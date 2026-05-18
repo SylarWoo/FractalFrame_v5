@@ -13,6 +13,7 @@ frontend/dist/
 .env
 .env.*
 !.env.example
+runtime_data/
 
 # JetBrains / PyCharm
 .idea/
