@@ -45,6 +45,19 @@ const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
   { key: 'settings', label: '设置' },
 ]
 
+const storeAggregateRows = [
+  { period: 'M5', count: '249,715', updated: '1 分钟前' },
+  { period: 'M15', count: '83,238', updated: '1 分钟前' },
+  { period: 'M30', count: '41,612', updated: '1 分钟前' },
+  { period: 'H1', count: '20,806', updated: '1 分钟前' },
+  { period: 'H2', count: '10,403', updated: '1 分钟前' },
+  { period: 'H4', count: '5,202', updated: '1 分钟前' },
+  { period: 'H8', count: '2,601', updated: '1 分钟前' },
+  { period: 'D1', count: '138', updated: '1 分钟前' },
+  { period: 'W1', count: '28', updated: '1 分钟前' },
+  { period: 'MN1', count: '7', updated: '1 分钟前' },
+]
+
 function clampDrawerWidth(width: number) {
   return Math.max(minDrawerWidth, Math.min(maxDrawerWidth, Math.round(width)))
 }
@@ -586,6 +599,57 @@ export function RightDrawer({
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {selectedPanelTab === 'store' && (
+                  <div className="ff-import-store-panel" role="tabpanel">
+                    <section className="ff-store-card ff-store-card--direct">
+                      <div className="ff-store-direct-summary">
+                        <strong>直连仓库 M1</strong>
+                        <span>MT5 条数：1,248,576</span>
+                        <span>真实条数：1,237,652</span>
+                        <span>时间范围：2025-01-01 22:00 ~ 2025-05-18 22:00(UTC)</span>
+                        <span>本地条数：1,237,652</span>
+                      </div>
+                    </section>
+
+                    <div className="ff-store-direct-actions">
+                      <button type="button">检查</button>
+                      <button type="button">拉取</button>
+                    </div>
+
+                    <table className="ff-store-detail-table ff-store-aggregate-table">
+                      <thead>
+                        <tr>
+                          <th>周期</th>
+                          <th>条数</th>
+                          <th>最后更新</th>
+                          <th>操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {storeAggregateRows.map((row) => (
+                          <tr key={row.period}>
+                            <td>
+                              <strong>{row.period}</strong>
+                            </td>
+                            <td>{row.count}</td>
+                            <td>{row.updated}</td>
+                            <td>
+                              <button title={`重建 ${row.period}`} type="button">↻</button>
+                              <button title={`删除 ${row.period}`} type="button">×</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    <div className="ff-store-direct-actions">
+                      <button type="button">检查</button>
+                      <button type="button">聚合</button>
+                    </div>
+
                   </div>
                 )}
               </section>
