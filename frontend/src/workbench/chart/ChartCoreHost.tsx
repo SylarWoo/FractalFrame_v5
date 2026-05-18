@@ -1,41 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { dispose, init } from 'klinecharts'
-import type { KLineData } from 'klinecharts'
+import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import './ChartCoreHost.css'
 
 type ChartCoreHostProps = {
   period: string
   symbol: string
-}
-
-function createPreviewBars(count = 180): KLineData[] {
-  const bars: KLineData[] = []
-  const now = Date.now()
-  const intervalMs = 60 * 1000
-  let price = 4540
-
-  for (let index = count - 1; index >= 0; index -= 1) {
-    const timestamp = now - index * intervalMs
-    const wave = Math.sin((count - index) / 12) * 1.8
-    const drift = (Math.random() - 0.48) * 3
-    const open = price
-    const close = Math.max(1, open + drift + wave * 0.12)
-    const high = Math.max(open, close) + Math.random() * 1.6
-    const low = Math.min(open, close) - Math.random() * 1.6
-
-    bars.push({
-      timestamp,
-      open: Number(open.toFixed(3)),
-      high: Number(high.toFixed(3)),
-      low: Number(low.toFixed(3)),
-      close: Number(close.toFixed(3)),
-      volume: Math.round(100 + Math.random() * 600),
-    })
-
-    price = close
-  }
-
-  return bars
 }
 
 export function ChartCoreHost({ period, symbol }: ChartCoreHostProps) {
@@ -66,7 +36,14 @@ export function ChartCoreHost({ period, symbol }: ChartCoreHostProps) {
     })
 
     chart?.setPriceVolumePrecision(3, 0)
-    chart?.applyNewData(createPreviewBars(), true)
+    let disposed = false
+    loadStoreV5KLineData({ symbol, period, limit: 1000 })
+      .then((data) => {
+        if (!disposed) chart?.applyNewData(data, true)
+      })
+      .catch(() => {
+        if (!disposed) chart?.applyNewData([], true)
+      })
 
     const resize = () => {
       chart?.resize()
@@ -81,6 +58,7 @@ export function ChartCoreHost({ period, symbol }: ChartCoreHostProps) {
     window.requestAnimationFrame(resize)
 
     return () => {
+      disposed = true
       resizeObserver.disconnect()
       window.removeEventListener('resize', resize)
 
@@ -88,7 +66,7 @@ export function ChartCoreHost({ period, symbol }: ChartCoreHostProps) {
         dispose(chart)
       }
     }
-  }, [])
+  }, [period, symbol])
 
   return (
     <section className="ff-chart-core-host" aria-label={`${symbol} ${period} chart`}>

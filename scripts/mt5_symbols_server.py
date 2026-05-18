@@ -30,12 +30,12 @@ def clamp_limit(value: str | None, default: int = 50_000) -> int:
     return max(1, min(parsed, 50_000))
 
 
-def clamp_m1_check_count(value: str | None, default: int = 500_000) -> int:
+def clamp_m1_check_count(value: str | None, default: int = 5_000_000) -> int:
     try:
         parsed = int(value or default)
     except ValueError:
         parsed = default
-    return max(1, min(parsed, 2_000_000))
+    return max(1, min(parsed, 10_000_000))
 
 
 def safe_bool(value: Any, default: bool | None = None) -> bool | None:
@@ -60,6 +60,21 @@ def safe_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def safe_query_int(value: str | None, default: int | None = None) -> int | None:
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def query_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "y", "on"}
 
 
 def namedtuple_to_dict(value: Any) -> dict[str, Any]:
@@ -402,9 +417,24 @@ def mt5_rates_to_rows(rates: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def check_mt5_m1_live(symbol: str, count: int = 500_000) -> dict[str, Any]:
+def mt5_row_to_m1_check_row(row: dict[str, Any], symbol: str, ingested_at: str) -> dict[str, Any]:
+    return {
+        "time": int(row["time"]),
+        "open": float(row["open"]),
+        "high": float(row["high"]),
+        "low": float(row["low"]),
+        "close": float(row["close"]),
+        "volume": int(row.get("tick_volume", row.get("volume", 0)) or 0),
+        "provider": "mt5",
+        "symbol": symbol,
+        "timeframe": "M1",
+        "source": "mt5_terminal",
+        "ingestedAt": ingested_at,
+    }
+
+
+def check_mt5_m1_live(symbol: str, count: int = 5_000_000) -> dict[str, Any]:
     from python.data_warehouse.mt5.mt5_m1_integrity_validator_v1 import validate_true_m1_rows_v1
-    from python.data_warehouse.store_v5.ohlcv_schema_v5 import mt5_row_to_canonical
 
     published_at = utc_now_iso()
     try:
@@ -443,7 +473,7 @@ def check_mt5_m1_live(symbol: str, count: int = 500_000) -> dict[str, Any]:
 
         raw_rows = mt5_rates_to_rows(mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, int(count)))
         canonical_rows = [
-            mt5_row_to_canonical(row, provider="mt5", symbol=symbol, timeframe="M1")
+            mt5_row_to_m1_check_row(row, symbol=symbol, ingested_at=published_at)
             for row in raw_rows
         ]
         validation = validate_true_m1_rows_v1(canonical_rows)
@@ -499,6 +529,54 @@ def check_mt5_m1_live(symbol: str, count: int = 500_000) -> dict[str, Any]:
                 pass
 
 
+def pull_store_v5(symbol: str, mode: str, count: int, store_root: Path | None = None) -> dict[str, Any]:
+    from python.data_warehouse.mt5.mt5_m1_pull_service_v1 import pull_mt5_m1_to_store_v5
+
+    return pull_mt5_m1_to_store_v5(
+        symbol=symbol,
+        import_mode=mode,
+        count=count,
+        store_root=store_root,
+    )
+
+
+def aggregate_store_v5(symbol: str, timeframes: list[str], rebuild: bool, store_root: Path | None = None) -> dict[str, Any]:
+    from python.data_warehouse.aggregate.aggregate_from_m1_service_v1 import aggregate_from_m1_store_v5
+
+    return aggregate_from_m1_store_v5(
+        symbol=symbol,
+        target_timeframes=timeframes,
+        store_root=store_root,
+        rebuild=rebuild,
+    )
+
+
+def query_store_v5_ohlcv(params: dict[str, list[str]], store_root: Path | None = None) -> dict[str, Any]:
+    from python.data_warehouse.query.duckdb_ohlcv_query_v5 import query_ohlcv_store_v5
+
+    symbol = (params.get("symbol") or [""])[0].strip()
+    timeframe = (params.get("timeframe") or ["M1"])[0].strip().upper()
+    mode = (params.get("mode") or ["direct"])[0].strip().lower()
+    base_timeframe = (params.get("baseTimeframe") or params.get("base_timeframe") or ["M1"])[0].strip().upper()
+    anchor = (params.get("anchor") or ["UTC2200"])[0].strip().upper()
+    time_from = safe_query_int((params.get("timeFrom") or params.get("time_from") or [None])[0], None)
+    time_to = safe_query_int((params.get("timeTo") or params.get("time_to") or [None])[0], None)
+    limit = safe_query_int((params.get("limit") or ["5000"])[0], 5000)
+    if not symbol:
+        return {"ok": False, "status": "bad_request", "error": "symbol_required"}
+    return query_ohlcv_store_v5(
+        symbol=symbol,
+        timeframe=timeframe,
+        mode=mode,
+        base_timeframe=base_timeframe if mode == "aggregated" else None,
+        anchor=anchor if mode == "aggregated" else None,
+        time_from=time_from,
+        time_to=time_to,
+        limit=limit,
+        store_root=store_root,
+    )
+
+
 class Mt5SymbolsHandler(BaseHTTPRequestHandler):
     cache_root = DEFAULT_CACHE_ROOT
     store_root: Path | None = None
@@ -510,10 +588,10 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/api/market-data/v1/store-v5/check":
+        if parsed.path in {"/api/market-data/v1/mt5/m1/check", "/api/market-data/v1/store-v5/check"}:
             query = parse_qs(parsed.query)
             symbol = (query.get("symbol") or [""])[0].strip()
-            count = clamp_m1_check_count((query.get("count") or ["500000"])[0], default=500_000)
+            count = clamp_m1_check_count((query.get("count") or [None])[0], default=5_000_000)
             if not symbol:
                 self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
                 return
@@ -521,7 +599,60 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
                 payload = check_mt5_m1_live(symbol, count=count)
                 self.send_json(200, payload)
             except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "store_v5_check_failed", "error": str(exc)})
+                self.send_json(500, {"ok": False, "status": "mt5_m1_check_failed", "error": str(exc)})
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/status":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            try:
+                payload = check_store_v5(symbol, store_root=self.store_root)
+                self.send_json(200, payload)
+            except Exception as exc:
+                self.send_json(500, {"ok": False, "status": "store_v5_status_failed", "error": str(exc)})
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/pull":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            mode = (query.get("mode") or ["incremental"])[0].strip().lower()
+            count = clamp_m1_check_count((query.get("count") or [None])[0], default=5_000_000)
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            try:
+                payload = pull_store_v5(symbol, mode=mode, count=count, store_root=self.store_root)
+                self.send_json(200 if payload.get("ok") is True else 400, payload)
+            except Exception as exc:
+                self.send_json(500, {"ok": False, "status": "store_v5_pull_failed", "error": str(exc)})
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/aggregate":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            raw_timeframes = (query.get("timeframes") or ["M5,M15,M30,H1,H2,H4,H8,D1,W1,MN1"])[0]
+            timeframes = [item.strip().upper() for item in raw_timeframes.split(",") if item.strip()]
+            rebuild = query_bool((query.get("rebuild") or ["1"])[0], default=True)
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            try:
+                payload = aggregate_store_v5(symbol, timeframes=timeframes, rebuild=rebuild, store_root=self.store_root)
+                self.send_json(200 if payload.get("ok") is True else 400, payload)
+            except Exception as exc:
+                self.send_json(500, {"ok": False, "status": "store_v5_aggregate_failed", "error": str(exc)})
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/query":
+            query = parse_qs(parsed.query)
+            try:
+                payload = query_store_v5_ohlcv(query, store_root=self.store_root)
+                self.send_json(200 if payload.get("ok") is True else 404, payload)
+            except Exception as exc:
+                self.send_json(500, {"ok": False, "status": "store_v5_query_failed", "error": str(exc)})
             return
 
         if parsed.path not in {"/api/market-data/v1/mt5/symbols", "/api/market/mt5/symbols"}:
@@ -576,7 +707,11 @@ def main() -> int:
     server = ThreadingHTTPServer((args.host, args.port), Mt5SymbolsHandler)
     print(f"[mt5_symbols_server] listening on http://{args.host}:{args.port}")
     print("[mt5_symbols_server] endpoint /api/market-data/v1/mt5/symbols?refresh=1")
-    print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/check?symbol=XAUUSDm")
+    print("[mt5_symbols_server] endpoint /api/market-data/v1/mt5/m1/check?symbol=XAUUSDm")
+    print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/status?symbol=XAUUSDm")
+    print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/pull?symbol=XAUUSDm")
+    print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/aggregate?symbol=XAUUSDm")
+    print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/query?symbol=XAUUSDm&timeframe=M1")
     print(f"[mt5_symbols_server] cache {Mt5SymbolsHandler.cache_root}")
     try:
         server.serve_forever()

@@ -53,7 +53,7 @@ def _init_mt5(mt5: Any, symbol: str) -> tuple[bool, str | None]:
 def pull_mt5_m1_to_store_v5(
     *,
     symbol: str,
-    count: int = 500_000,
+    count: int = 5_000_000,
     import_mode: str = "incremental",
     store_root: str | Path | None = None,
     overlap_bars: int = 1000,

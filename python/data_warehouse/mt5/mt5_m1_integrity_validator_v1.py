@@ -40,6 +40,16 @@ def _gap(previous: int, next_time: int) -> dict[str, int]:
     }
 
 
+def _first_hour_check(candidate_rows: list[dict[str, Any]], first_anchor_time: int) -> tuple[bool, int, dict[str, int] | None]:
+    first_hour_rows = [row for row in candidate_rows if first_anchor_time <= _row_time(row) < first_anchor_time + 3600]
+    first_hour_gap = None
+    for previous, current in zip(first_hour_rows, first_hour_rows[1:]):
+        if _row_time(current) - _row_time(previous) != SECONDS_PER_MINUTE:
+            first_hour_gap = _gap(_row_time(previous), _row_time(current))
+            break
+    return len(first_hour_rows) == 60 and first_hour_gap is None, len(first_hour_rows), first_hour_gap
+
+
 def validate_true_m1_rows_v1(
     rows: list[dict[str, Any]],
     *,
@@ -49,7 +59,8 @@ def validate_true_m1_rows_v1(
 ) -> dict[str, Any]:
     mt5_count = len(rows)
     ordered = _dedupe_sort(rows)
-    anchor_index = next((i for i, row in enumerate(ordered) if _is_anchor_time(_row_time(row), anchor_hour_utc)), None)
+    anchor_indexes = [i for i, row in enumerate(ordered) if _is_anchor_time(_row_time(row), anchor_hour_utc)]
+    anchor_index = anchor_indexes[0] if anchor_indexes else None
     if anchor_index is None:
         return {
             "ok": False,
@@ -59,27 +70,50 @@ def validate_true_m1_rows_v1(
             "trueRows": [],
         }
 
+    first_failed_hour: dict[str, Any] | None = None
     first_anchor_time = _row_time(ordered[anchor_index])
     candidate_rows = ordered[anchor_index:]
-    first_hour_rows = [row for row in candidate_rows if first_anchor_time <= _row_time(row) < first_anchor_time + 3600]
-    first_hour_gap = None
-    for previous, current in zip(first_hour_rows, first_hour_rows[1:]):
-        if _row_time(current) - _row_time(previous) != SECONDS_PER_MINUTE:
-            first_hour_gap = _gap(_row_time(previous), _row_time(current))
-            break
-
-    first_hour_ok = len(first_hour_rows) == 60 and first_hour_gap is None
+    first_hour_ok, first_hour_true_rows, first_hour_gap = _first_hour_check(candidate_rows, first_anchor_time)
     if require_first_hour_complete and not first_hour_ok:
+        first_failed_hour = {
+            "firstAnchorTime": first_anchor_time,
+            "firstAnchorText": _time_text(first_anchor_time),
+            "firstHourTrueRows": first_hour_true_rows,
+            "firstGap": first_hour_gap,
+        }
+        for next_anchor_index in anchor_indexes[1:]:
+            next_anchor_time = _row_time(ordered[next_anchor_index])
+            next_candidate_rows = ordered[next_anchor_index:]
+            next_first_hour_ok, next_first_hour_true_rows, next_first_hour_gap = _first_hour_check(
+                next_candidate_rows,
+                next_anchor_time,
+            )
+            if next_first_hour_ok:
+                anchor_index = next_anchor_index
+                first_anchor_time = next_anchor_time
+                candidate_rows = next_candidate_rows
+                first_hour_ok = next_first_hour_ok
+                first_hour_true_rows = next_first_hour_true_rows
+                first_hour_gap = next_first_hour_gap
+                break
+
+    if require_first_hour_complete and not first_hour_ok:
+        failed = first_failed_hour or {
+            "firstAnchorTime": first_anchor_time,
+            "firstAnchorText": _time_text(first_anchor_time),
+            "firstHourTrueRows": first_hour_true_rows,
+            "firstGap": first_hour_gap,
+        }
         return {
             "ok": False,
             "error": "first_hour_m1_not_continuous",
             "mt5RowsCount": mt5_count,
-            "firstAnchorTime": first_anchor_time,
-            "firstAnchorText": _time_text(first_anchor_time),
+            "firstAnchorTime": failed["firstAnchorTime"],
+            "firstAnchorText": failed["firstAnchorText"],
             "firstHourExpectedRows": 60,
-            "firstHourTrueRows": len(first_hour_rows),
+            "firstHourTrueRows": failed["firstHourTrueRows"],
             "firstHourM1CheckOk": False,
-            "firstGap": first_hour_gap,
+            "firstGap": failed["firstGap"],
             "trueM1RowsCount": 0,
             "trueRows": [],
         }
@@ -113,7 +147,7 @@ def validate_true_m1_rows_v1(
         "firstAnchorTime": first_anchor_time,
         "firstAnchorText": _time_text(first_anchor_time),
         "firstHourExpectedRows": 60,
-        "firstHourTrueRows": len(first_hour_rows),
+        "firstHourTrueRows": first_hour_true_rows,
         "firstHourM1CheckOk": first_hour_ok,
         "gapCount": 0 if first_gap is None else 1,
         "firstGap": first_gap,

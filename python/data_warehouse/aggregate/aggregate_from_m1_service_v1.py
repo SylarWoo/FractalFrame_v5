@@ -22,8 +22,7 @@ def _direct_ready(cell: dict[str, Any] | None) -> bool:
     if not cell:
         return False
     return (
-        cell.get("m1IntegrityStatus") == "true_m1_continuous"
-        and cell.get("gapCount") == 0
+        cell.get("m1IntegrityStatus") in {"true_m1_continuous", "true_m1_truncated_at_gap"}
         and cell.get("firstHourM1CheckOk") is True
         and cell.get("rowsCount") == cell.get("trueM1RowsCount")
         and cell.get("firstAnchorTime") is not None

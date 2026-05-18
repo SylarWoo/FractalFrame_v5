@@ -2,7 +2,13 @@ import { useMemo, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import './RightDrawer.css'
 import { resolveMt5SymbolDisplay } from './mt5SymbolDisplay'
-import { fetchMt5Symbols, fetchStoreV5Check } from './mt5SymbolsApi'
+import {
+  aggregateStoreV5,
+  fetchMt5Symbols,
+  fetchStoreV5Check,
+  fetchStoreV5Status,
+  pullStoreV5,
+} from './mt5SymbolsApi'
 import type { Mt5SymbolRow, StoreV5CheckPayload } from './mt5SymbolsApi'
 
 type RightDrawerProps = {
@@ -43,19 +49,6 @@ const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
   { key: 'store', label: '仓库' },
   { key: 'watchlist', label: '自选列表' },
   { key: 'settings', label: '设置' },
-]
-
-const storeAggregateRows = [
-  { period: 'M5', count: '249,715', updated: '1 分钟前' },
-  { period: 'M15', count: '83,238', updated: '1 分钟前' },
-  { period: 'M30', count: '41,612', updated: '1 分钟前' },
-  { period: 'H1', count: '20,806', updated: '1 分钟前' },
-  { period: 'H2', count: '10,403', updated: '1 分钟前' },
-  { period: 'H4', count: '5,202', updated: '1 分钟前' },
-  { period: 'H8', count: '2,601', updated: '1 分钟前' },
-  { period: 'D1', count: '138', updated: '1 分钟前' },
-  { period: 'W1', count: '28', updated: '1 分钟前' },
-  { period: 'MN1', count: '7', updated: '1 分钟前' },
 ]
 
 function clampDrawerWidth(width: number) {
@@ -219,6 +212,7 @@ export function RightDrawer({
   const [storeCheck, setStoreCheck] = useState<StoreV5CheckPayload | null>(null)
   const [storeCheckLoading, setStoreCheckLoading] = useState(false)
   const [storeCheckError, setStoreCheckError] = useState('')
+  const [storeActionStatus, setStoreActionStatus] = useState('')
   const tableWrapRef = useRef<HTMLDivElement | null>(null)
 
   const visibleSymbols = useMemo(() => {
@@ -248,7 +242,7 @@ export function RightDrawer({
   const selectedDisplay = selectedRow ? resolveMt5SymbolDisplay(selectedRow) : null
 
   const visibleStoreAggregateRows = useMemo(() => {
-    if (!storeCheck?.aggregated?.length) return storeAggregateRows
+    if (!storeCheck?.aggregated?.length) return []
     return storeCheck.aggregated.map((cell) => ({
       period: cell.timeframe || '-',
       count: formatCount(cell.rowsCount),
@@ -435,6 +429,7 @@ export function RightDrawer({
     setSelectedSymbol(symbol)
     setStoreCheck(null)
     setStoreCheckError('')
+    setStoreActionStatus('')
     if (symbols.length) {
       saveSymbolSnapshot({
         selectedSymbol: symbol,
@@ -444,19 +439,81 @@ export function RightDrawer({
     }
   }
 
-  async function handleCheckStore() {
+  async function handleCheckMt5M1() {
     const symbol = selectedRow?.symbol
     if (!symbol) return
     setStoreCheckLoading(true)
     setStoreCheckError('')
+    setStoreActionStatus('正在检查 MT5 终端 M1...')
 
     try {
       const payload = await fetchStoreV5Check(symbol)
       setStoreCheck(payload)
+      setStoreActionStatus('MT5 终端 M1 检查完成。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setStoreCheckError(message)
       setStoreCheck(null)
+      setStoreActionStatus('')
+    } finally {
+      setStoreCheckLoading(false)
+    }
+  }
+
+  async function handleRefreshStoreStatus() {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    setStoreCheckLoading(true)
+    setStoreCheckError('')
+    setStoreActionStatus('正在读取 StoreV5 仓库状态...')
+    try {
+      const payload = await fetchStoreV5Status(symbol)
+      setStoreCheck(payload)
+      setStoreActionStatus('StoreV5 仓库状态已刷新。')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setStoreCheckError(message)
+      setStoreActionStatus('')
+    } finally {
+      setStoreCheckLoading(false)
+    }
+  }
+
+  async function handlePullStore() {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    setStoreCheckLoading(true)
+    setStoreCheckError('')
+    setStoreActionStatus('正在拉取 MT5 M1 写入 StoreV5...')
+    try {
+      await pullStoreV5(symbol, storeCheck?.directM1 ? 'incremental' : 'refresh')
+      const payload = await fetchStoreV5Status(symbol)
+      setStoreCheck(payload)
+      setStoreActionStatus('拉取完成，仓库状态已刷新。')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setStoreCheckError(message)
+      setStoreActionStatus('')
+    } finally {
+      setStoreCheckLoading(false)
+    }
+  }
+
+  async function handleAggregateStore() {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    setStoreCheckLoading(true)
+    setStoreCheckError('')
+    setStoreActionStatus('正在从 M1 重建聚合周期...')
+    try {
+      await aggregateStoreV5(symbol)
+      const payload = await fetchStoreV5Status(symbol)
+      setStoreCheck(payload)
+      setStoreActionStatus('聚合完成，仓库状态已刷新。')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setStoreCheckError(message)
+      setStoreActionStatus('')
     } finally {
       setStoreCheckLoading(false)
     }
@@ -669,7 +726,6 @@ export function RightDrawer({
                               时间范围：
                               {formatUtcRange(storeCheck.directM1.firstTimeText, storeCheck.directM1.lastTimeText)}
                             </span>
-                            <span>第一小时：{storeCheck.directM1.firstHourM1CheckOk ? '60 根通过' : '-'}</span>
                             {storeCheck.directM1.validationError && (
                               <span className="ff-store-direct-summary__error">
                                 校验失败：{storeCheck.directM1.validationError}
@@ -681,7 +737,6 @@ export function RightDrawer({
                             <span>MT5 条数：-</span>
                             <span>真实条数：-</span>
                             <span>时间范围：-</span>
-                            <span>第一小时：-</span>
                           </>
                         )}
                         {storeCheckError && (
@@ -691,11 +746,15 @@ export function RightDrawer({
                     </section>
 
                     <div className="ff-store-direct-actions">
-                      <button disabled={storeCheckLoading} onClick={handleCheckStore} type="button">
+                      <button disabled={storeCheckLoading} onClick={handleCheckMt5M1} type="button">
                         {storeCheckLoading ? '检查中' : '检查'}
                       </button>
-                      <button type="button">拉取</button>
+                      <button disabled={storeCheckLoading} onClick={handlePullStore} type="button">拉取</button>
+                      <button disabled={storeCheckLoading} onClick={handleRefreshStoreStatus} type="button">刷新仓库</button>
                     </div>
+                    {storeActionStatus && (
+                      <div className="ff-import-note">{storeActionStatus}</div>
+                    )}
 
                     <table className="ff-store-detail-table ff-store-aggregate-table">
                       <thead>
@@ -720,14 +779,21 @@ export function RightDrawer({
                             </td>
                           </tr>
                         ))}
+                        {!visibleStoreAggregateRows.length && (
+                          <tr>
+                            <td className="ff-symbol-table__empty" colSpan={4}>
+                              暂无 StoreV5 聚合周期。请先拉取 M1，再执行聚合。
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
 
                     <div className="ff-store-direct-actions">
-                      <button disabled={storeCheckLoading} onClick={handleCheckStore} type="button">
-                        {storeCheckLoading ? '检查中' : '检查'}
+                      <button disabled={storeCheckLoading} onClick={handleRefreshStoreStatus} type="button">
+                        {storeCheckLoading ? '刷新中' : '刷新仓库'}
                       </button>
-                      <button type="button">聚合</button>
+                      <button disabled={storeCheckLoading} onClick={handleAggregateStore} type="button">聚合</button>
                     </div>
 
                   </div>
