@@ -1,10 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { KLineChartPro } from '@klinecharts/pro'
 import { TooltipIconPosition } from 'klinecharts'
 import type { DeepPartial, Styles } from 'klinecharts'
 import '@klinecharts/pro/dist/klinecharts-pro.css'
 import './App.css'
-import { createMockKLineChartProDatafeed } from './datafeed/createMockKLineChartProDatafeed'
+import {
+  createStaticMt5FullDatafeed,
+  type StaticMt5FullDatafeedStats,
+} from './datafeed/createStaticMt5FullDatafeed'
 
 function createIndicatorTooltipIconStyles(color = '#76808F'): DeepPartial<Styles> {
   const baseIconStyle = {
@@ -63,11 +66,20 @@ function createIndicatorTooltipIconStyles(color = '#76808F'): DeepPartial<Styles
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const [stats, setStats] = useState<StaticMt5FullDatafeedStats>({
+    bars: 0,
+    loadTimeMs: null,
+    renderReadyTimeMs: null,
+    dataFile: '/data/mt5_m1_full.json',
+    status: 'idle',
+  })
 
   useEffect(() => {
     if (!containerRef.current) return
 
     const container = containerRef.current
+    const chartStartTime = performance.now()
+    let disposed = false
     container.innerHTML = ''
 
     const chart = new KLineChartPro({
@@ -82,11 +94,31 @@ export default function App() {
         type: 'forex',
       },
       period: {
-        multiplier: 5,
+        multiplier: 1,
         timespan: 'minute',
-        text: '5m',
+        text: '1m',
       },
-      datafeed: createMockKLineChartProDatafeed(),
+      datafeed: createStaticMt5FullDatafeed({
+        onStatsChange(nextStats) {
+          if (disposed) return
+
+          setStats((currentStats) => ({
+            ...currentStats,
+            ...nextStats,
+          }))
+
+          if (nextStats.status === 'ready') {
+            window.requestAnimationFrame(() => {
+              if (disposed) return
+
+              setStats((currentStats) => ({
+                ...currentStats,
+                renderReadyTimeMs: Math.round(performance.now() - chartStartTime),
+              }))
+            })
+          }
+        },
+      }),
     })
 
     chart.setStyles(createIndicatorTooltipIconStyles())
@@ -95,6 +127,7 @@ export default function App() {
     }, 0)
 
     return () => {
+      disposed = true
       ;(chart as { destroy?: () => void }).destroy?.()
       container.innerHTML = ''
     }
@@ -102,6 +135,24 @@ export default function App() {
 
   return (
     <div className="ff-v5-root">
+      <div className="ff-v5-debug">
+        <span>Symbol: XAUUSDm</span>
+        <span>Period: M1</span>
+        <span>Bars: {stats.bars.toLocaleString()}</span>
+        <span>
+          Load:{' '}
+          {stats.loadTimeMs === null ? '-' : `${stats.loadTimeMs.toLocaleString()} ms`}
+        </span>
+        <span>
+          Ready:{' '}
+          {stats.renderReadyTimeMs === null
+            ? '-'
+            : `${stats.renderReadyTimeMs.toLocaleString()} ms`}
+        </span>
+        <span>Data: {stats.dataFile}</span>
+        <span>Status: {stats.status}</span>
+        {stats.error ? <span title={stats.error}>Error: {stats.error}</span> : null}
+      </div>
       <div ref={containerRef} className="ff-v5-chart" />
     </div>
   )
