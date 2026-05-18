@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@klinecharts/pro": "^0.1.1",
-    "klinecharts": "^10.0.0-beta1",
+    "klinecharts": "^9.8.12",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
