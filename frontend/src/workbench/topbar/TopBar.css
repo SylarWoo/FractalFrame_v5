@@ -1,0 +1,15 @@
+.ff-topbar {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.ff-topbar__brand {
+  color: #020617;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}

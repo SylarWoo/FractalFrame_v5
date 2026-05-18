@@ -1,0 +1,24 @@
+.ff-app-shell {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 40px 1fr;
+  overflow: hidden;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.ff-app-main {
+  --ff-right-drawer-width: 280px;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 0 48px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.ff-app-main[data-right-drawer-open='true'] {
+  grid-template-columns: minmax(0, 1fr) var(--ff-right-drawer-width) 48px;
+}
