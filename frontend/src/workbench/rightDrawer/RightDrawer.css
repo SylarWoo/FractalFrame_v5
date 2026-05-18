@@ -492,6 +492,14 @@ body[data-fractalframe-mt5-column-resizing='true'] .ff-symbol-table__column-resi
   line-height: 16px;
 }
 
+.ff-store-direct-summary__error {
+  color: #b42318 !important;
+}
+
+.ff-store-direct-summary__empty {
+  color: #64748b !important;
+}
+
 .ff-store-direct-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -514,6 +522,13 @@ body[data-fractalframe-mt5-column-resizing='true'] .ff-symbol-table__column-resi
   border-color: #93b4e8;
   background: #eff6ff;
   color: #1d4ed8;
+}
+
+.ff-store-direct-actions button:disabled {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: wait;
 }
 
 .ff-store-detail-table {

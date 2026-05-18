@@ -45,6 +45,49 @@ export type Mt5SymbolsPayload = {
   }
 }
 
+export type StoreV5DirectM1 = {
+  datasetKey?: string
+  mt5RowsCount?: number | null
+  trueM1RowsCount?: number | null
+  rowsCount?: number | null
+  firstTime?: number | null
+  lastTime?: number | null
+  firstTimeText?: string | null
+  lastTimeText?: string | null
+  firstAnchorTime?: number | null
+  firstHourM1CheckOk?: boolean | null
+  firstHourTrueRows?: number | null
+  gapCount?: number | null
+  m1IntegrityStatus?: string | null
+  lastImportAt?: string | null
+  status?: string | null
+  rootPath?: string | null
+  validationOk?: boolean | null
+  validationError?: string | null
+}
+
+export type StoreV5AggregatedCell = {
+  timeframe?: string
+  rowsCount?: number | null
+  sourceLastTime?: number | null
+  sourceTrueM1RowsCount?: number | null
+  anchor?: string | null
+  dirty?: boolean | null
+  lastAggregateAt?: string | null
+}
+
+export type StoreV5CheckPayload = {
+  ok: boolean
+  status: string
+  provider?: string
+  storeVersion?: string
+  symbol: string
+  directM1: StoreV5DirectM1 | null
+  aggregated: StoreV5AggregatedCell[]
+  publishedAt?: string
+  error?: string
+}
+
 const defaultMt5ApiBase = 'http://127.0.0.1:8765'
 
 function resolveMt5ApiBase() {
@@ -74,6 +117,25 @@ export async function fetchMt5Symbols(
     },
   )
   const payload = (await response.json()) as Mt5SymbolsPayload
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
+export async function fetchStoreV5Check(symbol: string, count = 500000): Promise<StoreV5CheckPayload> {
+  const params = new URLSearchParams()
+  params.set('symbol', symbol)
+  params.set('count', String(count))
+
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/check?${params.toString()}`,
+    {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    },
+  )
+  const payload = (await response.json()) as StoreV5CheckPayload
   if (!response.ok || payload.ok !== true) {
     throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
   }

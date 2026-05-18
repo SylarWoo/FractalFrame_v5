@@ -2,8 +2,8 @@ import { useMemo, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import './RightDrawer.css'
 import { resolveMt5SymbolDisplay } from './mt5SymbolDisplay'
-import { fetchMt5Symbols } from './mt5SymbolsApi'
-import type { Mt5SymbolRow } from './mt5SymbolsApi'
+import { fetchMt5Symbols, fetchStoreV5Check } from './mt5SymbolsApi'
+import type { Mt5SymbolRow, StoreV5CheckPayload } from './mt5SymbolsApi'
 
 type RightDrawerProps = {
   drawerWidth: number
@@ -144,6 +144,28 @@ function formatDetailValue(value: string | number | boolean | null | undefined) 
   return String(value)
 }
 
+function formatCount(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('en-US') : '-'
+}
+
+function formatUtcRange(firstText?: string | null, lastText?: string | null) {
+  if (!firstText || !lastText) return '-'
+  return `${firstText.replace(':00 UTC', '')} ~ ${lastText.replace(':00 UTC', '')} (UTC)`
+}
+
+function formatStoreUpdated(value?: string | null) {
+  if (!value) return '-'
+  const time = Date.parse(value)
+  if (!Number.isFinite(time)) return value
+  const seconds = Math.max(0, Math.round((Date.now() - time) / 1000))
+  if (seconds < 90) return '1 分钟内'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} 分钟前`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours} 小时前`
+  return `${Math.round(hours / 24)} 天前`
+}
+
 function selectedDetailRows(row: Mt5SymbolRow): DetailRow[] {
   return [
     ['分类', row.category || row.market, '小数位', row.digits],
@@ -194,6 +216,9 @@ export function RightDrawer({
   const [topPaneHeight, setTopPaneHeight] = useState(getInitialTopPaneHeight)
   const [columnWidths, setColumnWidths] = useState(getInitialColumnWidths)
   const [selectedPanelTab, setSelectedPanelTab] = useState<SelectedPanelTab>('details')
+  const [storeCheck, setStoreCheck] = useState<StoreV5CheckPayload | null>(null)
+  const [storeCheckLoading, setStoreCheckLoading] = useState(false)
+  const [storeCheckError, setStoreCheckError] = useState('')
   const tableWrapRef = useRef<HTMLDivElement | null>(null)
 
   const visibleSymbols = useMemo(() => {
@@ -221,6 +246,15 @@ export function RightDrawer({
   }, [selectedSymbol, symbols, visibleSymbols])
 
   const selectedDisplay = selectedRow ? resolveMt5SymbolDisplay(selectedRow) : null
+
+  const visibleStoreAggregateRows = useMemo(() => {
+    if (!storeCheck?.aggregated?.length) return storeAggregateRows
+    return storeCheck.aggregated.map((cell) => ({
+      period: cell.timeframe || '-',
+      count: formatCount(cell.rowsCount),
+      updated: cell.dirty ? '需重建' : formatStoreUpdated(cell.lastAggregateAt),
+    }))
+  }, [storeCheck])
 
   async function loadSymbols(refresh: boolean) {
     setLoading(true)
@@ -399,12 +433,32 @@ export function RightDrawer({
 
   function handleSelectSymbol(symbol: string) {
     setSelectedSymbol(symbol)
+    setStoreCheck(null)
+    setStoreCheckError('')
     if (symbols.length) {
       saveSymbolSnapshot({
         selectedSymbol: symbol,
         status,
         symbols,
       })
+    }
+  }
+
+  async function handleCheckStore() {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    setStoreCheckLoading(true)
+    setStoreCheckError('')
+
+    try {
+      const payload = await fetchStoreV5Check(symbol)
+      setStoreCheck(payload)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setStoreCheckError(message)
+      setStoreCheck(null)
+    } finally {
+      setStoreCheckLoading(false)
     }
   }
 
@@ -607,15 +661,39 @@ export function RightDrawer({
                     <section className="ff-store-card ff-store-card--direct">
                       <div className="ff-store-direct-summary">
                         <strong>直连仓库 M1</strong>
-                        <span>MT5 条数：1,248,576</span>
-                        <span>真实条数：1,237,652</span>
-                        <span>时间范围：2025-01-01 22:00 ~ 2025-05-18 22:00(UTC)</span>
-                        <span>本地条数：1,237,652</span>
+                        {storeCheck?.directM1 ? (
+                          <>
+                            <span>MT5 条数：{formatCount(storeCheck.directM1.mt5RowsCount)}</span>
+                            <span>真实条数：{formatCount(storeCheck.directM1.trueM1RowsCount)}</span>
+                            <span>
+                              时间范围：
+                              {formatUtcRange(storeCheck.directM1.firstTimeText, storeCheck.directM1.lastTimeText)}
+                            </span>
+                            <span>第一小时：{storeCheck.directM1.firstHourM1CheckOk ? '60 根通过' : '-'}</span>
+                            {storeCheck.directM1.validationError && (
+                              <span className="ff-store-direct-summary__error">
+                                校验失败：{storeCheck.directM1.validationError}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span>MT5 条数：-</span>
+                            <span>真实条数：-</span>
+                            <span>时间范围：-</span>
+                            <span>第一小时：-</span>
+                          </>
+                        )}
+                        {storeCheckError && (
+                          <span className="ff-store-direct-summary__error">{storeCheckError}</span>
+                        )}
                       </div>
                     </section>
 
                     <div className="ff-store-direct-actions">
-                      <button type="button">检查</button>
+                      <button disabled={storeCheckLoading} onClick={handleCheckStore} type="button">
+                        {storeCheckLoading ? '检查中' : '检查'}
+                      </button>
                       <button type="button">拉取</button>
                     </div>
 
@@ -629,7 +707,7 @@ export function RightDrawer({
                         </tr>
                       </thead>
                       <tbody>
-                        {storeAggregateRows.map((row) => (
+                        {visibleStoreAggregateRows.map((row) => (
                           <tr key={row.period}>
                             <td>
                               <strong>{row.period}</strong>
@@ -646,7 +724,9 @@ export function RightDrawer({
                     </table>
 
                     <div className="ff-store-direct-actions">
-                      <button type="button">检查</button>
+                      <button disabled={storeCheckLoading} onClick={handleCheckStore} type="button">
+                        {storeCheckLoading ? '检查中' : '检查'}
+                      </button>
                       <button type="button">聚合</button>
                     </div>
 

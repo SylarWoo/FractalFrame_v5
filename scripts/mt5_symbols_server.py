@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -10,6 +11,8 @@ from urllib.parse import parse_qs, urlparse
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 DEFAULT_CACHE_ROOT = ROOT / "runtime_data" / "instruments" / "mt5"
 SYMBOL_CACHE_FILE = "symbol_universe_info.json"
 SYMBOL_REPORT_FILE = "symbol_universe_scan_report.json"
@@ -25,6 +28,14 @@ def clamp_limit(value: str | None, default: int = 50_000) -> int:
     except ValueError:
         parsed = default
     return max(1, min(parsed, 50_000))
+
+
+def clamp_m1_check_count(value: str | None, default: int = 500_000) -> int:
+    try:
+        parsed = int(value or default)
+    except ValueError:
+        parsed = default
+    return max(1, min(parsed, 2_000_000))
 
 
 def safe_bool(value: Any, default: bool | None = None) -> bool | None:
@@ -305,8 +316,192 @@ def read_symbol_cache(cache_root: Path, query: str, market: str, limit: int) -> 
     }
 
 
+def format_utc_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    try:
+        return datetime.fromtimestamp(int(value), tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    except (TypeError, ValueError, OSError):
+        return None
+
+
+def check_store_v5(symbol: str, store_root: Path | None = None) -> dict[str, Any]:
+    from python.data_warehouse.store_v5.manifest_v5 import load_manifest_v5
+    from python.data_warehouse.store_v5.store_v5_paths import dataset_key, resolve_store_root
+
+    root = resolve_store_root(store_root)
+    direct_key = dataset_key(provider="mt5", symbol=symbol, mode="direct", timeframe="M1")
+    manifest = load_manifest_v5(root)
+    direct = manifest.get("datasets", {}).get(direct_key)
+    aggregated = [
+        cell
+        for cell in manifest.get("datasets", {}).values()
+        if cell.get("provider") == "mt5" and cell.get("symbol") == symbol and cell.get("mode") == "aggregated"
+    ]
+    aggregated.sort(key=lambda cell: str(cell.get("timeframe") or ""))
+
+    if not direct:
+        return {
+            "ok": True,
+            "status": "store_v5_direct_m1_missing",
+            "provider": "store_v5",
+            "storeVersion": "v5",
+            "symbol": symbol,
+            "directM1": None,
+            "aggregated": aggregated,
+            "publishedAt": utc_now_iso(),
+        }
+
+    first_time = direct.get("firstTime") or direct.get("firstAnchorTime")
+    last_time = direct.get("lastTrueM1Time") or direct.get("lastTime")
+    return {
+        "ok": True,
+        "status": "store_v5_check_ready",
+        "provider": "store_v5",
+        "storeVersion": "v5",
+        "symbol": symbol,
+        "directM1": {
+            "datasetKey": direct_key,
+            "mt5RowsCount": direct.get("mt5RowsCount"),
+            "trueM1RowsCount": direct.get("trueM1RowsCount"),
+            "rowsCount": direct.get("rowsCount"),
+            "firstTime": first_time,
+            "lastTime": last_time,
+            "firstTimeText": format_utc_text(first_time),
+            "lastTimeText": format_utc_text(last_time),
+            "firstAnchorTime": direct.get("firstAnchorTime"),
+            "firstHourM1CheckOk": direct.get("firstHourM1CheckOk"),
+            "firstHourTrueRows": direct.get("firstHourTrueRows"),
+            "gapCount": direct.get("gapCount"),
+            "m1IntegrityStatus": direct.get("m1IntegrityStatus"),
+            "lastImportAt": direct.get("lastImportAt"),
+            "status": direct.get("status"),
+            "rootPath": direct.get("rootPath"),
+        },
+        "aggregated": aggregated,
+        "publishedAt": utc_now_iso(),
+    }
+
+
+def mt5_rates_to_rows(rates: Any) -> list[dict[str, Any]]:
+    if rates is None:
+        return []
+    rows: list[dict[str, Any]] = []
+    for row in rates:
+        if hasattr(row, "_asdict"):
+            rows.append(dict(row._asdict()))
+            continue
+        if isinstance(row, dict):
+            rows.append(dict(row))
+            continue
+        names = getattr(getattr(row, "dtype", None), "names", None)
+        if names:
+            rows.append({name: row[name].item() if hasattr(row[name], "item") else row[name] for name in names})
+            continue
+        rows.append(dict(row))
+    return rows
+
+
+def check_mt5_m1_live(symbol: str, count: int = 500_000) -> dict[str, Any]:
+    from python.data_warehouse.mt5.mt5_m1_integrity_validator_v1 import validate_true_m1_rows_v1
+    from python.data_warehouse.store_v5.ohlcv_schema_v5 import mt5_row_to_canonical
+
+    published_at = utc_now_iso()
+    try:
+        import MetaTrader5 as mt5
+    except ImportError as exc:
+        return {
+            "ok": False,
+            "status": "mt5_m1_check_unavailable",
+            "error": str(exc),
+            "symbol": symbol,
+            "publishedAt": published_at,
+        }
+
+    initialized = False
+    try:
+        if not mt5.initialize():
+            return {
+                "ok": False,
+                "status": "mt5_m1_check_init_failed",
+                "error": "mt5_initialize_failed",
+                "mt5LastError": mt5.last_error(),
+                "symbol": symbol,
+                "publishedAt": published_at,
+            }
+        initialized = True
+
+        if not mt5.symbol_select(symbol, True):
+            return {
+                "ok": False,
+                "status": "mt5_m1_check_symbol_select_failed",
+                "error": "mt5_symbol_select_failed",
+                "mt5LastError": mt5.last_error(),
+                "symbol": symbol,
+                "publishedAt": published_at,
+            }
+
+        raw_rows = mt5_rates_to_rows(mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, int(count)))
+        canonical_rows = [
+            mt5_row_to_canonical(row, provider="mt5", symbol=symbol, timeframe="M1")
+            for row in raw_rows
+        ]
+        validation = validate_true_m1_rows_v1(canonical_rows)
+        true_rows = validation.get("trueRows") or []
+        first_time = validation.get("firstAnchorTime")
+        last_time = validation.get("lastTrueM1Time")
+        if true_rows:
+            first_time = int(true_rows[0]["time"])
+            last_time = int(true_rows[-1]["time"])
+
+        return {
+            "ok": True,
+            "status": "mt5_m1_check_completed" if validation.get("ok") else "mt5_m1_check_failed_validation",
+            "provider": "mt5",
+            "storeVersion": "v5",
+            "symbol": symbol,
+            "directM1": {
+                "datasetKey": f"mt5:{symbol}:direct:M1",
+                "mt5RowsCount": validation.get("mt5RowsCount", len(raw_rows)),
+                "trueM1RowsCount": validation.get("trueM1RowsCount", 0),
+                "rowsCount": validation.get("trueM1RowsCount", 0),
+                "firstTime": first_time,
+                "lastTime": last_time,
+                "firstTimeText": format_utc_text(first_time),
+                "lastTimeText": format_utc_text(last_time),
+                "firstAnchorTime": validation.get("firstAnchorTime"),
+                "firstHourM1CheckOk": validation.get("firstHourM1CheckOk"),
+                "firstHourTrueRows": validation.get("firstHourTrueRows"),
+                "gapCount": validation.get("gapCount"),
+                "m1IntegrityStatus": validation.get("m1IntegrityStatus"),
+                "status": "mt5_live_check",
+                "validationOk": validation.get("ok"),
+                "validationError": validation.get("error"),
+                "firstGap": validation.get("firstGap"),
+            },
+            "validation": {key: value for key, value in validation.items() if key != "trueRows"},
+            "aggregated": [],
+            "publishedAt": published_at,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": "mt5_m1_check_exception",
+            "error": str(exc),
+            "symbol": symbol,
+            "publishedAt": published_at,
+        }
+    finally:
+        if initialized:
+            try:
+                mt5.shutdown()
+            except Exception:
+                pass
+
+
 class Mt5SymbolsHandler(BaseHTTPRequestHandler):
     cache_root = DEFAULT_CACHE_ROOT
+    store_root: Path | None = None
 
     def do_OPTIONS(self) -> None:
         self.send_response(204)
@@ -315,6 +510,20 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/market-data/v1/store-v5/check":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            count = clamp_m1_check_count((query.get("count") or ["500000"])[0], default=500_000)
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            try:
+                payload = check_mt5_m1_live(symbol, count=count)
+                self.send_json(200, payload)
+            except Exception as exc:
+                self.send_json(500, {"ok": False, "status": "store_v5_check_failed", "error": str(exc)})
+            return
+
         if parsed.path not in {"/api/market-data/v1/mt5/symbols", "/api/market/mt5/symbols"}:
             self.send_json(404, {"ok": False, "status": "not_found", "error": parsed.path})
             return
@@ -356,15 +565,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--cache-root", type=Path, default=DEFAULT_CACHE_ROOT)
+    parser.add_argument("--store-root", type=Path, default=None)
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     Mt5SymbolsHandler.cache_root = args.cache_root.resolve()
+    Mt5SymbolsHandler.store_root = args.store_root.resolve() if args.store_root else None
     server = ThreadingHTTPServer((args.host, args.port), Mt5SymbolsHandler)
     print(f"[mt5_symbols_server] listening on http://{args.host}:{args.port}")
     print("[mt5_symbols_server] endpoint /api/market-data/v1/mt5/symbols?refresh=1")
+    print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/check?symbol=XAUUSDm")
     print(f"[mt5_symbols_server] cache {Mt5SymbolsHandler.cache_root}")
     try:
         server.serve_forever()
