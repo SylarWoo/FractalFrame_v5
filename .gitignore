@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node / Vite
+node_modules/
+dist/
+frontend/node_modules/
+frontend/dist/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# JetBrains / PyCharm
+.idea/
+*.iml
