@@ -48,24 +48,24 @@ class IntegrityValidatorTests(unittest.TestCase):
 
         prefixed = validate_true_m1_rows_v1(make_rows(ANCHOR - 300, 125))
         self.assertTrue(prefixed["ok"])
-        self.assertEqual(prefixed["discardedBeforeAnchorRowsCount"], 5)
-        self.assertEqual(prefixed["firstAnchorTime"], ANCHOR)
+        self.assertEqual(prefixed["discardedBeforeTrueM1RowsCount"], 0)
+        self.assertEqual(prefixed["firstTrueM1Time"], ANCHOR - 300)
 
-        no_anchor = validate_true_m1_rows_v1(make_rows(ANCHOR + 60, 60))
-        self.assertFalse(no_anchor["ok"])
-        self.assertEqual(no_anchor["error"], "no_utc_2200_anchor_found")
+        non_anchor_start = validate_true_m1_rows_v1(make_rows(ANCHOR + 60, 60))
+        self.assertTrue(non_anchor_start["ok"])
+        self.assertEqual(non_anchor_start["firstTrueM1Time"], ANCHOR + 60)
 
-        missing_first_hour = make_rows(ANCHOR, 60)
-        del missing_first_hour[10]
+        missing_first_hour = make_rows(ANCHOR, 59)
         bad_hour = validate_true_m1_rows_v1(missing_first_hour)
         self.assertFalse(bad_hour["ok"])
-        self.assertEqual(bad_hour["error"], "first_hour_m1_not_continuous")
+        self.assertEqual(bad_hour["error"], "no_true_m1_run_found")
 
         gap = validate_true_m1_rows_v1(make_rows(ANCHOR, 90, gap_after=64))
         self.assertTrue(gap["ok"])
         self.assertEqual(gap["gapCount"], 1)
         self.assertEqual(gap["firstGap"]["deltaSeconds"], 240)
         self.assertEqual(gap["firstGap"]["missingBarsEstimate"], 3)
+        self.assertEqual(gap["trueM1RowsCount"], 90)
 
     def test_incremental_cases(self) -> None:
         rows = make_rows(ANCHOR, 11)

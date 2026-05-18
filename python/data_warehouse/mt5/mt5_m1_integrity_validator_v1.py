@@ -40,14 +40,18 @@ def _gap(previous: int, next_time: int) -> dict[str, int]:
     }
 
 
-def _first_hour_check(candidate_rows: list[dict[str, Any]], first_anchor_time: int) -> tuple[bool, int, dict[str, int] | None]:
-    first_hour_rows = [row for row in candidate_rows if first_anchor_time <= _row_time(row) < first_anchor_time + 3600]
-    first_hour_gap = None
-    for previous, current in zip(first_hour_rows, first_hour_rows[1:]):
-        if _row_time(current) - _row_time(previous) != SECONDS_PER_MINUTE:
-            first_hour_gap = _gap(_row_time(previous), _row_time(current))
-            break
-    return len(first_hour_rows) == 60 and first_hour_gap is None, len(first_hour_rows), first_hour_gap
+def _find_first_m1_run_index(rows: list[dict[str, Any]], min_consecutive_rows: int) -> int | None:
+    if min_consecutive_rows <= 1:
+        return 0 if rows else None
+    for start in range(0, max(0, len(rows) - min_consecutive_rows + 1)):
+        ok = True
+        for offset in range(1, min_consecutive_rows):
+            if _row_time(rows[start + offset]) - _row_time(rows[start + offset - 1]) != SECONDS_PER_MINUTE:
+                ok = False
+                break
+        if ok:
+            return start
+    return None
 
 
 def validate_true_m1_rows_v1(
@@ -56,70 +60,38 @@ def validate_true_m1_rows_v1(
     anchor_hour_utc: int = 22,
     strict_continuous: bool = True,
     require_first_hour_complete: bool = True,
+    min_initial_consecutive_rows: int = 60,
+    require_utc_anchor: bool = False,
 ) -> dict[str, Any]:
     mt5_count = len(rows)
     ordered = _dedupe_sort(rows)
-    anchor_indexes = [i for i, row in enumerate(ordered) if _is_anchor_time(_row_time(row), anchor_hour_utc)]
-    anchor_index = anchor_indexes[0] if anchor_indexes else None
-    if anchor_index is None:
+    if require_utc_anchor:
+        candidate_start_index = next((i for i, row in enumerate(ordered) if _is_anchor_time(_row_time(row), anchor_hour_utc)), None)
+        error = "no_utc_2200_anchor_found"
+    else:
+        candidate_start_index = _find_first_m1_run_index(ordered, min_initial_consecutive_rows)
+        error = "no_true_m1_run_found"
+    if candidate_start_index is None:
         return {
             "ok": False,
-            "error": "no_utc_2200_anchor_found",
+            "error": error,
             "mt5RowsCount": mt5_count,
             "trueM1RowsCount": 0,
             "trueRows": [],
         }
 
-    first_failed_hour: dict[str, Any] | None = None
-    first_anchor_time = _row_time(ordered[anchor_index])
-    candidate_rows = ordered[anchor_index:]
-    first_hour_ok, first_hour_true_rows, first_hour_gap = _first_hour_check(candidate_rows, first_anchor_time)
-    if require_first_hour_complete and not first_hour_ok:
-        first_failed_hour = {
-            "firstAnchorTime": first_anchor_time,
-            "firstAnchorText": _time_text(first_anchor_time),
-            "firstHourTrueRows": first_hour_true_rows,
-            "firstGap": first_hour_gap,
-        }
-        for next_anchor_index in anchor_indexes[1:]:
-            next_anchor_time = _row_time(ordered[next_anchor_index])
-            next_candidate_rows = ordered[next_anchor_index:]
-            next_first_hour_ok, next_first_hour_true_rows, next_first_hour_gap = _first_hour_check(
-                next_candidate_rows,
-                next_anchor_time,
-            )
-            if next_first_hour_ok:
-                anchor_index = next_anchor_index
-                first_anchor_time = next_anchor_time
-                candidate_rows = next_candidate_rows
-                first_hour_ok = next_first_hour_ok
-                first_hour_true_rows = next_first_hour_true_rows
-                first_hour_gap = next_first_hour_gap
-                break
-
-    if require_first_hour_complete and not first_hour_ok:
-        failed = first_failed_hour or {
-            "firstAnchorTime": first_anchor_time,
-            "firstAnchorText": _time_text(first_anchor_time),
-            "firstHourTrueRows": first_hour_true_rows,
-            "firstGap": first_hour_gap,
-        }
-        return {
-            "ok": False,
-            "error": "first_hour_m1_not_continuous",
-            "mt5RowsCount": mt5_count,
-            "firstAnchorTime": failed["firstAnchorTime"],
-            "firstAnchorText": failed["firstAnchorText"],
-            "firstHourExpectedRows": 60,
-            "firstHourTrueRows": failed["firstHourTrueRows"],
-            "firstHourM1CheckOk": False,
-            "firstGap": failed["firstGap"],
-            "trueM1RowsCount": 0,
-            "trueRows": [],
-        }
+    first_true_m1_time = _row_time(ordered[candidate_start_index])
+    candidate_rows = ordered[candidate_start_index:]
+    initial_run_rows = 1
+    for previous, current in zip(candidate_rows, candidate_rows[1:]):
+        if _row_time(current) - _row_time(previous) != SECONDS_PER_MINUTE:
+            break
+        initial_run_rows += 1
+    first_hour_ok = initial_run_rows >= min_initial_consecutive_rows
 
     true_rows: list[dict[str, Any]] = []
     first_gap = None
+    gap_count = 0
     for row in candidate_rows:
         if not true_rows:
             true_rows.append(row)
@@ -131,32 +103,38 @@ def validate_true_m1_rows_v1(
             true_rows.append(row)
             continue
         if delta > SECONDS_PER_MINUTE:
-            first_gap = _gap(previous_time, current_time)
-            if strict_continuous:
+            gap_count += 1
+            if first_gap is None:
+                first_gap = _gap(previous_time, current_time)
+            if strict_continuous and require_utc_anchor:
                 break
             true_rows.append(row)
             continue
         continue
 
-    status = "true_m1_continuous" if first_gap is None else "true_m1_truncated_at_gap"
+    status = "true_m1_continuous" if first_gap is None else "true_m1_with_session_gaps"
     result = {
         "ok": True,
         "mt5RowsCount": mt5_count,
         "trueM1RowsCount": len(true_rows),
-        "discardedBeforeAnchorRowsCount": anchor_index,
-        "firstAnchorTime": first_anchor_time,
-        "firstAnchorText": _time_text(first_anchor_time),
-        "firstHourExpectedRows": 60,
-        "firstHourTrueRows": first_hour_true_rows,
+        "discardedBeforeAnchorRowsCount": candidate_start_index,
+        "discardedBeforeTrueM1RowsCount": candidate_start_index,
+        "firstAnchorTime": first_true_m1_time,
+        "firstAnchorText": _time_text(first_true_m1_time),
+        "firstTrueM1Time": first_true_m1_time,
+        "firstTrueM1Text": _time_text(first_true_m1_time),
+        "firstHourExpectedRows": min_initial_consecutive_rows,
+        "firstHourTrueRows": min(initial_run_rows, min_initial_consecutive_rows),
         "firstHourM1CheckOk": first_hour_ok,
-        "gapCount": 0 if first_gap is None else 1,
+        "initialConsecutiveRows": initial_run_rows,
+        "gapCount": gap_count,
         "firstGap": first_gap,
         "lastTrueM1Time": _row_time(true_rows[-1]) if true_rows else None,
         "m1IntegrityStatus": status,
         "trueRows": true_rows,
     }
     if first_gap is not None:
-        result["warning"] = "m1_gap_detected_truncated_at_first_gap"
+        result["warning"] = "m1_session_gaps_detected"
     return result
 
 

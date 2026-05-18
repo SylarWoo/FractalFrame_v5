@@ -9,7 +9,7 @@ MT5 Terminal TIMEFRAME_M1
   ↓
 MT5 M1 检查接口
   ↓
-正式 M1 validator
+正式 M1 validator（寻找首个真实 M1 连续窗口）
   ↓
 StoreV5 Direct M1
   ↓
@@ -25,9 +25,10 @@ KLineCharts datafeed / vectorBT export
 1. Direct Store 只允许写 M1。
 2. M5、M15、M30、H1、H2、H4、H8、D1、W1、MN1 全部从 Direct M1 聚合生成。
 3. MT5 返回条数只记录为 `mt5RowsCount`，不等于可入库条数。
-4. 可入库条数是 `trueM1RowsCount`，必须从 UTC 22:00 锚点开始，并且第一小时完整、后续严格 60 秒连续。
-5. 有 gap 时不补假数据，不静默跳过，不把 gap 后数据伪装成连续 M1。
-6. 前端不直接读 parquet，不直接接 MT5 K 线；前端只调用 HTTP API。
+4. 可入库条数是 `trueM1RowsCount`，必须从首个真实 M1 连续窗口开始。首个真实窗口默认要求至少 60 根相邻 bar 严格按 60 秒递进。
+5. UTC 22:00 不是 M1 入库起点门禁，只是后续聚合交易日锚点。
+6. 休市、周末、节假日造成的 session gap 可以记录并保留；不补假数据，不把小时级假 M1 当成真实 M1。
+7. 前端不直接读 parquet，不直接接 MT5 K 线；前端只调用 HTTP API。
 
 ## 3. HTTP API 边界
 
@@ -37,7 +38,7 @@ KLineCharts datafeed / vectorBT export
 GET /api/market-data/v1/mt5/m1/check?symbol=XAUUSDm
 ```
 
-用途：只检查 MT5 终端当前能返回多少 M1，以及其中第一段真实连续 M1 的范围。
+用途：只检查 MT5 终端当前能返回多少 M1，以及真实 M1 从哪个时间开始。
 
 返回重点：
 
@@ -68,7 +69,7 @@ GET /api/market-data/v1/store-v5/pull?symbol=XAUUSDm&mode=refresh
 GET /api/market-data/v1/store-v5/pull?symbol=XAUUSDm&mode=incremental
 ```
 
-用途：调用正式 `pull_mt5_m1_to_store_v5` 服务，把 validator 通过的 true M1 写入 Direct Store。
+用途：调用正式 `pull_mt5_m1_to_store_v5` 服务，把 validator 通过的 true M1 写入 Direct Store。写入时会丢弃首个真实 M1 之前的小时级假 M1 或其他非 M1 段。
 
 ### 聚合重建
 
@@ -136,7 +137,7 @@ baseTimeframe=M1
 anchor=UTC2200
 ```
 
-这样图表不会依赖 MT5 是否在线，也不会绕过仓库完整性门禁。
+这样图表不会依赖 MT5 是否在线，也不会绕过仓库完整性门禁。即使 Direct M1 的第一根不在 UTC 22:00，聚合层仍会按 UTC 22:00 切 bucket；不完整 bucket 会被跳过。
 
 ## 6. vectorBT 接入
 

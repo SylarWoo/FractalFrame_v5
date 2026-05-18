@@ -723,7 +723,7 @@ export function RightDrawer({
                             <span>MT5 条数：{formatCount(storeCheck.directM1.mt5RowsCount)}</span>
                             <span>真实条数：{formatCount(storeCheck.directM1.trueM1RowsCount)}</span>
                             <span>
-                              时间范围：
+                              真实 M1 范围：
                               {formatUtcRange(storeCheck.directM1.firstTimeText, storeCheck.directM1.lastTimeText)}
                             </span>
                             {storeCheck.directM1.validationError && (
@@ -736,7 +736,7 @@ export function RightDrawer({
                           <>
                             <span>MT5 条数：-</span>
                             <span>真实条数：-</span>
-                            <span>时间范围：-</span>
+                            <span>真实 M1 范围：-</span>
                           </>
                         )}
                         {storeCheckError && (
