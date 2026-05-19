@@ -43,20 +43,28 @@ def _ohlcv_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _query_latest_rows(files: list[str], limit: int) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    # StoreV5 part names are partitioned by year/month and part date, so reverse
-    # path order lets the common "latest N bars" path avoid scanning old history.
-    for start in range(0, len(files), 8):
-        batch = list(reversed(files))[start : start + 8]
-        if not batch:
-            break
-        need = max(limit, limit - len(rows))
-        sql = "SELECT time, open, high, low, close, volume FROM read_parquet(?) ORDER BY time DESC LIMIT ?"
-        rows.extend(_fetch_rows(sql, [batch, need]))
-        rows = sorted(rows, key=lambda row: int(row["time"]), reverse=True)[:limit]
-        if len(rows) >= limit:
-            break
-    return list(reversed(rows))
+    sql = """
+    WITH ranked AS (
+      SELECT
+        time,
+        open,
+        high,
+        low,
+        close,
+        volume,
+        ROW_NUMBER() OVER (
+          PARTITION BY time
+          ORDER BY volume DESC, ABS(high - low) DESC, filename DESC
+        ) AS row_rank
+      FROM read_parquet(?, filename=true)
+    )
+    SELECT time, open, high, low, close, volume
+    FROM ranked
+    WHERE row_rank = 1
+    ORDER BY time DESC
+    LIMIT ?
+    """
+    return list(reversed(_fetch_rows(sql, [files, int(limit)])))
 
 
 def query_ohlcv_store_v5(
@@ -126,7 +134,28 @@ def query_ohlcv_store_v5(
         }
 
     if time_from is None and time_to is not None and limit is not None:
-        sql = "SELECT time, open, high, low, close, volume FROM read_parquet(?) WHERE time <= ? ORDER BY time DESC LIMIT ?"
+        sql = """
+        WITH ranked AS (
+          SELECT
+            time,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            ROW_NUMBER() OVER (
+              PARTITION BY time
+              ORDER BY volume DESC, ABS(high - low) DESC, filename DESC
+            ) AS row_rank
+          FROM read_parquet(?, filename=true)
+          WHERE time <= ?
+        )
+        SELECT time, open, high, low, close, volume
+        FROM ranked
+        WHERE row_rank = 1
+        ORDER BY time DESC
+        LIMIT ?
+        """
         rows = _ohlcv_rows(list(reversed(_fetch_rows(sql, [files, int(time_to), int(limit)]))))
         time_values = [int(row["time"]) for row in rows]
         return {
@@ -163,7 +192,28 @@ def query_ohlcv_store_v5(
     limit_sql = "LIMIT ?" if limit is not None else ""
     if limit is not None:
         params.append(int(limit))
-    sql = f"SELECT time, open, high, low, close, volume FROM read_parquet(?) {where_sql} ORDER BY time {limit_sql}"
+    sql = f"""
+    WITH ranked AS (
+      SELECT
+        time,
+        open,
+        high,
+        low,
+        close,
+        volume,
+        ROW_NUMBER() OVER (
+          PARTITION BY time
+          ORDER BY volume DESC, ABS(high - low) DESC, filename DESC
+        ) AS row_rank
+      FROM read_parquet(?, filename=true)
+      {where_sql}
+    )
+    SELECT time, open, high, low, close, volume
+    FROM ranked
+    WHERE row_rank = 1
+    ORDER BY time
+    {limit_sql}
+    """
     rows = _ohlcv_rows(_fetch_rows(sql, params))
     time_values = [int(row["time"]) for row in rows]
     return {

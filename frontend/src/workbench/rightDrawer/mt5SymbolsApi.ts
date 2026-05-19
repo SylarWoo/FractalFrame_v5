@@ -234,6 +234,26 @@ export type StoreV5DeletePayload = {
   deletedDirs?: string[]
 }
 
+export type StoreV5M1GapRepairPayload = {
+  ok: boolean
+  status: string
+  error?: string
+  symbol: string
+  lookbackMinutes?: number
+  gapsDetected?: number
+  gaps?: Array<{
+    previousTime: number
+    nextTime: number
+    deltaSeconds: number
+    missingBarsEstimate: number
+  }>
+  rowsWritten?: number
+  rawRowsWritten?: number
+  firstRepairTime?: number | null
+  lastRepairTime?: number | null
+  publishedAt?: string
+}
+
 export type StoreV5QueryRow = {
   time: number
   open: number
@@ -256,6 +276,20 @@ export type StoreV5QueryPayload = {
     timeToResult?: number | null
     datasetKey?: string
   }
+}
+
+export type Mt5RealtimeTick = {
+  symbol: string
+  bid?: number | null
+  ask?: number | null
+  last?: number | null
+  volume?: number | null
+  time?: number | null
+  timeMsc?: number | null
+  dayOpen?: number | null
+  change?: number | null
+  changePercent?: number | null
+  publishedAt?: string
 }
 
 const defaultMt5ApiBase = 'http://127.0.0.1:8765'
@@ -406,6 +440,25 @@ export async function deleteStoreV5Symbol(symbol: string): Promise<StoreV5Delete
   return payload
 }
 
+export async function repairStoreV5M1Gaps(
+  symbol: string,
+  options: { lookbackMinutes?: number; maxGapMinutes?: number } = {},
+): Promise<StoreV5M1GapRepairPayload> {
+  const params = new URLSearchParams()
+  params.set('symbol', symbol)
+  params.set('lookbackMinutes', String(options.lookbackMinutes ?? 360))
+  params.set('maxGapMinutes', String(options.maxGapMinutes ?? 240))
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/m1/repair-gaps?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as StoreV5M1GapRepairPayload
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
 export async function deleteStoreV5AggregatedTimeframes(symbol: string, timeframes: string[]): Promise<StoreV5DeletePayload> {
   const params = new URLSearchParams()
   params.set('symbol', symbol)
@@ -471,6 +524,13 @@ export function createStoreV5PullEventSource(jobId: string): EventSource {
   const params = new URLSearchParams()
   params.set('jobId', jobId)
   return new EventSource(`${resolveMt5ApiBase()}/api/market-data/v1/store-v5/pull/events?${params.toString()}`)
+}
+
+export function createMt5TicksEventSource(symbols: string[], intervalMs = 500): EventSource {
+  const params = new URLSearchParams()
+  params.set('symbols', symbols.join(','))
+  params.set('intervalMs', String(intervalMs))
+  return new EventSource(`${resolveMt5ApiBase()}/api/market-data/v1/mt5/ticks/events?${params.toString()}`)
 }
 
 export async function cancelStoreV5PullJob(jobId: string): Promise<StoreV5PullJobPayload> {

@@ -2580,7 +2580,7 @@ def query_store_v5_ohlcv(params: dict[str, list[str]], store_root: Path | None =
     limit = safe_query_int((params.get("limit") or ["5000"])[0], 5000)
     if not symbol:
         return {"ok": False, "status": "bad_request", "error": "symbol_required"}
-    return query_ohlcv_store_v5(
+    payload = query_ohlcv_store_v5(
         symbol=symbol,
         timeframe=timeframe,
         mode=mode,
@@ -2591,6 +2591,316 @@ def query_store_v5_ohlcv(params: dict[str, list[str]], store_root: Path | None =
         limit=limit,
         store_root=store_root,
     )
+    rows = payload.get("rows")
+    if isinstance(rows, list):
+        rows_by_time: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row_time = safe_int(row.get("time"))
+            if row_time is None:
+                continue
+            rows_by_time[row_time] = row
+        deduped_rows = [rows_by_time[key] for key in sorted(rows_by_time)]
+        payload = {
+            **payload,
+            "rows": deduped_rows,
+            "rowsCount": len(deduped_rows),
+        }
+        if len(deduped_rows) != len(rows):
+            warnings = payload.get("warnings") if isinstance(payload.get("warnings"), list) else []
+            payload["warnings"] = [
+                *warnings,
+                {
+                    "status": "duplicate_ohlcv_rows_deduped",
+                    "removed": len(rows) - len(deduped_rows),
+                },
+            ]
+    return payload
+
+
+def repair_store_v5_m1_gaps(
+    symbol: str,
+    *,
+    lookback_minutes: int = 360,
+    max_gap_minutes: int = 240,
+    store_root: Path | None = None,
+) -> dict[str, Any]:
+    from python.data_warehouse.query.duckdb_ohlcv_query_v5 import query_ohlcv_store_v5
+    from python.data_warehouse.store_v5.manifest_v5 import get_dataset_cell, mark_aggregated_dirty_for_symbol
+    from python.data_warehouse.store_v5.ohlcv_schema_v5 import mt5_row_to_canonical
+    from python.data_warehouse.store_v5.partitioned_parquet_writer_v5 import append_ohlcv_part_v5
+    from python.data_warehouse.store_v5.store_v5_paths import dataset_key, resolve_store_root
+
+    root = resolve_store_root(store_root)
+    direct_key = dataset_key(provider="mt5", symbol=symbol, mode="direct", timeframe="M1")
+    direct_cell = get_dataset_cell(root, direct_key)
+    last_time = safe_int(direct_cell.get("lastTrueM1Time") or direct_cell.get("lastTime")) if direct_cell else None
+    if last_time is None:
+      return {
+          "ok": True,
+          "status": "m1_gap_repair_skipped_no_direct_m1",
+          "symbol": symbol,
+          "gapsDetected": 0,
+          "rowsWritten": 0,
+          "publishedAt": utc_now_iso(),
+      }
+
+    lookback_seconds = max(60, min(int(lookback_minutes), 7 * 24 * 60)) * 60
+    max_gap_seconds = max(120, min(int(max_gap_minutes), 24 * 60)) * 60
+    time_from = int(last_time) - lookback_seconds
+    payload = query_ohlcv_store_v5(
+        symbol=symbol,
+        timeframe="M1",
+        mode="direct",
+        time_from=time_from,
+        time_to=int(last_time),
+        limit=max(1000, int(lookback_minutes) + 500),
+        store_root=root,
+    )
+    rows = payload.get("rows") if isinstance(payload, dict) else []
+    existing_rows_by_time: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row_time = safe_int(row.get("time"))
+        if row_time is not None:
+            existing_rows_by_time[row_time] = row
+    ordered_times = sorted({
+        int(row.get("time"))
+        for row in rows
+        if isinstance(row, dict) and safe_int(row.get("time")) is not None
+    })
+
+    gaps: list[dict[str, int]] = []
+    for previous_time, next_time in zip(ordered_times, ordered_times[1:]):
+        delta = next_time - previous_time
+        if delta <= 60:
+            continue
+        if delta > max_gap_seconds:
+            continue
+        gaps.append({
+            "previousTime": previous_time,
+            "nextTime": next_time,
+            "deltaSeconds": delta,
+            "missingBarsEstimate": max(0, delta // 60 - 1),
+        })
+
+    try:
+        import MetaTrader5 as mt5
+    except ImportError as exc:
+        return {
+            "ok": False,
+            "status": "m1_gap_repair_mt5_unavailable",
+            "error": str(exc),
+            "symbol": symbol,
+            "gapsDetected": len(gaps),
+            "rowsWritten": 0,
+            "publishedAt": utc_now_iso(),
+        }
+
+    initialized = False
+    try:
+        if not mt5.initialize():
+            return {
+                "ok": False,
+                "status": "m1_gap_repair_mt5_init_failed",
+                "error": "mt5_initialize_failed",
+                "mt5LastError": mt5.last_error(),
+                "symbol": symbol,
+                "gapsDetected": len(gaps),
+                "rowsWritten": 0,
+                "publishedAt": utc_now_iso(),
+            }
+        initialized = True
+        if not mt5.symbol_select(symbol, True):
+            return {
+                "ok": False,
+                "status": "m1_gap_repair_symbol_select_failed",
+                "error": "mt5_symbol_select_failed",
+                "mt5LastError": mt5.last_error(),
+                "symbol": symbol,
+                "gapsDetected": len(gaps),
+                "rowsWritten": 0,
+                "publishedAt": utc_now_iso(),
+            }
+
+        def row_quality(row: dict[str, Any]) -> tuple[int, float]:
+            volume = safe_int(row.get("volume"))
+            try:
+                high = float(row.get("high"))
+                low = float(row.get("low"))
+                spread = abs(high - low)
+            except (TypeError, ValueError):
+                spread = 0.0
+            return (0 if volume is None else volume, spread)
+
+        repair_rows_by_time: dict[int, dict[str, Any]] = {}
+
+        recent_rates = mt5.copy_rates_range(
+            symbol,
+            mt5.TIMEFRAME_M1,
+            datetime.fromtimestamp(time_from, tz=timezone.utc),
+            datetime.fromtimestamp(int(last_time), tz=timezone.utc),
+        )
+        for row in mt5_rates_to_rows(recent_rates):
+            row_time = safe_int(row.get("time"))
+            if row_time is None or row_time < time_from or row_time > int(last_time):
+                continue
+            canonical = mt5_row_to_canonical(row, provider="mt5", symbol=symbol, timeframe="M1")
+            existing = existing_rows_by_time.get(row_time)
+            if existing is None or row_quality(canonical) > row_quality(existing):
+                repair_rows_by_time[row_time] = canonical
+
+        for gap in gaps:
+            rates = mt5.copy_rates_range(
+                symbol,
+                mt5.TIMEFRAME_M1,
+                datetime.fromtimestamp(int(gap["previousTime"]) + 60, tz=timezone.utc),
+                datetime.fromtimestamp(int(gap["nextTime"]) - 60, tz=timezone.utc),
+            )
+            for row in mt5_rates_to_rows(rates):
+                row_time = safe_int(row.get("time"))
+                if row_time is None:
+                    continue
+                if row_time <= gap["previousTime"] or row_time >= gap["nextTime"]:
+                    continue
+                repair_rows_by_time[row_time] = mt5_row_to_canonical(row, provider="mt5", symbol=symbol, timeframe="M1")
+
+        repair_rows = [repair_rows_by_time[key] for key in sorted(repair_rows_by_time)]
+        if not repair_rows:
+            return {
+                "ok": True,
+                "status": "m1_gap_repair_no_rows_available_from_mt5",
+                "symbol": symbol,
+                "lookbackMinutes": lookback_minutes,
+                "gapsDetected": len(gaps),
+                "gaps": gaps,
+                "rowsWritten": 0,
+                "publishedAt": utc_now_iso(),
+            }
+
+        raw_write = append_ohlcv_part_v5(
+            repair_rows,
+            provider="mt5",
+            symbol=symbol,
+            mode="raw_direct",
+            timeframe="M1",
+            store_root=root,
+            source="store_v5_m1_recent_repair",
+            deduplicate_existing_time=False,
+        )
+        previous_true_count = int(direct_cell.get("trueM1RowsCount") or direct_cell.get("rowsCount") or 0) if direct_cell else 0
+        previous_mt5_count = int(direct_cell.get("mt5RowsCount") or previous_true_count) if direct_cell else previous_true_count
+        sync_now = utc_now_iso()
+        direct_write = append_ohlcv_part_v5(
+            repair_rows,
+            provider="mt5",
+            symbol=symbol,
+            mode="direct",
+            timeframe="M1",
+            store_root=root,
+            source="store_v5_m1_recent_repair",
+            deduplicate_existing_time=False,
+            manifest_extra={
+                **(direct_cell or {}),
+                "mt5RowsCount": previous_mt5_count + len(repair_rows),
+                "trueM1RowsCount": previous_true_count + len(repair_rows),
+                "lastImportAt": sync_now,
+                "lastGapRepairAt": sync_now,
+                "lastGapRepairRows": len(repair_rows),
+                "lastGapRepairGaps": len(gaps),
+                "m1IntegrityStatus": "true_m1_recent_window_repaired",
+                "status": "ready",
+                "dirty": False,
+                "updatedAt": sync_now,
+            },
+        )
+        if int(direct_write.get("rowsWritten") or 0) > 0:
+            mark_aggregated_dirty_for_symbol(root, provider="mt5", symbol=symbol)
+
+        return {
+            "ok": True,
+            "status": "m1_gap_repair_completed",
+            "symbol": symbol,
+            "lookbackMinutes": lookback_minutes,
+            "gapsDetected": len(gaps),
+            "gaps": gaps,
+            "rowsWritten": int(direct_write.get("rowsWritten") or 0),
+            "rawRowsWritten": int(raw_write.get("rowsWritten") or 0),
+            "firstRepairTime": min(repair_rows_by_time) if repair_rows_by_time else None,
+            "lastRepairTime": max(repair_rows_by_time) if repair_rows_by_time else None,
+            "publishedAt": utc_now_iso(),
+        }
+    finally:
+        if initialized:
+            try:
+                mt5.shutdown()
+            except Exception:
+                pass
+
+
+def parse_symbols_query(value: str, max_symbols: int = 80) -> list[str]:
+    seen: set[str] = set()
+    symbols: list[str] = []
+    for item in value.split(","):
+        symbol = item.strip()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        symbols.append(symbol)
+        if len(symbols) >= max_symbols:
+            break
+    return symbols
+
+
+def mt5_tick_to_payload(mt5: Any, symbol: str, day_open: float | None) -> dict[str, Any] | None:
+    tick = mt5.symbol_info_tick(symbol)
+    if tick is None:
+        return None
+    raw = namedtuple_to_dict(tick)
+
+    bid = safe_float(raw.get("bid"))
+    ask = safe_float(raw.get("ask"))
+    last = safe_float(raw.get("last"))
+    if last is None or last <= 0:
+        if bid is not None and ask is not None and bid > 0 and ask > 0:
+            last = (bid + ask) / 2
+        elif bid is not None and bid > 0:
+            last = bid
+        elif ask is not None and ask > 0:
+            last = ask
+
+    change = None
+    change_percent = None
+    if last is not None and day_open is not None and day_open > 0:
+        change = last - day_open
+        change_percent = (change / day_open) * 100
+
+    return {
+        "symbol": symbol,
+        "bid": bid,
+        "ask": ask,
+        "last": last,
+        "volume": safe_float(raw.get("volume")),
+        "time": safe_int(raw.get("time")),
+        "timeMsc": safe_int(raw.get("time_msc")),
+        "dayOpen": day_open,
+        "change": change,
+        "changePercent": change_percent,
+        "publishedAt": utc_now_iso(),
+    }
+
+
+def resolve_mt5_day_open(mt5: Any, symbol: str) -> float | None:
+    try:
+        rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_D1, 0, 1)
+        rows = mt5_rates_to_rows(rates)
+        if not rows:
+            return None
+        return safe_float(rows[0].get("open"))
+    except Exception:
+        return None
 
 
 class Mt5SymbolsHandler(BaseHTTPRequestHandler):
@@ -2620,6 +2930,16 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/market-data/v1/mt5/ticks/events":
+            query = parse_qs(parsed.query)
+            symbols = parse_symbols_query((query.get("symbols") or [""])[0])
+            interval_ms = max(200, min(safe_query_int((query.get("intervalMs") or query.get("interval_ms") or [None])[0], 500) or 500, 5_000))
+            if not symbols:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbols_required"})
+                return
+            self.send_mt5_tick_events(symbols, interval_ms=interval_ms)
+            return
+
         if parsed.path == "/api/market-data/v1/mt5/m1/check/start":
             query = parse_qs(parsed.query)
             symbol = (query.get("symbol") or [""])[0].strip()
@@ -2711,6 +3031,26 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
                 self.send_json(200, payload)
             except Exception as exc:
                 self.send_json(500, {"ok": False, "status": "store_v5_status_failed", "error": str(exc)})
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/m1/repair-gaps":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            lookback_minutes = safe_query_int((query.get("lookbackMinutes") or query.get("lookback_minutes") or [None])[0], 360) or 360
+            max_gap_minutes = safe_query_int((query.get("maxGapMinutes") or query.get("max_gap_minutes") or [None])[0], 240) or 240
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            try:
+                payload = repair_store_v5_m1_gaps(
+                    symbol,
+                    lookback_minutes=lookback_minutes,
+                    max_gap_minutes=max_gap_minutes,
+                    store_root=self.store_root,
+                )
+                self.send_json(200 if payload.get("ok") is True else 500, payload)
+            except Exception as exc:
+                self.send_json(500, {"ok": False, "status": "store_v5_m1_gap_repair_failed", "error": str(exc)})
             return
 
         if parsed.path == "/api/market-data/v1/store-v5/delete":
@@ -2934,6 +3274,108 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def send_mt5_tick_events(self, symbols: list[str], interval_ms: int) -> None:
+        self.send_response(200)
+        self.send_cors_headers()
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+
+        try:
+            import MetaTrader5 as mt5
+        except ImportError as exc:
+            self.write_sse_event(1, "error", {
+                "ok": False,
+                "status": "mt5_realtime_unavailable",
+                "error": str(exc),
+                "symbols": symbols,
+                "publishedAt": utc_now_iso(),
+            })
+            return
+
+        initialized = False
+        event_id = 1
+        try:
+            if not mt5.initialize():
+                self.write_sse_event(event_id, "error", {
+                    "ok": False,
+                    "status": "mt5_realtime_init_failed",
+                    "error": "mt5_initialize_failed",
+                    "mt5LastError": mt5.last_error(),
+                    "symbols": symbols,
+                    "publishedAt": utc_now_iso(),
+                })
+                return
+            initialized = True
+
+            selected_symbols: list[str] = []
+            day_open_by_symbol: dict[str, float | None] = {}
+            for symbol in symbols:
+                if mt5.symbol_select(symbol, True):
+                    selected_symbols.append(symbol)
+                    day_open_by_symbol[symbol] = resolve_mt5_day_open(mt5, symbol)
+
+            if not selected_symbols:
+                self.write_sse_event(event_id, "error", {
+                    "ok": False,
+                    "status": "mt5_realtime_symbol_select_failed",
+                    "error": "all_symbol_select_failed",
+                    "symbols": symbols,
+                    "mt5LastError": mt5.last_error(),
+                    "publishedAt": utc_now_iso(),
+                })
+                return
+
+            self.write_sse_event(event_id, "ready", {
+                "ok": True,
+                "status": "mt5_realtime_ready",
+                "symbols": selected_symbols,
+                "intervalMs": interval_ms,
+                "publishedAt": utc_now_iso(),
+            })
+
+            sleep_seconds = interval_ms / 1000
+            while True:
+                event_id += 1
+                ticks = [
+                    payload
+                    for symbol in selected_symbols
+                    if (payload := mt5_tick_to_payload(mt5, symbol, day_open_by_symbol.get(symbol))) is not None
+                ]
+                self.write_sse_event(event_id, "ticks", {
+                    "ok": True,
+                    "status": "mt5_realtime_ticks",
+                    "symbols": selected_symbols,
+                    "ticks": ticks,
+                    "publishedAt": utc_now_iso(),
+                })
+                time.sleep(sleep_seconds)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            return
+        except Exception as exc:
+            try:
+                self.write_sse_event(event_id + 1, "error", {
+                    "ok": False,
+                    "status": "mt5_realtime_exception",
+                    "error": str(exc),
+                    "symbols": symbols,
+                    "publishedAt": utc_now_iso(),
+                })
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                return
+        finally:
+            if initialized:
+                try:
+                    mt5.shutdown()
+                except Exception:
+                    pass
+
+    def write_sse_event(self, event_id: int, event_name: str, data: dict[str, Any]) -> None:
+        self.wfile.write(f"id: {event_id}\n".encode("utf-8"))
+        self.wfile.write(f"event: {event_name}\n".encode("utf-8"))
+        self.wfile.write(f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8"))
+        self.wfile.flush()
 
     def send_pull_job_events(self, job_id: str) -> None:
         self.send_response(200)

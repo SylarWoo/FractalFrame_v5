@@ -27,8 +27,10 @@ import { TopBar } from './topbar/TopBar'
 import './AppShell.css'
 
 const drawerWidthStorageKey = 'fractalframe:rightWidgetDrawerWidthPx:v1'
+const rightDrawerOpenStorageKey = 'fractalframe:rightWidgetDrawerOpen:v1'
 const bottomDrawerOpenStorageKey = 'fractalframe:bottomDrawerOpen:v1'
 const bottomDrawerHeightStorageKey = 'fractalframe:bottomDrawerHeightPx:v1'
+const sharedSelectionStorageKey = 'fractalframe:mt5ImportCenterSharedSelection:v1'
 
 const leftToolbarItems = [
   { type: 'button', label: 'Cursor', svg: LEFT_RAIL_CURSOR_ARROW_SVGREPO_ICON_48 },
@@ -92,16 +94,44 @@ function getInitialBottomDrawerHeight() {
   }
 }
 
+function getInitialRightDrawerOpen() {
+  try {
+    return window.localStorage.getItem(rightDrawerOpenStorageKey) === '1'
+  } catch {
+    return false
+  }
+}
+
+function readSharedSelection() {
+  try {
+    const raw = window.localStorage.getItem(sharedSelectionStorageKey)
+    const parsed = raw ? JSON.parse(raw) : null
+    return {
+      symbol: typeof parsed?.symbol === 'string' && parsed.symbol ? parsed.symbol : 'XAUUSDm',
+      period: typeof parsed?.period === 'string' && parsed.period ? parsed.period : 'M1',
+    }
+  } catch {
+    return { symbol: 'XAUUSDm', period: 'M1' }
+  }
+}
+
+function periodToChartPeriod(period: string) {
+  return period.toUpperCase() === 'M1' ? '1m' : period
+}
+
 export function AppShell() {
-  const [rightDrawerOpen, setRightDrawerOpen] = useState(false)
+  const [rightDrawerOpen, setRightDrawerOpen] = useState(getInitialRightDrawerOpen)
   const [rightDrawerWidth, setRightDrawerWidth] = useState(getInitialDrawerWidth)
   const [bottomDrawerOpen, setBottomDrawerOpen] = useState(getInitialBottomDrawerOpen)
   const [bottomDrawerHeight, setBottomDrawerHeight] = useState(getInitialBottomDrawerHeight)
   const [activeBottomPanel, setActiveBottomPanel] = useState<(typeof bottomPanels)[number]['id']>('strategyTester')
   const [activeLeftTool, setActiveLeftTool] = useState('Cursor')
-  const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null }>({
-    symbol: 'XAUUSDm',
-    period: '1m',
+  const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null; reloadId?: number }>(() => {
+    const shared = readSharedSelection()
+    return {
+      symbol: shared.symbol,
+      period: periodToChartPeriod(shared.period),
+    }
   })
   const [chartJump, setChartJump] = useState<{ id: number; timestamp?: number } | null>(null)
   const [chartStepLoad, setChartStepLoad] = useState<{ direction: 'left' | 'right'; id: number } | null>(null)
@@ -126,6 +156,14 @@ export function AppShell() {
       // Width persistence is best-effort only.
     }
   }, [rightDrawerWidth])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(rightDrawerOpenStorageKey, rightDrawerOpen ? '1' : '0')
+    } catch {
+      // Right drawer open state persistence is best-effort only.
+    }
+  }, [rightDrawerOpen])
 
   useEffect(() => {
     try {
@@ -224,6 +262,7 @@ export function AppShell() {
             jump={chartJump}
             onLoadStateChange={setChartLoadState}
             period={chartTarget.period}
+            reloadId={chartTarget.reloadId}
             stepLoad={chartStepLoad}
             symbol={chartTarget.symbol}
             totalRows={chartTarget.totalRows}

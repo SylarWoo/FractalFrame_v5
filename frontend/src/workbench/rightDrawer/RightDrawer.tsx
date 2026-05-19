@@ -7,6 +7,7 @@ import {
   cancelMt5M1CheckJob,
   cancelStoreV5PullJob,
   cleanStoreV5DirectM1,
+  createMt5TicksEventSource,
   createStoreV5AggregateEventSource,
   createStoreV5PullEventSource,
   deleteStoreV5AggregatedTimeframes,
@@ -17,11 +18,12 @@ import {
   fetchStoreV5PullJob,
   fetchStoreV5Check,
   fetchStoreV5Status,
+  repairStoreV5M1Gaps,
   startStoreV5AggregateJob,
   startStoreV5PullJob,
   startMt5M1CheckJob,
 } from './mt5SymbolsApi'
-import type { Mt5M1CheckJobPayload, Mt5SymbolRow, StoreV5AggregateJobPayload, StoreV5CheckPayload, StoreV5PullJobPayload } from './mt5SymbolsApi'
+import type { Mt5M1CheckJobPayload, Mt5RealtimeTick, Mt5SymbolRow, StoreV5AggregateJobPayload, StoreV5CheckPayload, StoreV5PullJobPayload } from './mt5SymbolsApi'
 
 type RightDrawerProps = {
   chartLoadState?: ChartLoadState | null
@@ -33,7 +35,7 @@ type RightDrawerProps = {
   onResize: (width: number) => void
   onResetChartToLatest?: () => void
   onToggle: () => void
-  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null }) => void
+  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number }) => void
 }
 
 const minDrawerWidth = 220
@@ -54,7 +56,11 @@ const mt5M1CheckResultsStorageKey = 'fractalframe:mt5ImportCenterM1CheckResults:
 const storeV5StatusStorageKey = 'fractalframe:mt5ImportCenterStoreV5Status:v1'
 const storeV5ListSymbolsStorageKey = 'fractalframe:mt5ImportCenterStoreV5ListSymbols:v1'
 const storePanelPersistenceEnabledStorageKey = 'fractalframe:mt5ImportCenterStorePanelPersistenceEnabled:v1'
+const watchlistRealtimeEnabledStorageKey = 'fractalframe:mt5ImportCenterWatchlistRealtimeEnabled:v1'
+const watchlistRealtimeSnapshotStorageKey = 'fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1'
 const storePanelSelectedTableKeyStorageKey = 'fractalframe:mt5ImportCenterStorePanelSelectedTableKey:v1'
+const importCenterQueryStorageKey = 'fractalframe:mt5ImportCenterQuery:v1'
+const importCenterSelectedTabStorageKey = 'fractalframe:mt5ImportCenterSelectedTab:v1'
 const storePanelPersistenceKeys = [
   mt5M1CheckResultsStorageKey,
   storeV5StatusStorageKey,
@@ -62,6 +68,8 @@ const storePanelPersistenceKeys = [
   storePanelSelectedTableKeyStorageKey,
 ]
 const storeTableAggregatePeriods = ['M5', 'M15', 'M30', 'H1', 'H2', 'H3', 'H4', 'D1', 'W1', 'MN1']
+const storeV5M1RepairLookbackMinutes = 720
+const storeV5M1RepairMaxGapMinutes = 720
 
 const defaultColumnWidths = {
   symbol: 96,
@@ -108,6 +116,18 @@ type StoreTableRow = {
 type SharedSelection = {
   symbol: string
   period: string
+}
+
+type PersistedRealtimeSnapshot = {
+  lastTickAt?: string
+  log?: string[]
+  ticks?: Record<string, Mt5RealtimeTick>
+}
+
+function resolveStoreV5AggregateTargets(status: StoreV5CheckPayload) {
+  return status.aggregated
+    .map((cell) => String(cell.timeframe || '').toUpperCase())
+    .filter((period) => storeTableAggregatePeriods.includes(period))
 }
 
 const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
@@ -195,6 +215,81 @@ function readStorePanelPersistenceEnabled() {
     return raw == null ? true : raw === '1'
   } catch {
     return true
+  }
+}
+
+function readWatchlistRealtimeEnabled() {
+  try {
+    return window.localStorage.getItem(watchlistRealtimeEnabledStorageKey) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveWatchlistRealtimeEnabled(enabled: boolean) {
+  try {
+    window.localStorage.setItem(watchlistRealtimeEnabledStorageKey, enabled ? '1' : '0')
+  } catch {
+    // Watchlist realtime persistence is best-effort only.
+  }
+}
+
+function readImportCenterQuery() {
+  try {
+    return window.localStorage.getItem(importCenterQueryStorageKey) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function saveImportCenterQuery(value: string) {
+  try {
+    window.localStorage.setItem(importCenterQueryStorageKey, value)
+  } catch {
+    // Query persistence is best-effort only.
+  }
+}
+
+function readImportCenterSelectedTab(): SelectedPanelTab {
+  try {
+    const value = window.localStorage.getItem(importCenterSelectedTabStorageKey)
+    return selectedPanelTabs.some((tab) => tab.key === value) ? value as SelectedPanelTab : 'details'
+  } catch {
+    return 'details'
+  }
+}
+
+function saveImportCenterSelectedTab(value: SelectedPanelTab) {
+  try {
+    window.localStorage.setItem(importCenterSelectedTabStorageKey, value)
+  } catch {
+    // Tab persistence is best-effort only.
+  }
+}
+
+function readPersistedRealtimeSnapshot(): PersistedRealtimeSnapshot {
+  try {
+    const raw = window.localStorage.getItem(watchlistRealtimeSnapshotStorageKey)
+    const parsed = raw ? JSON.parse(raw) : null
+    return {
+      lastTickAt: typeof parsed?.lastTickAt === 'string' ? parsed.lastTickAt : '',
+      log: Array.isArray(parsed?.log) ? parsed.log.filter((item: unknown): item is string => typeof item === 'string').slice(0, 8) : [],
+      ticks: parsed?.ticks && typeof parsed.ticks === 'object' ? parsed.ticks as Record<string, Mt5RealtimeTick> : {},
+    }
+  } catch {
+    return { lastTickAt: '', log: [], ticks: {} }
+  }
+}
+
+function savePersistedRealtimeSnapshot(snapshot: PersistedRealtimeSnapshot) {
+  try {
+    window.localStorage.setItem(watchlistRealtimeSnapshotStorageKey, JSON.stringify({
+      lastTickAt: snapshot.lastTickAt ?? '',
+      log: (snapshot.log ?? []).slice(0, 8),
+      ticks: snapshot.ticks ?? {},
+    }))
+  } catch {
+    // Realtime snapshot persistence is best-effort only.
   }
 }
 
@@ -433,6 +528,24 @@ function formatCount(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('en-US') : '-'
 }
 
+function formatMarketPrice(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toLocaleString('en-US', { maximumFractionDigits: 6 })
+    : '-'
+}
+
+function formatMarketChange(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${value.toLocaleString('en-US', { maximumFractionDigits: 6 })}`
+}
+
+function formatMarketPercent(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${value.toFixed(2)}%`
+}
+
 function formatChartLoadStatus(state: ChartLoadState | null | undefined) {
   if (!state) return '-'
   if (state.loading) return `${state.symbol} ${state.period} 加载中 ${state.requestedRows.toLocaleString()}`
@@ -653,9 +766,11 @@ export function RightDrawer({
   onOpenChart,
 }: RightDrawerProps) {
   const initialSnapshot = useMemo(getInitialSymbolSnapshot, [])
-  const [query, setQuery] = useState('')
+  const initialRealtimeSnapshot = useMemo(readPersistedRealtimeSnapshot, [])
+  const initialSharedSelection = useMemo(readSharedSelection, [])
+  const [query, setQuery] = useState(readImportCenterQuery)
   const [symbols, setSymbols] = useState<Mt5SymbolRow[]>(() => initialSnapshot?.symbols ?? [])
-  const [selectedSymbol, setSelectedSymbol] = useState(() => initialSnapshot?.selectedSymbol ?? '')
+  const [selectedSymbol, setSelectedSymbol] = useState(() => initialSharedSelection.symbol || initialSnapshot?.selectedSymbol || '')
   const [status, setStatus] = useState(
     () => normalizeStoredStatus(initialSnapshot?.status ?? '', initialSnapshot?.symbols.length ?? 0),
   )
@@ -664,24 +779,30 @@ export function RightDrawer({
   const [topPaneHeight, setTopPaneHeight] = useState(getInitialTopPaneHeight)
   const [watchlistTableHeight, setWatchlistTableHeight] = useState(getInitialWatchlistTableHeight)
   const [columnWidths, setColumnWidths] = useState(getInitialColumnWidths)
-  const [selectedPanelTab, setSelectedPanelTab] = useState<SelectedPanelTab>('details')
+  const [selectedPanelTab, setSelectedPanelTab] = useState<SelectedPanelTab>(readImportCenterSelectedTab)
   const [storePanelPersistenceEnabled, setStorePanelPersistenceEnabled] = useState(readStorePanelPersistenceEnabled)
   const initialPersistedM1Check = useMemo(
-    () => readPersistedM1CheckResult(initialSnapshot?.selectedSymbol ?? '', storePanelPersistenceEnabled),
-    [initialSnapshot?.selectedSymbol, storePanelPersistenceEnabled],
+    () => readPersistedM1CheckResult(selectedSymbol, storePanelPersistenceEnabled),
+    [selectedSymbol, storePanelPersistenceEnabled],
   )
   const initialPersistedStoreV5Status = useMemo(
-    () => readPersistedStoreV5Status(initialSnapshot?.selectedSymbol ?? '', storePanelPersistenceEnabled),
-    [initialSnapshot?.selectedSymbol, storePanelPersistenceEnabled],
+    () => readPersistedStoreV5Status(selectedSymbol, storePanelPersistenceEnabled),
+    [selectedSymbol, storePanelPersistenceEnabled],
   )
   const [storeCheck, setStoreCheck] = useState<StoreV5CheckPayload | null>(() => initialPersistedM1Check?.payload ?? null)
   const [mt5M1LastCheckedAt, setMt5M1LastCheckedAt] = useState(() => initialPersistedM1Check?.checkedAt ?? '')
   const [localStoreStatus, setLocalStoreStatus] = useState<StoreV5CheckPayload | null>(() => initialPersistedStoreV5Status?.payload ?? null)
   const [storeV5ListSymbols, setStoreV5ListSymbols] = useState<string[]>(() => readStoreV5ListSymbols(storePanelPersistenceEnabled))
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(readWatchlistSymbols)
+  const [watchlistRealtimeEnabled, setWatchlistRealtimeEnabled] = useState(readWatchlistRealtimeEnabled)
+  const [watchlistRealtimeReady, setWatchlistRealtimeReady] = useState(false)
+  const [watchlistRealtimeStatus, setWatchlistRealtimeStatus] = useState('')
+  const [watchlistRealtimeLog, setWatchlistRealtimeLog] = useState<string[]>(() => initialRealtimeSnapshot.log ?? [])
+  const [watchlistTicks, setWatchlistTicks] = useState<Record<string, Mt5RealtimeTick>>(() => initialRealtimeSnapshot.ticks ?? {})
+  const [watchlistLastTickAt, setWatchlistLastTickAt] = useState(() => initialRealtimeSnapshot.lastTickAt ?? '')
   const [shortcutMenuEnabled, setShortcutMenuEnabled] = useState(readShortcutMenuEnabled)
   const [selectedStoreTableKey, setSelectedStoreTableKey] = useState(() =>
-    readPersistedStoreTableSelection(initialSnapshot?.selectedSymbol ?? '', storePanelPersistenceEnabled),
+    readPersistedStoreTableSelection(initialSharedSelection.symbol || initialSnapshot?.selectedSymbol || '', storePanelPersistenceEnabled),
   )
   const [selectedAggregatePeriods, setSelectedAggregatePeriods] = useState<string[]>([])
   const [storeCheckLoading, setStoreCheckLoading] = useState(false)
@@ -699,6 +820,8 @@ export function RightDrawer({
   const autoOpenedStoreTableRef = useRef('')
   const pullEventSourceRef = useRef<EventSource | null>(null)
   const aggregateEventSourceRef = useRef<EventSource | null>(null)
+  const watchlistTicksEventSourceRef = useRef<EventSource | null>(null)
+  const watchlistRealtimeRunRef = useRef(0)
 
   const visibleSymbols = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -732,6 +855,12 @@ export function RightDrawer({
       .map((symbol) => rowsBySymbol.get(symbol))
       .filter((row): row is Mt5SymbolRow => Boolean(row))
   }, [symbols, watchlistSymbols])
+  const foregroundRealtimeSymbol = selectedRow?.symbol ?? ''
+
+  function pushWatchlistRealtimeLog(message: string) {
+    const timestamp = new Date().toLocaleTimeString()
+    setWatchlistRealtimeLog((current) => [`${timestamp}  ${message}`, ...current].slice(0, 8))
+  }
 
   const visibleStoreAggregateRows = useMemo(() => {
     const cellsByPeriod = new Map(
@@ -863,6 +992,285 @@ export function RightDrawer({
       totalRows: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : null,
     })
   }, [onOpenChart, selectedRow?.symbol, selectedStoreTableKey, selectedStoreTableKeyIsVisible, visibleStoreTableRows])
+
+  useEffect(() => {
+    saveImportCenterQuery(query)
+  }, [query])
+
+  useEffect(() => {
+    saveImportCenterSelectedTab(selectedPanelTab)
+  }, [selectedPanelTab])
+
+  useEffect(() => {
+    saveWatchlistRealtimeEnabled(watchlistRealtimeEnabled)
+  }, [watchlistRealtimeEnabled])
+
+  useEffect(() => {
+    savePersistedRealtimeSnapshot({
+      lastTickAt: watchlistLastTickAt,
+      log: watchlistRealtimeLog,
+      ticks: watchlistTicks,
+    })
+  }, [watchlistLastTickAt, watchlistRealtimeLog, watchlistTicks])
+
+  useEffect(() => {
+    if (!watchlistRealtimeEnabled) {
+      watchlistRealtimeRunRef.current += 1
+      setWatchlistRealtimeReady(false)
+      setWatchlistRealtimeStatus('')
+      pushWatchlistRealtimeLog('Realtime stopped')
+      return
+    }
+
+    if (!foregroundRealtimeSymbol) {
+      setWatchlistRealtimeReady(false)
+      setWatchlistRealtimeStatus('No symbols')
+      pushWatchlistRealtimeLog('No foreground symbol, realtime not started')
+      return
+    }
+
+    const runId = watchlistRealtimeRunRef.current + 1
+    watchlistRealtimeRunRef.current = runId
+    setWatchlistRealtimeReady(false)
+    setWatchlistRealtimeStatus('Syncing')
+    setWatchlistRealtimeLog([])
+    pushWatchlistRealtimeLog(`Realtime requested for foreground symbol ${foregroundRealtimeSymbol}`)
+
+    const waitForPullJob = (jobId: string, symbol: string) => new Promise<void>((resolve, reject) => {
+      const source = createStoreV5PullEventSource(jobId)
+
+      const cleanup = () => source.close()
+      const fail = (message: string) => {
+        cleanup()
+        reject(new Error(message))
+      }
+
+      source.addEventListener('progress', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as StoreV5PullJobPayload
+          if (watchlistRealtimeRunRef.current !== runId) {
+            cleanup()
+            resolve()
+            return
+          }
+          const line = `${symbol} ${payload.progressLabel || payload.status || 'Pulling M1'}`
+          setWatchlistRealtimeStatus(line)
+          pushWatchlistRealtimeLog(line)
+        } catch {
+          setWatchlistRealtimeStatus(`${symbol} Pulling M1`)
+        }
+      })
+      source.addEventListener('done', () => {
+        pushWatchlistRealtimeLog(`${symbol} M1 gap fill completed`)
+        cleanup()
+        resolve()
+      })
+      source.addEventListener('cancelled', () => fail(`${symbol} pull cancelled`))
+      source.addEventListener('error', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as { error?: string; status?: string }
+          fail(payload.error || payload.status || `${symbol} pull failed`)
+        } catch {
+          fail(`${symbol} pull failed`)
+        }
+      })
+      source.onerror = () => fail(`${symbol} pull disconnected`)
+    })
+
+    const waitForAggregateJob = (jobId: string, symbol: string) => new Promise<void>((resolve, reject) => {
+      const source = createStoreV5AggregateEventSource(jobId)
+
+      const cleanup = () => source.close()
+      const fail = (message: string) => {
+        cleanup()
+        reject(new Error(message))
+      }
+
+      source.addEventListener('progress', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as StoreV5AggregateJobPayload
+          if (watchlistRealtimeRunRef.current !== runId) {
+            cleanup()
+            resolve()
+            return
+          }
+          const line = `${symbol} ${payload.progressLabel || payload.status || 'Aggregating'}`
+          setWatchlistRealtimeStatus(line)
+          pushWatchlistRealtimeLog(line)
+        } catch {
+          setWatchlistRealtimeStatus(`${symbol} Aggregating`)
+        }
+      })
+      source.addEventListener('done', () => {
+        pushWatchlistRealtimeLog(`${symbol} aggregation completed`)
+        cleanup()
+        resolve()
+      })
+      source.addEventListener('cancelled', () => fail(`${symbol} aggregate cancelled`))
+      source.addEventListener('error', (event) => {
+        try {
+          const payload = JSON.parse((event as MessageEvent).data) as { error?: string; status?: string }
+          fail(payload.error || payload.status || `${symbol} aggregate failed`)
+        } catch {
+          fail(`${symbol} aggregate failed`)
+        }
+      })
+      source.onerror = () => fail(`${symbol} aggregate disconnected`)
+    })
+
+    const runRealtimeSync = async () => {
+      try {
+        for (const symbol of [foregroundRealtimeSymbol]) {
+          if (watchlistRealtimeRunRef.current !== runId) return
+
+          setWatchlistRealtimeStatus(`${symbol} checking store`)
+          pushWatchlistRealtimeLog(`${symbol} checking local StoreV5 status`)
+          const statusPayload = await fetchStoreV5Status(symbol)
+          const hasLocalM1 = typeof resolveLocalM1Rows(statusPayload) === 'number'
+            && Number(resolveLocalM1Rows(statusPayload)) > 0
+
+          setWatchlistRealtimeStatus(`${symbol} pulling missing M1`)
+          pushWatchlistRealtimeLog(`${symbol} ${hasLocalM1 ? 'incremental M1 gap fill started' : 'full M1 download started'}`)
+          const pullJob = await startStoreV5PullJob(symbol, hasLocalM1 ? 'incremental' : 'refresh')
+          await waitForPullJob(pullJob.jobId, symbol)
+          if (watchlistRealtimeRunRef.current !== runId) return
+
+          setWatchlistRealtimeStatus(`${symbol} repairing M1 gaps`)
+          pushWatchlistRealtimeLog(`${symbol} scanning and repairing recent M1 window`)
+          const gapRepair = await repairStoreV5M1Gaps(symbol, {
+            lookbackMinutes: storeV5M1RepairLookbackMinutes,
+            maxGapMinutes: storeV5M1RepairMaxGapMinutes,
+          })
+          if ((gapRepair.gapsDetected ?? 0) > 0) {
+            pushWatchlistRealtimeLog(
+              `${symbol} gap repair: ${gapRepair.gapsDetected ?? 0} gaps, ${gapRepair.rowsWritten ?? 0} rows written`,
+            )
+          } else {
+            pushWatchlistRealtimeLog(`${symbol} M1 recent window repaired, ${gapRepair.rowsWritten ?? 0} rows written`)
+          }
+
+          const statusAfterPull = await fetchStoreV5Status(symbol)
+
+          const aggregateTargets = resolveStoreV5AggregateTargets(statusAfterPull)
+
+          if (aggregateTargets.length) {
+            setWatchlistRealtimeStatus(`${symbol} aggregating periods`)
+            pushWatchlistRealtimeLog(`${symbol} aggregating ${aggregateTargets.join(', ')}`)
+            const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets)
+            await waitForAggregateJob(aggregateJob.jobId, symbol)
+          } else {
+            pushWatchlistRealtimeLog(`${symbol} no aggregate periods to rebuild`)
+          }
+
+          const statusAfterSync = await fetchStoreV5Status(symbol)
+          if (symbol === selectedRow?.symbol) {
+            setLocalStoreStatus(statusAfterSync)
+            savePersistedStoreV5Status(symbol, statusAfterSync, new Date().toISOString(), storePanelPersistenceEnabled)
+          }
+        }
+
+        if (watchlistRealtimeRunRef.current !== runId) return
+        setWatchlistRealtimeReady(true)
+        setWatchlistRealtimeStatus('Starting realtime')
+        const period = periodFromStoreTableKey(selectedStoreTableKey) || readSharedSelection().period || 'M1'
+        const latestStatus = await fetchStoreV5Status(foregroundRealtimeSymbol)
+        const rowsForPeriod = period === 'M1'
+          ? resolveLocalM1Rows(latestStatus)
+          : latestStatus.aggregated.find((cell) => String(cell.timeframe || '').toUpperCase() === period)?.rowsCount
+        onOpenChart?.({
+          symbol: foregroundRealtimeSymbol,
+          period: period === 'M1' ? '1m' : period,
+          totalRows: typeof rowsForPeriod === 'number' && Number.isFinite(rowsForPeriod) ? rowsForPeriod : null,
+          reloadId: Date.now(),
+        })
+        pushWatchlistRealtimeLog('Gap fill and aggregation completed, starting tick realtime')
+      } catch (error) {
+        if (watchlistRealtimeRunRef.current !== runId) return
+        setWatchlistRealtimeReady(false)
+        setWatchlistRealtimeEnabled(false)
+        setWatchlistRealtimeStatus(error instanceof Error ? error.message : 'Sync failed')
+        pushWatchlistRealtimeLog(error instanceof Error ? `Realtime failed: ${error.message}` : 'Realtime failed')
+      }
+    }
+
+    void runRealtimeSync()
+
+    return () => {
+      if (watchlistRealtimeRunRef.current === runId) {
+        watchlistRealtimeRunRef.current += 1
+      }
+    }
+  }, [foregroundRealtimeSymbol, onOpenChart, selectedStoreTableKey, watchlistRealtimeEnabled])
+
+  useEffect(() => {
+    watchlistTicksEventSourceRef.current?.close()
+    watchlistTicksEventSourceRef.current = null
+
+    if (!watchlistRealtimeEnabled || !watchlistRealtimeReady) return
+
+    setWatchlistRealtimeStatus('Connecting')
+    if (!foregroundRealtimeSymbol) return
+
+    const source = createMt5TicksEventSource([foregroundRealtimeSymbol], 500)
+    watchlistTicksEventSourceRef.current = source
+
+    source.addEventListener('ready', () => {
+      setWatchlistRealtimeStatus('Live')
+      pushWatchlistRealtimeLog('Realtime feed connected')
+    })
+
+    source.addEventListener('ticks', (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as { ticks?: Mt5RealtimeTick[] }
+        const ticks = Array.isArray(payload.ticks) ? payload.ticks : []
+        if (!ticks.length) return
+        const updatedSymbols = ticks.map((tick) => tick.symbol).filter(Boolean)
+        setWatchlistTicks((current) => {
+          const next = { ...current }
+          ticks.forEach((tick) => {
+            if (tick.symbol) next[tick.symbol] = tick
+          })
+          return next
+        })
+        ticks.forEach((tick) => {
+          if (!tick.symbol) return
+          window.dispatchEvent(new CustomEvent('fractalframe:mt5RealtimeTick', { detail: tick }))
+        })
+        if (updatedSymbols.length) {
+          setWatchlistLastTickAt(new Date().toLocaleTimeString())
+        }
+        setWatchlistRealtimeStatus('Live')
+      } catch {
+        setWatchlistRealtimeStatus('Parse error')
+        pushWatchlistRealtimeLog('Realtime tick parse error')
+      }
+    })
+
+    source.addEventListener('error', (event) => {
+      try {
+        const payload = JSON.parse((event as MessageEvent).data) as { error?: string; status?: string }
+        const line = payload.error || payload.status || 'Error'
+        setWatchlistRealtimeStatus(line)
+        pushWatchlistRealtimeLog(`Realtime error: ${line}`)
+      } catch {
+        setWatchlistRealtimeStatus('Disconnected')
+        pushWatchlistRealtimeLog('Realtime disconnected')
+      }
+    })
+
+    source.onerror = () => {
+      setWatchlistRealtimeStatus('Reconnecting')
+      pushWatchlistRealtimeLog('Realtime reconnecting')
+    }
+
+    return () => {
+      source.close()
+      if (watchlistTicksEventSourceRef.current === source) {
+        watchlistTicksEventSourceRef.current = null
+      }
+    }
+  }, [foregroundRealtimeSymbol, watchlistRealtimeEnabled, watchlistRealtimeReady])
+
   const storeOperationLine = useMemo(
     () => formatStoreOperationLine(pullProgress, m1CheckJob, aggregateProgress, storeActionStatus),
     [aggregateProgress, m1CheckJob, pullProgress, storeActionStatus],
@@ -1343,9 +1751,29 @@ export function RightDrawer({
     setPullProgress(null)
     setStoreActionStatus('正在读取 StoreV5 仓库状态...')
     try {
+      setStoreActionStatus('正在扫描并修复 M1 中间缺口...')
+      const gapRepair = await repairStoreV5M1Gaps(symbol, {
+        lookbackMinutes: storeV5M1RepairLookbackMinutes,
+        maxGapMinutes: storeV5M1RepairMaxGapMinutes,
+      })
+      setStoreActionStatus(
+        (gapRepair.gapsDetected ?? 0) > 0
+          ? `M1 缺口修复完成：发现 ${gapRepair.gapsDetected ?? 0} 个缺口，写入 ${gapRepair.rowsWritten ?? 0} 条。`
+          : 'M1 缺口检查完成：最近窗口没有中间缺口。',
+      )
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
       savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
+      const period = periodFromStoreTableKey(selectedStoreTableKey) || readSharedSelection().period || 'M1'
+      const rowsForPeriod = period === 'M1'
+        ? resolveLocalM1Rows(payload)
+        : payload.aggregated.find((cell) => String(cell.timeframe || '').toUpperCase() === period)?.rowsCount
+      onOpenChart?.({
+        symbol,
+        period: period === 'M1' ? '1m' : period,
+        totalRows: typeof rowsForPeriod === 'number' && Number.isFinite(rowsForPeriod) ? rowsForPeriod : null,
+        reloadId: Date.now(),
+      })
       window.setTimeout(() => {
         setAggregateProgress((current) => (current?.phase === 'completed' ? null : current))
         setStoreActionStatus((current) => (current.includes('鑱氬悎瀹屾垚') ? '' : current))
@@ -1404,9 +1832,39 @@ export function RightDrawer({
         if (activePullJobRef.current !== started.jobId) throw err
         await waitStoreV5PullJobByPolling(started.jobId)
       }
+      setStoreActionStatus('正在扫描并修复最近 M1 窗口...')
+      await repairStoreV5M1Gaps(symbol, {
+        lookbackMinutes: storeV5M1RepairLookbackMinutes,
+        maxGapMinutes: storeV5M1RepairMaxGapMinutes,
+      })
+
+      const repairedStatus = await fetchStoreV5Status(symbol)
+      const aggregateTargets = resolveStoreV5AggregateTargets(repairedStatus)
+      if (aggregateTargets.length) {
+        setStoreActionStatus(`正在聚合周期：${aggregateTargets.join('、')}...`)
+        const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets)
+        activeAggregateJobRef.current = aggregateJob.jobId
+        setAggregateProgress(aggregateJob)
+        try {
+          await waitStoreV5AggregateJobBySse(aggregateJob.jobId)
+        } catch (err) {
+          if (activeAggregateJobRef.current !== aggregateJob.jobId) throw err
+          await waitStoreV5AggregateJobByPolling(aggregateJob.jobId)
+        }
+      }
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
       savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
+      const period = periodFromStoreTableKey(selectedStoreTableKey) || readSharedSelection().period || 'M1'
+      const rowsForPeriod = period === 'M1'
+        ? resolveLocalM1Rows(payload)
+        : payload.aggregated.find((cell) => String(cell.timeframe || '').toUpperCase() === period)?.rowsCount
+      onOpenChart?.({
+        symbol,
+        period: period === 'M1' ? '1m' : period,
+        totalRows: typeof rowsForPeriod === 'number' && Number.isFinite(rowsForPeriod) ? rowsForPeriod : null,
+        reloadId: Date.now(),
+      })
       setStoreActionStatus('拉取完成，仓库状态已刷新。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -1420,7 +1878,15 @@ export function RightDrawer({
         // best effort
       }
       pullEventSourceRef.current = null
+      activeAggregateJobRef.current = ''
+      try {
+        aggregateEventSourceRef.current?.close()
+      } catch {
+        // best effort
+      }
+      aggregateEventSourceRef.current = null
       setPullProgress(null)
+      setAggregateProgress((current) => (current?.phase === 'completed' ? null : current))
       setStoreCheckLoading(false)
     }
   }
@@ -1759,6 +2225,16 @@ export function RightDrawer({
             <path d="M43.5,33.0688v-9.07" />
             <path d="M43.5,23.9991v-9.07" />
             <path d="M4.5,24V14.93" />
+          </svg>
+        </button>
+        <button
+          className="ff-right-rail__button"
+          title="Settings"
+          type="button"
+        >
+          <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+            <polygon points="34.75 5.38 13.25 5.38 2.5 24 13.25 42.62 34.75 42.62 45.5 24 34.75 5.38" />
+            <circle cx="24" cy="24" r="7.5" />
           </svg>
         </button>
       </div>
@@ -2104,7 +2580,7 @@ export function RightDrawer({
                       </tbody>
                     </table>
 
-                    <div className="ff-store-direct-actions">
+                    <div className="ff-store-direct-actions ff-store-direct-actions--aggregate">
                       <button
                         data-state={
                           selectedAggregatePeriods.length === 0
@@ -2183,9 +2659,11 @@ export function RightDrawer({
                         <tbody>
                           {watchlistRows.map((row) => {
                             const display = resolveMt5SymbolDisplay(row)
+                            const tick = watchlistTicks[row.symbol]
                             return (
                               <tr
                                 data-selected={selectedSymbol === row.symbol}
+                                data-realtime={watchlistRealtimeEnabled && tick ? 'true' : 'false'}
                                 key={row.symbol}
                                 onClick={() => handleSelectSymbol(row.symbol)}
                                 tabIndex={0}
@@ -2193,9 +2671,13 @@ export function RightDrawer({
                                 <td title={row.symbol}>{row.symbol}</td>
                                 <td title={display.chineseName}>{display.chineseName}</td>
                                 <td title={display.assetType}>{display.assetType}</td>
-                                <td>-</td>
-                                <td>-</td>
-                                <td>-</td>
+                                <td title={tick?.publishedAt ?? ''}>{formatMarketPrice(tick?.last)}</td>
+                                <td data-direction={(tick?.change ?? 0) > 0 ? 'up' : (tick?.change ?? 0) < 0 ? 'down' : 'flat'}>
+                                  {formatMarketChange(tick?.change)}
+                                </td>
+                                <td data-direction={(tick?.changePercent ?? 0) > 0 ? 'up' : (tick?.changePercent ?? 0) < 0 ? 'down' : 'flat'}>
+                                  {formatMarketPercent(tick?.changePercent)}
+                                </td>
                               </tr>
                             )
                           })}
@@ -2256,6 +2738,37 @@ export function RightDrawer({
                             </div>
                           </section>
                         )}
+                      </div>
+                    )}
+                    <div className="ff-watchlist-realtime-controls">
+                      <button
+                        className="ff-watchlist-realtime-toggle"
+                        data-active={watchlistRealtimeEnabled}
+                        data-ready={watchlistRealtimeReady}
+                        onClick={() => setWatchlistRealtimeEnabled((current) => !current)}
+                        type="button"
+                        aria-pressed={watchlistRealtimeEnabled}
+                      >
+                        <span>{watchlistRealtimeEnabled && !watchlistRealtimeReady ? 'Syncing' : 'Realtime'}</span>
+                        <i aria-hidden="true" />
+                      </button>
+                      {watchlistRealtimeStatus && (
+                        <span className="ff-watchlist-realtime-status">
+                          {watchlistRealtimeStatus || 'Live'}
+                          {watchlistLastTickAt ? ` · ${watchlistLastTickAt}` : ''}
+                        </span>
+                      )}
+                    </div>
+                    {watchlistRealtimeLog.length > 0 && (
+                      <div className="ff-watchlist-realtime-log" aria-label="Realtime sync log">
+                        <div className="ff-watchlist-realtime-log__title">
+                          {watchlistRealtimeReady ? 'Realtime Feed' : 'Realtime Sync'}
+                        </div>
+                        <div className="ff-watchlist-realtime-log__body">
+                          {watchlistRealtimeLog.map((line, index) => (
+                            <div key={`${line}-${index}`}>{line}</div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

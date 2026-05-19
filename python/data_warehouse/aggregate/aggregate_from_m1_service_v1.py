@@ -26,7 +26,12 @@ def _direct_ready(cell: dict[str, Any] | None) -> bool:
     if not cell:
         return False
     return (
-        cell.get("m1IntegrityStatus") in {"true_m1_continuous", "true_m1_with_session_gaps", "true_m1_truncated_at_gap"}
+        cell.get("m1IntegrityStatus") in {
+            "true_m1_continuous",
+            "true_m1_with_session_gaps",
+            "true_m1_truncated_at_gap",
+            "true_m1_recent_window_repaired",
+        }
         and cell.get("firstHourM1CheckOk") is True
         and cell.get("rowsCount") == cell.get("trueM1RowsCount")
         and cell.get("firstAnchorTime") is not None
@@ -43,11 +48,50 @@ def _read_direct_m1(store_root: Path, symbol: str, time_from: int | None = None)
     try:
         if time_from is None:
             return con.execute(
-                "SELECT time, open, high, low, close, volume FROM read_parquet(?) ORDER BY time",
+                """
+                WITH ranked AS (
+                  SELECT
+                    time,
+                    open,
+                    high,
+                    low,
+                    close,
+                    volume,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY time
+                      ORDER BY volume DESC, ABS(high - low) DESC, filename DESC
+                    ) AS row_rank
+                  FROM read_parquet(?, filename=true)
+                )
+                SELECT time, open, high, low, close, volume
+                FROM ranked
+                WHERE row_rank = 1
+                ORDER BY time
+                """,
                 [files],
             ).fetchdf()
         return con.execute(
-            "SELECT time, open, high, low, close, volume FROM read_parquet(?) WHERE time >= ? ORDER BY time",
+            """
+            WITH ranked AS (
+              SELECT
+                time,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                ROW_NUMBER() OVER (
+                  PARTITION BY time
+                  ORDER BY volume DESC, ABS(high - low) DESC, filename DESC
+                ) AS row_rank
+              FROM read_parquet(?, filename=true)
+              WHERE time >= ?
+            )
+            SELECT time, open, high, low, close, volume
+            FROM ranked
+            WHERE row_rank = 1
+            ORDER BY time
+            """,
             [files, int(time_from)],
         ).fetchdf()
     finally:

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './TopBar.css'
 
 type TopBarProps = {
-  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null }) => void
+  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number }) => void
 }
 
 type StoreV5StatusSnapshot = {

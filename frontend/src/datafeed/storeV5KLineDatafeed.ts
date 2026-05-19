@@ -45,12 +45,19 @@ export async function loadStoreV5KLineData(options: {
     })
   }
 
-  return payload.rows.map((row) => ({
-    timestamp: Number(row.time) * 1000,
-    open: Number(row.open),
-    high: Number(row.high),
-    low: Number(row.low),
-    close: Number(row.close),
-    volume: Number(row.volume ?? 0),
-  }))
+  const rowsByTimestamp = new Map<number, KLineData>()
+  payload.rows.forEach((row) => {
+    const timestamp = Number(row.time) * 1000
+    if (!Number.isFinite(timestamp)) return
+    rowsByTimestamp.set(timestamp, {
+      timestamp,
+      open: Number(row.open),
+      high: Number(row.high),
+      low: Number(row.low),
+      close: Number(row.close),
+      volume: Number(row.volume ?? 0),
+    })
+  })
+
+  return [...rowsByTimestamp.values()].sort((left, right) => Number(left.timestamp) - Number(right.timestamp))
 }
