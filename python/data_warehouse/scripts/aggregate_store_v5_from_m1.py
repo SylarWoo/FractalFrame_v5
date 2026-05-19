@@ -9,7 +9,7 @@ from ..aggregate.aggregate_from_m1_service_v1 import aggregate_from_m1_store_v5
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--symbol", required=True)
-    parser.add_argument("--timeframes", default="M5,M15,M30,H1,H2,H4,H8,D1,W1,MN1")
+    parser.add_argument("--timeframes", default="M5,M15,M30,H1,H2,H3,H4,D1,W1,MN1")
     parser.add_argument("--store-root")
     parser.add_argument("--anchor", default="UTC2200")
     parser.add_argument("--rebuild", action="store_true")

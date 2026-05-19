@@ -1,31 +1,39 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import './RightDrawer.css'
+import type { ChartLoadState } from '../chart/ChartCoreHost'
 import { resolveMt5SymbolDisplay } from './mt5SymbolDisplay'
 import {
-  aggregateStoreV5,
   cancelMt5M1CheckJob,
   cancelStoreV5PullJob,
   cleanStoreV5DirectM1,
+  createStoreV5AggregateEventSource,
   createStoreV5PullEventSource,
+  deleteStoreV5AggregatedTimeframes,
   deleteStoreV5Symbol,
   fetchMt5M1CheckJob,
   fetchMt5Symbols,
+  fetchStoreV5AggregateJob,
   fetchStoreV5PullJob,
   fetchStoreV5Check,
   fetchStoreV5Status,
+  startStoreV5AggregateJob,
   startStoreV5PullJob,
   startMt5M1CheckJob,
 } from './mt5SymbolsApi'
-import type { Mt5M1CheckJobPayload, Mt5SymbolRow, StoreV5CheckPayload, StoreV5PullJobPayload } from './mt5SymbolsApi'
+import type { Mt5M1CheckJobPayload, Mt5SymbolRow, StoreV5AggregateJobPayload, StoreV5CheckPayload, StoreV5PullJobPayload } from './mt5SymbolsApi'
 
 type RightDrawerProps = {
+  chartLoadState?: ChartLoadState | null
   drawerWidth: number
   open: boolean
   onClose: () => void
+  onJumpChartToTime?: (timestamp: number) => void
+  onLoadChartStep?: (direction: 'left' | 'right') => void
   onResize: (width: number) => void
+  onResetChartToLatest?: () => void
   onToggle: () => void
-  onOpenChart?: (options: { symbol: string; period: string; limit?: number }) => void
+  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null }) => void
 }
 
 const minDrawerWidth = 220
@@ -36,6 +44,15 @@ const symbolSnapshotStorageKey = 'fractalframe:mt5ImportCenterSymbolSnapshot:v1'
 const mt5M1CheckResultsStorageKey = 'fractalframe:mt5ImportCenterM1CheckResults:v1'
 const storeV5StatusStorageKey = 'fractalframe:mt5ImportCenterStoreV5Status:v1'
 const storeV5ListSymbolsStorageKey = 'fractalframe:mt5ImportCenterStoreV5ListSymbols:v1'
+const storePanelPersistenceEnabledStorageKey = 'fractalframe:mt5ImportCenterStorePanelPersistenceEnabled:v1'
+const storePanelSelectedTableKeyStorageKey = 'fractalframe:mt5ImportCenterStorePanelSelectedTableKey:v1'
+const storePanelPersistenceKeys = [
+  mt5M1CheckResultsStorageKey,
+  storeV5StatusStorageKey,
+  storeV5ListSymbolsStorageKey,
+  storePanelSelectedTableKeyStorageKey,
+]
+const storeTableAggregatePeriods = ['M5', 'M15', 'M30', 'H1', 'H2', 'H3', 'H4', 'D1', 'W1', 'MN1']
 
 const defaultColumnWidths = {
   symbol: 96,
@@ -64,6 +81,11 @@ type PersistedM1CheckResult = {
 type PersistedStoreV5Status = {
   checkedAt: string
   payload: StoreV5CheckPayload
+}
+
+type PersistedStoreTableSelection = {
+  key: string
+  symbol: string
 }
 
 type StoreTableRow = {
@@ -141,7 +163,33 @@ function saveSymbolSnapshot(snapshot: Omit<SymbolSnapshot, 'savedAt'>) {
   }
 }
 
-function readPersistedM1CheckResult(symbol: string): PersistedM1CheckResult | null {
+function readStorePanelPersistenceEnabled() {
+  try {
+    const raw = window.localStorage.getItem(storePanelPersistenceEnabledStorageKey)
+    return raw == null ? true : raw === '1'
+  } catch {
+    return true
+  }
+}
+
+function saveStorePanelPersistenceEnabled(enabled: boolean) {
+  try {
+    window.localStorage.setItem(storePanelPersistenceEnabledStorageKey, enabled ? '1' : '0')
+  } catch {
+    // Store panel persistence flag is best-effort only.
+  }
+}
+
+function clearStorePanelPersistence() {
+  try {
+    storePanelPersistenceKeys.forEach((key) => window.localStorage.removeItem(key))
+  } catch {
+    // Store panel persistence cleanup is best-effort only.
+  }
+}
+
+function readPersistedM1CheckResult(symbol: string, enabled = true): PersistedM1CheckResult | null {
+  if (!enabled) return null
   if (!symbol) return null
   try {
     const raw = window.localStorage.getItem(mt5M1CheckResultsStorageKey)
@@ -155,7 +203,8 @@ function readPersistedM1CheckResult(symbol: string): PersistedM1CheckResult | nu
   }
 }
 
-function savePersistedM1CheckResult(symbol: string, payload: StoreV5CheckPayload, checkedAt: string) {
+function savePersistedM1CheckResult(symbol: string, payload: StoreV5CheckPayload, checkedAt: string, enabled = true) {
+  if (!enabled) return
   if (!symbol) return
   try {
     const raw = window.localStorage.getItem(mt5M1CheckResultsStorageKey)
@@ -172,7 +221,8 @@ function savePersistedM1CheckResult(symbol: string, payload: StoreV5CheckPayload
   }
 }
 
-function readPersistedStoreV5Status(symbol: string): PersistedStoreV5Status | null {
+function readPersistedStoreV5Status(symbol: string, enabled = true): PersistedStoreV5Status | null {
+  if (!enabled) return null
   if (!symbol) return null
   try {
     const raw = window.localStorage.getItem(storeV5StatusStorageKey)
@@ -186,7 +236,8 @@ function readPersistedStoreV5Status(symbol: string): PersistedStoreV5Status | nu
   }
 }
 
-function savePersistedStoreV5Status(symbol: string, payload: StoreV5CheckPayload, checkedAt = new Date().toISOString()) {
+function savePersistedStoreV5Status(symbol: string, payload: StoreV5CheckPayload, checkedAt = new Date().toISOString(), enabled = true) {
+  if (!enabled) return
   if (!symbol) return
   try {
     const raw = window.localStorage.getItem(storeV5StatusStorageKey)
@@ -203,7 +254,8 @@ function savePersistedStoreV5Status(symbol: string, payload: StoreV5CheckPayload
   }
 }
 
-function readStoreV5ListSymbols(): string[] {
+function readStoreV5ListSymbols(enabled = true): string[] {
+  if (!enabled) return []
   try {
     const raw = window.localStorage.getItem(storeV5ListSymbolsStorageKey)
     const parsed = raw ? JSON.parse(raw) : []
@@ -213,11 +265,41 @@ function readStoreV5ListSymbols(): string[] {
   }
 }
 
-function saveStoreV5ListSymbols(symbols: string[]) {
+function saveStoreV5ListSymbols(symbols: string[], enabled = true) {
+  if (!enabled) return
   try {
     window.localStorage.setItem(storeV5ListSymbolsStorageKey, JSON.stringify([...new Set(symbols)]))
   } catch {
     // Store list persistence is best-effort only.
+  }
+}
+
+function readPersistedStoreTableSelection(symbol: string, enabled = true): string {
+  if (!enabled || !symbol) return ''
+  try {
+    const raw = window.localStorage.getItem(storePanelSelectedTableKeyStorageKey)
+    const parsed = raw ? JSON.parse(raw) : null
+    const item = parsed?.[symbol] as PersistedStoreTableSelection | undefined
+    return item?.symbol === symbol && typeof item.key === 'string' ? item.key : ''
+  } catch {
+    return ''
+  }
+}
+
+function savePersistedStoreTableSelection(symbol: string, key: string, enabled = true) {
+  if (!enabled || !symbol) return
+  try {
+    const raw = window.localStorage.getItem(storePanelSelectedTableKeyStorageKey)
+    const parsed = raw ? JSON.parse(raw) : {}
+    window.localStorage.setItem(
+      storePanelSelectedTableKeyStorageKey,
+      JSON.stringify({
+        ...(parsed && typeof parsed === 'object' ? parsed : {}),
+        [symbol]: { key, symbol },
+      }),
+    )
+  } catch {
+    // Store table selection persistence is best-effort only.
   }
 }
 
@@ -251,6 +333,16 @@ function formatCount(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('en-US') : '-'
 }
 
+function formatChartLoadStatus(state: ChartLoadState | null | undefined) {
+  if (!state) return '-'
+  if (state.loading) return `${state.symbol} ${state.period} 加载中 ${state.requestedRows.toLocaleString()}`
+  if (state.error) return `${state.symbol} ${state.period} 加载失败`
+  const localRows = typeof state.totalRows === 'number' && Number.isFinite(state.totalRows)
+    ? state.totalRows
+    : state.requestedRows
+  return `${state.symbol} ${state.period} 已进图 ${state.rows.toLocaleString()} / 本地 ${localRows.toLocaleString()}${state.loadingMore ? ' · 加载历史' : ''}`
+}
+
 function formatCountWithWan(value: number | null | undefined) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
   if (Math.abs(value) < 10000) return value.toLocaleString('en-US')
@@ -265,16 +357,37 @@ function formatCheckTime(value?: string | null) {
   return new Date(time).toLocaleString()
 }
 
+function formatEpochSeconds(value?: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  return new Date(value * 1000).toLocaleString()
+}
+
+function parseChartJumpTime(value: string) {
+  const normalized = value.trim().replace('T', ' ')
+  if (!normalized) return null
+  const match = normalized.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/)
+  if (!match) return null
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const hour = Number(match[4] ?? 0)
+  const minute = Number(match[5] ?? 0)
+  const second = Number(match[6] ?? 0)
+  const timestamp = new Date(year, month - 1, day, hour, minute, second).getTime()
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
 function resolveLocalM1Rows(status: StoreV5CheckPayload | null) {
-  return status?.rawDirectM1?.rowsCount
-    ?? status?.rawDirectM1?.rawRowsCount
-    ?? status?.directM1?.rowsCount
+  return status?.directM1?.rowsCount
     ?? status?.directM1?.trueM1RowsCount
+    ?? status?.rawDirectM1?.rowsCount
+    ?? status?.rawDirectM1?.rawRowsCount
     ?? null
 }
 
-function resolveLocalM1UpdatedAt(status: StoreV5CheckPayload | null) {
-  return status?.rawDirectM1?.lastImportAt ?? status?.directM1?.lastImportAt ?? null
+function resolveLocalM1LastTime(status: StoreV5CheckPayload | null) {
+  return status?.directM1?.lastTime ?? status?.rawDirectM1?.lastTime ?? null
 }
 
 function delay(ms: number) {
@@ -289,6 +402,7 @@ function formatUtcRange(firstText?: string | null, lastText?: string | null) {
 function formatStoreOperationLine(
   pullJob: StoreV5PullJobPayload | null,
   checkJob: Mt5M1CheckJobPayload | null,
+  aggregateProgress: StoreV5AggregateJobPayload | null,
   fallback: string,
 ) {
   if (pullJob) {
@@ -326,12 +440,24 @@ function formatStoreOperationLine(
     if (checkJob.phase === 'failed') return `失败：${checkJob.error || checkJob.status}`
     return checkJob.status || fallback
   }
+  if (aggregateProgress) {
+    if (aggregateProgress.progressLabel) return aggregateProgress.progressLabel
+    if (aggregateProgress.phase === 'completed') {
+      return `聚合完成：${aggregateProgress.periods.join('、')}`
+    }
+    if (aggregateProgress.phase === 'failed') {
+      return `聚合失败：${aggregateProgress.currentPeriod ?? aggregateProgress.periods.join('、')}`
+    }
+    const current = aggregateProgress.currentPeriod ? `，当前 ${aggregateProgress.currentPeriod}` : ''
+    return `正在聚合：${aggregateProgress.completed}/${aggregateProgress.total}${current}`
+  }
   return fallback
 }
 
 function resolveStoreOperationProgress(
   pullJob: StoreV5PullJobPayload | null,
   checkJob: Mt5M1CheckJobPayload | null,
+  aggregateProgress: StoreV5AggregateJobPayload | null,
 ) {
   if (pullJob) {
     if (pullJob.phase === 'completed') return { hasEstimate: true, width: 100 }
@@ -360,20 +486,15 @@ function resolveStoreOperationProgress(
     }
     return { hasEstimate: false, width: 45 }
   }
+  if (aggregateProgress) {
+    if (aggregateProgress.phase === 'completed') return { hasEstimate: true, width: 100 }
+    if (aggregateProgress.phase === 'failed') return null
+    return {
+      hasEstimate: true,
+      width: Math.max(4, Math.min(99, Math.round((aggregateProgress.completed / Math.max(1, aggregateProgress.total)) * 100))),
+    }
+  }
   return null
-}
-
-function formatStoreUpdated(value?: string | null) {
-  if (!value) return '-'
-  const time = Date.parse(value)
-  if (!Number.isFinite(time)) return value
-  const seconds = Math.max(0, Math.round((Date.now() - time) / 1000))
-  if (seconds < 90) return '1 分钟内'
-  const minutes = Math.round(seconds / 60)
-  if (minutes < 60) return `${minutes} 分钟前`
-  const hours = Math.round(minutes / 60)
-  if (hours < 24) return `${hours} 小时前`
-  return `${Math.round(hours / 24)} 天前`
 }
 
 function selectedDetailRows(row: Mt5SymbolRow): DetailRow[] {
@@ -408,10 +529,14 @@ function clampColumnWidth(width: number, column: ColumnKey) {
 }
 
 export function RightDrawer({
+  chartLoadState,
   drawerWidth,
   open,
   onClose,
+  onJumpChartToTime,
+  onLoadChartStep,
   onResize,
+  onResetChartToLatest,
   onToggle,
   onOpenChart,
 }: RightDrawerProps) {
@@ -427,28 +552,38 @@ export function RightDrawer({
   const [topPaneHeight, setTopPaneHeight] = useState(getInitialTopPaneHeight)
   const [columnWidths, setColumnWidths] = useState(getInitialColumnWidths)
   const [selectedPanelTab, setSelectedPanelTab] = useState<SelectedPanelTab>('details')
+  const [storePanelPersistenceEnabled, setStorePanelPersistenceEnabled] = useState(readStorePanelPersistenceEnabled)
   const initialPersistedM1Check = useMemo(
-    () => readPersistedM1CheckResult(initialSnapshot?.selectedSymbol ?? ''),
-    [initialSnapshot?.selectedSymbol],
+    () => readPersistedM1CheckResult(initialSnapshot?.selectedSymbol ?? '', storePanelPersistenceEnabled),
+    [initialSnapshot?.selectedSymbol, storePanelPersistenceEnabled],
   )
   const initialPersistedStoreV5Status = useMemo(
-    () => readPersistedStoreV5Status(initialSnapshot?.selectedSymbol ?? ''),
-    [initialSnapshot?.selectedSymbol],
+    () => readPersistedStoreV5Status(initialSnapshot?.selectedSymbol ?? '', storePanelPersistenceEnabled),
+    [initialSnapshot?.selectedSymbol, storePanelPersistenceEnabled],
   )
   const [storeCheck, setStoreCheck] = useState<StoreV5CheckPayload | null>(() => initialPersistedM1Check?.payload ?? null)
   const [mt5M1LastCheckedAt, setMt5M1LastCheckedAt] = useState(() => initialPersistedM1Check?.checkedAt ?? '')
   const [localStoreStatus, setLocalStoreStatus] = useState<StoreV5CheckPayload | null>(() => initialPersistedStoreV5Status?.payload ?? null)
-  const [storeV5ListSymbols, setStoreV5ListSymbols] = useState<string[]>(readStoreV5ListSymbols)
-  const [selectedStoreTableKey, setSelectedStoreTableKey] = useState('')
+  const [storeV5ListSymbols, setStoreV5ListSymbols] = useState<string[]>(() => readStoreV5ListSymbols(storePanelPersistenceEnabled))
+  const [selectedStoreTableKey, setSelectedStoreTableKey] = useState(() =>
+    readPersistedStoreTableSelection(initialSnapshot?.selectedSymbol ?? '', storePanelPersistenceEnabled),
+  )
+  const [selectedAggregatePeriods, setSelectedAggregatePeriods] = useState<string[]>([])
   const [storeCheckLoading, setStoreCheckLoading] = useState(false)
   const [storeCheckError, setStoreCheckError] = useState('')
   const [storeActionStatus, setStoreActionStatus] = useState('')
+  const [chartJumpInput, setChartJumpInput] = useState('')
+  const [chartJumpError, setChartJumpError] = useState('')
   const [m1CheckJob, setM1CheckJob] = useState<Mt5M1CheckJobPayload | null>(null)
   const [pullProgress, setPullProgress] = useState<StoreV5PullJobPayload | null>(null)
+  const [aggregateProgress, setAggregateProgress] = useState<StoreV5AggregateJobPayload | null>(null)
   const tableWrapRef = useRef<HTMLDivElement | null>(null)
   const activeM1CheckJobRef = useRef('')
   const activePullJobRef = useRef('')
+  const activeAggregateJobRef = useRef('')
+  const autoOpenedStoreTableRef = useRef('')
   const pullEventSourceRef = useRef<EventSource | null>(null)
+  const aggregateEventSourceRef = useRef<EventSource | null>(null)
 
   const visibleSymbols = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -477,12 +612,20 @@ export function RightDrawer({
   const selectedDisplay = selectedRow ? resolveMt5SymbolDisplay(selectedRow) : null
 
   const visibleStoreAggregateRows = useMemo(() => {
-    if (!localStoreStatus?.aggregated?.length) return []
-    return localStoreStatus.aggregated.map((cell) => ({
-      period: cell.timeframe || '-',
-      count: formatCount(cell.rowsCount),
-      updated: cell.dirty ? '需重建' : formatStoreUpdated(cell.lastAggregateAt),
-    }))
+    const cellsByPeriod = new Map(
+      (localStoreStatus?.aggregated ?? [])
+        .filter((cell) => typeof cell.timeframe === 'string')
+        .map((cell) => [String(cell.timeframe).toUpperCase(), cell]),
+    )
+    return storeTableAggregatePeriods.map((period) => {
+      const cell = cellsByPeriod.get(period)
+      return {
+        period,
+        count: formatCount(cell?.rowsCount),
+        updated: cell ? formatEpochSeconds(cell.lastTime) : '未聚合',
+        rowsCount: cell?.rowsCount ?? null,
+      }
+    })
   }, [localStoreStatus])
   const visibleStoreTableRows = useMemo<StoreTableRow[]>(() => {
     const rows: StoreTableRow[] = []
@@ -491,7 +634,7 @@ export function RightDrawer({
       rows.push({
         period: 'M1',
         count: formatCount(rowsCount),
-        updated: formatCheckTime(resolveLocalM1UpdatedAt(localStoreStatus)),
+        updated: formatEpochSeconds(resolveLocalM1LastTime(localStoreStatus)),
         kind: 'm1',
         rowsCount,
       })
@@ -499,19 +642,52 @@ export function RightDrawer({
     return [...rows, ...visibleStoreAggregateRows.map((row) => ({
       ...row,
       kind: 'aggregate' as const,
-      rowsCount: Number(row.count.replace(/,/g, '')),
+      rowsCount: row.rowsCount,
     }))]
   }, [localStoreStatus, selectedRow?.symbol, storeV5ListSymbols, visibleStoreAggregateRows])
+  const selectedStoreTableKeyIsVisible = useMemo(
+    () => visibleStoreTableRows.some((row) => `${row.kind}-${row.period}` === selectedStoreTableKey),
+    [selectedStoreTableKey, visibleStoreTableRows],
+  )
+
+  useEffect(() => {
+    if (!selectedRow?.symbol || !selectedStoreTableKeyIsVisible || !selectedStoreTableKey) return
+
+    const autoOpenKey = `${selectedRow.symbol}:${selectedStoreTableKey}`
+    if (autoOpenedStoreTableRef.current === autoOpenKey) return
+
+    const row = visibleStoreTableRows.find((item) => `${item.kind}-${item.period}` === selectedStoreTableKey)
+    if (!row) return
+
+    autoOpenedStoreTableRef.current = autoOpenKey
+    onOpenChart?.({
+      symbol: selectedRow.symbol,
+      period: row.period === 'M1' ? '1m' : row.period,
+      totalRows: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : null,
+    })
+  }, [onOpenChart, selectedRow?.symbol, selectedStoreTableKey, selectedStoreTableKeyIsVisible, visibleStoreTableRows])
   const storeOperationLine = useMemo(
-    () => formatStoreOperationLine(pullProgress, m1CheckJob, storeActionStatus),
-    [m1CheckJob, pullProgress, storeActionStatus],
+    () => formatStoreOperationLine(pullProgress, m1CheckJob, aggregateProgress, storeActionStatus),
+    [aggregateProgress, m1CheckJob, pullProgress, storeActionStatus],
   )
   const storeOperationProgress = useMemo(
-    () => resolveStoreOperationProgress(pullProgress, m1CheckJob),
-    [m1CheckJob, pullProgress],
+    () => resolveStoreOperationProgress(pullProgress, m1CheckJob, aggregateProgress),
+    [aggregateProgress, m1CheckJob, pullProgress],
   )
   const isCheckingMt5M1 = storeCheckLoading && m1CheckJob != null
   const isPullingStoreV5 = storeCheckLoading && (pullProgress != null || storeActionStatus.includes('拉取'))
+
+  function handleToggleStorePanelPersistence(enabled: boolean) {
+    setStorePanelPersistenceEnabled(enabled)
+    saveStorePanelPersistenceEnabled(enabled)
+    if (!enabled) {
+      clearStorePanelPersistence()
+      setSelectedStoreTableKey('')
+    } else {
+      setStoreV5ListSymbols(readStoreV5ListSymbols(true))
+      setSelectedStoreTableKey(readPersistedStoreTableSelection(selectedRow?.symbol ?? '', true))
+    }
+  }
 
   async function loadSymbols(refresh: boolean) {
     setLoading(true)
@@ -534,11 +710,12 @@ export function RightDrawer({
 
       setSymbols(rows)
       setSelectedSymbol(nextSelectedSymbol)
-      const persistedCheck = readPersistedM1CheckResult(nextSelectedSymbol)
-      const persistedStoreStatus = readPersistedStoreV5Status(nextSelectedSymbol)
+      const persistedCheck = readPersistedM1CheckResult(nextSelectedSymbol, storePanelPersistenceEnabled)
+      const persistedStoreStatus = readPersistedStoreV5Status(nextSelectedSymbol, storePanelPersistenceEnabled)
       setStoreCheck(persistedCheck?.payload ?? null)
       setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')
       setLocalStoreStatus(persistedStoreStatus?.payload ?? null)
+      setSelectedStoreTableKey(readPersistedStoreTableSelection(nextSelectedSymbol, storePanelPersistenceEnabled))
       setStatus(nextStatus)
       saveSymbolSnapshot({
         selectedSymbol: nextSelectedSymbol,
@@ -694,12 +871,13 @@ export function RightDrawer({
   }
 
   function handleSelectSymbol(symbol: string) {
-    const persistedCheck = readPersistedM1CheckResult(symbol)
-    const persistedStoreStatus = readPersistedStoreV5Status(symbol)
+    const persistedCheck = readPersistedM1CheckResult(symbol, storePanelPersistenceEnabled)
+    const persistedStoreStatus = readPersistedStoreV5Status(symbol, storePanelPersistenceEnabled)
     setSelectedSymbol(symbol)
     setStoreCheck(persistedCheck?.payload ?? null)
     setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')
     setLocalStoreStatus(persistedStoreStatus?.payload ?? null)
+    setSelectedStoreTableKey(readPersistedStoreTableSelection(symbol, storePanelPersistenceEnabled))
     setStoreCheckError('')
     setStoreActionStatus('')
     if (symbols.length) {
@@ -771,7 +949,7 @@ export function RightDrawer({
             const checkedAt = new Date().toISOString()
             setStoreCheck(current.result)
             setMt5M1LastCheckedAt(checkedAt)
-            savePersistedM1CheckResult(symbol, current.result, checkedAt)
+            savePersistedM1CheckResult(symbol, current.result, checkedAt, storePanelPersistenceEnabled)
           }
           setM1CheckJob(null)
           break
@@ -918,13 +1096,24 @@ export function RightDrawer({
     try {
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload)
+      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
+      window.setTimeout(() => {
+        setAggregateProgress((current) => (current?.phase === 'completed' ? null : current))
+        setStoreActionStatus((current) => (current.includes('鑱氬悎瀹屾垚') ? '' : current))
+      }, 1600)
       setStoreActionStatus('StoreV5 仓库状态已刷新。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setStoreCheckError(message)
       setStoreActionStatus('')
     } finally {
+      activeAggregateJobRef.current = ''
+      try {
+        aggregateEventSourceRef.current?.close()
+      } catch {
+        // best effort
+      }
+      aggregateEventSourceRef.current = null
       setStoreCheckLoading(false)
     }
   }
@@ -968,7 +1157,7 @@ export function RightDrawer({
       }
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload)
+      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
       setStoreActionStatus('拉取完成，仓库状态已刷新。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -1000,8 +1189,39 @@ export function RightDrawer({
       await deleteStoreV5Symbol(symbol)
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload)
+      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
       setStoreActionStatus('本地 StoreV5 数据已删除。')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setStoreCheckError(message)
+      setStoreActionStatus('')
+    } finally {
+      setStoreCheckLoading(false)
+    }
+  }
+
+  async function handleDeleteSelectedAggregates() {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    const periods = [...selectedAggregatePeriods]
+    if (!periods.length) {
+      setStoreCheckError('请先勾选要删除的聚合周期。')
+      return
+    }
+    const ok = window.confirm(`确认删除 ${symbol} 的聚合周期：${periods.join('、')}？M1 不会删除。`)
+    if (!ok) return
+    setStoreCheckLoading(true)
+    setStoreCheckError('')
+    setPullProgress(null)
+    setM1CheckJob(null)
+    setAggregateProgress(null)
+    setStoreActionStatus(`正在删除聚合周期：${periods.join('、')}...`)
+    try {
+      await deleteStoreV5AggregatedTimeframes(symbol, periods)
+      const payload = await fetchStoreV5Status(symbol)
+      setLocalStoreStatus(payload)
+      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
+      setStoreActionStatus(`已删除聚合周期：${periods.join('、')}。`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setStoreCheckError(message)
@@ -1022,7 +1242,7 @@ export function RightDrawer({
       await cleanStoreV5DirectM1(symbol)
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload)
+      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
       setStoreActionStatus('本地 M1 已清理，并与真实 M1 数据对齐。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -1038,7 +1258,7 @@ export function RightDrawer({
     if (!symbol) return
     setStoreV5ListSymbols((current) => {
       const next = current.includes(symbol) ? current : [...current, symbol]
-      saveStoreV5ListSymbols(next)
+      saveStoreV5ListSymbols(next, storePanelPersistenceEnabled)
       return next
     })
   }
@@ -1046,29 +1266,175 @@ export function RightDrawer({
   function handleOpenStoreTableRow(row: StoreTableRow) {
     const symbol = selectedRow?.symbol
     if (!symbol) return
-    setSelectedStoreTableKey(`${row.kind}-${row.period}`)
+    const key = `${row.kind}-${row.period}`
+    setSelectedStoreTableKey(key)
+    savePersistedStoreTableSelection(symbol, key, storePanelPersistenceEnabled)
     onOpenChart?.({
       symbol,
       period: row.period === 'M1' ? '1m' : row.period,
-      limit: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : undefined,
+      totalRows: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : null,
     })
+  }
+
+  function handleJumpChartToTime() {
+    const timestamp = parseChartJumpTime(chartJumpInput)
+    if (timestamp == null) {
+      setChartJumpError('请输入 YYYY-MM-DD HH:mm')
+      return
+    }
+    setChartJumpError('')
+    onJumpChartToTime?.(timestamp)
+  }
+
+  function handleResetChartToLatest() {
+    setChartJumpError('')
+    onResetChartToLatest?.()
+  }
+
+  function toggleAggregatePeriod(period: string) {
+    setSelectedAggregatePeriods((current) => (
+      current.includes(period)
+        ? current.filter((item) => item !== period)
+        : [...current, period]
+    ))
+  }
+
+  function waitStoreV5AggregateJobBySse(jobId: string) {
+    return new Promise<StoreV5AggregateJobPayload>((resolve, reject) => {
+      let settled = false
+      const finish = (fn: () => void) => {
+        if (settled) return
+        settled = true
+        try {
+          aggregateEventSourceRef.current?.close()
+        } catch {
+          // best effort
+        }
+        aggregateEventSourceRef.current = null
+        fn()
+      }
+      const applyPayload = (event: MessageEvent) => {
+        if (activeAggregateJobRef.current !== jobId) return null
+        const payload = JSON.parse(event.data || '{}') as StoreV5AggregateJobPayload
+        setAggregateProgress(payload)
+        return payload
+      }
+
+      try {
+        const source = createStoreV5AggregateEventSource(jobId)
+        aggregateEventSourceRef.current = source
+        source.addEventListener('progress', (event) => {
+          try {
+            applyPayload(event as MessageEvent)
+          } catch {
+            // ignore malformed progress
+          }
+        })
+        source.addEventListener('done', (event) => {
+          try {
+            const payload = applyPayload(event as MessageEvent)
+            finish(() => resolve(payload as StoreV5AggregateJobPayload))
+          } catch (err) {
+            finish(() => reject(err))
+          }
+        })
+        source.addEventListener('cancelled', (event) => {
+          try {
+            applyPayload(event as MessageEvent)
+          } catch {
+            // ignore malformed cancelled payload
+          }
+          finish(() => reject(new Error('store_v5_aggregate_cancelled')))
+        })
+        source.addEventListener('error', (event) => {
+          const messageEvent = event as MessageEvent
+          if (messageEvent.data) {
+            try {
+              const payload = applyPayload(messageEvent)
+              finish(() => reject(new Error(payload?.error || payload?.status || 'store_v5_aggregate_failed')))
+              return
+            } catch {
+              // fall through to generic error
+            }
+          }
+          if (!settled && activeAggregateJobRef.current === jobId) {
+            finish(() => reject(new Error('store_v5_aggregate_sse_disconnected')))
+          }
+        })
+      } catch (err) {
+        finish(() => reject(err))
+      }
+    })
+  }
+
+  async function waitStoreV5AggregateJobByPolling(jobId: string) {
+    while (activeAggregateJobRef.current === jobId) {
+      await delay(600)
+      const current = await fetchStoreV5AggregateJob(jobId)
+      setAggregateProgress(current)
+      if (current.phase === 'completed') return current
+      if (current.phase === 'failed' || current.phase === 'cancelled') {
+        throw new Error(current.error || current.status || current.phase)
+      }
+    }
+    throw new Error('store_v5_aggregate_cancelled')
   }
 
   async function handleAggregateStore() {
     const symbol = selectedRow?.symbol
     if (!symbol) return
+    const periods = [...selectedAggregatePeriods]
+    if (!selectedAggregatePeriods.length) {
+      setStoreCheckError('请至少勾选一个聚合周期。')
+      return
+    }
     setStoreCheckLoading(true)
     setStoreCheckError('')
     setPullProgress(null)
+    setM1CheckJob(null)
+    setAggregateProgress({
+      ok: true,
+      jobId: '',
+      symbol,
+      phase: 'running',
+      status: 'store_v5_aggregate_running',
+      periods,
+      currentPeriod: periods[0],
+      completed: 0,
+      total: periods.length,
+    })
     setStoreActionStatus('正在从 M1 重建聚合周期...')
     try {
-      await aggregateStoreV5(symbol)
+      const started = await startStoreV5AggregateJob(symbol, periods)
+      activeAggregateJobRef.current = started.jobId
+      setAggregateProgress(started)
+      try {
+        await waitStoreV5AggregateJobBySse(started.jobId)
+      } catch (err) {
+        if (activeAggregateJobRef.current !== started.jobId) throw err
+        await waitStoreV5AggregateJobByPolling(started.jobId)
+      }
+      setAggregateProgress({
+        ok: true,
+        jobId: activeAggregateJobRef.current,
+        symbol,
+        phase: 'completed',
+        status: 'store_v5_aggregate_completed',
+        periods,
+        completed: periods.length,
+        total: periods.length,
+      })
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload)
+      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
+      window.setTimeout(() => {
+        setAggregateProgress((current) => (current?.phase === 'completed' ? null : current))
+        setStoreActionStatus('')
+      }, 1600)
       setStoreActionStatus('聚合完成，仓库状态已刷新。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
+      setAggregateProgress((current) => current ? { ...current, phase: 'failed' } : null)
       setStoreCheckError(message)
       setStoreActionStatus('')
     } finally {
@@ -1273,6 +1639,14 @@ export function RightDrawer({
                 {selectedPanelTab === 'store' && (
                   <div className="ff-import-store-panel" role="tabpanel">
                     <section className="ff-store-card ff-store-card--direct">
+                      <label className="ff-store-persistence-toggle">
+                        <input
+                          checked={storePanelPersistenceEnabled}
+                          onChange={(event) => handleToggleStorePanelPersistence(event.target.checked)}
+                          type="checkbox"
+                        />
+                        <span>持久化</span>
+                      </label>
                       <div className="ff-store-direct-summary">
                         <strong>直连仓库 M1</strong>
                         {storeCheck?.directM1 ? (
@@ -1348,31 +1722,38 @@ export function RightDrawer({
                         <tr>
                           <th>周期</th>
                           <th>条数</th>
-                          <th>最后更新</th>
-                          <th>操作</th>
+                          <th>最后K线</th>
                         </tr>
                       </thead>
                       <tbody>
                         {visibleStoreTableRows.map((row) => (
                           <tr
-                            data-selected={selectedStoreTableKey === `${row.kind}-${row.period}`}
+                            data-selected={selectedStoreTableKeyIsVisible && selectedStoreTableKey === `${row.kind}-${row.period}`}
                             key={`${row.kind}-${row.period}`}
                             onClick={() => handleOpenStoreTableRow(row)}
                           >
                             <td>
-                              <strong>{row.period}</strong>
+                              {row.kind === 'aggregate' ? (
+                                <label className="ff-store-period-check" onClick={(event) => event.stopPropagation()}>
+                                  <input
+                                    checked={selectedAggregatePeriods.includes(row.period)}
+                                    disabled={storeCheckLoading}
+                                    onChange={() => toggleAggregatePeriod(row.period)}
+                                    type="checkbox"
+                                  />
+                                  <strong>{row.period}</strong>
+                                </label>
+                              ) : (
+                                <strong>{row.period}</strong>
+                              )}
                             </td>
                             <td>{row.count}</td>
                             <td>{row.updated}</td>
-                            <td>
-                              <button title={`重建 ${row.period}`} type="button">↻</button>
-                              <button title={`删除 ${row.period}`} type="button">×</button>
-                            </td>
                           </tr>
                         ))}
                         {!visibleStoreTableRows.length && (
                           <tr>
-                            <td className="ff-symbol-table__empty" colSpan={4}>
+                            <td className="ff-symbol-table__empty" colSpan={3}>
                               暂无 StoreV5 聚合周期。请先拉取 M1，再执行聚合。
                             </td>
                           </tr>
@@ -1384,7 +1765,35 @@ export function RightDrawer({
                       <button disabled={storeCheckLoading} onClick={handleRefreshStoreStatus} type="button">
                         {storeCheckLoading ? '刷新中' : '刷新仓库'}
                       </button>
-                      <button disabled={storeCheckLoading} onClick={handleAggregateStore} type="button">聚合</button>
+                      <button disabled={storeCheckLoading || selectedAggregatePeriods.length === 0} onClick={handleDeleteSelectedAggregates} type="button">删除</button>
+                      <button disabled={storeCheckLoading || selectedAggregatePeriods.length === 0} onClick={handleAggregateStore} type="button">聚合</button>
+                    </div>
+
+                    <div className="ff-chart-jump-controls">
+                      <input
+                        aria-label="跳转日期时间"
+                        onChange={(event) => {
+                          setChartJumpInput(event.target.value)
+                          setChartJumpError('')
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            handleJumpChartToTime()
+                          }
+                        }}
+                        placeholder="YYYY-MM-DD HH:mm"
+                        type="text"
+                        value={chartJumpInput}
+                      />
+                      <button onClick={handleJumpChartToTime} type="button">跳转</button>
+                      <button onClick={handleResetChartToLatest} type="button">回到当前</button>
+                      <button onClick={() => onLoadChartStep?.('left')} type="button">向左10000</button>
+                      <button onClick={() => onLoadChartStep?.('right')} type="button">向右10000</button>
+                      {chartJumpError && <span>{chartJumpError}</span>}
+                    </div>
+
+                    <div className="ff-chart-load-status">
+                      {formatChartLoadStatus(chartLoadState)}
                     </div>
 
                   </div>

@@ -84,6 +84,8 @@ export type StoreV5RawDirectM1 = {
 export type StoreV5AggregatedCell = {
   timeframe?: string
   rowsCount?: number | null
+  lastTime?: number | null
+  lastTimeText?: string | null
   sourceLastTime?: number | null
   sourceTrueM1RowsCount?: number | null
   anchor?: string | null
@@ -189,6 +191,27 @@ export type StoreV5AggregatePayload = {
     rowsWritten?: number
     dirty?: boolean
   }>
+}
+
+export type StoreV5AggregateJobPayload = {
+  ok: boolean
+  jobId: string
+  symbol: string
+  phase: string
+  status: string
+  error?: string
+  targets?: string[]
+  currentTarget?: string | null
+  currentIndex?: number
+  totalTargets?: number
+  progressPercent?: number | null
+  progressLabel?: string
+  results?: StoreV5AggregatePayload['results']
+  result?: StoreV5AggregatePayload
+  periods: string[]
+  currentPeriod?: string
+  completed: number
+  total: number
 }
 
 export type StoreV5CleanPayload = {
@@ -383,6 +406,21 @@ export async function deleteStoreV5Symbol(symbol: string): Promise<StoreV5Delete
   return payload
 }
 
+export async function deleteStoreV5AggregatedTimeframes(symbol: string, timeframes: string[]): Promise<StoreV5DeletePayload> {
+  const params = new URLSearchParams()
+  params.set('symbol', symbol)
+  params.set('timeframes', timeframes.join(','))
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/aggregated/delete?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as StoreV5DeletePayload
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
 export async function pullStoreV5(symbol: string, mode = 'refresh', count?: number): Promise<StoreV5PullPayload> {
   const params = new URLSearchParams()
   params.set('symbol', symbol)
@@ -449,10 +487,11 @@ export async function cancelStoreV5PullJob(jobId: string): Promise<StoreV5PullJo
   return payload
 }
 
-export async function aggregateStoreV5(symbol: string): Promise<StoreV5AggregatePayload> {
+export async function aggregateStoreV5(symbol: string, timeframes?: string[]): Promise<StoreV5AggregatePayload> {
   const params = new URLSearchParams()
   params.set('symbol', symbol)
-  params.set('rebuild', '1')
+  params.set('rebuild', '0')
+  if (timeframes?.length) params.set('timeframes', timeframes.join(','))
   const response = await fetch(
     `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/aggregate?${params.toString()}`,
     { headers: { Accept: 'application/json' }, cache: 'no-store' },
@@ -462,6 +501,42 @@ export async function aggregateStoreV5(symbol: string): Promise<StoreV5Aggregate
     throw new Error(payload.error || `HTTP ${response.status}`)
   }
   return payload
+}
+
+export async function startStoreV5AggregateJob(symbol: string, timeframes?: string[]): Promise<StoreV5AggregateJobPayload> {
+  const params = new URLSearchParams()
+  params.set('symbol', symbol)
+  params.set('rebuild', '0')
+  if (timeframes?.length) params.set('timeframes', timeframes.join(','))
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/aggregate/start?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as StoreV5AggregateJobPayload
+  if (!response.ok) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
+export async function fetchStoreV5AggregateJob(jobId: string): Promise<StoreV5AggregateJobPayload> {
+  const params = new URLSearchParams()
+  params.set('jobId', jobId)
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/aggregate/progress?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as StoreV5AggregateJobPayload
+  if (!response.ok) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
+export function createStoreV5AggregateEventSource(jobId: string): EventSource {
+  const params = new URLSearchParams()
+  params.set('jobId', jobId)
+  return new EventSource(`${resolveMt5ApiBase()}/api/market-data/v1/store-v5/aggregate/events?${params.toString()}`)
 }
 
 export async function cleanStoreV5DirectM1(symbol: string): Promise<StoreV5CleanPayload> {

@@ -26,6 +26,10 @@ PULL_JOBS: dict[str, dict[str, Any]] = {}
 PULL_JOBS_LOCK = threading.Lock()
 PULL_JOBS_CONDITION = threading.Condition(PULL_JOBS_LOCK)
 PULL_JOB_TERMINAL_PHASES = {"completed", "failed", "cancelled"}
+AGGREGATE_JOBS: dict[str, dict[str, Any]] = {}
+AGGREGATE_JOBS_LOCK = threading.Lock()
+AGGREGATE_JOBS_CONDITION = threading.Condition(AGGREGATE_JOBS_LOCK)
+AGGREGATE_JOB_TERMINAL_PHASES = {"completed", "failed", "cancelled"}
 
 
 def utc_now_iso() -> str:
@@ -521,6 +525,62 @@ def delete_store_v5_symbol(symbol: str, store_root: Path | None = None) -> dict[
     }
 
 
+def delete_store_v5_aggregated_timeframes(symbol: str, timeframes: list[str], store_root: Path | None = None) -> dict[str, Any]:
+    from python.data_warehouse.store_v5.manifest_v5 import load_manifest_v5, save_manifest_v5
+    from python.data_warehouse.store_v5.store_v5_paths import resolve_store_root
+
+    root = resolve_store_root(store_root)
+    datasets_root = (root / "datasets").resolve()
+    requested = {str(item or "").strip().upper() for item in timeframes if str(item or "").strip()}
+    if not requested:
+        return {"ok": False, "status": "bad_request", "error": "timeframes_required", "symbol": symbol}
+
+    manifest = load_manifest_v5(root)
+    datasets = manifest.get("datasets", {})
+    keys_to_delete = [
+        key
+        for key, cell in datasets.items()
+        if (
+            cell.get("provider") == "mt5"
+            and cell.get("symbol") == symbol
+            and cell.get("mode") == "aggregated"
+            and str(cell.get("timeframe") or "").strip().upper() in requested
+        )
+    ]
+
+    deleted_dirs: list[str] = []
+    for key in keys_to_delete:
+        cell = datasets.get(key, {})
+        rel_root = str(cell.get("rootPath") or "").strip()
+        if rel_root:
+            target = (root / rel_root).resolve()
+            if target == datasets_root or datasets_root not in target.parents:
+                return {
+                    "ok": False,
+                    "status": "store_v5_aggregate_delete_refused",
+                    "error": "dataset_path_outside_store",
+                    "symbol": symbol,
+                    "path": str(target),
+                }
+            if target.exists():
+                shutil.rmtree(target)
+                deleted_dirs.append(str(target))
+        datasets.pop(key, None)
+
+    if keys_to_delete:
+        save_manifest_v5(manifest, root)
+
+    return {
+        "ok": True,
+        "status": "store_v5_aggregated_timeframes_deleted" if keys_to_delete else "store_v5_aggregated_timeframes_not_found",
+        "symbol": symbol,
+        "timeframes": sorted(requested),
+        "deletedDatasets": keys_to_delete,
+        "deletedDirs": deleted_dirs,
+        "publishedAt": utc_now_iso(),
+    }
+
+
 def mt5_rates_to_rows(rates: Any) -> list[dict[str, Any]]:
     if rates is None:
         return []
@@ -606,6 +666,50 @@ def _get_pull_job(job_id: str) -> dict[str, Any] | None:
 
 def _public_pull_job_snapshot(job: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in job.items() if key != "events"}
+
+
+def _public_aggregate_job_snapshot(job: dict[str, Any]) -> dict[str, Any]:
+    snapshot = {key: value for key, value in job.items() if key != "events"}
+    targets = list(snapshot.get("targets") or [])
+    current_index = int(snapshot.get("currentIndex") or 0)
+    phase = str(snapshot.get("phase") or "")
+    snapshot.setdefault("periods", targets)
+    snapshot.setdefault("currentPeriod", snapshot.get("currentTarget"))
+    snapshot.setdefault("total", int(snapshot.get("totalTargets") or len(targets)))
+    snapshot.setdefault("completed", int(snapshot.get("total") or len(targets)) if phase == "completed" else max(0, current_index - 1))
+    return snapshot
+
+
+def _set_aggregate_job(job_id: str, **updates: Any) -> dict[str, Any]:
+    with AGGREGATE_JOBS_CONDITION:
+        job = AGGREGATE_JOBS.get(job_id)
+        if not job:
+            return {}
+        job.update(updates)
+        job["updatedAt"] = utc_now_iso()
+        events = job.setdefault("events", [])
+        event_id = int(job.get("lastEventId") or 0) + 1
+        job["lastEventId"] = event_id
+        phase = str(job.get("phase") or "")
+        event_name = "progress"
+        if phase == "completed":
+            event_name = "done"
+        elif phase == "failed":
+            event_name = "error"
+        elif phase == "cancelled":
+            event_name = "cancelled"
+        snapshot = _public_aggregate_job_snapshot(job)
+        events.append({"id": event_id, "event": event_name, "data": snapshot})
+        if len(events) > 500:
+            del events[:-500]
+        AGGREGATE_JOBS_CONDITION.notify_all()
+        return snapshot
+
+
+def _get_aggregate_job(job_id: str) -> dict[str, Any] | None:
+    with AGGREGATE_JOBS_LOCK:
+        job = AGGREGATE_JOBS.get(job_id)
+        return _public_aggregate_job_snapshot(job) if job else None
 
 
 def _build_m1_check_payload(
@@ -1111,6 +1215,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
 
         previous_first_time = None
         previous_last_time = None
+        previous_raw_rows_count = 0
+        previous_raw_mt5_rows_count = 0
         range_window: dict[str, Any] | None = None
         if mode == "refresh":
             raw_root = dataset_root(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1", store_root=root)
@@ -1130,6 +1236,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             else:
                 previous_first_time = safe_int(raw_cell.get("firstTime") or raw_cell.get("firstRawM1Time"))
                 previous_last_time = safe_int(raw_cell.get("lastTime") or raw_cell.get("lastRawM1Time"))
+                previous_raw_rows_count = int(raw_cell.get("rowsCount") or raw_cell.get("rawRowsCount") or 0)
+                previous_raw_mt5_rows_count = int(raw_cell.get("rowsCount") or raw_cell.get("mt5RowsCount") or previous_raw_rows_count)
                 if previous_last_time is None:
                     mode = "refresh"
                     raw_root = dataset_root(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1", store_root=root)
@@ -1186,6 +1294,20 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 return True
             return row_time < int(previous_first_time) or row_time > int(previous_last_time)
 
+        def manifest_total_first_time() -> int | None:
+            if previous_first_time is None:
+                return first_time
+            if first_time is None:
+                return previous_first_time
+            return min(int(previous_first_time), int(first_time))
+
+        def manifest_total_last_time() -> int | None:
+            if previous_last_time is None:
+                return last_time
+            if last_time is None:
+                return previous_last_time
+            return max(int(previous_last_time), int(last_time))
+
         def flush_pending_rows(progress_floor: float | None = None) -> None:
             nonlocal rows_written_total, duplicate_rows_total
             if not pending_rows:
@@ -1226,10 +1348,10 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 source="mt5_terminal",
                 deduplicate_existing_time=(mode != "refresh"),
                 manifest_extra={
-                    "mt5RowsCount": rows_fetched_total,
-                    "rawRowsCount": rows_written_total + len(pending_rows),
-                    "firstRawM1Time": first_time,
-                    "lastRawM1Time": last_time,
+                    "mt5RowsCount": previous_raw_mt5_rows_count + rows_fetched_total if mode != "refresh" else rows_fetched_total,
+                    "rawRowsCount": previous_raw_rows_count + rows_written_total + len(pending_rows) if mode != "refresh" else rows_written_total + len(pending_rows),
+                    "firstRawM1Time": manifest_total_first_time(),
+                    "lastRawM1Time": manifest_total_last_time(),
                     "rawIngestStatus": "raw_m1_written",
                     "cleanStatus": "pending",
                     "lastImportAt": utc_now_iso(),
@@ -1550,19 +1672,109 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
         )
 
         direct_cell = get_dataset_cell(root, direct_key)
+        direct_sync: dict[str, Any] | None = None
         if direct_cell:
-            upsert_dataset_cell(
-                root,
-                direct_key,
-                {
-                    **direct_cell,
-                    "status": "stale",
-                    "dirty": True,
-                    "cleanStatus": "stale",
-                    "staleReason": "raw_direct_updated",
-                    "updatedAt": utc_now_iso(),
-                },
-            )
+            try:
+                import duckdb
+
+                direct_last_time = safe_int(direct_cell.get("lastTrueM1Time") or direct_cell.get("lastTime"))
+                if direct_last_time is not None:
+                    raw_root = dataset_root(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1", store_root=root)
+                    raw_files = sorted(str(path) for path in raw_root.rglob("part-*.parquet"))
+                    direct_tail_rows: list[dict[str, Any]] = []
+                    if raw_files:
+                        con = duckdb.connect(database=":memory:")
+                        try:
+                            direct_tail_rows = con.execute(
+                                "SELECT * FROM read_parquet(?) WHERE time > ? ORDER BY time",
+                                [raw_files, int(direct_last_time)],
+                            ).fetchdf().to_dict("records")
+                        finally:
+                            con.close()
+                    if direct_tail_rows:
+                        tail_times = sorted({int(row["time"]) for row in direct_tail_rows})
+                        first_tail_time = tail_times[0]
+                        last_tail_time = tail_times[-1]
+                        gap_count = int(direct_cell.get("gapCount") or 0)
+                        first_gap = direct_cell.get("firstGap")
+                        previous_time = int(direct_last_time)
+                        for current_time in tail_times:
+                            delta = current_time - previous_time
+                            if delta > 60:
+                                gap_count += 1
+                                if not first_gap:
+                                    first_gap = {
+                                        "previousTime": previous_time,
+                                        "nextTime": current_time,
+                                        "deltaSeconds": delta,
+                                        "missingBarsEstimate": max(0, delta // 60 - 1),
+                                    }
+                            previous_time = current_time
+                        previous_true_count = int(direct_cell.get("trueM1RowsCount") or direct_cell.get("rowsCount") or 0)
+                        sync_now = utc_now_iso()
+                        write_direct = append_ohlcv_part_v5(
+                            direct_tail_rows,
+                            provider="mt5",
+                            symbol=symbol,
+                            mode="direct",
+                            timeframe="M1",
+                            store_root=root,
+                            source="store_v5_raw_direct_incremental_sync",
+                            deduplicate_existing_time=True,
+                            manifest_extra={
+                                **direct_cell,
+                                "sourceDataset": raw_key,
+                                "sourceRawRowsCount": previous_raw_rows_count + rows_written_total,
+                                "sourceRawLastTime": manifest_total_last_time(),
+                                "mt5RowsCount": int(direct_cell.get("mt5RowsCount") or previous_true_count) + len(direct_tail_rows),
+                                "trueM1RowsCount": previous_true_count + len(tail_times),
+                                "lastTrueM1Time": last_tail_time,
+                                "lastImportAt": sync_now,
+                                "lastImportMode": mode,
+                                "lastIncrementalSyncAt": sync_now,
+                                "lastIncrementalSyncRows": len(tail_times),
+                                "gapCount": gap_count,
+                                "firstGap": first_gap,
+                                "m1IntegrityStatus": "true_m1_continuous" if gap_count == 0 else "true_m1_with_session_gaps",
+                                "status": "ready",
+                                "dirty": False,
+                                "cleanStatus": "ready",
+                                "staleReason": None,
+                                "updatedAt": sync_now,
+                            },
+                        )
+                        direct_sync = {
+                            "rowsCandidate": len(direct_tail_rows),
+                            "rowsWritten": int(write_direct.get("rowsWritten") or 0),
+                            "firstTime": first_tail_time,
+                            "lastTime": last_tail_time,
+                        }
+                if direct_sync is None and rows_written_total:
+                    upsert_dataset_cell(
+                        root,
+                        direct_key,
+                        {
+                            **direct_cell,
+                            "status": "stale",
+                            "dirty": True,
+                            "cleanStatus": "stale",
+                            "staleReason": "raw_direct_updated",
+                            "updatedAt": utc_now_iso(),
+                        },
+                    )
+            except Exception as sync_exc:
+                upsert_dataset_cell(
+                    root,
+                    direct_key,
+                    {
+                        **direct_cell,
+                        "status": "stale",
+                        "dirty": True,
+                        "cleanStatus": "stale",
+                        "staleReason": f"direct_incremental_sync_failed:{sync_exc}",
+                        "updatedAt": utc_now_iso(),
+                    },
+                )
         mark_aggregated_dirty_for_symbol(root, provider="mt5", symbol=symbol)
         report = {
             "ok": True,
@@ -1578,6 +1790,7 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             "firstRawM1Time": first_time,
             "lastRawM1Time": last_time,
             "cleanStatus": "pending",
+            "directSync": direct_sync,
             "manifestPath": str(manifest_path(root)),
         }
         _set_pull_job(
@@ -2241,6 +2454,117 @@ def aggregate_store_v5(symbol: str, timeframes: list[str], rebuild: bool, store_
     )
 
 
+def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str], rebuild: bool, store_root: Path | None = None) -> None:
+    results: dict[str, Any] = {}
+    total = max(1, len(timeframes))
+    try:
+        _set_aggregate_job(
+            job_id,
+            phase="running",
+            status="store_v5_aggregate_running",
+            progressPercent=1,
+            progressLabel=f"开始聚合：共 {len(timeframes)} 个周期",
+            currentIndex=0,
+            totalTargets=len(timeframes),
+            results=results,
+        )
+        job = _get_aggregate_job(job_id)
+        if job and job.get("cancelRequested"):
+            _set_aggregate_job(
+                job_id,
+                ok=False,
+                phase="cancelled",
+                status="store_v5_aggregate_cancelled",
+                progressLabel="已取消",
+                finishedAt=utc_now_iso(),
+            )
+            return
+        _set_aggregate_job(
+            job_id,
+            phase="running",
+            status="store_v5_aggregate_targets_running",
+            currentTarget=",".join(timeframes),
+            currentIndex=1,
+            totalTargets=len(timeframes),
+            progressPercent=5,
+            progressLabel=f"正在聚合：{','.join(timeframes)}",
+            results=results,
+        )
+        payload = aggregate_store_v5(symbol, timeframes=timeframes, rebuild=rebuild, store_root=store_root)
+        results.update(payload.get("results") or {})
+        for timeframe in timeframes:
+            target_result = results.get(timeframe) or {}
+            if target_result.get("ok") is not True:
+                raise RuntimeError(str(target_result.get("error") or target_result.get("status") or f"{timeframe} aggregate failed"))
+        report = {
+            "ok": True,
+            "status": "store_v5_aggregate_completed",
+            "symbol": symbol,
+            "storeVersion": "v5",
+            "results": results,
+        }
+        _set_aggregate_job(
+            job_id,
+            ok=True,
+            phase="completed",
+            status="store_v5_aggregate_completed",
+            progressPercent=100,
+            progressLabel=f"聚合完成：{len(timeframes)} 个周期",
+            results=results,
+            result=report,
+            finishedAt=utc_now_iso(),
+        )
+    except Exception as exc:
+        _set_aggregate_job(
+            job_id,
+            ok=False,
+            phase="failed",
+            status="store_v5_aggregate_failed",
+            error=str(exc),
+            progressPercent=None,
+            progressLabel=f"聚合失败：{exc}",
+            results=results,
+            finishedAt=utc_now_iso(),
+        )
+
+
+def start_store_v5_aggregate_job(symbol: str, *, timeframes: list[str], rebuild: bool, store_root: Path | None = None) -> dict[str, Any]:
+    job_id = uuid.uuid4().hex
+    now = utc_now_iso()
+    targets = [item.strip().upper() for item in timeframes if item.strip()]
+    with AGGREGATE_JOBS_CONDITION:
+        job = {
+            "ok": True,
+            "jobId": job_id,
+            "symbol": symbol,
+            "phase": "queued",
+            "status": "store_v5_aggregate_queued",
+            "progressPercent": 0,
+            "progressLabel": "准备开始聚合",
+            "targets": targets,
+            "currentTarget": None,
+            "currentIndex": 0,
+            "totalTargets": len(targets),
+            "results": {},
+            "rebuild": bool(rebuild),
+            "createdAt": now,
+            "updatedAt": now,
+            "lastEventId": 1,
+            "events": [],
+        }
+        snapshot = _public_aggregate_job_snapshot(job)
+        job["events"].append({"id": 1, "event": "progress", "data": snapshot})
+        AGGREGATE_JOBS[job_id] = job
+        AGGREGATE_JOBS_CONDITION.notify_all()
+    threading.Thread(
+        target=run_store_v5_aggregate_job,
+        args=(job_id, symbol),
+        kwargs={"timeframes": targets, "rebuild": rebuild, "store_root": store_root},
+        daemon=True,
+    ).start()
+    return _get_aggregate_job(job_id) or {"ok": False, "error": "job_not_found", "jobId": job_id}
+
+
 def query_store_v5_ohlcv(params: dict[str, list[str]], store_root: Path | None = None) -> dict[str, Any]:
     from python.data_warehouse.query.duckdb_ohlcv_query_v5 import query_ohlcv_store_v5
 
@@ -2400,6 +2724,24 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
                 self.send_json(500, {"ok": False, "status": "store_v5_delete_failed", "error": str(exc)})
             return
 
+        if parsed.path == "/api/market-data/v1/store-v5/aggregated/delete":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            raw_timeframes = (query.get("timeframes") or [""])[0]
+            timeframes = [item.strip().upper() for item in raw_timeframes.split(",") if item.strip()]
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            if not timeframes:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "timeframes_required"})
+                return
+            try:
+                payload = delete_store_v5_aggregated_timeframes(symbol, timeframes=timeframes, store_root=self.store_root)
+                self.send_json(200 if payload.get("ok") is True else 400, payload)
+            except Exception as exc:
+                self.send_json(500, {"ok": False, "status": "store_v5_aggregated_delete_failed", "error": str(exc)})
+            return
+
         if parsed.path == "/api/market-data/v1/store-v5/pull/start":
             query = parse_qs(parsed.query)
             symbol = (query.get("symbol") or [""])[0].strip()
@@ -2453,6 +2795,59 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
             self.send_json(200, job)
             return
 
+        if parsed.path == "/api/market-data/v1/store-v5/aggregate/start":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            raw_timeframes = (query.get("timeframes") or ["M5,M15,M30,H1,H2,H3,H4,D1,W1,MN1"])[0]
+            timeframes = [item.strip().upper() for item in raw_timeframes.split(",") if item.strip()]
+            rebuild = query_bool((query.get("rebuild") or ["0"])[0], default=False)
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            if not timeframes:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "timeframes_required"})
+                return
+            self.send_json(202, start_store_v5_aggregate_job(symbol, timeframes=timeframes, rebuild=rebuild, store_root=self.store_root))
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/aggregate/progress":
+            query = parse_qs(parsed.query)
+            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
+            if not job_id:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
+                return
+            job = _get_aggregate_job(job_id)
+            if not job:
+                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
+                return
+            self.send_json(200, job)
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/aggregate/events":
+            query = parse_qs(parsed.query)
+            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
+            if not job_id:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
+                return
+            if not _get_aggregate_job(job_id):
+                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
+                return
+            self.send_aggregate_job_events(job_id)
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/aggregate/cancel":
+            query = parse_qs(parsed.query)
+            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
+            if not job_id:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
+                return
+            job = _set_aggregate_job(job_id, cancelRequested=True, status="store_v5_aggregate_cancel_requested")
+            if not job:
+                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
+                return
+            self.send_json(200, job)
+            return
+
         if parsed.path == "/api/market-data/v1/store-v5/pull":
             query = parse_qs(parsed.query)
             symbol = (query.get("symbol") or [""])[0].strip()
@@ -2484,7 +2879,7 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/market-data/v1/store-v5/aggregate":
             query = parse_qs(parsed.query)
             symbol = (query.get("symbol") or [""])[0].strip()
-            raw_timeframes = (query.get("timeframes") or ["M5,M15,M30,H1,H2,H4,H8,D1,W1,MN1"])[0]
+            raw_timeframes = (query.get("timeframes") or ["M5,M15,M30,H1,H2,H3,H4,D1,W1,MN1"])[0]
             timeframes = [item.strip().upper() for item in raw_timeframes.split(",") if item.strip()]
             rebuild = query_bool((query.get("rebuild") or ["1"])[0], default=True)
             if not symbol:
@@ -2559,6 +2954,55 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
                     PULL_JOBS_CONDITION.wait_for(
                         lambda: any(int(event.get("id") or 0) > last_sent for event in job.get("events", []))
                         or str(job.get("phase") or "") in PULL_JOB_TERMINAL_PHASES,
+                        timeout=15,
+                    )
+                    events = [
+                        event for event in job.get("events", [])
+                        if int(event.get("id") or 0) > last_sent
+                    ]
+                    if not events:
+                        events = [{"id": last_sent, "event": "ping", "data": {"ok": True, "jobId": job_id, "phase": job.get("phase"), "updatedAt": utc_now_iso()}}]
+
+            should_close = False
+            for event in events:
+                event_id = int(event.get("id") or last_sent)
+                event_name = str(event.get("event") or "progress")
+                data = event.get("data") if isinstance(event.get("data"), dict) else {}
+                if event_id > last_sent:
+                    last_sent = event_id
+                if event_name in {"done", "error", "cancelled"}:
+                    should_close = True
+                try:
+                    self.wfile.write(f"id: {event_id}\n".encode("utf-8"))
+                    self.wfile.write(f"event: {event_name}\n".encode("utf-8"))
+                    self.wfile.write(f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    return
+            if should_close:
+                return
+
+    def send_aggregate_job_events(self, job_id: str) -> None:
+        self.send_response(200)
+        self.send_cors_headers()
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+
+        last_sent = 0
+        while True:
+            with AGGREGATE_JOBS_CONDITION:
+                job = AGGREGATE_JOBS.get(job_id)
+                if not job:
+                    events = [{
+                        "id": last_sent + 1,
+                        "event": "error",
+                        "data": {"ok": False, "jobId": job_id, "phase": "failed", "status": "job_not_found", "error": "job_not_found"},
+                    }]
+                else:
+                    AGGREGATE_JOBS_CONDITION.wait_for(
+                        lambda: any(int(event.get("id") or 0) > last_sent for event in job.get("events", []))
+                        or str(job.get("phase") or "") in AGGREGATE_JOB_TERMINAL_PHASES,
                         timeout=15,
                     )
                     events = [

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 import duckdb
+import pandas as pd
 
 from ..store_v5.manifest_v5 import load_manifest_v5
 from ..store_v5.store_v5_paths import dataset_key, dataset_root, resolve_store_root
@@ -21,6 +22,26 @@ def _fetch_rows(sql: str, params: list[Any]) -> list[dict[str, Any]]:
         con.close()
 
 
+def _ohlcv_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            volume = row.get("volume", 0)
+            out.append(
+                {
+                    "time": int(row["time"]),
+                    "open": float(row["open"]),
+                    "high": float(row["high"]),
+                    "low": float(row["low"]),
+                    "close": float(row["close"]),
+                    "volume": int(0 if pd.isna(volume) else volume),
+                }
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
 def _query_latest_rows(files: list[str], limit: int) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     # StoreV5 part names are partitioned by year/month and part date, so reverse
@@ -30,7 +51,7 @@ def _query_latest_rows(files: list[str], limit: int) -> list[dict[str, Any]]:
         if not batch:
             break
         need = max(limit, limit - len(rows))
-        sql = "SELECT * FROM read_parquet(?) ORDER BY time DESC LIMIT ?"
+        sql = "SELECT time, open, high, low, close, volume FROM read_parquet(?) ORDER BY time DESC LIMIT ?"
         rows.extend(_fetch_rows(sql, [batch, need]))
         rows = sorted(rows, key=lambda row: int(row["time"]), reverse=True)[:limit]
         if len(rows) >= limit:
@@ -80,7 +101,7 @@ def query_ohlcv_store_v5(
         return {"ok": False, "error": "dataset_has_no_parquet_parts", "datasetKey": key, "rows": []}
 
     if time_from is None and time_to is None and limit is not None:
-        rows = _query_latest_rows(files, int(limit))
+        rows = _ohlcv_rows(_query_latest_rows(files, int(limit)))
         time_values = [int(row["time"]) for row in rows]
         return {
             "ok": True,
@@ -105,8 +126,8 @@ def query_ohlcv_store_v5(
         }
 
     if time_from is None and time_to is not None and limit is not None:
-        sql = "SELECT * FROM read_parquet(?) WHERE time <= ? ORDER BY time DESC LIMIT ?"
-        rows = list(reversed(_fetch_rows(sql, [files, int(time_to), int(limit)])))
+        sql = "SELECT time, open, high, low, close, volume FROM read_parquet(?) WHERE time <= ? ORDER BY time DESC LIMIT ?"
+        rows = _ohlcv_rows(list(reversed(_fetch_rows(sql, [files, int(time_to), int(limit)]))))
         time_values = [int(row["time"]) for row in rows]
         return {
             "ok": True,
@@ -142,8 +163,8 @@ def query_ohlcv_store_v5(
     limit_sql = "LIMIT ?" if limit is not None else ""
     if limit is not None:
         params.append(int(limit))
-    sql = f"SELECT * FROM read_parquet(?) {where_sql} ORDER BY time {limit_sql}"
-    rows = _fetch_rows(sql, params)
+    sql = f"SELECT time, open, high, low, close, volume FROM read_parquet(?) {where_sql} ORDER BY time {limit_sql}"
+    rows = _ohlcv_rows(_fetch_rows(sql, params))
     time_values = [int(row["time"]) for row in rows]
     return {
         "ok": True,

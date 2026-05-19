@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChartCoreHost } from './chart/ChartCoreHost'
+import type { ChartLoadState } from './chart/ChartCoreHost'
 import { RightDrawer } from './rightDrawer/RightDrawer'
 import { TopBar } from './topbar/TopBar'
 import './AppShell.css'
@@ -21,10 +22,13 @@ function getInitialDrawerWidth() {
 export function AppShell() {
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false)
   const [rightDrawerWidth, setRightDrawerWidth] = useState(getInitialDrawerWidth)
-  const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; limit?: number }>({
+  const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null }>({
     symbol: 'XAUUSDm',
     period: '1m',
   })
+  const [chartJump, setChartJump] = useState<{ id: number; timestamp?: number } | null>(null)
+  const [chartStepLoad, setChartStepLoad] = useState<{ direction: 'left' | 'right'; id: number } | null>(null)
+  const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
 
   useEffect(() => {
     const resize = () => window.dispatchEvent(new Event('resize'))
@@ -55,12 +59,23 @@ export function AppShell() {
           ['--ff-right-drawer-width' as string]: `${rightDrawerWidth}px`,
         }}
       >
-        <ChartCoreHost limit={chartTarget.limit} period={chartTarget.period} symbol={chartTarget.symbol} />
+        <ChartCoreHost
+          jump={chartJump}
+          onLoadStateChange={setChartLoadState}
+          period={chartTarget.period}
+          stepLoad={chartStepLoad}
+          symbol={chartTarget.symbol}
+          totalRows={chartTarget.totalRows}
+        />
         <RightDrawer
+          chartLoadState={chartLoadState}
           drawerWidth={rightDrawerWidth}
           open={rightDrawerOpen}
           onClose={() => setRightDrawerOpen(false)}
+          onJumpChartToTime={(timestamp) => setChartJump({ id: Date.now(), timestamp })}
+          onLoadChartStep={(direction) => setChartStepLoad({ direction, id: Date.now() })}
           onOpenChart={setChartTarget}
+          onResetChartToLatest={() => setChartJump({ id: Date.now() })}
           onResize={setRightDrawerWidth}
           onToggle={() => setRightDrawerOpen((current) => !current)}
         />

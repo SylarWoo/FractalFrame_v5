@@ -454,8 +454,30 @@ body[data-fractalframe-mt5-column-resizing='true'] .ff-symbol-table__column-resi
 }
 
 .ff-store-card--direct {
+  position: relative;
   border-color: transparent;
   border-radius: 0;
+}
+
+.ff-store-persistence-toggle {
+  position: absolute;
+  top: 0;
+  right: 8px;
+  display: flex;
+  height: 24px;
+  align-items: center;
+  gap: 5px;
+  color: #475569;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+}
+
+.ff-store-persistence-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
 }
 
 .ff-store-card--compact {
@@ -720,17 +742,32 @@ body[data-fractalframe-mt5-column-resizing='true'] .ff-symbol-table__column-resi
 
 .ff-store-aggregate-table th:nth-child(3),
 .ff-store-aggregate-table td:nth-child(3) {
-  width: 96px;
+  width: 128px;
   text-align: left;
-}
-
-.ff-store-aggregate-table th:last-child,
-.ff-store-aggregate-table td:last-child {
-  width: 62px;
 }
 
 .ff-store-aggregate-table td:first-child strong {
   font-weight: 800;
+}
+
+.ff-store-period-check {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  min-height: 18px;
+}
+
+.ff-store-period-check input {
+  accent-color: #2563eb;
+  cursor: pointer;
+  height: 14px;
+  margin: 0;
+  width: 14px;
+}
+
+.ff-store-period-check input:disabled {
+  cursor: default;
 }
 
 .ff-store-aggregate-table tbody tr {
@@ -750,15 +787,69 @@ body[data-fractalframe-mt5-column-resizing='true'] .ff-symbol-table__column-resi
   font-size: 10px;
 }
 
-.ff-store-aggregate-table button {
-  width: 22px;
-  height: 22px;
-  border: 0;
-  background: transparent;
-  color: #334155;
+.ff-chart-jump-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px 84px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.ff-chart-jump-controls button:nth-of-type(3),
+.ff-chart-jump-controls button:nth-of-type(4) {
+  grid-row: 2;
+}
+
+.ff-chart-jump-controls button:nth-of-type(3) {
+  grid-column: 1 / 2;
+}
+
+.ff-chart-jump-controls button:nth-of-type(4) {
+  grid-column: 2 / 4;
+}
+
+.ff-chart-jump-controls input {
+  min-width: 0;
+  height: 26px;
+  border: 1px solid #ef476f;
+  border-radius: 0;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.ff-chart-jump-controls button {
+  height: 26px;
+  border: 1px solid #ef476f;
+  border-radius: 0;
+  background: #ffffff;
+  color: #0f172a;
   cursor: pointer;
-  font-size: 15px;
-  line-height: 20px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ff-chart-jump-controls button:hover {
+  background: #fff1f4;
+}
+
+.ff-chart-jump-controls span {
+  grid-column: 1 / -1;
+  color: #b42318;
+  font-size: 12px;
+}
+
+.ff-chart-load-status {
+  min-height: 26px;
+  margin-top: 8px;
+  overflow: hidden;
+  border: 1px solid #ef476f;
+  padding: 5px 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ff-import-detail,
