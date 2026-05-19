@@ -1006,7 +1006,7 @@ def cleanup_direct_m1_prefix_before_time_v5(root: Path, symbol: str, cutoff_time
     }
 
 
-def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | None, store_root: Path | None, fetch_chunk: int = 50_000) -> None:
+def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | None, store_root: Path | None, fetch_chunk: int = 20_000) -> None:
     from python.data_warehouse.mt5.mt5_m1_integrity_validator_v1 import validate_incremental_true_m1_rows_v1, validate_true_m1_rows_v1
     from python.data_warehouse.store_v5.manifest_v5 import delete_dataset_cell, get_dataset_cell, mark_aggregated_dirty_for_symbol, upsert_dataset_cell
     from python.data_warehouse.store_v5.ohlcv_schema_v5 import mt5_row_to_canonical
@@ -1061,12 +1061,49 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
         )
 
         seen_times: set[int] = set()
+        write_buffer_target = 200_000
+        pending_rows: list[dict[str, Any]] = []
         rows_fetched_total = 0
         rows_written_total = 0
         duplicate_rows_total = 0
         chunks = 0
         first_time = None
         last_time = None
+
+        def flush_pending_rows() -> None:
+            nonlocal rows_written_total, duplicate_rows_total
+            if not pending_rows:
+                return
+            write = append_ohlcv_part_v5(
+                pending_rows,
+                provider="mt5",
+                symbol=symbol,
+                mode="raw_direct",
+                timeframe="M1",
+                store_root=root,
+                source="mt5_terminal",
+                deduplicate_existing_time=(mode != "refresh"),
+                manifest_extra={
+                    "mt5RowsCount": rows_fetched_total,
+                    "rawRowsCount": rows_written_total + len(pending_rows),
+                    "firstRawM1Time": first_time,
+                    "lastRawM1Time": last_time,
+                    "rawIngestStatus": "raw_m1_written",
+                    "cleanStatus": "pending",
+                    "lastImportAt": utc_now_iso(),
+                    "lastImportMode": mode,
+                    "lastPullMethod": "copy_rates_from_pos_buffered_raw_direct",
+                    "lastPullChunkSize": step,
+                    "lastWriteBufferTarget": write_buffer_target,
+                    "lastAddedRows": len(pending_rows),
+                    "lastDuplicateRows": duplicate_rows_total,
+                    "dirty": False,
+                    "compactRecommended": True,
+                },
+            )
+            rows_written_total += int(write.get("rowsWritten") or 0)
+            duplicate_rows_total += int(write.get("duplicateRows") or 0)
+            pending_rows.clear()
 
         while target is None or pos < target:
             job = _get_pull_job(job_id)
@@ -1096,41 +1133,32 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 batch_last = max((int(row["time"]) for row in canonical_batch), default=None)
                 first_time = batch_first if first_time is None else min(first_time, batch_first or first_time)
                 last_time = batch_last if last_time is None else max(last_time, batch_last or last_time)
-                write = append_ohlcv_part_v5(
-                    canonical_batch,
-                    provider="mt5",
-                    symbol=symbol,
-                    mode="raw_direct",
-                    timeframe="M1",
-                    store_root=root,
-                    source="mt5_terminal",
-                    deduplicate_existing_time=(mode != "refresh"),
-                    manifest_extra={
-                        "mt5RowsCount": rows_fetched_total,
-                        "rawRowsCount": rows_written_total + int(len(canonical_batch)),
-                        "firstRawM1Time": first_time,
-                        "lastRawM1Time": last_time,
-                        "rawIngestStatus": "raw_m1_written",
-                        "cleanStatus": "pending",
-                        "lastImportAt": utc_now_iso(),
-                        "lastImportMode": mode,
-                        "lastPullMethod": "copy_rates_from_pos_streaming_raw_direct",
-                        "lastPullChunkSize": step,
-                        "lastAddedRows": len(canonical_batch),
-                        "lastDuplicateRows": duplicate_rows_total,
-                        "dirty": False,
-                        "compactRecommended": True,
-                    },
-                )
-                rows_written_total += int(write.get("rowsWritten") or 0)
-                duplicate_rows_total += int(write.get("duplicateRows") or 0)
+                pending_rows.extend(canonical_batch)
+                if len(pending_rows) >= write_buffer_target:
+                    _set_pull_job(
+                        job_id,
+                        phase="writing",
+                        status="store_v5_pull_raw_m1_writing",
+                        currentAction="append_raw_direct_m1_buffer",
+                        rowsFetched=rows_fetched_total,
+                        rowsWritten=rows_written_total,
+                        rawRowsCount=rows_written_total,
+                        chunksCompleted=chunks,
+                        fetchChunkSize=step,
+                        maxCount=target,
+                        writeBatchRows=len(pending_rows),
+                        firstTimeText=format_utc_text(first_time),
+                        lastTimeText=format_utc_text(last_time),
+                        cleanStatus="pending",
+                    )
+                    flush_pending_rows()
 
             chunks += 1
             _set_pull_job(
                 job_id,
-                phase="streaming",
+                phase="fetching",
                 status="store_v5_pull_raw_m1_streaming",
-                currentAction="copy_rates_from_pos_and_append_raw_direct_m1",
+                currentAction="copy_rates_from_pos_buffer_raw_direct_m1",
                 rowsFetched=rows_fetched_total,
                 rowsWritten=rows_written_total,
                 rawRowsCount=rows_written_total,
@@ -1138,13 +1166,32 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 fetchChunkSize=step,
                 maxCount=target,
                 writeBatchRows=len(new_part),
-                writeBatchWritten=len(new_part),
+                writeBatchWritten=rows_written_total,
+                pendingWriteRows=len(pending_rows),
                 firstTimeText=format_utc_text(first_time),
                 lastTimeText=format_utc_text(last_time),
                 cleanStatus="pending",
             )
             if len(part) < want:
                 break
+
+        _set_pull_job(
+            job_id,
+            phase="writing",
+            status="store_v5_pull_raw_m1_final_writing",
+            currentAction="append_raw_direct_m1_final_buffer",
+            rowsFetched=rows_fetched_total,
+            rowsWritten=rows_written_total,
+            rawRowsCount=rows_written_total,
+            chunksCompleted=chunks,
+            fetchChunkSize=step,
+            maxCount=target,
+            writeBatchRows=len(pending_rows),
+            firstTimeText=format_utc_text(first_time),
+            lastTimeText=format_utc_text(last_time),
+            cleanStatus="pending",
+        )
+        flush_pending_rows()
 
         direct_cell = get_dataset_cell(root, direct_key)
         if direct_cell:
@@ -1683,7 +1730,7 @@ def start_store_v5_pull_job(symbol: str, *, mode: str, count: int | None, store_
             "rowsFetched": 0,
             "rowsWritten": 0,
             "chunksCompleted": 0,
-            "fetchChunkSize": 50_000,
+            "fetchChunkSize": 20_000,
             "maxCount": count,
             "createdAt": now,
             "updatedAt": now,
