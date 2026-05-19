@@ -26,7 +26,7 @@ KLineCharts datafeed / vectorBT export
 2. M5、M15、M30、H1、H2、H4、H8、D1、W1、MN1 全部从 Direct M1 聚合生成。
 3. MT5 返回条数只记录为 `mt5RowsCount`，不等于可入库条数。
 4. 可入库条数是 `trueM1RowsCount`，必须从首个真实 M1 连续窗口开始。首个真实窗口默认要求至少 60 根相邻 bar 严格按 60 秒递进。
-5. UTC 22:00 不是 M1 入库起点门禁，只是后续聚合交易日锚点。
+5. UTC 22:00 不是 M1 入库起点门禁，也不是必须在数据里找到的一根 K 线；它只是后续聚合使用的交易日分割规则，对应 UTC+8 每日 06:00。
 6. 休市、周末、节假日造成的 session gap 可以记录并保留；不补假数据，不把小时级假 M1 当成真实 M1。
 7. 前端不直接读 parquet，不直接接 MT5 K 线；前端只调用 HTTP API。
 
@@ -137,7 +137,9 @@ baseTimeframe=M1
 anchor=UTC2200
 ```
 
-这样图表不会依赖 MT5 是否在线，也不会绕过仓库完整性门禁。即使 Direct M1 的第一根不在 UTC 22:00，聚合层仍会按 UTC 22:00 切 bucket；不完整 bucket 会被跳过。
+这里的 `anchor=UTC2200` 是规则 ID，不表示聚合器要在 M1 数据中寻找 UTC22:00 那根 bar。聚合器会把真实 M1 按交易日分割规则映射到 bucket，前面不完整 bucket 自动跳过。
+
+这样图表不会依赖 MT5 是否在线，也不会绕过仓库完整性门禁。即使 Direct M1 的第一根不在 UTC 22:00，聚合层仍会按 UTC+8 每日 06:00 的交易日分割线切 bucket；不完整 bucket 会被跳过。
 
 ## 6. vectorBT 接入
 

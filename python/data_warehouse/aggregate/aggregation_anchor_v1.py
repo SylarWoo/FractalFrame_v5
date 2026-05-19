@@ -28,6 +28,7 @@ def anchor_offset_seconds(anchor: str = ANCHOR_UTC2200) -> int:
 
 
 def fixed_bucket_start(time_value: int, timeframe: str, anchor: str = ANCHOR_UTC2200) -> int:
+    # The anchor is a trading-day split rule, not a requirement that a bar exists at that time.
     seconds = FIXED_SECONDS[timeframe]
     offset = anchor_offset_seconds(anchor)
     return ((int(time_value) - offset) // seconds) * seconds + offset

@@ -4,12 +4,19 @@ import './RightDrawer.css'
 import { resolveMt5SymbolDisplay } from './mt5SymbolDisplay'
 import {
   aggregateStoreV5,
+  cancelMt5M1CheckJob,
+  cancelStoreV5PullJob,
+  createStoreV5PullEventSource,
+  deleteStoreV5Symbol,
+  fetchMt5M1CheckJob,
   fetchMt5Symbols,
+  fetchStoreV5PullJob,
   fetchStoreV5Check,
   fetchStoreV5Status,
-  pullStoreV5,
+  startStoreV5PullJob,
+  startMt5M1CheckJob,
 } from './mt5SymbolsApi'
-import type { Mt5SymbolRow, StoreV5CheckPayload } from './mt5SymbolsApi'
+import type { Mt5M1CheckJobPayload, Mt5SymbolRow, StoreV5CheckPayload, StoreV5PullJobPayload } from './mt5SymbolsApi'
 
 type RightDrawerProps = {
   drawerWidth: number
@@ -24,6 +31,7 @@ const maxDrawerWidth = 900
 const splitHeightStorageKey = 'fractalframe:mt5ImportCenterTopPaneHeightPx:v1'
 const columnWidthsStorageKey = 'fractalframe:mt5ImportCenterColumnWidthsPx:v1'
 const symbolSnapshotStorageKey = 'fractalframe:mt5ImportCenterSymbolSnapshot:v1'
+const mt5M1CheckResultsStorageKey = 'fractalframe:mt5ImportCenterM1CheckResults:v1'
 
 const defaultColumnWidths = {
   symbol: 96,
@@ -42,6 +50,11 @@ type SymbolSnapshot = {
   status: string
   symbols: Mt5SymbolRow[]
   savedAt: string
+}
+
+type PersistedM1CheckResult = {
+  checkedAt: string
+  payload: StoreV5CheckPayload
 }
 
 const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
@@ -111,6 +124,37 @@ function saveSymbolSnapshot(snapshot: Omit<SymbolSnapshot, 'savedAt'>) {
   }
 }
 
+function readPersistedM1CheckResult(symbol: string): PersistedM1CheckResult | null {
+  if (!symbol) return null
+  try {
+    const raw = window.localStorage.getItem(mt5M1CheckResultsStorageKey)
+    const parsed = raw ? JSON.parse(raw) : null
+    const item = parsed?.[symbol]
+    if (!item || typeof item !== 'object' || !item.payload) return null
+    if (typeof item.checkedAt !== 'string') return null
+    return item as PersistedM1CheckResult
+  } catch {
+    return null
+  }
+}
+
+function savePersistedM1CheckResult(symbol: string, payload: StoreV5CheckPayload, checkedAt: string) {
+  if (!symbol) return
+  try {
+    const raw = window.localStorage.getItem(mt5M1CheckResultsStorageKey)
+    const parsed = raw ? JSON.parse(raw) : {}
+    window.localStorage.setItem(
+      mt5M1CheckResultsStorageKey,
+      JSON.stringify({
+        ...(parsed && typeof parsed === 'object' ? parsed : {}),
+        [symbol]: { checkedAt, payload },
+      }),
+    )
+  } catch {
+    // Check result persistence is best-effort only.
+  }
+}
+
 function formatSymbolStatus(totalCount: number, visibleCount: number, merge?: { added?: number; updated?: number }) {
   return `共 ${totalCount} 个品种，本地已保存，刷新后自动恢复（当前显示 ${visibleCount} 个）`
     + (merge ? ` · 新增 ${merge.added ?? 0}，更新 ${merge.updated ?? 0}` : '')
@@ -141,9 +185,93 @@ function formatCount(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('en-US') : '-'
 }
 
+function formatCountWithWan(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  if (Math.abs(value) < 10000) return value.toLocaleString('en-US')
+  const wan = value / 10000
+  return `${value.toLocaleString('en-US')}（${wan.toFixed(wan >= 100 ? 0 : 1)}W）`
+}
+
+function formatCheckTime(value?: string | null) {
+  if (!value) return '-'
+  const time = Date.parse(value)
+  if (!Number.isFinite(time)) return value
+  return new Date(time).toLocaleString()
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 function formatUtcRange(firstText?: string | null, lastText?: string | null) {
   if (!firstText || !lastText) return '-'
   return `${firstText.replace(':00 UTC', '')} ~ ${lastText.replace(':00 UTC', '')} (UTC)`
+}
+
+function formatStoreOperationLine(
+  pullJob: StoreV5PullJobPayload | null,
+  checkJob: Mt5M1CheckJobPayload | null,
+  fallback: string,
+) {
+  if (pullJob) {
+    const batchSize = pullJob.fetchChunkSize ?? pullJob.writeBatchSize ?? 200000
+    if (pullJob.phase === 'probing' || pullJob.phase === 'queued' || pullJob.phase === 'fetching') {
+      return `开始读取 ${formatCountWithWan(batchSize)}，已读取 ${formatCountWithWan(pullJob.rowsFetched)}`
+    }
+    if (pullJob.phase === 'streaming' || pullJob.phase === 'writing') {
+      const currentBatch = pullJob.writeBatchRows ?? batchSize
+      return `开始写入 ${formatCountWithWan(currentBatch)}，已写入 ${formatCountWithWan(pullJob.rowsWritten)}`
+    }
+    if (pullJob.phase === 'checking' || pullJob.phase === 'validating') return '已经写完，开始检查错误字段'
+    if (pullJob.phase === 'cleaning') {
+      const deleted = pullJob.cleanupDeletedRows != null ? `，已删除 ${formatCountWithWan(pullJob.cleanupDeletedRows)}` : ''
+      return `检查完，删除错误字段${deleted}`
+    }
+    if (pullJob.phase === 'completed') return '完成，本地 M1 数据已更新'
+    if (pullJob.phase === 'cancelled') return '已取消'
+    if (pullJob.phase === 'failed') return `失败：${pullJob.error || pullJob.status}`
+    return pullJob.status || fallback
+  }
+  if (checkJob) {
+    const batchSize = checkJob.chunkSize ?? 200000
+    if (checkJob.phase === 'fetching' || checkJob.phase === 'queued') {
+      return `开始读取 ${formatCountWithWan(batchSize)}，已读取 ${formatCountWithWan(checkJob.mt5RowsCount)}`
+    }
+    if (checkJob.phase === 'validating') return '已经读完，开始检查错误字段'
+    if (checkJob.phase === 'completed') return '检查完成'
+    if (checkJob.phase === 'cancelled') return '已取消'
+    if (checkJob.phase === 'failed') return `失败：${checkJob.error || checkJob.status}`
+    return checkJob.status || fallback
+  }
+  return fallback
+}
+
+function resolveStoreOperationProgress(
+  pullJob: StoreV5PullJobPayload | null,
+  checkJob: Mt5M1CheckJobPayload | null,
+) {
+  if (pullJob) {
+    if (pullJob.phase === 'completed') return { hasEstimate: true, width: 100 }
+    if (pullJob.phase === 'failed' || pullJob.phase === 'cancelled') return null
+    if (pullJob.phase === 'writing') {
+      const written = typeof pullJob.rowsWritten === 'number' ? pullJob.rowsWritten : 0
+      const total = typeof pullJob.trueM1RowsCount === 'number' && pullJob.trueM1RowsCount > 0 ? pullJob.trueM1RowsCount : null
+      if (total) return { hasEstimate: true, width: Math.max(1, Math.min(99, Math.round((written / total) * 100))) }
+    }
+    const fetched = typeof pullJob.rowsFetched === 'number' ? pullJob.rowsFetched : 0
+    const total = typeof pullJob.maxCount === 'number' && pullJob.maxCount > 0 ? pullJob.maxCount : null
+    if (total) return { hasEstimate: true, width: Math.max(fetched > 0 ? 1 : 0, Math.min(99, Math.round((fetched / total) * 100))) }
+    return { hasEstimate: false, width: 45 }
+  }
+  if (checkJob) {
+    if (checkJob.phase === 'completed') return { hasEstimate: true, width: 100 }
+    if (checkJob.phase === 'failed' || checkJob.phase === 'cancelled') return null
+    if (typeof checkJob.progressPercent === 'number') {
+      return { hasEstimate: true, width: Math.max(1, Math.min(99, Math.round(checkJob.progressPercent))) }
+    }
+    return { hasEstimate: false, width: 45 }
+  }
+  return null
 }
 
 function formatStoreUpdated(value?: string | null) {
@@ -209,11 +337,22 @@ export function RightDrawer({
   const [topPaneHeight, setTopPaneHeight] = useState(getInitialTopPaneHeight)
   const [columnWidths, setColumnWidths] = useState(getInitialColumnWidths)
   const [selectedPanelTab, setSelectedPanelTab] = useState<SelectedPanelTab>('details')
-  const [storeCheck, setStoreCheck] = useState<StoreV5CheckPayload | null>(null)
+  const initialPersistedM1Check = useMemo(
+    () => readPersistedM1CheckResult(initialSnapshot?.selectedSymbol ?? ''),
+    [initialSnapshot?.selectedSymbol],
+  )
+  const [storeCheck, setStoreCheck] = useState<StoreV5CheckPayload | null>(() => initialPersistedM1Check?.payload ?? null)
+  const [mt5M1LastCheckedAt, setMt5M1LastCheckedAt] = useState(() => initialPersistedM1Check?.checkedAt ?? '')
+  const [localStoreStatus, setLocalStoreStatus] = useState<StoreV5CheckPayload | null>(null)
   const [storeCheckLoading, setStoreCheckLoading] = useState(false)
   const [storeCheckError, setStoreCheckError] = useState('')
   const [storeActionStatus, setStoreActionStatus] = useState('')
+  const [m1CheckJob, setM1CheckJob] = useState<Mt5M1CheckJobPayload | null>(null)
+  const [pullProgress, setPullProgress] = useState<StoreV5PullJobPayload | null>(null)
   const tableWrapRef = useRef<HTMLDivElement | null>(null)
+  const activeM1CheckJobRef = useRef('')
+  const activePullJobRef = useRef('')
+  const pullEventSourceRef = useRef<EventSource | null>(null)
 
   const visibleSymbols = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -242,13 +381,22 @@ export function RightDrawer({
   const selectedDisplay = selectedRow ? resolveMt5SymbolDisplay(selectedRow) : null
 
   const visibleStoreAggregateRows = useMemo(() => {
-    if (!storeCheck?.aggregated?.length) return []
-    return storeCheck.aggregated.map((cell) => ({
+    if (!localStoreStatus?.aggregated?.length) return []
+    return localStoreStatus.aggregated.map((cell) => ({
       period: cell.timeframe || '-',
       count: formatCount(cell.rowsCount),
       updated: cell.dirty ? '需重建' : formatStoreUpdated(cell.lastAggregateAt),
     }))
-  }, [storeCheck])
+  }, [localStoreStatus])
+
+  const storeOperationLine = useMemo(
+    () => formatStoreOperationLine(pullProgress, m1CheckJob, storeActionStatus),
+    [m1CheckJob, pullProgress, storeActionStatus],
+  )
+  const storeOperationProgress = useMemo(
+    () => resolveStoreOperationProgress(pullProgress, m1CheckJob),
+    [m1CheckJob, pullProgress],
+  )
 
   async function loadSymbols(refresh: boolean) {
     setLoading(true)
@@ -271,6 +419,9 @@ export function RightDrawer({
 
       setSymbols(rows)
       setSelectedSymbol(nextSelectedSymbol)
+      const persistedCheck = readPersistedM1CheckResult(nextSelectedSymbol)
+      setStoreCheck(persistedCheck?.payload ?? null)
+      setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')
       setStatus(nextStatus)
       saveSymbolSnapshot({
         selectedSymbol: nextSelectedSymbol,
@@ -426,8 +577,11 @@ export function RightDrawer({
   }
 
   function handleSelectSymbol(symbol: string) {
+    const persistedCheck = readPersistedM1CheckResult(symbol)
     setSelectedSymbol(symbol)
-    setStoreCheck(null)
+    setStoreCheck(persistedCheck?.payload ?? null)
+    setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')
+    setLocalStoreStatus(null)
     setStoreCheckError('')
     setStoreActionStatus('')
     if (symbols.length) {
@@ -460,15 +614,192 @@ export function RightDrawer({
     }
   }
 
+  void handleCheckMt5M1
+
+  async function handleCheckMt5M1Staged() {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    setStoreCheckLoading(true)
+    setStoreCheckError('')
+    setPullProgress(null)
+    setM1CheckJob(null)
+    setStoreActionStatus('')
+
+    try {
+      const previous = storeCheck?.directM1
+      const canIncremental = previous?.lastTime != null && (previous.trueM1RowsCount != null || previous.rowsCount != null)
+      const started = await startMt5M1CheckJob(symbol, canIncremental
+        ? {
+            chunk: 200000,
+            maxCount: 10000000,
+            mode: 'incremental',
+            sinceTime: previous.lastTime,
+            baseFirstTime: previous.firstTime,
+            baseLastTime: previous.lastTime,
+            baseTrueM1RowsCount: previous.trueM1RowsCount ?? previous.rowsCount,
+            baseMt5RowsCount: previous.mt5RowsCount ?? previous.trueM1RowsCount ?? previous.rowsCount,
+            overlapBars: 1000,
+          }
+        : { chunk: 200000, maxCount: 10000000, mode: 'refresh' })
+      activeM1CheckJobRef.current = started.jobId
+      setM1CheckJob(started)
+
+      while (activeM1CheckJobRef.current === started.jobId) {
+        await delay(600)
+        const current = await fetchMt5M1CheckJob(started.jobId)
+        setM1CheckJob(current)
+        if (current.phase === 'completed') {
+          if (current.result) {
+            const checkedAt = new Date().toISOString()
+            setStoreCheck(current.result)
+            setMt5M1LastCheckedAt(checkedAt)
+            savePersistedM1CheckResult(symbol, current.result, checkedAt)
+          }
+          setM1CheckJob(null)
+          break
+        }
+        if (current.phase === 'failed' || current.phase === 'cancelled') {
+          throw new Error(current.error || current.status || current.phase)
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setStoreCheckError(message)
+      setStoreActionStatus('')
+    } finally {
+      activeM1CheckJobRef.current = ''
+      setPullProgress(null)
+      setStoreCheckLoading(false)
+    }
+  }
+
+  async function handleCancelMt5M1Check() {
+    const jobId = m1CheckJob?.jobId
+    if (!jobId) return
+    activeM1CheckJobRef.current = ''
+    try {
+      const payload = await cancelMt5M1CheckJob(jobId)
+      setM1CheckJob(payload)
+      setStoreActionStatus('')
+    } catch (err) {
+      setStoreCheckError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setM1CheckJob(null)
+      setStoreCheckLoading(false)
+    }
+  }
+
+  async function handleCancelPullStore() {
+    const jobId = pullProgress?.jobId
+    if (!jobId) return
+    activePullJobRef.current = ''
+    try {
+      pullEventSourceRef.current?.close()
+    } catch {
+      // best effort
+    }
+    pullEventSourceRef.current = null
+    setPullProgress(null)
+    setStoreCheckLoading(false)
+    setStoreActionStatus('已取消')
+    try {
+      await cancelStoreV5PullJob(jobId)
+    } catch (err) {
+      setStoreCheckError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  function waitStoreV5PullJobBySse(jobId: string) {
+    return new Promise<StoreV5PullJobPayload>((resolve, reject) => {
+      let settled = false
+      const finish = (fn: () => void) => {
+        if (settled) return
+        settled = true
+        try {
+          pullEventSourceRef.current?.close()
+        } catch {
+          // best effort
+        }
+        pullEventSourceRef.current = null
+        fn()
+      }
+      const applyPayload = (event: MessageEvent) => {
+        if (activePullJobRef.current !== jobId) return null
+        const payload = JSON.parse(event.data || '{}') as StoreV5PullJobPayload
+        setPullProgress(payload)
+        return payload
+      }
+
+      try {
+        const source = createStoreV5PullEventSource(jobId)
+        pullEventSourceRef.current = source
+        source.addEventListener('progress', (event) => {
+          try {
+            applyPayload(event as MessageEvent)
+          } catch {
+            // ignore malformed progress
+          }
+        })
+        source.addEventListener('done', (event) => {
+          try {
+            const payload = applyPayload(event as MessageEvent)
+            finish(() => resolve(payload as StoreV5PullJobPayload))
+          } catch (err) {
+            finish(() => reject(err))
+          }
+        })
+        source.addEventListener('cancelled', (event) => {
+          try {
+            applyPayload(event as MessageEvent)
+          } catch {
+            // ignore malformed cancelled payload
+          }
+          finish(() => reject(new Error('store_v5_pull_cancelled')))
+        })
+        source.addEventListener('error', (event) => {
+          const messageEvent = event as MessageEvent
+          if (messageEvent.data) {
+            try {
+              const payload = applyPayload(messageEvent)
+              finish(() => reject(new Error(payload?.error || payload?.status || 'store_v5_pull_failed')))
+              return
+            } catch {
+              // fall through to generic error
+            }
+          }
+          if (!settled && activePullJobRef.current === jobId) {
+            finish(() => reject(new Error('store_v5_pull_sse_disconnected')))
+          }
+        })
+      } catch (err) {
+        finish(() => reject(err))
+      }
+    })
+  }
+
+  async function waitStoreV5PullJobByPolling(jobId: string) {
+    while (activePullJobRef.current === jobId) {
+      await delay(600)
+      const current = await fetchStoreV5PullJob(jobId)
+      setPullProgress(current)
+      if (current.phase === 'completed') return current
+      if (current.phase === 'failed' || current.phase === 'cancelled') {
+        throw new Error(current.error || current.status || current.phase)
+      }
+    }
+    throw new Error('store_v5_pull_cancelled')
+  }
+
   async function handleRefreshStoreStatus() {
     const symbol = selectedRow?.symbol
     if (!symbol) return
     setStoreCheckLoading(true)
     setStoreCheckError('')
+    setPullProgress(null)
     setStoreActionStatus('正在读取 StoreV5 仓库状态...')
     try {
       const payload = await fetchStoreV5Status(symbol)
-      setStoreCheck(payload)
+      setLocalStoreStatus(payload)
       setStoreActionStatus('StoreV5 仓库状态已刷新。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -484,12 +815,67 @@ export function RightDrawer({
     if (!symbol) return
     setStoreCheckLoading(true)
     setStoreCheckError('')
+    setM1CheckJob(null)
+    setPullProgress(null)
     setStoreActionStatus('正在拉取 MT5 M1 写入 StoreV5...')
     try {
-      await pullStoreV5(symbol, storeCheck?.directM1 ? 'incremental' : 'refresh')
+      let pullMode = 'refresh'
+      try {
+        const currentStore = await fetchStoreV5Status(symbol)
+        if (currentStore.directM1?.lastTime != null || currentStore.directM1?.rowsCount != null) {
+          pullMode = 'incremental'
+        }
+      } catch {
+        pullMode = 'refresh'
+      }
+      setStoreActionStatus(
+        pullMode === 'incremental'
+          ? '正在增量拉取 MT5 M1 写入 StoreV5...'
+          : '正在首次拉取 MT5 M1 写入 StoreV5...',
+      )
+      const started = await startStoreV5PullJob(symbol, pullMode)
+      activePullJobRef.current = started.jobId
+      setPullProgress(started)
+      try {
+        await waitStoreV5PullJobBySse(started.jobId)
+      } catch (err) {
+        if (activePullJobRef.current !== started.jobId) throw err
+        await waitStoreV5PullJobByPolling(started.jobId)
+      }
       const payload = await fetchStoreV5Status(symbol)
-      setStoreCheck(payload)
+      setLocalStoreStatus(payload)
       setStoreActionStatus('拉取完成，仓库状态已刷新。')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setStoreCheckError(message)
+      setStoreActionStatus('')
+    } finally {
+      activePullJobRef.current = ''
+      try {
+        pullEventSourceRef.current?.close()
+      } catch {
+        // best effort
+      }
+      pullEventSourceRef.current = null
+      setPullProgress(null)
+      setStoreCheckLoading(false)
+    }
+  }
+
+  async function handleDeleteLocalStore() {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    const ok = window.confirm(`确认删除 ${symbol} 的本地 StoreV5 数据？此操作会清空本地 M1 和聚合周期。`)
+    if (!ok) return
+    setStoreCheckLoading(true)
+    setStoreCheckError('')
+    setPullProgress(null)
+    setStoreActionStatus('正在删除本地 StoreV5 数据...')
+    try {
+      await deleteStoreV5Symbol(symbol)
+      const payload = await fetchStoreV5Status(symbol)
+      setLocalStoreStatus(payload)
+      setStoreActionStatus('本地 StoreV5 数据已删除。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setStoreCheckError(message)
@@ -504,11 +890,12 @@ export function RightDrawer({
     if (!symbol) return
     setStoreCheckLoading(true)
     setStoreCheckError('')
+    setPullProgress(null)
     setStoreActionStatus('正在从 M1 重建聚合周期...')
     try {
       await aggregateStoreV5(symbol)
       const payload = await fetchStoreV5Status(symbol)
-      setStoreCheck(payload)
+      setLocalStoreStatus(payload)
       setStoreActionStatus('聚合完成，仓库状态已刷新。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -721,7 +1108,7 @@ export function RightDrawer({
                         {storeCheck?.directM1 ? (
                           <>
                             <span>MT5 条数：{formatCount(storeCheck.directM1.mt5RowsCount)}</span>
-                            <span>真实条数：{formatCount(storeCheck.directM1.trueM1RowsCount)}</span>
+                            <span>真实条数：{formatCount(storeCheck.directM1.trueM1RowsCount)} · 最后检查：{formatCheckTime(mt5M1LastCheckedAt)}</span>
                             <span>
                               真实 M1 范围：
                               {formatUtcRange(storeCheck.directM1.firstTimeText, storeCheck.directM1.lastTimeText)}
@@ -739,23 +1126,49 @@ export function RightDrawer({
                             <span>真实 M1 范围：-</span>
                           </>
                         )}
+                        <span>
+                          本地 M1 数据：
+                          {localStoreStatus?.directM1?.rowsCount != null
+                            ? `${formatCount(localStoreStatus.directM1.rowsCount)} 条 · 最后更新时间：${formatCheckTime(localStoreStatus.directM1.lastImportAt)}`
+                            : '无数据'}
+                        </span>
                         {storeCheckError && (
                           <span className="ff-store-direct-summary__error">{storeCheckError}</span>
                         )}
                       </div>
                     </section>
 
-                    <div className="ff-store-direct-actions">
-                      <button disabled={storeCheckLoading} onClick={handleCheckMt5M1} type="button">
-                        {storeCheckLoading ? '检查中' : '检查'}
-                      </button>
-                      <button disabled={storeCheckLoading} onClick={handlePullStore} type="button">拉取</button>
-                      <button disabled={storeCheckLoading} onClick={handleRefreshStoreStatus} type="button">刷新仓库</button>
-                    </div>
-                    {storeActionStatus && (
-                      <div className="ff-import-note">{storeActionStatus}</div>
+                    {storeOperationLine && (
+                      <div className="ff-store-status-line">
+                        <div className="ff-store-status-line__row">
+                          <span>{storeOperationLine}</span>
+                          {m1CheckJob?.jobId && (
+                            <button onClick={handleCancelMt5M1Check} type="button">取消</button>
+                          )}
+                          {pullProgress?.jobId && pullProgress.phase !== 'completed' && (
+                            <button onClick={handleCancelPullStore} type="button">取消</button>
+                          )}
+                        </div>
+                        {storeOperationProgress && (
+                          <div
+                            className="ff-store-status-line__bar"
+                            data-estimated={storeOperationProgress.hasEstimate}
+                            aria-hidden="true"
+                          >
+                            <span style={{ width: `${storeOperationProgress.width}%` }} />
+                          </div>
+                        )}
+                      </div>
                     )}
 
+                    <div className="ff-store-direct-actions">
+                      <button disabled={storeCheckLoading} onClick={handleCheckMt5M1Staged} type="button">
+                        {storeCheckLoading ? '检查中' : '检查 MT5 数据'}
+                      </button>
+                      <button disabled={storeCheckLoading} onClick={handleRefreshStoreStatus} type="button">检查本地仓库</button>
+                      <button disabled={storeCheckLoading} onClick={handlePullStore} type="button">拉取</button>
+                      <button disabled={storeCheckLoading} onClick={handleDeleteLocalStore} type="button">删除本地数据</button>
+                    </div>
                     <table className="ff-store-detail-table ff-store-aggregate-table">
                       <thead>
                         <tr>

@@ -88,6 +88,24 @@ export type StoreV5CheckPayload = {
   error?: string
 }
 
+export type Mt5M1CheckJobPayload = {
+  ok: boolean
+  jobId: string
+  symbol: string
+  mode?: 'refresh' | 'incremental' | string
+  phase: 'queued' | 'fetching' | 'validating' | 'completed' | 'failed' | 'cancelled' | string
+  status: string
+  error?: string
+  chunkSize?: number
+  maxCount?: number | null
+  chunksCompleted?: number
+  mt5RowsCount?: number
+  progressPercent?: number | null
+  firstTimeText?: string | null
+  lastTimeText?: string | null
+  result?: StoreV5CheckPayload
+}
+
 export type StoreV5PullPayload = {
   ok: boolean
   status?: string
@@ -97,6 +115,39 @@ export type StoreV5PullPayload = {
   rowsWritten?: number
   mt5RowsCount?: number
   trueM1RowsCount?: number
+}
+
+export type StoreV5PullJobPayload = {
+  ok: boolean
+  jobId: string
+  symbol: string
+  mode: 'refresh' | 'incremental' | string
+  phase: string
+  status: string
+  error?: string
+  currentAction?: string
+  rowsFetched?: number
+  rowsWritten?: number
+  trueM1RowsCount?: number
+  discardedBeforeTrueM1RowsCount?: number
+  gapCount?: number
+  validationPreviewStatus?: string
+  chunksCompleted?: number
+  fetchChunkSize?: number
+  maxCount?: number | null
+  probedRowsCount?: number
+  writeBatchStart?: number
+  writeBatchRows?: number
+  writeBatchWritten?: number
+  writeBatchSize?: number
+  cleanupStatus?: string
+  cleanupDeletedRows?: number
+  cleanupKeptRows?: number
+  firstTimeText?: string | null
+  lastTimeText?: string | null
+  result?: StoreV5PullPayload
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type StoreV5AggregatePayload = {
@@ -110,6 +161,15 @@ export type StoreV5AggregatePayload = {
     rowsWritten?: number
     dirty?: boolean
   }>
+}
+
+export type StoreV5DeletePayload = {
+  ok: boolean
+  status: string
+  error?: string
+  symbol: string
+  deletedDatasets?: string[]
+  deletedDirs?: string[]
 }
 
 export type StoreV5QueryRow = {
@@ -192,6 +252,70 @@ export async function fetchStoreV5Check(symbol: string, count?: number): Promise
   return payload
 }
 
+export async function startMt5M1CheckJob(
+  symbol: string,
+  options: {
+    chunk?: number
+    maxCount?: number
+    mode?: 'refresh' | 'incremental'
+    sinceTime?: number | null
+    baseFirstTime?: number | null
+    baseLastTime?: number | null
+    baseTrueM1RowsCount?: number | null
+    baseMt5RowsCount?: number | null
+    overlapBars?: number
+  } = {},
+): Promise<Mt5M1CheckJobPayload> {
+  const params = new URLSearchParams()
+  params.set('symbol', symbol)
+  params.set('chunk', String(options.chunk ?? 200000))
+  params.set('maxCount', String(options.maxCount ?? 10000000))
+  if (options.mode) params.set('mode', options.mode)
+  if (typeof options.sinceTime === 'number') params.set('sinceTime', String(options.sinceTime))
+  if (typeof options.baseFirstTime === 'number') params.set('baseFirstTime', String(options.baseFirstTime))
+  if (typeof options.baseLastTime === 'number') params.set('baseLastTime', String(options.baseLastTime))
+  if (typeof options.baseTrueM1RowsCount === 'number') params.set('baseTrueM1RowsCount', String(options.baseTrueM1RowsCount))
+  if (typeof options.baseMt5RowsCount === 'number') params.set('baseMt5RowsCount', String(options.baseMt5RowsCount))
+  if (typeof options.overlapBars === 'number') params.set('overlapBars', String(options.overlapBars))
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/mt5/m1/check/start?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as Mt5M1CheckJobPayload
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
+export async function fetchMt5M1CheckJob(jobId: string): Promise<Mt5M1CheckJobPayload> {
+  const params = new URLSearchParams()
+  params.set('jobId', jobId)
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/mt5/m1/check/progress?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as Mt5M1CheckJobPayload
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
+export async function cancelMt5M1CheckJob(jobId: string): Promise<Mt5M1CheckJobPayload> {
+  const params = new URLSearchParams()
+  params.set('jobId', jobId)
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/mt5/m1/check/cancel?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as Mt5M1CheckJobPayload
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
 export async function fetchStoreV5Status(symbol: string): Promise<StoreV5CheckPayload> {
   const params = new URLSearchParams()
   params.set('symbol', symbol)
@@ -200,6 +324,20 @@ export async function fetchStoreV5Status(symbol: string): Promise<StoreV5CheckPa
     { headers: { Accept: 'application/json' }, cache: 'no-store' },
   )
   const payload = (await response.json()) as StoreV5CheckPayload
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
+export async function deleteStoreV5Symbol(symbol: string): Promise<StoreV5DeletePayload> {
+  const params = new URLSearchParams()
+  params.set('symbol', symbol)
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/delete?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as StoreV5DeletePayload
   if (!response.ok || payload.ok !== true) {
     throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
   }
@@ -216,6 +354,56 @@ export async function pullStoreV5(symbol: string, mode = 'refresh', count?: numb
     { headers: { Accept: 'application/json' }, cache: 'no-store' },
   )
   const payload = (await response.json()) as StoreV5PullPayload
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
+export async function startStoreV5PullJob(symbol: string, mode = 'refresh', count?: number): Promise<StoreV5PullJobPayload> {
+  const params = new URLSearchParams()
+  params.set('symbol', symbol)
+  params.set('mode', mode)
+  if (typeof count === 'number' && Number.isFinite(count)) params.set('count', String(count))
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/pull/start?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as StoreV5PullJobPayload
+  if (!response.ok) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
+export async function fetchStoreV5PullJob(jobId: string): Promise<StoreV5PullJobPayload> {
+  const params = new URLSearchParams()
+  params.set('jobId', jobId)
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/pull/progress?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as StoreV5PullJobPayload
+  if (!response.ok) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
+export function createStoreV5PullEventSource(jobId: string): EventSource {
+  const params = new URLSearchParams()
+  params.set('jobId', jobId)
+  return new EventSource(`${resolveMt5ApiBase()}/api/market-data/v1/store-v5/pull/events?${params.toString()}`)
+}
+
+export async function cancelStoreV5PullJob(jobId: string): Promise<StoreV5PullJobPayload> {
+  const params = new URLSearchParams()
+  params.set('jobId', jobId)
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/pull/cancel?${params.toString()}`,
+    { headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as StoreV5PullJobPayload
   if (!response.ok || payload.ok !== true) {
     throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
   }
@@ -261,7 +449,7 @@ export async function queryStoreV5Ohlcv(options: {
     { headers: { Accept: 'application/json' }, cache: 'no-store' },
   )
   const payload = (await response.json()) as StoreV5QueryPayload
-  if (!response.ok || payload.ok !== true) {
+  if (!response.ok) {
     throw new Error(payload.error || `HTTP ${response.status}`)
   }
   return payload

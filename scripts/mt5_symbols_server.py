@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
+import threading
+import time
+import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -16,6 +20,12 @@ if str(ROOT) not in sys.path:
 DEFAULT_CACHE_ROOT = ROOT / "runtime_data" / "instruments" / "mt5"
 SYMBOL_CACHE_FILE = "symbol_universe_info.json"
 SYMBOL_REPORT_FILE = "symbol_universe_scan_report.json"
+M1_CHECK_JOBS: dict[str, dict[str, Any]] = {}
+M1_CHECK_JOBS_LOCK = threading.Lock()
+PULL_JOBS: dict[str, dict[str, Any]] = {}
+PULL_JOBS_LOCK = threading.Lock()
+PULL_JOBS_CONDITION = threading.Condition(PULL_JOBS_LOCK)
+PULL_JOB_TERMINAL_PHASES = {"completed", "failed", "cancelled"}
 
 
 def utc_now_iso() -> str:
@@ -30,12 +40,20 @@ def clamp_limit(value: str | None, default: int = 50_000) -> int:
     return max(1, min(parsed, 50_000))
 
 
-def clamp_m1_check_count(value: str | None, default: int = 5_000_000) -> int:
+def clamp_m1_check_count(value: str | None, default: int = 200_000) -> int:
     try:
         parsed = int(value or default)
     except ValueError:
         parsed = default
     return max(1, min(parsed, 10_000_000))
+
+
+def clamp_m1_check_chunk(value: str | None, default: int = 200_000) -> int:
+    try:
+        parsed = int(value or default)
+    except ValueError:
+        parsed = default
+    return max(1_000, min(parsed, 500_000))
 
 
 def safe_bool(value: Any, default: bool | None = None) -> bool | None:
@@ -398,6 +416,52 @@ def check_store_v5(symbol: str, store_root: Path | None = None) -> dict[str, Any
     }
 
 
+def delete_store_v5_symbol(symbol: str, store_root: Path | None = None) -> dict[str, Any]:
+    from python.data_warehouse.store_v5.manifest_v5 import load_manifest_v5, save_manifest_v5
+    from python.data_warehouse.store_v5.store_v5_paths import resolve_store_root
+
+    root = resolve_store_root(store_root)
+    datasets_root = (root / "datasets").resolve()
+    manifest = load_manifest_v5(root)
+    datasets = manifest.get("datasets", {})
+    keys_to_delete = [
+        key
+        for key, cell in datasets.items()
+        if cell.get("provider") == "mt5" and cell.get("symbol") == symbol
+    ]
+
+    deleted_dirs: list[str] = []
+    for key in keys_to_delete:
+        cell = datasets.get(key, {})
+        rel_root = str(cell.get("rootPath") or "").strip()
+        if rel_root:
+            target = (root / rel_root).resolve()
+            if target == datasets_root or datasets_root not in target.parents:
+                return {
+                    "ok": False,
+                    "status": "store_v5_delete_refused",
+                    "error": "dataset_path_outside_store",
+                    "symbol": symbol,
+                    "path": str(target),
+                }
+            if target.exists():
+                shutil.rmtree(target)
+                deleted_dirs.append(str(target))
+        datasets.pop(key, None)
+
+    if keys_to_delete:
+        save_manifest_v5(manifest, root)
+
+    return {
+        "ok": True,
+        "status": "store_v5_symbol_deleted" if keys_to_delete else "store_v5_symbol_not_found",
+        "symbol": symbol,
+        "deletedDatasets": keys_to_delete,
+        "deletedDirs": deleted_dirs,
+        "publishedAt": utc_now_iso(),
+    }
+
+
 def mt5_rates_to_rows(rates: Any) -> list[dict[str, Any]]:
     if rates is None:
         return []
@@ -431,6 +495,978 @@ def mt5_row_to_m1_check_row(row: dict[str, Any], symbol: str, ingested_at: str) 
         "source": "mt5_terminal",
         "ingestedAt": ingested_at,
     }
+
+
+def _set_m1_check_job(job_id: str, **updates: Any) -> dict[str, Any]:
+    with M1_CHECK_JOBS_LOCK:
+        job = M1_CHECK_JOBS.get(job_id)
+        if not job:
+            return {}
+        job.update(updates)
+        job["updatedAt"] = utc_now_iso()
+        return dict(job)
+
+
+def _get_m1_check_job(job_id: str) -> dict[str, Any] | None:
+    with M1_CHECK_JOBS_LOCK:
+        job = M1_CHECK_JOBS.get(job_id)
+        return dict(job) if job else None
+
+
+def _set_pull_job(job_id: str, **updates: Any) -> dict[str, Any]:
+    with PULL_JOBS_CONDITION:
+        job = PULL_JOBS.get(job_id)
+        if not job:
+            return {}
+        job.update(updates)
+        job["updatedAt"] = utc_now_iso()
+        events = job.setdefault("events", [])
+        event_id = int(job.get("lastEventId") or 0) + 1
+        job["lastEventId"] = event_id
+        phase = str(job.get("phase") or "")
+        event_name = "progress"
+        if phase == "completed":
+            event_name = "done"
+        elif phase == "failed":
+            event_name = "error"
+        elif phase == "cancelled":
+            event_name = "cancelled"
+        snapshot = _public_pull_job_snapshot(job)
+        events.append({"id": event_id, "event": event_name, "data": snapshot})
+        if len(events) > 500:
+            del events[:-500]
+        PULL_JOBS_CONDITION.notify_all()
+        return snapshot
+
+
+def _get_pull_job(job_id: str) -> dict[str, Any] | None:
+    with PULL_JOBS_LOCK:
+        job = PULL_JOBS.get(job_id)
+        return _public_pull_job_snapshot(job) if job else None
+
+
+def _public_pull_job_snapshot(job: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in job.items() if key != "events"}
+
+
+def _build_m1_check_payload(
+    *,
+    symbol: str,
+    raw_rows: list[dict[str, Any]],
+    validation: dict[str, Any],
+    published_at: str,
+    staged: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    true_rows = validation.get("trueRows") or []
+    first_time = validation.get("firstAnchorTime")
+    last_time = validation.get("lastTrueM1Time")
+    if true_rows:
+        first_time = int(true_rows[0]["time"])
+        last_time = int(true_rows[-1]["time"])
+
+    return {
+        "ok": True,
+        "status": "mt5_m1_check_completed" if validation.get("ok") else "mt5_m1_check_failed_validation",
+        "provider": "mt5",
+        "storeVersion": "v5",
+        "symbol": symbol,
+        "directM1": {
+            "datasetKey": f"mt5:{symbol}:direct:M1",
+            "mt5RowsCount": validation.get("mt5RowsCount", len(raw_rows)),
+            "trueM1RowsCount": validation.get("trueM1RowsCount", 0),
+            "rowsCount": validation.get("trueM1RowsCount", 0),
+            "firstTime": first_time,
+            "lastTime": last_time,
+            "firstTimeText": format_utc_text(first_time),
+            "lastTimeText": format_utc_text(last_time),
+            "firstAnchorTime": validation.get("firstAnchorTime"),
+            "firstHourM1CheckOk": validation.get("firstHourM1CheckOk"),
+            "firstHourTrueRows": validation.get("firstHourTrueRows"),
+            "gapCount": validation.get("gapCount"),
+            "m1IntegrityStatus": validation.get("m1IntegrityStatus"),
+            "status": "mt5_live_check",
+            "validationOk": validation.get("ok"),
+            "validationError": validation.get("error"),
+            "firstGap": validation.get("firstGap"),
+        },
+        "validation": {key: value for key, value in validation.items() if key != "trueRows"},
+        "aggregated": [],
+        "staged": staged,
+        "publishedAt": published_at,
+    }
+
+
+def _build_incremental_m1_check_payload(
+    *,
+    symbol: str,
+    raw_rows: list[dict[str, Any]],
+    validation: dict[str, Any],
+    published_at: str,
+    base: dict[str, Any],
+    staged: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    base_first_time = base.get("firstTime")
+    base_last_time = int(base["lastTime"])
+    base_true_count = int(base.get("trueM1RowsCount") or base.get("rowsCount") or 0)
+    base_mt5_count = int(base.get("mt5RowsCount") or base_true_count)
+    added_true_count = int(validation.get("trueM1RowsCount") or 0) if validation.get("ok") else 0
+    last_time = int(validation.get("lastNewTime") or base_last_time)
+    true_count = base_true_count + added_true_count
+    mt5_count = base_mt5_count + added_true_count
+    return {
+        "ok": validation.get("ok") is True,
+        "status": "mt5_m1_incremental_check_completed" if validation.get("ok") else "mt5_m1_incremental_check_failed_validation",
+        "provider": "mt5",
+        "storeVersion": "v5",
+        "symbol": symbol,
+        "directM1": {
+            "datasetKey": f"mt5:{symbol}:direct:M1",
+            "mt5RowsCount": mt5_count,
+            "trueM1RowsCount": true_count,
+            "rowsCount": true_count,
+            "firstTime": base_first_time,
+            "lastTime": last_time,
+            "firstTimeText": format_utc_text(base_first_time),
+            "lastTimeText": format_utc_text(last_time),
+            "firstAnchorTime": base.get("firstAnchorTime") or base_first_time,
+            "firstHourM1CheckOk": base.get("firstHourM1CheckOk"),
+            "firstHourTrueRows": base.get("firstHourTrueRows"),
+            "gapCount": base.get("gapCount"),
+            "m1IntegrityStatus": validation.get("status") or "incremental_true_m1_ok",
+            "status": "mt5_live_incremental_check",
+            "validationOk": validation.get("ok"),
+            "validationError": validation.get("error"),
+            "firstGap": validation.get("firstGap"),
+        },
+        "validation": {key: value for key, value in validation.items() if key != "trueRows"},
+        "aggregated": [],
+        "staged": staged,
+        "publishedAt": published_at,
+    }
+
+
+def run_mt5_m1_staged_check_job(
+    job_id: str,
+    symbol: str,
+    *,
+    chunk: int,
+    max_count: int,
+    pause_ms: int,
+    mode: str = "refresh",
+    since_time: int | None = None,
+    base_first_time: int | None = None,
+    base_last_time: int | None = None,
+    base_true_m1_rows_count: int = 0,
+    base_mt5_rows_count: int = 0,
+    overlap_bars: int = 1000,
+) -> None:
+    from python.data_warehouse.mt5.mt5_m1_integrity_validator_v1 import validate_incremental_true_m1_rows_v1, validate_true_m1_rows_v1
+
+    published_at = utc_now_iso()
+    raw_rows: list[dict[str, Any]] = []
+    initialized = False
+    try:
+        import MetaTrader5 as mt5
+
+        if not mt5.initialize():
+            _set_m1_check_job(
+                job_id,
+                ok=False,
+                phase="failed",
+                status="mt5_m1_check_init_failed",
+                error="mt5_initialize_failed",
+                mt5LastError=mt5.last_error(),
+                finishedAt=utc_now_iso(),
+            )
+            return
+        initialized = True
+
+        if not mt5.symbol_select(symbol, True):
+            _set_m1_check_job(
+                job_id,
+                ok=False,
+                phase="failed",
+                status="mt5_m1_check_symbol_select_failed",
+                error="mt5_symbol_select_failed",
+                mt5LastError=mt5.last_error(),
+                finishedAt=utc_now_iso(),
+            )
+            return
+
+        if mode == "incremental" and since_time is not None:
+            from datetime import timedelta
+
+            from_time = datetime.fromtimestamp(int(since_time) - max(0, int(overlap_bars)) * 60, tz=timezone.utc)
+            to_time = datetime.now(timezone.utc) + timedelta(minutes=1)
+            _set_m1_check_job(
+                job_id,
+                ok=True,
+                phase="fetching",
+                status="mt5_m1_incremental_check_fetching",
+                currentAction="copy_rates_range",
+                chunkSize=chunk,
+                maxCount=None,
+                firstTimeText=format_utc_text(int(from_time.timestamp())),
+                lastTimeText=format_utc_text(int(to_time.timestamp())),
+            )
+            rates = mt5.copy_rates_range(symbol, mt5.TIMEFRAME_M1, from_time, to_time)
+            raw_rows = mt5_rates_to_rows(rates)
+            _set_m1_check_job(job_id, phase="validating", status="mt5_m1_incremental_check_validating", mt5RowsCount=len(raw_rows))
+            canonical_rows = [
+                mt5_row_to_m1_check_row(row, symbol=symbol, ingested_at=published_at)
+                for row in raw_rows
+            ]
+            validation = validate_incremental_true_m1_rows_v1(
+                canonical_rows,
+                last_true_m1_time=int(since_time),
+                overlap_bars=int(overlap_bars),
+            )
+            payload = _build_incremental_m1_check_payload(
+                symbol=symbol,
+                raw_rows=raw_rows,
+                validation=validation,
+                published_at=published_at,
+                base={
+                    "firstTime": base_first_time,
+                    "lastTime": base_last_time or since_time,
+                    "trueM1RowsCount": base_true_m1_rows_count,
+                    "mt5RowsCount": base_mt5_rows_count,
+                },
+                staged={
+                    "jobId": job_id,
+                    "mode": "incremental",
+                    "overlapBars": overlap_bars,
+                    "sinceTime": since_time,
+                    "rangeRowsCount": len(raw_rows),
+                },
+            )
+            _set_m1_check_job(
+                job_id,
+                ok=payload.get("ok"),
+                phase="completed" if payload.get("ok") else "failed",
+                status=payload.get("status"),
+                progressPercent=100,
+                mt5RowsCount=len(raw_rows),
+                result=payload,
+                finishedAt=utc_now_iso(),
+            )
+            return
+
+        pos = 0
+        chunk_index = 0
+        while pos < max_count:
+            job = _get_m1_check_job(job_id)
+            if job and job.get("cancelRequested"):
+                _set_m1_check_job(job_id, ok=False, phase="cancelled", status="mt5_m1_check_cancelled", finishedAt=utc_now_iso())
+                return
+
+            want = min(chunk, max_count - pos)
+            rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, pos, want)
+            part = mt5_rates_to_rows(rates)
+            if not part:
+                break
+            raw_rows.extend(part)
+            chunk_index += 1
+            pos += len(part)
+
+            first_time = raw_rows[0].get("time") if raw_rows else None
+            last_time = raw_rows[-1].get("time") if raw_rows else None
+            _set_m1_check_job(
+                job_id,
+                ok=True,
+                phase="fetching",
+                status="mt5_m1_check_fetching",
+                chunksCompleted=chunk_index,
+                mt5RowsCount=len(raw_rows),
+                currentPosition=pos,
+                maxCount=max_count,
+                chunkSize=chunk,
+                firstTime=first_time,
+                lastTime=last_time,
+                firstTimeText=format_utc_text(first_time),
+                lastTimeText=format_utc_text(last_time),
+                progressPercent=round(min(99, (pos / max_count) * 100), 2) if max_count else None,
+            )
+            if len(part) < want:
+                break
+            if pause_ms > 0:
+                time.sleep(pause_ms / 1000)
+
+        _set_m1_check_job(job_id, phase="validating", status="mt5_m1_check_validating", mt5RowsCount=len(raw_rows))
+        canonical_rows = [
+            mt5_row_to_m1_check_row(row, symbol=symbol, ingested_at=published_at)
+            for row in raw_rows
+        ]
+        validation = validate_true_m1_rows_v1(canonical_rows)
+        payload = _build_m1_check_payload(
+            symbol=symbol,
+            raw_rows=raw_rows,
+            validation=validation,
+            published_at=published_at,
+            staged={
+                "jobId": job_id,
+                "chunksCompleted": chunk_index,
+                "chunkSize": chunk,
+                "maxCount": max_count,
+                "exhausted": len(raw_rows) < max_count,
+            },
+        )
+        _set_m1_check_job(
+            job_id,
+            ok=payload.get("ok"),
+            phase="completed",
+            status=payload.get("status"),
+            progressPercent=100,
+            mt5RowsCount=len(raw_rows),
+            result=payload,
+            finishedAt=utc_now_iso(),
+        )
+    except ImportError as exc:
+        _set_m1_check_job(job_id, ok=False, phase="failed", status="mt5_m1_check_unavailable", error=str(exc), finishedAt=utc_now_iso())
+    except Exception as exc:
+        _set_m1_check_job(job_id, ok=False, phase="failed", status="mt5_m1_check_exception", error=str(exc), finishedAt=utc_now_iso())
+    finally:
+        if initialized:
+            try:
+                mt5.shutdown()
+            except Exception:
+                pass
+
+
+def start_mt5_m1_staged_check(
+    symbol: str,
+    *,
+    chunk: int = 200_000,
+    max_count: int = 10_000_000,
+    pause_ms: int = 50,
+    mode: str = "refresh",
+    since_time: int | None = None,
+    base_first_time: int | None = None,
+    base_last_time: int | None = None,
+    base_true_m1_rows_count: int = 0,
+    base_mt5_rows_count: int = 0,
+    overlap_bars: int = 1000,
+) -> dict[str, Any]:
+    job_id = uuid.uuid4().hex
+    now = utc_now_iso()
+    with M1_CHECK_JOBS_LOCK:
+        M1_CHECK_JOBS[job_id] = {
+            "ok": True,
+            "jobId": job_id,
+            "symbol": symbol,
+            "mode": mode,
+            "phase": "queued",
+            "status": "mt5_m1_check_queued",
+            "chunkSize": chunk,
+            "maxCount": max_count,
+            "chunksCompleted": 0,
+            "mt5RowsCount": 0,
+            "progressPercent": 0,
+            "createdAt": now,
+            "updatedAt": now,
+        }
+    thread = threading.Thread(
+        target=run_mt5_m1_staged_check_job,
+        args=(job_id, symbol),
+        kwargs={
+            "chunk": chunk,
+            "max_count": max_count,
+            "pause_ms": pause_ms,
+            "mode": mode,
+            "since_time": since_time,
+            "base_first_time": base_first_time,
+            "base_last_time": base_last_time,
+            "base_true_m1_rows_count": base_true_m1_rows_count,
+            "base_mt5_rows_count": base_mt5_rows_count,
+            "overlap_bars": overlap_bars,
+        },
+        daemon=True,
+    )
+    thread.start()
+    return _get_m1_check_job(job_id) or {"ok": False, "error": "job_not_found", "jobId": job_id}
+
+
+def has_m1_run(rows: list[dict[str, Any]], min_consecutive_rows: int = 60) -> bool:
+    times = sorted({int(row.get("time") or 0) for row in rows if int(row.get("time") or 0) > 0})
+    if len(times) < min_consecutive_rows:
+        return False
+    run = 1
+    for previous, current in zip(times, times[1:]):
+        if current - previous == 60:
+            run += 1
+            if run >= min_consecutive_rows:
+                return True
+        else:
+            run = 1
+    return False
+
+
+def cleanup_direct_m1_prefix_before_time_v5(root: Path, symbol: str, cutoff_time: int, manifest_extra: dict[str, Any]) -> dict[str, Any]:
+    import pandas as pd
+
+    from python.data_warehouse.store_v5.manifest_v5 import load_manifest_v5, save_manifest_v5
+    from python.data_warehouse.store_v5.ohlcv_schema_v5 import CANONICAL_COLUMNS
+    from python.data_warehouse.store_v5.store_v5_paths import (
+        SCHEMA_VERSION,
+        STORE_VERSION,
+        dataset_key,
+        dataset_relative_root,
+        dataset_root,
+    )
+
+    key = dataset_key(provider="mt5", symbol=symbol, mode="direct", timeframe="M1")
+    rel_root = dataset_relative_root(provider="mt5", symbol=symbol, mode="direct", timeframe="M1")
+    ds_root = dataset_root(provider="mt5", symbol=symbol, mode="direct", timeframe="M1", store_root=root)
+    deleted_rows = 0
+    kept_rows = 0
+    parts_count = 0
+    first_time = None
+    last_time = None
+
+    for file in list(ds_root.rglob("part-*.parquet")):
+        frame = pd.read_parquet(file)
+        before = int(len(frame))
+        if before <= 0:
+            file.unlink(missing_ok=True)
+            continue
+        frame = frame[frame["time"].astype("int64") >= int(cutoff_time)]
+        deleted_rows += before - int(len(frame))
+        if frame.empty:
+            file.unlink(missing_ok=True)
+            continue
+        tmp = file.with_name(f"{file.name}.tmp")
+        frame[CANONICAL_COLUMNS].to_parquet(tmp, index=False)
+        tmp.replace(file)
+        kept_rows += int(len(frame))
+        parts_count += 1
+        file_first = int(frame["time"].min())
+        file_last = int(frame["time"].max())
+        first_time = file_first if first_time is None else min(first_time, file_first)
+        last_time = file_last if last_time is None else max(last_time, file_last)
+
+    manifest = load_manifest_v5(root)
+    cell = {
+        **manifest.get("datasets", {}).get(key, {}),
+        "provider": "mt5",
+        "symbol": symbol,
+        "mode": "direct",
+        "timeframe": "M1",
+        "baseTimeframe": None,
+        "anchor": None,
+        "rootPath": rel_root.as_posix(),
+        "rowsCount": int(manifest_extra.get("trueM1RowsCount") or kept_rows),
+        "partsCount": parts_count,
+        "firstTime": first_time,
+        "lastTime": last_time,
+        "status": "ready",
+        "dirty": False,
+        "schemaVersion": SCHEMA_VERSION,
+        "storeVersion": STORE_VERSION,
+        **manifest_extra,
+    }
+    cell["rowsCount"] = int(cell.get("trueM1RowsCount") or kept_rows)
+    manifest.setdefault("datasets", {})[key] = cell
+    save_manifest_v5(manifest, root)
+    return {
+        "deletedRows": deleted_rows,
+        "keptRows": kept_rows,
+        "partsCount": parts_count,
+        "firstTime": first_time,
+        "lastTime": last_time,
+    }
+
+
+def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | None, store_root: Path | None, fetch_chunk: int = 200_000) -> None:
+    from python.data_warehouse.mt5.mt5_m1_integrity_validator_v1 import validate_incremental_true_m1_rows_v1, validate_true_m1_rows_v1
+    from python.data_warehouse.store_v5.manifest_v5 import delete_dataset_cell, get_dataset_cell, mark_aggregated_dirty_for_symbol
+    from python.data_warehouse.store_v5.ohlcv_schema_v5 import mt5_row_to_canonical
+    from python.data_warehouse.store_v5.partitioned_parquet_writer_v5 import append_ohlcv_part_v5
+    from python.data_warehouse.store_v5.store_v5_paths import STORE_VERSION, dataset_key, dataset_root, manifest_path, resolve_store_root
+
+    root = resolve_store_root(store_root)
+    if mode == "incremental":
+        _set_pull_job(job_id, phase="fetching", status="store_v5_pull_incremental_fetching", currentAction="copy_rates_from_pos")
+        initialized = False
+        try:
+            direct_key = dataset_key(provider="mt5", symbol=symbol, mode="direct", timeframe="M1")
+            cell = get_dataset_cell(root, direct_key)
+            if not cell or cell.get("lastTrueM1Time") is None:
+                _set_pull_job(
+                    job_id,
+                    ok=False,
+                    phase="failed",
+                    status="direct_m1_manifest_missing_for_incremental",
+                    error="direct_m1_manifest_missing_for_incremental",
+                    finishedAt=utc_now_iso(),
+                )
+                return
+            last_true_time = int(cell["lastTrueM1Time"])
+            previous_true_count = int(cell.get("trueM1RowsCount") or cell.get("rowsCount") or 0)
+            previous_mt5_count = int(cell.get("mt5RowsCount") or previous_true_count)
+
+            import MetaTrader5 as mt5
+
+            if not mt5.initialize():
+                _set_pull_job(job_id, ok=False, phase="failed", status="mt5_initialize_failed", mt5LastError=mt5.last_error(), finishedAt=utc_now_iso())
+                return
+            initialized = True
+            if not mt5.symbol_select(symbol, True):
+                _set_pull_job(job_id, ok=False, phase="failed", status="mt5_symbol_select_failed", mt5LastError=mt5.last_error(), finishedAt=utc_now_iso())
+                return
+
+            raw_rows: list[dict[str, Any]] = []
+            seen_times: set[int] = set()
+            pos = 0
+            chunks = 0
+            step = max(1, int(fetch_chunk))
+            reached_existing = False
+            while True:
+                job = _get_pull_job(job_id)
+                if job and job.get("cancelRequested"):
+                    _set_pull_job(job_id, ok=False, phase="cancelled", status="store_v5_pull_cancelled", finishedAt=utc_now_iso())
+                    return
+                part = mt5_rates_to_rows(mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, pos, step))
+                if not part:
+                    break
+                pos += len(part)
+                new_part: list[dict[str, Any]] = []
+                for row in part:
+                    row_time = int(row.get("time") or 0)
+                    if row_time <= 0 or row_time in seen_times:
+                        continue
+                    seen_times.add(row_time)
+                    if row_time < last_true_time:
+                        reached_existing = True
+                        continue
+                    new_part.append(row)
+                    if row_time == last_true_time:
+                        reached_existing = True
+                if new_part:
+                    raw_rows.extend(new_part)
+                chunks += 1
+                first_time = min(seen_times) if seen_times else None
+                last_time = max(seen_times) if seen_times else None
+                _set_pull_job(
+                    job_id,
+                    phase="fetching",
+                    status="store_v5_pull_incremental_fetching",
+                    currentAction="copy_rates_from_pos",
+                    rowsFetched=len(raw_rows),
+                    chunksCompleted=chunks,
+                    fetchChunkSize=step,
+                    maxCount=None,
+                    firstTimeText=format_utc_text(first_time),
+                    lastTimeText=format_utc_text(last_time),
+                    localLastTrueM1Time=last_true_time,
+                    localLastTrueM1Text=format_utc_text(last_true_time),
+                )
+                if reached_existing or len(part) < step:
+                    break
+
+            if not reached_existing:
+                report = {
+                    "ok": False,
+                    "error": "incremental_existing_boundary_not_found",
+                    "symbol": symbol,
+                    "storeVersion": STORE_VERSION,
+                    "importMode": mode,
+                    "lastTrueM1Time": last_true_time,
+                    "mt5RowsCount": len(raw_rows),
+                    "rowsWritten": 0,
+                }
+                _set_pull_job(job_id, ok=False, phase="failed", status="incremental_existing_boundary_not_found", result=report, finishedAt=utc_now_iso())
+                return
+
+            _set_pull_job(job_id, phase="validating", status="store_v5_pull_incremental_validating", rowsFetched=len(raw_rows))
+            canonical_rows = [mt5_row_to_canonical(row, provider="mt5", symbol=symbol, timeframe="M1") for row in raw_rows]
+            validation = validate_incremental_true_m1_rows_v1(canonical_rows, last_true_m1_time=last_true_time)
+            if not validation.get("ok"):
+                report = {**validation, "symbol": symbol, "storeVersion": STORE_VERSION, "importMode": mode, "rowsWritten": 0}
+                _set_pull_job(
+                    job_id,
+                    ok=False,
+                    phase="failed",
+                    status=validation.get("error") or "store_v5_pull_incremental_validation_failed",
+                    trueM1RowsCount=validation.get("trueM1RowsCount", 0),
+                    result=report,
+                    finishedAt=utc_now_iso(),
+                )
+                return
+
+            true_new_rows = validation["trueRows"]
+            _set_pull_job(job_id, phase="writing", status="store_v5_pull_incremental_writing", trueM1RowsCount=len(true_new_rows))
+            extra = {
+                "mt5RowsCount": previous_mt5_count + len(true_new_rows),
+                "lastPullMt5RowsCount": validation["mt5RowsCount"],
+                "trueM1RowsCount": previous_true_count + len(true_new_rows),
+                "lastTrueM1Time": validation.get("lastNewTime", last_true_time),
+                "lastImportAt": utc_now_iso(),
+                "lastImportMode": mode,
+                "lastPullMethod": "copy_rates_from_pos_until_existing",
+                "lastPullChunkSize": step,
+                "lastAddedRows": len(true_new_rows),
+                "lastDuplicateRows": max(0, validation["mt5RowsCount"] - len(true_new_rows)),
+                "dirty": False,
+                "compactRecommended": False,
+            }
+            write = append_ohlcv_part_v5(
+                true_new_rows,
+                provider="mt5",
+                symbol=symbol,
+                mode="direct",
+                timeframe="M1",
+                store_root=root,
+                source="mt5_terminal",
+                manifest_extra=extra,
+            )
+            _set_pull_job(
+                job_id,
+                phase="validating",
+                status="store_v5_pull_checking_invalid_fields",
+                currentAction="validate_written_fields",
+                rowsFetched=validation["mt5RowsCount"],
+                rowsWritten=write["rowsWritten"],
+                trueM1RowsCount=len(true_new_rows),
+            )
+            time.sleep(0.65)
+            _set_pull_job(
+                job_id,
+                phase="cleaning",
+                status="store_v5_pull_deleting_invalid_fields",
+                currentAction="cleanup_invalid_fields",
+                rowsFetched=validation["mt5RowsCount"],
+                rowsWritten=write["rowsWritten"],
+                trueM1RowsCount=len(true_new_rows),
+                cleanupDeletedRows=0,
+            )
+            time.sleep(0.65)
+            mark_aggregated_dirty_for_symbol(root, provider="mt5", symbol=symbol)
+            report = {
+                "ok": True,
+                "status": "mt5_m1_incremental_completed" if true_new_rows else "no_new_true_m1_rows",
+                "symbol": symbol,
+                "storeVersion": STORE_VERSION,
+                "importMode": mode,
+                "mt5RowsCount": validation["mt5RowsCount"],
+                "trueM1RowsCount": len(true_new_rows),
+                "rowsWritten": write["rowsWritten"],
+                "duplicateRows": write["duplicateRows"],
+                "lastTrueM1Time": extra["lastTrueM1Time"],
+                "manifestPath": str(manifest_path(root)),
+            }
+            _set_pull_job(
+                job_id,
+                ok=True,
+                phase="completed",
+                status=report["status"],
+                rowsFetched=validation["mt5RowsCount"],
+                rowsWritten=write["rowsWritten"],
+                trueM1RowsCount=len(true_new_rows),
+                result=report,
+                finishedAt=utc_now_iso(),
+            )
+        except Exception as exc:
+            _set_pull_job(job_id, ok=False, phase="failed", status="store_v5_pull_exception", error=str(exc), finishedAt=utc_now_iso())
+        finally:
+            if initialized:
+                try:
+                    mt5.shutdown()
+                except Exception:
+                    pass
+        return
+
+    initialized = False
+    raw_rows: list[dict[str, Any]] = []
+    try:
+        import MetaTrader5 as mt5
+
+        if not mt5.initialize():
+            _set_pull_job(job_id, ok=False, phase="failed", status="mt5_initialize_failed", mt5LastError=mt5.last_error(), finishedAt=utc_now_iso())
+            return
+        initialized = True
+        if not mt5.symbol_select(symbol, True):
+            _set_pull_job(job_id, ok=False, phase="failed", status="mt5_symbol_select_failed", mt5LastError=mt5.last_error(), finishedAt=utc_now_iso())
+            return
+
+        pos = 0
+        chunks = 0
+        step = max(1, int(fetch_chunk))
+        target = int(count) if count is not None and int(count) > 0 else None
+        _set_pull_job(
+            job_id,
+            phase="fetching",
+            status="store_v5_pull_fetching",
+            currentAction="copy_rates_from_pos",
+            rowsFetched=0,
+            chunksCompleted=0,
+            fetchChunkSize=step,
+            maxCount=target,
+        )
+        direct_key = dataset_key(provider="mt5", symbol=symbol, mode="direct", timeframe="M1")
+        ds_root = dataset_root(provider="mt5", symbol=symbol, mode="direct", timeframe="M1", store_root=root)
+        if ds_root.exists():
+            shutil.rmtree(ds_root)
+        delete_dataset_cell(root, direct_key)
+
+        seen_times: set[int] = set()
+        rows_written_total = 0
+        duplicate_rows_total = 0
+        first_time = None
+        last_time = None
+        while target is None or pos < target:
+            job = _get_pull_job(job_id)
+            if job and job.get("cancelRequested"):
+                _set_pull_job(job_id, ok=False, phase="cancelled", status="store_v5_pull_cancelled", finishedAt=utc_now_iso())
+                return
+            want = step if target is None else min(step, target - pos)
+            part = mt5_rates_to_rows(mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, pos, want))
+            if not part:
+                break
+            candidate_part: list[dict[str, Any]] = []
+            for row in part:
+                row_time = int(row.get("time") or 0)
+                if row_time <= 0 or row_time in seen_times:
+                    continue
+                candidate_part.append(row)
+            pos += len(part)
+            new_part = candidate_part
+            if not new_part:
+                _set_pull_job(
+                    job_id,
+                    phase="checking",
+                    status="store_v5_pull_reached_duplicate_tail",
+                    currentAction="copy_rates_from_pos",
+                    rowsFetched=len(raw_rows),
+                    rowsWritten=rows_written_total,
+                    chunksCompleted=chunks,
+                    fetchChunkSize=step,
+                    maxCount=target,
+                )
+                break
+            for row in new_part:
+                seen_times.add(int(row.get("time") or 0))
+            raw_rows.extend(new_part)
+            chunks += 1
+            canonical_batch = [mt5_row_to_canonical(row, provider="mt5", symbol=symbol, timeframe="M1") for row in new_part]
+            batch_first = int(canonical_batch[0]["time"]) if canonical_batch else None
+            batch_last = int(canonical_batch[-1]["time"]) if canonical_batch else None
+            first_time = batch_first if first_time is None else min(first_time, batch_first or first_time)
+            last_time = batch_last if last_time is None else max(last_time, batch_last or last_time)
+            write = append_ohlcv_part_v5(
+                canonical_batch,
+                provider="mt5",
+                symbol=symbol,
+                mode="direct",
+                timeframe="M1",
+                store_root=root,
+                source="mt5_terminal",
+                manifest_extra={
+                    "mt5RowsCount": len(raw_rows),
+                    "trueM1RowsCount": rows_written_total + len(canonical_batch),
+                    "lastTrueM1Time": batch_last,
+                    "m1IntegrityStatus": "pending_prefix_cleanup",
+                    "lastImportAt": utc_now_iso(),
+                    "lastImportMode": mode,
+                    "lastPullMethod": "copy_rates_from_pos_streaming",
+                    "lastPullChunkSize": step,
+                    "lastAddedRows": len(canonical_batch),
+                    "lastDuplicateRows": 0,
+                    "dirty": False,
+                    "compactRecommended": True,
+                },
+            )
+            batch_written = int(write.get("rowsWritten") or 0)
+            rows_written_total += batch_written
+            duplicate_rows_total += int(write.get("duplicateRows") or 0)
+            _set_pull_job(
+                job_id,
+                phase="streaming",
+                status="store_v5_pull_streaming_read_write",
+                currentAction="copy_rates_from_pos_and_append_ohlcv_part_v5",
+                rowsFetched=len(raw_rows),
+                rowsWritten=rows_written_total,
+                chunksCompleted=chunks,
+                fetchChunkSize=step,
+                maxCount=target,
+                writeBatchRows=len(canonical_batch),
+                writeBatchWritten=batch_written,
+                firstTimeText=format_utc_text(first_time),
+                lastTimeText=format_utc_text(last_time),
+            )
+            if len(part) < want:
+                break
+
+        _set_pull_job(
+            job_id,
+            phase="checking",
+            status="store_v5_pull_checking_invalid_data",
+            currentAction="validate_true_m1_rows",
+            rowsFetched=len(raw_rows),
+            rowsWritten=rows_written_total,
+            chunksCompleted=chunks,
+            fetchChunkSize=step,
+            maxCount=target,
+        )
+        canonical_rows = [mt5_row_to_canonical(row, provider="mt5", symbol=symbol, timeframe="M1") for row in raw_rows]
+        validation = validate_true_m1_rows_v1(canonical_rows)
+        if not validation.get("ok"):
+            report = {**validation, "symbol": symbol, "storeVersion": STORE_VERSION, "importMode": mode, "rowsWritten": 0}
+            _set_pull_job(
+                job_id,
+                ok=False,
+                phase="failed",
+                status=validation.get("error") or "store_v5_pull_validation_failed",
+                trueM1RowsCount=validation.get("trueM1RowsCount", 0),
+                discardedBeforeTrueM1RowsCount=validation.get("discardedBeforeTrueM1RowsCount", 0),
+                gapCount=validation.get("gapCount", 0),
+                result=report,
+                finishedAt=utc_now_iso(),
+            )
+            return
+
+        cutoff_time = int(validation.get("firstTrueM1Time") or validation.get("firstAnchorTime"))
+        _set_pull_job(
+            job_id,
+            phase="cleaning",
+            status="store_v5_pull_cleaning_invalid_prefix",
+            currentAction="cleanup_invalid_prefix",
+            rowsFetched=validation["mt5RowsCount"],
+            rowsWritten=rows_written_total,
+            trueM1RowsCount=validation["trueM1RowsCount"],
+            discardedBeforeTrueM1RowsCount=validation["discardedBeforeTrueM1RowsCount"],
+            gapCount=validation["gapCount"],
+            cleanupStatus="running",
+        )
+        cleanup = cleanup_direct_m1_prefix_before_time_v5(
+            root,
+            symbol,
+            cutoff_time,
+            {
+                "mt5RowsCount": validation["mt5RowsCount"],
+                "trueM1RowsCount": validation["trueM1RowsCount"],
+                "discardedBeforeAnchorRowsCount": validation["discardedBeforeAnchorRowsCount"],
+                "discardedBeforeTrueM1RowsCount": validation["discardedBeforeTrueM1RowsCount"],
+                "firstAnchorTime": validation["firstAnchorTime"],
+                "firstAnchorText": validation["firstAnchorText"],
+                "firstTrueM1Time": validation["firstTrueM1Time"],
+                "firstTrueM1Text": validation["firstTrueM1Text"],
+                "lastTrueM1Time": validation["lastTrueM1Time"],
+                "firstHourM1CheckOk": validation["firstHourM1CheckOk"],
+                "firstHourExpectedRows": validation["firstHourExpectedRows"],
+                "firstHourTrueRows": validation["firstHourTrueRows"],
+                "gapCount": validation["gapCount"],
+                "firstGap": validation["firstGap"],
+                "m1IntegrityStatus": validation["m1IntegrityStatus"],
+                "lastImportAt": utc_now_iso(),
+                "lastImportMode": mode,
+                "lastPullMethod": "copy_rates_from_pos_streaming_then_cleanup",
+                "lastPullChunkSize": step,
+                "lastAddedRows": validation["trueM1RowsCount"],
+                "lastDuplicateRows": duplicate_rows_total,
+                "dirty": False,
+                "compactRecommended": False,
+            },
+            )
+        mark_aggregated_dirty_for_symbol(root, provider="mt5", symbol=symbol)
+        _set_pull_job(
+            job_id,
+            phase="validating",
+            status="store_v5_pull_checking_invalid_fields",
+            currentAction="validate_written_fields",
+            rowsFetched=validation["mt5RowsCount"],
+            rowsWritten=rows_written_total,
+            trueM1RowsCount=validation["trueM1RowsCount"],
+            discardedBeforeTrueM1RowsCount=validation["discardedBeforeTrueM1RowsCount"],
+            gapCount=validation["gapCount"],
+        )
+        time.sleep(0.65)
+        _set_pull_job(
+            job_id,
+            phase="cleaning",
+            status="store_v5_pull_deleting_invalid_fields",
+            currentAction="cleanup_invalid_fields",
+            rowsFetched=validation["mt5RowsCount"],
+            rowsWritten=rows_written_total,
+            trueM1RowsCount=validation["trueM1RowsCount"],
+            discardedBeforeTrueM1RowsCount=validation["discardedBeforeTrueM1RowsCount"],
+            gapCount=validation["gapCount"],
+            cleanupDeletedRows=0,
+        )
+        time.sleep(0.65)
+        report = {
+            "ok": True,
+            "status": "mt5_m1_refresh_completed",
+            "symbol": symbol,
+            "storeVersion": STORE_VERSION,
+            "importMode": mode,
+            "mt5RowsCount": validation["mt5RowsCount"],
+            "trueM1RowsCount": validation["trueM1RowsCount"],
+            "rowsWritten": cleanup["keptRows"],
+            "duplicateRows": duplicate_rows_total,
+            "cleanupDeletedRows": cleanup["deletedRows"],
+            "manifestPath": str(manifest_path(root)),
+        }
+        _set_pull_job(
+            job_id,
+            ok=True,
+            phase="completed",
+            status="mt5_m1_refresh_completed",
+            rowsFetched=validation["mt5RowsCount"],
+            rowsWritten=cleanup["keptRows"],
+            trueM1RowsCount=validation["trueM1RowsCount"],
+            discardedBeforeTrueM1RowsCount=validation["discardedBeforeTrueM1RowsCount"],
+            gapCount=validation["gapCount"],
+            cleanupStatus="completed",
+            cleanupDeletedRows=cleanup["deletedRows"],
+            cleanupKeptRows=cleanup["keptRows"],
+            firstTimeText=format_utc_text(cleanup["firstTime"]),
+            lastTimeText=format_utc_text(cleanup["lastTime"]),
+            result=report,
+            finishedAt=utc_now_iso(),
+        )
+    except Exception as exc:
+        _set_pull_job(job_id, ok=False, phase="failed", status="store_v5_pull_exception", error=str(exc), finishedAt=utc_now_iso())
+    finally:
+        if initialized:
+            try:
+                mt5.shutdown()
+            except Exception:
+                pass
+
+
+def start_store_v5_pull_job(symbol: str, *, mode: str, count: int | None, store_root: Path | None = None) -> dict[str, Any]:
+    job_id = uuid.uuid4().hex
+    now = utc_now_iso()
+    with PULL_JOBS_CONDITION:
+        job = {
+            "ok": True,
+            "jobId": job_id,
+            "symbol": symbol,
+            "mode": mode,
+            "phase": "queued",
+            "status": "store_v5_pull_queued",
+            "rowsFetched": 0,
+            "rowsWritten": 0,
+            "chunksCompleted": 0,
+            "fetchChunkSize": 200_000,
+            "maxCount": count,
+            "createdAt": now,
+            "updatedAt": now,
+            "lastEventId": 1,
+            "events": [],
+        }
+        snapshot = _public_pull_job_snapshot(job)
+        job["events"].append({"id": 1, "event": "progress", "data": snapshot})
+        PULL_JOBS[job_id] = job
+        PULL_JOBS_CONDITION.notify_all()
+    thread = threading.Thread(
+        target=run_store_v5_pull_job,
+        args=(job_id, symbol),
+        kwargs={"mode": mode, "count": count, "store_root": store_root},
+        daemon=True,
+    )
+    thread.start()
+    return _get_pull_job(job_id) or {"ok": False, "error": "job_not_found", "jobId": job_id}
 
 
 def check_mt5_m1_live(symbol: str, count: int = 5_000_000) -> dict[str, Any]:
@@ -477,42 +1513,12 @@ def check_mt5_m1_live(symbol: str, count: int = 5_000_000) -> dict[str, Any]:
             for row in raw_rows
         ]
         validation = validate_true_m1_rows_v1(canonical_rows)
-        true_rows = validation.get("trueRows") or []
-        first_time = validation.get("firstAnchorTime")
-        last_time = validation.get("lastTrueM1Time")
-        if true_rows:
-            first_time = int(true_rows[0]["time"])
-            last_time = int(true_rows[-1]["time"])
-
-        return {
-            "ok": True,
-            "status": "mt5_m1_check_completed" if validation.get("ok") else "mt5_m1_check_failed_validation",
-            "provider": "mt5",
-            "storeVersion": "v5",
-            "symbol": symbol,
-            "directM1": {
-                "datasetKey": f"mt5:{symbol}:direct:M1",
-                "mt5RowsCount": validation.get("mt5RowsCount", len(raw_rows)),
-                "trueM1RowsCount": validation.get("trueM1RowsCount", 0),
-                "rowsCount": validation.get("trueM1RowsCount", 0),
-                "firstTime": first_time,
-                "lastTime": last_time,
-                "firstTimeText": format_utc_text(first_time),
-                "lastTimeText": format_utc_text(last_time),
-                "firstAnchorTime": validation.get("firstAnchorTime"),
-                "firstHourM1CheckOk": validation.get("firstHourM1CheckOk"),
-                "firstHourTrueRows": validation.get("firstHourTrueRows"),
-                "gapCount": validation.get("gapCount"),
-                "m1IntegrityStatus": validation.get("m1IntegrityStatus"),
-                "status": "mt5_live_check",
-                "validationOk": validation.get("ok"),
-                "validationError": validation.get("error"),
-                "firstGap": validation.get("firstGap"),
-            },
-            "validation": {key: value for key, value in validation.items() if key != "trueRows"},
-            "aggregated": [],
-            "publishedAt": published_at,
-        }
+        return _build_m1_check_payload(
+            symbol=symbol,
+            raw_rows=raw_rows,
+            validation=validation,
+            published_at=published_at,
+        )
     except Exception as exc:
         return {
             "ok": False,
@@ -532,12 +1538,21 @@ def check_mt5_m1_live(symbol: str, count: int = 5_000_000) -> dict[str, Any]:
 def pull_store_v5(symbol: str, mode: str, count: int, store_root: Path | None = None) -> dict[str, Any]:
     from python.data_warehouse.mt5.mt5_m1_pull_service_v1 import pull_mt5_m1_to_store_v5
 
-    return pull_mt5_m1_to_store_v5(
+    report = pull_mt5_m1_to_store_v5(
         symbol=symbol,
         import_mode=mode,
         count=count,
         store_root=store_root,
     )
+    if mode == "incremental" and report.get("error") == "direct_m1_manifest_missing_for_incremental":
+        report = pull_mt5_m1_to_store_v5(
+            symbol=symbol,
+            import_mode="refresh",
+            count=count,
+            store_root=store_root,
+        )
+        report["fallbackFrom"] = "incremental"
+    return report
 
 
 def aggregate_store_v5(symbol: str, timeframes: list[str], rebuild: bool, store_root: Path | None = None) -> dict[str, Any]:
@@ -588,10 +1603,76 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/market-data/v1/mt5/m1/check/start":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            mode = (query.get("mode") or ["refresh"])[0].strip().lower()
+            chunk = clamp_m1_check_chunk((query.get("chunk") or [None])[0], default=200_000)
+            max_count = clamp_m1_check_count((query.get("maxCount") or query.get("max_count") or [None])[0], default=10_000_000)
+            pause_ms = max(0, min(safe_query_int((query.get("pauseMs") or query.get("pause_ms") or [None])[0], 50) or 0, 5_000))
+            since_time = safe_query_int((query.get("sinceTime") or query.get("since_time") or [None])[0], None)
+            base_first_time = safe_query_int((query.get("baseFirstTime") or query.get("base_first_time") or [None])[0], None)
+            base_last_time = safe_query_int((query.get("baseLastTime") or query.get("base_last_time") or [None])[0], None)
+            base_true_m1_rows_count = safe_query_int((query.get("baseTrueM1RowsCount") or query.get("base_true_m1_rows_count") or [None])[0], 0) or 0
+            base_mt5_rows_count = safe_query_int((query.get("baseMt5RowsCount") or query.get("base_mt5_rows_count") or [None])[0], 0) or 0
+            overlap_bars = safe_query_int((query.get("overlapBars") or query.get("overlap_bars") or [None])[0], 1000) or 1000
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            if mode not in {"refresh", "incremental"}:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "unsupported_check_mode"})
+                return
+            if mode == "incremental" and since_time is None:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "since_time_required"})
+                return
+            self.send_json(
+                202,
+                start_mt5_m1_staged_check(
+                    symbol,
+                    chunk=chunk,
+                    max_count=max_count,
+                    pause_ms=pause_ms,
+                    mode=mode,
+                    since_time=since_time,
+                    base_first_time=base_first_time,
+                    base_last_time=base_last_time,
+                    base_true_m1_rows_count=base_true_m1_rows_count,
+                    base_mt5_rows_count=base_mt5_rows_count,
+                    overlap_bars=overlap_bars,
+                ),
+            )
+            return
+
+        if parsed.path == "/api/market-data/v1/mt5/m1/check/progress":
+            query = parse_qs(parsed.query)
+            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
+            if not job_id:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
+                return
+            job = _get_m1_check_job(job_id)
+            if not job:
+                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
+                return
+            self.send_json(200, job)
+            return
+
+        if parsed.path == "/api/market-data/v1/mt5/m1/check/cancel":
+            query = parse_qs(parsed.query)
+            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
+            if not job_id:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
+                return
+            job = _set_m1_check_job(job_id, cancelRequested=True, status="mt5_m1_check_cancel_requested")
+            if not job:
+                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
+                return
+            self.send_json(200, job)
+            return
+
         if parsed.path in {"/api/market-data/v1/mt5/m1/check", "/api/market-data/v1/store-v5/check"}:
             query = parse_qs(parsed.query)
             symbol = (query.get("symbol") or [""])[0].strip()
-            count = clamp_m1_check_count((query.get("count") or [None])[0], default=5_000_000)
+            count = clamp_m1_check_count((query.get("count") or [None])[0], default=200_000)
             if not symbol:
                 self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
                 return
@@ -615,11 +1696,77 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
                 self.send_json(500, {"ok": False, "status": "store_v5_status_failed", "error": str(exc)})
             return
 
+        if parsed.path == "/api/market-data/v1/store-v5/delete":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            try:
+                payload = delete_store_v5_symbol(symbol, store_root=self.store_root)
+                self.send_json(200 if payload.get("ok") is True else 400, payload)
+            except Exception as exc:
+                self.send_json(500, {"ok": False, "status": "store_v5_delete_failed", "error": str(exc)})
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/pull/start":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            mode = (query.get("mode") or ["incremental"])[0].strip().lower()
+            count_text = (query.get("count") or [None])[0]
+            count = None if mode == "refresh" and count_text in {None, ""} else clamp_m1_check_count(count_text, default=10_000_000)
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            if mode not in {"refresh", "incremental"}:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "unsupported_import_mode"})
+                return
+            self.send_json(202, start_store_v5_pull_job(symbol, mode=mode, count=count, store_root=self.store_root))
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/pull/progress":
+            query = parse_qs(parsed.query)
+            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
+            if not job_id:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
+                return
+            job = _get_pull_job(job_id)
+            if not job:
+                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
+                return
+            self.send_json(200, job)
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/pull/events":
+            query = parse_qs(parsed.query)
+            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
+            if not job_id:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
+                return
+            if not _get_pull_job(job_id):
+                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
+                return
+            self.send_pull_job_events(job_id)
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/pull/cancel":
+            query = parse_qs(parsed.query)
+            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
+            if not job_id:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
+                return
+            job = _set_pull_job(job_id, cancelRequested=True, status="store_v5_pull_cancel_requested")
+            if not job:
+                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
+                return
+            self.send_json(200, job)
+            return
+
         if parsed.path == "/api/market-data/v1/store-v5/pull":
             query = parse_qs(parsed.query)
             symbol = (query.get("symbol") or [""])[0].strip()
             mode = (query.get("mode") or ["incremental"])[0].strip().lower()
-            count = clamp_m1_check_count((query.get("count") or [None])[0], default=5_000_000)
+            count = clamp_m1_check_count((query.get("count") or [None])[0], default=10_000_000)
             if not symbol:
                 self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
                 return
@@ -650,7 +1797,7 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             try:
                 payload = query_store_v5_ohlcv(query, store_root=self.store_root)
-                self.send_json(200 if payload.get("ok") is True else 404, payload)
+                self.send_json(200, payload)
             except Exception as exc:
                 self.send_json(500, {"ok": False, "status": "store_v5_query_failed", "error": str(exc)})
             return
@@ -686,6 +1833,55 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def send_pull_job_events(self, job_id: str) -> None:
+        self.send_response(200)
+        self.send_cors_headers()
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+
+        last_sent = 0
+        while True:
+            with PULL_JOBS_CONDITION:
+                job = PULL_JOBS.get(job_id)
+                if not job:
+                    events = [{
+                        "id": last_sent + 1,
+                        "event": "error",
+                        "data": {"ok": False, "jobId": job_id, "phase": "failed", "status": "job_not_found", "error": "job_not_found"},
+                    }]
+                else:
+                    PULL_JOBS_CONDITION.wait_for(
+                        lambda: any(int(event.get("id") or 0) > last_sent for event in job.get("events", []))
+                        or str(job.get("phase") or "") in PULL_JOB_TERMINAL_PHASES,
+                        timeout=15,
+                    )
+                    events = [
+                        event for event in job.get("events", [])
+                        if int(event.get("id") or 0) > last_sent
+                    ]
+                    if not events:
+                        events = [{"id": last_sent, "event": "ping", "data": {"ok": True, "jobId": job_id, "phase": job.get("phase"), "updatedAt": utc_now_iso()}}]
+
+            should_close = False
+            for event in events:
+                event_id = int(event.get("id") or last_sent)
+                event_name = str(event.get("event") or "progress")
+                data = event.get("data") if isinstance(event.get("data"), dict) else {}
+                if event_id > last_sent:
+                    last_sent = event_id
+                if event_name in {"done", "error", "cancelled"}:
+                    should_close = True
+                try:
+                    self.wfile.write(f"id: {event_id}\n".encode("utf-8"))
+                    self.wfile.write(f"event: {event_name}\n".encode("utf-8"))
+                    self.wfile.write(f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    return
+            if should_close:
+                return
 
     def log_message(self, format: str, *args: Any) -> None:
         print(f"[mt5_symbols_server] {self.address_string()} - {format % args}")

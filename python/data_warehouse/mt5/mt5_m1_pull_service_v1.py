@@ -42,6 +42,26 @@ def _canonicalize(rows: list[dict[str, Any]], *, symbol: str) -> list[dict[str, 
     return [mt5_row_to_canonical(row, provider="mt5", symbol=symbol, timeframe="M1") for row in rows]
 
 
+def _copy_rates_from_pos_chunked(mt5: Any, symbol: str, timeframe: Any, count: int, chunk: int = 10_000) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    pos = 0
+    total = 0
+    target = int(count)
+    step = max(1, int(chunk))
+    while total < target:
+        want = min(step, target - total)
+        part = _as_dict_rows(mt5.copy_rates_from_pos(symbol, timeframe, pos, want))
+        if not part:
+            break
+        rows.extend(part)
+        pulled = len(part)
+        total += pulled
+        pos += pulled
+        if pulled < want:
+            break
+    return rows
+
+
 def _init_mt5(mt5: Any, symbol: str) -> tuple[bool, str | None]:
     if hasattr(mt5, "initialize") and not mt5.initialize():
         return False, "mt5_initialize_failed"
@@ -57,6 +77,7 @@ def pull_mt5_m1_to_store_v5(
     import_mode: str = "incremental",
     store_root: str | Path | None = None,
     overlap_bars: int = 1000,
+    refresh_chunk: int = 10_000,
     mt5_module: Any | None = None,
 ) -> dict[str, Any]:
     root = resolve_store_root(store_root)
@@ -76,7 +97,7 @@ def pull_mt5_m1_to_store_v5(
             if ds_root.exists():
                 shutil.rmtree(ds_root)
             delete_dataset_cell(root, direct_key)
-            raw_rows = _as_dict_rows(mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, int(count)))
+            raw_rows = _copy_rates_from_pos_chunked(mt5, symbol, mt5.TIMEFRAME_M1, int(count), chunk=refresh_chunk)
             canonical_rows = _canonicalize(raw_rows, symbol=symbol)
             validation = validate_true_m1_rows_v1(canonical_rows)
             if not validation.get("ok"):
@@ -103,6 +124,7 @@ def pull_mt5_m1_to_store_v5(
                 "lastImportAt": utc_now_iso(),
                 "lastImportMode": mode,
                 "lastPullMethod": "copy_rates_from_pos",
+                "lastPullChunkSize": refresh_chunk,
                 "lastAddedRows": validation["trueM1RowsCount"],
                 "lastDuplicateRows": 0,
                 "dirty": False,
@@ -158,8 +180,10 @@ def pull_mt5_m1_to_store_v5(
                 "rowsWritten": 0,
             }
         true_new_rows = validation["trueRows"]
+        previous_mt5_rows_count = int(cell.get("mt5RowsCount") or cell.get("trueM1RowsCount") or 0)
         extra = {
-            "mt5RowsCount": validation["mt5RowsCount"],
+            "mt5RowsCount": previous_mt5_rows_count + len(true_new_rows),
+            "lastPullMt5RowsCount": validation["mt5RowsCount"],
             "trueM1RowsCount": int(cell.get("trueM1RowsCount") or 0) + len(true_new_rows),
             "lastTrueM1Time": validation.get("lastNewTime", last_time),
             "lastImportAt": utc_now_iso(),
