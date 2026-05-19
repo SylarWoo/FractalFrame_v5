@@ -733,6 +733,18 @@ body[data-fractalframe-mt5-column-resizing='true'] .ff-symbol-table__column-resi
   font-weight: 800;
 }
 
+.ff-store-aggregate-table tbody tr {
+  cursor: pointer;
+}
+
+.ff-store-aggregate-table tbody tr:hover td {
+  background: #eef5ff;
+}
+
+.ff-store-aggregate-table tbody tr[data-selected='true'] td {
+  background: #dbeafe;
+}
+
 .ff-store-aggregate-table small {
   color: #64748b;
   font-size: 10px;

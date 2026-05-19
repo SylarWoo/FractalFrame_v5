@@ -396,10 +396,39 @@ def check_store_v5(symbol: str, store_root: Path | None = None) -> dict[str, Any
                 "status": raw_direct.get("status"),
                 "rootPath": raw_direct.get("rootPath"),
             } if raw_direct else None,
-            "directM1": None,
+            "directM1": {
+                "datasetKey": raw_key,
+                "mt5RowsCount": raw_direct.get("mt5RowsCount"),
+                "trueM1RowsCount": raw_direct.get("rowsCount") or raw_direct.get("rawRowsCount"),
+                "rowsCount": raw_direct.get("rowsCount") or raw_direct.get("rawRowsCount"),
+                "firstTime": raw_direct.get("firstTime"),
+                "lastTime": raw_direct.get("lastTime"),
+                "firstTimeText": format_utc_text(raw_direct.get("firstTime")),
+                "lastTimeText": format_utc_text(raw_direct.get("lastTime")),
+                "lastImportAt": raw_direct.get("lastImportAt"),
+                "status": "raw_m1_ready_clean_pending",
+                "rootPath": raw_direct.get("rootPath"),
+            } if raw_direct else None,
             "aggregated": aggregated,
             "publishedAt": utc_now_iso(),
         }
+
+    raw_rows_count = safe_int(raw_direct.get("rowsCount")) if raw_direct else None
+    raw_last_time = safe_int(raw_direct.get("lastTime")) if raw_direct else None
+    direct_rows_count = safe_int(direct.get("rowsCount"))
+    direct_last_time = safe_int(direct.get("lastTrueM1Time") or direct.get("lastTime"))
+    direct_summary_rows_count = direct.get("rowsCount")
+    direct_summary_last_import_at = direct.get("lastImportAt")
+    if (
+        raw_rows_count is not None
+        and raw_rows_count > 0
+        and direct_rows_count is not None
+        and direct_rows_count > 0
+        and raw_rows_count > direct_rows_count * 10
+        and (raw_last_time is None or direct_last_time is None or raw_last_time > direct_last_time)
+    ):
+        direct_summary_rows_count = raw_rows_count
+        direct_summary_last_import_at = raw_direct.get("lastImportAt") if raw_direct else direct.get("lastImportAt")
 
     first_time = direct.get("firstTime") or direct.get("firstAnchorTime")
     last_time = direct.get("lastTrueM1Time") or direct.get("lastTime")
@@ -427,7 +456,7 @@ def check_store_v5(symbol: str, store_root: Path | None = None) -> dict[str, Any
             "datasetKey": direct_key,
             "mt5RowsCount": direct.get("mt5RowsCount"),
             "trueM1RowsCount": direct.get("trueM1RowsCount"),
-            "rowsCount": direct.get("rowsCount"),
+            "rowsCount": direct_summary_rows_count,
             "firstTime": first_time,
             "lastTime": last_time,
             "firstTimeText": format_utc_text(first_time),
@@ -437,7 +466,7 @@ def check_store_v5(symbol: str, store_root: Path | None = None) -> dict[str, Any
             "firstHourTrueRows": direct.get("firstHourTrueRows"),
             "gapCount": direct.get("gapCount"),
             "m1IntegrityStatus": direct.get("m1IntegrityStatus"),
-            "lastImportAt": direct.get("lastImportAt"),
+            "lastImportAt": direct_summary_last_import_at,
             "status": direct.get("status"),
             "rootPath": direct.get("rootPath"),
         },
@@ -791,6 +820,22 @@ def run_mt5_m1_staged_check_job(
                 return
 
             want = min(chunk, max_count - pos)
+            _set_m1_check_job(
+                job_id,
+                ok=True,
+                phase="fetching",
+                status="mt5_m1_check_fetching",
+                currentAction="copy_rates_from_pos",
+                chunksCompleted=chunk_index,
+                currentBatchIndex=chunk_index + 1,
+                currentBatchRequested=want,
+                currentBatchFetched=0,
+                mt5RowsCount=len(raw_rows),
+                currentPosition=pos,
+                maxCount=max_count,
+                chunkSize=chunk,
+                progressPercent=round(min(99, (pos / max_count) * 100), 2) if max_count else None,
+            )
             rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, pos, want)
             part = mt5_rates_to_rows(rates)
             if not part:
@@ -811,6 +856,9 @@ def run_mt5_m1_staged_check_job(
                 currentPosition=pos,
                 maxCount=max_count,
                 chunkSize=chunk,
+                currentBatchIndex=chunk_index,
+                currentBatchRequested=want,
+                currentBatchFetched=len(part),
                 firstTime=first_time,
                 lastTime=last_time,
                 firstTimeText=format_utc_text(first_time),
@@ -1006,7 +1054,7 @@ def cleanup_direct_m1_prefix_before_time_v5(root: Path, symbol: str, cutoff_time
     }
 
 
-def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | None, store_root: Path | None, fetch_chunk: int = 20_000) -> None:
+def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | None, store_root: Path | None, fetch_chunk: int = 500_000) -> None:
     from python.data_warehouse.mt5.mt5_m1_integrity_validator_v1 import validate_incremental_true_m1_rows_v1, validate_true_m1_rows_v1
     from python.data_warehouse.store_v5.manifest_v5 import delete_dataset_cell, get_dataset_cell, mark_aggregated_dirty_for_symbol, upsert_dataset_cell
     from python.data_warehouse.store_v5.ohlcv_schema_v5 import mt5_row_to_canonical
@@ -1021,15 +1069,49 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
         import MetaTrader5 as mt5
 
         if not mt5.initialize():
-            _set_pull_job(job_id, ok=False, phase="failed", status="mt5_initialize_failed", mt5LastError=mt5.last_error(), finishedAt=utc_now_iso())
+            _set_pull_job(
+                job_id,
+                ok=False,
+                phase="failed",
+                status="mt5_initialize_failed",
+                mt5LastError=mt5.last_error(),
+                progressPercent=None,
+                progressLabel="失败：MT5 初始化失败",
+                detailMessage="拉取开始前无法初始化 MT5",
+                finishedAt=utc_now_iso(),
+            )
             return
         initialized = True
         if not mt5.symbol_select(symbol, True):
-            _set_pull_job(job_id, ok=False, phase="failed", status="mt5_symbol_select_failed", mt5LastError=mt5.last_error(), finishedAt=utc_now_iso())
+            _set_pull_job(
+                job_id,
+                ok=False,
+                phase="failed",
+                status="mt5_symbol_select_failed",
+                mt5LastError=mt5.last_error(),
+                progressPercent=None,
+                progressLabel=f"失败：无法选择品种 {symbol}",
+                detailMessage="MT5 symbol_select 失败",
+                finishedAt=utc_now_iso(),
+            )
             return
 
         step = max(1, int(fetch_chunk))
         target = int(count) if count is not None and int(count) > 0 else None
+
+        def read_progress(rows_fetched: int, chunks_completed: int) -> float:
+            if target:
+                return min(70, round((rows_fetched / target) * 70, 2))
+            return min(65, 15 + chunks_completed * 3)
+
+        def write_progress(rows_written: int, chunks_completed: int) -> float:
+            if target:
+                return 70 + min(26, round((rows_written / target) * 26, 2))
+            return min(90, 70 + chunks_completed * 2)
+
+        previous_first_time = None
+        previous_last_time = None
+        range_window: dict[str, Any] | None = None
         if mode == "refresh":
             raw_root = dataset_root(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1", store_root=root)
             if raw_root.exists():
@@ -1046,6 +1128,24 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 delete_dataset_cell(root, raw_key)
                 pos = 0
             else:
+                previous_first_time = safe_int(raw_cell.get("firstTime") or raw_cell.get("firstRawM1Time"))
+                previous_last_time = safe_int(raw_cell.get("lastTime") or raw_cell.get("lastRawM1Time"))
+                if previous_last_time is None:
+                    mode = "refresh"
+                    raw_root = dataset_root(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1", store_root=root)
+                    if raw_root.exists():
+                        shutil.rmtree(raw_root)
+                    delete_dataset_cell(root, raw_key)
+                else:
+                    overlap_bars = 1000
+                    from_time = max(0, int(previous_last_time) - overlap_bars * 60)
+                    range_window = {
+                        "fromTime": from_time,
+                        "toTime": int(datetime.now(timezone.utc).timestamp()),
+                        "overlapBars": overlap_bars,
+                        "previousFirstTime": previous_first_time,
+                        "previousLastTime": previous_last_time,
+                    }
                 pos = 0
 
         _set_pull_job(
@@ -1053,15 +1153,26 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             phase="fetching",
             status="store_v5_pull_raw_m1_fetching",
             currentAction="copy_rates_from_pos",
+            progressPercent=1,
             rowsFetched=0,
             rowsWritten=0,
+            rawRowsCount=0,
+            duplicateRows=0,
             chunksCompleted=0,
             fetchChunkSize=step,
             maxCount=target,
+            currentBatchIndex=0,
+            currentBatchRequested=0,
+            currentBatchFetched=0,
+            writeBatchRows=0,
+            writeBatchWritten=0,
+            pendingWriteRows=0,
+            progressLabel=f"开始读取 MT5 M1，每批 {step:,} 根",
+            detailMessage="正在从 MT5 读取 M1 数据",
         )
 
         seen_times: set[int] = set()
-        write_buffer_target = 200_000
+        write_buffer_target = 500_000
         pending_rows: list[dict[str, Any]] = []
         rows_fetched_total = 0
         rows_written_total = 0
@@ -1070,10 +1181,41 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
         first_time = None
         last_time = None
 
-        def flush_pending_rows() -> None:
+        def keep_incremental_row(row_time: int) -> bool:
+            if mode == "refresh" or previous_first_time is None or previous_last_time is None:
+                return True
+            return row_time < int(previous_first_time) or row_time > int(previous_last_time)
+
+        def flush_pending_rows(progress_floor: float | None = None) -> None:
             nonlocal rows_written_total, duplicate_rows_total
             if not pending_rows:
                 return
+            batch_rows = len(pending_rows)
+            progress_before = write_progress(rows_written_total, chunks)
+            if progress_floor is not None:
+                progress_before = max(progress_before, progress_floor)
+            _set_pull_job(
+                job_id,
+                phase="writing",
+                status="store_v5_pull_raw_m1_writing",
+                currentAction="append_raw_direct_m1_buffer",
+                progressPercent=progress_before,
+                rowsFetched=rows_fetched_total,
+                rowsWritten=rows_written_total,
+                rawRowsCount=rows_written_total,
+                duplicateRows=duplicate_rows_total,
+                chunksCompleted=chunks,
+                fetchChunkSize=step,
+                maxCount=target,
+                writeBatchRows=batch_rows,
+                writeBatchWritten=0,
+                pendingWriteRows=batch_rows,
+                firstTimeText=format_utc_text(first_time),
+                lastTimeText=format_utc_text(last_time),
+                cleanStatus="pending",
+                progressLabel=f"正在写入：本批 {batch_rows:,}，累计已写入 {rows_written_total:,}",
+                detailMessage="正在写入 StoreV5 raw_direct/M1 parquet",
+            )
             write = append_ohlcv_part_v5(
                 pending_rows,
                 provider="mt5",
@@ -1101,22 +1243,188 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                     "compactRecommended": True,
                 },
             )
+            batch_written = int(write.get("rowsWritten") or 0)
             rows_written_total += int(write.get("rowsWritten") or 0)
             duplicate_rows_total += int(write.get("duplicateRows") or 0)
             pending_rows.clear()
+            progress_after = write_progress(rows_written_total, chunks)
+            if progress_floor is not None:
+                progress_after = max(progress_after, progress_floor)
+            _set_pull_job(
+                job_id,
+                phase="writing",
+                status="store_v5_pull_raw_m1_write_batch_done",
+                currentAction="append_raw_direct_m1_buffer_done",
+                progressPercent=progress_after,
+                rowsFetched=rows_fetched_total,
+                rowsWritten=rows_written_total,
+                rawRowsCount=rows_written_total,
+                duplicateRows=duplicate_rows_total,
+                chunksCompleted=chunks,
+                fetchChunkSize=step,
+                maxCount=target,
+                writeBatchRows=batch_rows,
+                writeBatchWritten=batch_written,
+                pendingWriteRows=0,
+                firstTimeText=format_utc_text(first_time),
+                lastTimeText=format_utc_text(last_time),
+                cleanStatus="pending",
+                progressLabel=f"写入完成：本批写入 {batch_written:,}，累计 {rows_written_total:,}",
+                detailMessage="本批 parquet 写入完成",
+            )
 
-        while target is None or pos < target:
+        if range_window is not None:
             job = _get_pull_job(job_id)
             if job and job.get("cancelRequested"):
-                _set_pull_job(job_id, ok=False, phase="cancelled", status="store_v5_pull_cancelled", finishedAt=utc_now_iso())
+                _set_pull_job(
+                    job_id,
+                    ok=False,
+                    phase="cancelled",
+                    status="store_v5_pull_cancelled",
+                    rowsFetched=0,
+                    rowsWritten=0,
+                    rawRowsCount=0,
+                    duplicateRows=0,
+                    progressLabel="已取消",
+                    detailMessage="用户取消了 StoreV5 拉取任务",
+                    finishedAt=utc_now_iso(),
+                )
+                return
+
+            from_time = int(range_window["fromTime"])
+            to_time = int(range_window["toTime"])
+            _set_pull_job(
+                job_id,
+                phase="fetching",
+                status="store_v5_pull_raw_m1_incremental_requesting",
+                currentAction="copy_rates_range",
+                progressPercent=15,
+                rowsFetched=0,
+                rowsWritten=0,
+                rawRowsCount=0,
+                duplicateRows=0,
+                chunksCompleted=0,
+                fetchChunkSize=step,
+                maxCount=target,
+                currentBatchIndex=1,
+                currentBatchRequested=0,
+                currentBatchFetched=0,
+                writeBatchRows=0,
+                writeBatchWritten=0,
+                pendingWriteRows=0,
+                cleanStatus="pending",
+                progressLabel=f"增量读取：从 {format_utc_text(from_time)} 到 {format_utc_text(to_time)}",
+                detailMessage="正在按 StoreV5 lastTime overlap 从 MT5 读取增量 M1",
+            )
+            rates = mt5.copy_rates_range(
+                symbol,
+                mt5.TIMEFRAME_M1,
+                datetime.fromtimestamp(from_time, tz=timezone.utc),
+                datetime.fromtimestamp(to_time, tz=timezone.utc),
+            )
+            part = mt5_rates_to_rows(rates)
+            rows_fetched_total = len(part)
+            chunks = 1 if part else 0
+            new_part = []
+            for row in part:
+                row_time = int(row.get("time") or 0)
+                if row_time <= 0 or row_time in seen_times:
+                    duplicate_rows_total += 1
+                    continue
+                seen_times.add(row_time)
+                if not keep_incremental_row(row_time):
+                    duplicate_rows_total += 1
+                    continue
+                new_part.append(row)
+
+            if new_part:
+                canonical_batch = [mt5_row_to_canonical(row, provider="mt5", symbol=symbol, timeframe="M1") for row in new_part]
+                batch_first = min((int(row["time"]) for row in canonical_batch), default=None)
+                batch_last = max((int(row["time"]) for row in canonical_batch), default=None)
+                first_time = batch_first if first_time is None else min(first_time, batch_first or first_time)
+                last_time = batch_last if last_time is None else max(last_time, batch_last or last_time)
+                pending_rows.extend(canonical_batch)
+
+            _set_pull_job(
+                job_id,
+                phase="fetching",
+                status="store_v5_pull_raw_m1_incremental_fetched",
+                currentAction="copy_rates_range_done",
+                progressPercent=65,
+                rowsFetched=rows_fetched_total,
+                rowsWritten=rows_written_total,
+                rawRowsCount=rows_written_total,
+                duplicateRows=duplicate_rows_total,
+                chunksCompleted=chunks,
+                fetchChunkSize=step,
+                maxCount=target,
+                currentBatchIndex=1,
+                currentBatchRequested=0,
+                currentBatchFetched=len(part),
+                writeBatchRows=len(new_part),
+                writeBatchWritten=0,
+                pendingWriteRows=len(pending_rows),
+                firstTimeText=format_utc_text(first_time),
+                lastTimeText=format_utc_text(last_time),
+                cleanStatus="pending",
+                progressLabel=f"增量读取完成：MT5 返回 {len(part):,}，新增候选 {len(new_part):,}，跳过 {duplicate_rows_total:,}",
+                detailMessage="已按 lastTime overlap 过滤已有 M1",
+            )
+
+        while range_window is None and (target is None or pos < target):
+            job = _get_pull_job(job_id)
+            if job and job.get("cancelRequested"):
+                _set_pull_job(
+                    job_id,
+                    ok=False,
+                    phase="cancelled",
+                    status="store_v5_pull_cancelled",
+                    rowsFetched=rows_fetched_total,
+                    rowsWritten=rows_written_total,
+                    rawRowsCount=rows_written_total,
+                    duplicateRows=duplicate_rows_total,
+                    progressLabel="已取消",
+                    detailMessage="用户取消了 StoreV5 拉取任务",
+                    finishedAt=utc_now_iso(),
+                )
                 return
 
             want = step if target is None else min(step, target - pos)
+            current_batch_index = chunks + 1
+            _set_pull_job(
+                job_id,
+                phase="fetching",
+                status="store_v5_pull_raw_m1_requesting",
+                currentAction="copy_rates_from_pos",
+                progressPercent=read_progress(rows_fetched_total, chunks),
+                rowsFetched=rows_fetched_total,
+                rowsWritten=rows_written_total,
+                rawRowsCount=rows_written_total,
+                duplicateRows=duplicate_rows_total,
+                chunksCompleted=chunks,
+                fetchChunkSize=step,
+                maxCount=target,
+                currentBatchIndex=current_batch_index,
+                currentBatchRequested=want,
+                currentBatchFetched=0,
+                writeBatchRows=0,
+                writeBatchWritten=0,
+                pendingWriteRows=len(pending_rows),
+                firstTimeText=format_utc_text(first_time),
+                lastTimeText=format_utc_text(last_time),
+                cleanStatus="pending",
+                progressLabel=(
+                    f"正在请求第 {current_batch_index} 批：计划读取 {want:,}，"
+                    f"累计已读取 {rows_fetched_total:,}" + (f" / {target:,}" if target else "")
+                ),
+                detailMessage="正在等待 MT5 返回 M1 数据",
+            )
             part = mt5_rates_to_rows(mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, pos, want))
             if not part:
                 break
             pos += len(part)
             rows_fetched_total += len(part)
+            current_batch_fetched = len(part)
 
             new_part: list[dict[str, Any]] = []
             for row in part:
@@ -1125,6 +1433,9 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                     duplicate_rows_total += 1
                     continue
                 seen_times.add(row_time)
+                if not keep_incremental_row(row_time):
+                    duplicate_rows_total += 1
+                    continue
                 new_part.append(row)
 
             if new_part:
@@ -1140,16 +1451,22 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                         phase="writing",
                         status="store_v5_pull_raw_m1_writing",
                         currentAction="append_raw_direct_m1_buffer",
+                        progressPercent=write_progress(rows_written_total, chunks),
                         rowsFetched=rows_fetched_total,
                         rowsWritten=rows_written_total,
                         rawRowsCount=rows_written_total,
+                        duplicateRows=duplicate_rows_total,
                         chunksCompleted=chunks,
                         fetchChunkSize=step,
                         maxCount=target,
                         writeBatchRows=len(pending_rows),
+                        writeBatchWritten=0,
+                        pendingWriteRows=len(pending_rows),
                         firstTimeText=format_utc_text(first_time),
                         lastTimeText=format_utc_text(last_time),
                         cleanStatus="pending",
+                        progressLabel=f"正在写入：本批 {len(pending_rows):,}，累计已写入 {rows_written_total:,}",
+                        detailMessage="正在写入 StoreV5 raw_direct/M1 parquet",
                     )
                     flush_pending_rows()
 
@@ -1159,18 +1476,28 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 phase="fetching",
                 status="store_v5_pull_raw_m1_streaming",
                 currentAction="copy_rates_from_pos_buffer_raw_direct_m1",
+                progressPercent=read_progress(rows_fetched_total, chunks),
                 rowsFetched=rows_fetched_total,
                 rowsWritten=rows_written_total,
                 rawRowsCount=rows_written_total,
+                duplicateRows=duplicate_rows_total,
                 chunksCompleted=chunks,
                 fetchChunkSize=step,
                 maxCount=target,
+                currentBatchIndex=current_batch_index,
+                currentBatchRequested=want,
+                currentBatchFetched=current_batch_fetched,
                 writeBatchRows=len(new_part),
                 writeBatchWritten=rows_written_total,
                 pendingWriteRows=len(pending_rows),
                 firstTimeText=format_utc_text(first_time),
                 lastTimeText=format_utc_text(last_time),
                 cleanStatus="pending",
+                progressLabel=(
+                    f"正在读取第 {current_batch_index} 批：本批 {current_batch_fetched:,}，"
+                    f"累计 {rows_fetched_total:,}" + (f" / {target:,}" if target else "")
+                ),
+                detailMessage="正在从 MT5 读取 M1 数据",
             )
             if len(part) < want:
                 break
@@ -1180,18 +1507,47 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             phase="writing",
             status="store_v5_pull_raw_m1_final_writing",
             currentAction="append_raw_direct_m1_final_buffer",
+            progressPercent=96,
             rowsFetched=rows_fetched_total,
             rowsWritten=rows_written_total,
             rawRowsCount=rows_written_total,
+            duplicateRows=duplicate_rows_total,
             chunksCompleted=chunks,
             fetchChunkSize=step,
             maxCount=target,
             writeBatchRows=len(pending_rows),
+            writeBatchWritten=0,
+            pendingWriteRows=len(pending_rows),
             firstTimeText=format_utc_text(first_time),
             lastTimeText=format_utc_text(last_time),
             cleanStatus="pending",
+            progressLabel=f"正在写入最后一批：{len(pending_rows):,}",
+            detailMessage="正在写入最后一批 StoreV5 parquet",
         )
-        flush_pending_rows()
+        flush_pending_rows(progress_floor=96)
+
+        _set_pull_job(
+            job_id,
+            phase="finalizing",
+            status="store_v5_pull_manifest_finalizing",
+            currentAction="finalize_manifest",
+            progressPercent=98,
+            rowsFetched=rows_fetched_total,
+            rowsWritten=rows_written_total,
+            rawRowsCount=rows_written_total,
+            duplicateRows=duplicate_rows_total,
+            chunksCompleted=chunks,
+            fetchChunkSize=step,
+            maxCount=target,
+            writeBatchRows=0,
+            writeBatchWritten=0,
+            pendingWriteRows=0,
+            firstTimeText=format_utc_text(first_time),
+            lastTimeText=format_utc_text(last_time),
+            cleanStatus="pending",
+            progressLabel="正在更新 Manifest 与标记聚合状态",
+            detailMessage="正在刷新 StoreV5 manifest",
+        )
 
         direct_cell = get_dataset_cell(root, direct_key)
         if direct_cell:
@@ -1229,17 +1585,36 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             ok=True,
             phase="completed",
             status=report["status"],
+            progressPercent=100,
             rowsFetched=rows_fetched_total,
             rowsWritten=rows_written_total,
             rawRowsCount=rows_written_total,
+            duplicateRows=duplicate_rows_total,
             cleanStatus="pending",
             firstTimeText=format_utc_text(first_time),
             lastTimeText=format_utc_text(last_time),
+            progressLabel=f"完成：读取 {rows_fetched_total:,}，写入 {rows_written_total:,}，重复 {duplicate_rows_total:,}",
+            detailMessage="本地 M1 raw_direct 已更新",
             result=report,
             finishedAt=utc_now_iso(),
         )
     except Exception as exc:
-        _set_pull_job(job_id, ok=False, phase="failed", status="store_v5_pull_exception", error=str(exc), finishedAt=utc_now_iso())
+        local_vars = locals()
+        _set_pull_job(
+            job_id,
+            ok=False,
+            phase="failed",
+            status="store_v5_pull_exception",
+            error=str(exc),
+            progressPercent=None,
+            rowsFetched=int(local_vars.get("rows_fetched_total") or 0),
+            rowsWritten=int(local_vars.get("rows_written_total") or 0),
+            rawRowsCount=int(local_vars.get("rows_written_total") or 0),
+            duplicateRows=int(local_vars.get("duplicate_rows_total") or 0),
+            progressLabel=f"失败：{exc}",
+            detailMessage="拉取或写入过程中发生错误",
+            finishedAt=utc_now_iso(),
+        )
     finally:
         if initialized:
             try:
@@ -1727,11 +2102,23 @@ def start_store_v5_pull_job(symbol: str, *, mode: str, count: int | None, store_
             "mode": mode,
             "phase": "queued",
             "status": "store_v5_pull_queued",
+            "currentAction": "waiting_to_start",
+            "progressPercent": 0,
             "rowsFetched": 0,
             "rowsWritten": 0,
+            "rawRowsCount": 0,
+            "duplicateRows": 0,
             "chunksCompleted": 0,
-            "fetchChunkSize": 20_000,
+            "fetchChunkSize": 500_000,
             "maxCount": count,
+            "currentBatchIndex": 0,
+            "currentBatchRequested": 0,
+            "currentBatchFetched": 0,
+            "writeBatchRows": 0,
+            "writeBatchWritten": 0,
+            "pendingWriteRows": 0,
+            "progressLabel": "准备开始拉取 MT5 M1",
+            "detailMessage": "正在等待 StoreV5 拉取任务启动",
             "createdAt": now,
             "updatedAt": now,
             "lastEventId": 1,

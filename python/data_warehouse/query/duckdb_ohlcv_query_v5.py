@@ -104,6 +104,32 @@ def query_ohlcv_store_v5(
             "warnings": [],
         }
 
+    if time_from is None and time_to is not None and limit is not None:
+        sql = "SELECT * FROM read_parquet(?) WHERE time <= ? ORDER BY time DESC LIMIT ?"
+        rows = list(reversed(_fetch_rows(sql, [files, int(time_to), int(limit)])))
+        time_values = [int(row["time"]) for row in rows]
+        return {
+            "ok": True,
+            "provider": "store_v5_duckdb",
+            "storeVersion": "v5",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "mode": mode,
+            "baseTimeframe": base_timeframe,
+            "anchor": anchor,
+            "rowsCount": len(rows),
+            "rows": rows,
+            "metadata": {
+                "queryEngineId": "ohlcv_store_v5_duckdb_v1",
+                "datasetKey": key,
+                "parquetPathsCount": len(files),
+                "timeFromResult": min(time_values) if time_values else None,
+                "timeToResult": max(time_values) if time_values else None,
+                "window": "backward",
+            },
+            "warnings": [],
+        }
+
     clauses = []
     params: list[Any] = [files]
     if time_from is not None:

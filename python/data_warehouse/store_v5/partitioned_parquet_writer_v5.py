@@ -90,8 +90,11 @@ def append_ohlcv_part_v5(
     duplicate_rows = 0
     written_files: list[str] = []
     if not df.empty:
-        for _, partition_df in df.groupby([df["time"].map(lambda v: (pd.to_datetime(int(v), unit="s", utc=True).year, pd.to_datetime(int(v), unit="s", utc=True).month))]):
-            partition_dir = _partition_dir(ds_root, int(partition_df["time"].iloc[0]))
+        ts = pd.to_datetime(df["time"], unit="s", utc=True)
+        df["_year"] = ts.dt.year.astype("int32")
+        df["_month"] = ts.dt.month.astype("int32")
+        for (_year, _month), partition_df in df.groupby(["_year", "_month"], sort=True):
+            partition_dir = ds_root / f"year={int(_year):04d}" / f"month={int(_month):02d}"
             partition_dir.mkdir(parents=True, exist_ok=True)
             if deduplicate_existing_time:
                 existing = _existing_times(partition_dir)
@@ -103,7 +106,7 @@ def append_ohlcv_part_v5(
             first_time = int(partition_df["time"].min())
             part_name = f"part-{pd.to_datetime(first_time, unit='s', utc=True).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8]}.parquet"
             out = partition_dir / part_name
-            partition_df[CANONICAL_COLUMNS].to_parquet(out, index=False)
+            partition_df[CANONICAL_COLUMNS].to_parquet(out, index=False, engine="pyarrow")
             rows_written += len(partition_df)
             written_files.append(str(out))
 

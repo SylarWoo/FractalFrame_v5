@@ -6,6 +6,7 @@ import {
   aggregateStoreV5,
   cancelMt5M1CheckJob,
   cancelStoreV5PullJob,
+  cleanStoreV5DirectM1,
   createStoreV5PullEventSource,
   deleteStoreV5Symbol,
   fetchMt5M1CheckJob,
@@ -24,6 +25,7 @@ type RightDrawerProps = {
   onClose: () => void
   onResize: (width: number) => void
   onToggle: () => void
+  onOpenChart?: (options: { symbol: string; period: string; limit?: number }) => void
 }
 
 const minDrawerWidth = 220
@@ -32,6 +34,8 @@ const splitHeightStorageKey = 'fractalframe:mt5ImportCenterTopPaneHeightPx:v1'
 const columnWidthsStorageKey = 'fractalframe:mt5ImportCenterColumnWidthsPx:v1'
 const symbolSnapshotStorageKey = 'fractalframe:mt5ImportCenterSymbolSnapshot:v1'
 const mt5M1CheckResultsStorageKey = 'fractalframe:mt5ImportCenterM1CheckResults:v1'
+const storeV5StatusStorageKey = 'fractalframe:mt5ImportCenterStoreV5Status:v1'
+const storeV5ListSymbolsStorageKey = 'fractalframe:mt5ImportCenterStoreV5ListSymbols:v1'
 
 const defaultColumnWidths = {
   symbol: 96,
@@ -55,6 +59,19 @@ type SymbolSnapshot = {
 type PersistedM1CheckResult = {
   checkedAt: string
   payload: StoreV5CheckPayload
+}
+
+type PersistedStoreV5Status = {
+  checkedAt: string
+  payload: StoreV5CheckPayload
+}
+
+type StoreTableRow = {
+  period: string
+  count: string
+  updated: string
+  kind: 'm1' | 'aggregate'
+  rowsCount?: number | null
 }
 
 const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
@@ -155,6 +172,55 @@ function savePersistedM1CheckResult(symbol: string, payload: StoreV5CheckPayload
   }
 }
 
+function readPersistedStoreV5Status(symbol: string): PersistedStoreV5Status | null {
+  if (!symbol) return null
+  try {
+    const raw = window.localStorage.getItem(storeV5StatusStorageKey)
+    const parsed = raw ? JSON.parse(raw) : null
+    const item = parsed?.[symbol]
+    if (!item || typeof item !== 'object' || !item.payload) return null
+    if (typeof item.checkedAt !== 'string') return null
+    return item as PersistedStoreV5Status
+  } catch {
+    return null
+  }
+}
+
+function savePersistedStoreV5Status(symbol: string, payload: StoreV5CheckPayload, checkedAt = new Date().toISOString()) {
+  if (!symbol) return
+  try {
+    const raw = window.localStorage.getItem(storeV5StatusStorageKey)
+    const parsed = raw ? JSON.parse(raw) : {}
+    window.localStorage.setItem(
+      storeV5StatusStorageKey,
+      JSON.stringify({
+        ...(parsed && typeof parsed === 'object' ? parsed : {}),
+        [symbol]: { checkedAt, payload },
+      }),
+    )
+  } catch {
+    // Store status persistence is best-effort only.
+  }
+}
+
+function readStoreV5ListSymbols(): string[] {
+  try {
+    const raw = window.localStorage.getItem(storeV5ListSymbolsStorageKey)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function saveStoreV5ListSymbols(symbols: string[]) {
+  try {
+    window.localStorage.setItem(storeV5ListSymbolsStorageKey, JSON.stringify([...new Set(symbols)]))
+  } catch {
+    // Store list persistence is best-effort only.
+  }
+}
+
 function formatSymbolStatus(totalCount: number, visibleCount: number, merge?: { added?: number; updated?: number }) {
   return `共 ${totalCount} 个品种，本地已保存，刷新后自动恢复（当前显示 ${visibleCount} 个）`
     + (merge ? ` · 新增 ${merge.added ?? 0}，更新 ${merge.updated ?? 0}` : '')
@@ -199,6 +265,18 @@ function formatCheckTime(value?: string | null) {
   return new Date(time).toLocaleString()
 }
 
+function resolveLocalM1Rows(status: StoreV5CheckPayload | null) {
+  return status?.rawDirectM1?.rowsCount
+    ?? status?.rawDirectM1?.rawRowsCount
+    ?? status?.directM1?.rowsCount
+    ?? status?.directM1?.trueM1RowsCount
+    ?? null
+}
+
+function resolveLocalM1UpdatedAt(status: StoreV5CheckPayload | null) {
+  return status?.rawDirectM1?.lastImportAt ?? status?.directM1?.lastImportAt ?? null
+}
+
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
@@ -214,6 +292,8 @@ function formatStoreOperationLine(
   fallback: string,
 ) {
   if (pullJob) {
+    if (pullJob.progressLabel) return pullJob.progressLabel
+
     const batchSize = pullJob.fetchChunkSize ?? pullJob.writeBatchSize ?? 200000
     if (pullJob.phase === 'probing' || pullJob.phase === 'queued' || pullJob.phase === 'fetching') {
       return `开始读取 ${formatCountWithWan(batchSize)}，已读取 ${formatCountWithWan(pullJob.rowsFetched)}`
@@ -235,6 +315,9 @@ function formatStoreOperationLine(
   if (checkJob) {
     const batchSize = checkJob.chunkSize ?? 200000
     if (checkJob.phase === 'fetching' || checkJob.phase === 'queued') {
+      if (checkJob.currentBatchIndex && checkJob.currentBatchRequested) {
+        return `正在读取第 ${checkJob.currentBatchIndex} 批：计划 ${formatCountWithWan(checkJob.currentBatchRequested)}，已读取 ${formatCountWithWan(checkJob.mt5RowsCount)}`
+      }
       return `开始读取 ${formatCountWithWan(batchSize)}，已读取 ${formatCountWithWan(checkJob.mt5RowsCount)}`
     }
     if (checkJob.phase === 'validating') return '已经读完，开始检查错误字段'
@@ -253,6 +336,12 @@ function resolveStoreOperationProgress(
   if (pullJob) {
     if (pullJob.phase === 'completed') return { hasEstimate: true, width: 100 }
     if (pullJob.phase === 'failed' || pullJob.phase === 'cancelled') return null
+    if (typeof pullJob.progressPercent === 'number') {
+      return {
+        hasEstimate: true,
+        width: Math.max(1, Math.min(99, Math.round(pullJob.progressPercent))),
+      }
+    }
     if (pullJob.phase === 'writing') {
       const written = typeof pullJob.rowsWritten === 'number' ? pullJob.rowsWritten : 0
       const total = typeof pullJob.trueM1RowsCount === 'number' && pullJob.trueM1RowsCount > 0 ? pullJob.trueM1RowsCount : null
@@ -324,6 +413,7 @@ export function RightDrawer({
   onClose,
   onResize,
   onToggle,
+  onOpenChart,
 }: RightDrawerProps) {
   const initialSnapshot = useMemo(getInitialSymbolSnapshot, [])
   const [query, setQuery] = useState('')
@@ -341,9 +431,15 @@ export function RightDrawer({
     () => readPersistedM1CheckResult(initialSnapshot?.selectedSymbol ?? ''),
     [initialSnapshot?.selectedSymbol],
   )
+  const initialPersistedStoreV5Status = useMemo(
+    () => readPersistedStoreV5Status(initialSnapshot?.selectedSymbol ?? ''),
+    [initialSnapshot?.selectedSymbol],
+  )
   const [storeCheck, setStoreCheck] = useState<StoreV5CheckPayload | null>(() => initialPersistedM1Check?.payload ?? null)
   const [mt5M1LastCheckedAt, setMt5M1LastCheckedAt] = useState(() => initialPersistedM1Check?.checkedAt ?? '')
-  const [localStoreStatus, setLocalStoreStatus] = useState<StoreV5CheckPayload | null>(null)
+  const [localStoreStatus, setLocalStoreStatus] = useState<StoreV5CheckPayload | null>(() => initialPersistedStoreV5Status?.payload ?? null)
+  const [storeV5ListSymbols, setStoreV5ListSymbols] = useState<string[]>(readStoreV5ListSymbols)
+  const [selectedStoreTableKey, setSelectedStoreTableKey] = useState('')
   const [storeCheckLoading, setStoreCheckLoading] = useState(false)
   const [storeCheckError, setStoreCheckError] = useState('')
   const [storeActionStatus, setStoreActionStatus] = useState('')
@@ -388,7 +484,24 @@ export function RightDrawer({
       updated: cell.dirty ? '需重建' : formatStoreUpdated(cell.lastAggregateAt),
     }))
   }, [localStoreStatus])
-
+  const visibleStoreTableRows = useMemo<StoreTableRow[]>(() => {
+    const rows: StoreTableRow[] = []
+    if (selectedRow?.symbol && storeV5ListSymbols.includes(selectedRow.symbol)) {
+      const rowsCount = resolveLocalM1Rows(localStoreStatus)
+      rows.push({
+        period: 'M1',
+        count: formatCount(rowsCount),
+        updated: formatCheckTime(resolveLocalM1UpdatedAt(localStoreStatus)),
+        kind: 'm1',
+        rowsCount,
+      })
+    }
+    return [...rows, ...visibleStoreAggregateRows.map((row) => ({
+      ...row,
+      kind: 'aggregate' as const,
+      rowsCount: Number(row.count.replace(/,/g, '')),
+    }))]
+  }, [localStoreStatus, selectedRow?.symbol, storeV5ListSymbols, visibleStoreAggregateRows])
   const storeOperationLine = useMemo(
     () => formatStoreOperationLine(pullProgress, m1CheckJob, storeActionStatus),
     [m1CheckJob, pullProgress, storeActionStatus],
@@ -397,6 +510,8 @@ export function RightDrawer({
     () => resolveStoreOperationProgress(pullProgress, m1CheckJob),
     [m1CheckJob, pullProgress],
   )
+  const isCheckingMt5M1 = storeCheckLoading && m1CheckJob != null
+  const isPullingStoreV5 = storeCheckLoading && (pullProgress != null || storeActionStatus.includes('拉取'))
 
   async function loadSymbols(refresh: boolean) {
     setLoading(true)
@@ -420,8 +535,10 @@ export function RightDrawer({
       setSymbols(rows)
       setSelectedSymbol(nextSelectedSymbol)
       const persistedCheck = readPersistedM1CheckResult(nextSelectedSymbol)
+      const persistedStoreStatus = readPersistedStoreV5Status(nextSelectedSymbol)
       setStoreCheck(persistedCheck?.payload ?? null)
       setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')
+      setLocalStoreStatus(persistedStoreStatus?.payload ?? null)
       setStatus(nextStatus)
       saveSymbolSnapshot({
         selectedSymbol: nextSelectedSymbol,
@@ -578,10 +695,11 @@ export function RightDrawer({
 
   function handleSelectSymbol(symbol: string) {
     const persistedCheck = readPersistedM1CheckResult(symbol)
+    const persistedStoreStatus = readPersistedStoreV5Status(symbol)
     setSelectedSymbol(symbol)
     setStoreCheck(persistedCheck?.payload ?? null)
     setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')
-    setLocalStoreStatus(null)
+    setLocalStoreStatus(persistedStoreStatus?.payload ?? null)
     setStoreCheckError('')
     setStoreActionStatus('')
     if (symbols.length) {
@@ -800,6 +918,7 @@ export function RightDrawer({
     try {
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
+      savePersistedStoreV5Status(symbol, payload)
       setStoreActionStatus('StoreV5 仓库状态已刷新。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -849,6 +968,7 @@ export function RightDrawer({
       }
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
+      savePersistedStoreV5Status(symbol, payload)
       setStoreActionStatus('拉取完成，仓库状态已刷新。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -880,6 +1000,7 @@ export function RightDrawer({
       await deleteStoreV5Symbol(symbol)
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
+      savePersistedStoreV5Status(symbol, payload)
       setStoreActionStatus('本地 StoreV5 数据已删除。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -888,6 +1009,49 @@ export function RightDrawer({
     } finally {
       setStoreCheckLoading(false)
     }
+  }
+
+  async function handleCleanLocalM1() {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    setStoreCheckLoading(true)
+    setStoreCheckError('')
+    setPullProgress(null)
+    setStoreActionStatus('正在清理无效 1 分钟数据...')
+    try {
+      await cleanStoreV5DirectM1(symbol)
+      const payload = await fetchStoreV5Status(symbol)
+      setLocalStoreStatus(payload)
+      savePersistedStoreV5Status(symbol, payload)
+      setStoreActionStatus('本地 M1 已清理，并与真实 M1 数据对齐。')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setStoreCheckError(message)
+      setStoreActionStatus('')
+    } finally {
+      setStoreCheckLoading(false)
+    }
+  }
+
+  function handleAddM1ToStoreList() {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    setStoreV5ListSymbols((current) => {
+      const next = current.includes(symbol) ? current : [...current, symbol]
+      saveStoreV5ListSymbols(next)
+      return next
+    })
+  }
+
+  function handleOpenStoreTableRow(row: StoreTableRow) {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    setSelectedStoreTableKey(`${row.kind}-${row.period}`)
+    onOpenChart?.({
+      symbol,
+      period: row.period === 'M1' ? '1m' : row.period,
+      limit: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : undefined,
+    })
   }
 
   async function handleAggregateStore() {
@@ -901,6 +1065,7 @@ export function RightDrawer({
       await aggregateStoreV5(symbol)
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
+      savePersistedStoreV5Status(symbol, payload)
       setStoreActionStatus('聚合完成，仓库状态已刷新。')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -1168,11 +1333,15 @@ export function RightDrawer({
 
                     <div className="ff-store-direct-actions">
                       <button disabled={storeCheckLoading} onClick={handleCheckMt5M1Staged} type="button">
-                        {storeCheckLoading ? '检查中' : '检查 MT5 数据'}
+                        {isCheckingMt5M1 ? '检查中' : '检查 MT5 数据'}
                       </button>
                       <button disabled={storeCheckLoading} onClick={handleRefreshStoreStatus} type="button">检查本地仓库</button>
-                      <button disabled={storeCheckLoading} onClick={handlePullStore} type="button">拉取</button>
+                      <button disabled={storeCheckLoading} onClick={handlePullStore} type="button">
+                        {isPullingStoreV5 ? '拉取中' : '拉取'}
+                      </button>
                       <button disabled={storeCheckLoading} onClick={handleDeleteLocalStore} type="button">删除本地数据</button>
+                      <button disabled={storeCheckLoading} onClick={handleCleanLocalM1} type="button">清理无效 M1</button>
+                      <button disabled={storeCheckLoading} onClick={handleAddM1ToStoreList} type="button">加入列表</button>
                     </div>
                     <table className="ff-store-detail-table ff-store-aggregate-table">
                       <thead>
@@ -1184,8 +1353,12 @@ export function RightDrawer({
                         </tr>
                       </thead>
                       <tbody>
-                        {visibleStoreAggregateRows.map((row) => (
-                          <tr key={row.period}>
+                        {visibleStoreTableRows.map((row) => (
+                          <tr
+                            data-selected={selectedStoreTableKey === `${row.kind}-${row.period}`}
+                            key={`${row.kind}-${row.period}`}
+                            onClick={() => handleOpenStoreTableRow(row)}
+                          >
                             <td>
                               <strong>{row.period}</strong>
                             </td>
@@ -1197,7 +1370,7 @@ export function RightDrawer({
                             </td>
                           </tr>
                         ))}
-                        {!visibleStoreAggregateRows.length && (
+                        {!visibleStoreTableRows.length && (
                           <tr>
                             <td className="ff-symbol-table__empty" colSpan={4}>
                               暂无 StoreV5 聚合周期。请先拉取 M1，再执行聚合。

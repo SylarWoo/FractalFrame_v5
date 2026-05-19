@@ -44,7 +44,8 @@ def clean_raw_m1_to_direct_store_v5(
     validation = validate_true_m1_rows_v1(
         raw_rows,
         anchor_hour_utc=anchor_hour_utc,
-        require_utc_anchor=True,
+        strict_continuous=False,
+        require_utc_anchor=False,
         require_first_hour_complete=True,
     )
     if not validation.get("ok"):

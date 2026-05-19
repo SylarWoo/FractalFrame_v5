@@ -18,21 +18,16 @@ export async function loadStoreV5KLineData(options: {
 }): Promise<KLineData[]> {
   const timeframe = normalizeTimeframe(options.period)
   const mode = timeframe === 'M1' ? 'direct' : 'aggregated'
-  let payload
-  try {
-    payload = await queryStoreV5Ohlcv({
-      symbol: options.symbol,
-      timeframe,
-      mode,
-      baseTimeframe: mode === 'aggregated' ? 'M1' : undefined,
-      anchor: mode === 'aggregated' ? 'UTC2200' : undefined,
-      timeFrom: options.timeFrom,
-      timeTo: options.timeTo,
-      limit: options.limit ?? 1000,
-    })
-  } catch {
-    return []
-  }
+  const payload = await queryStoreV5Ohlcv({
+    symbol: options.symbol,
+    timeframe,
+    mode,
+    baseTimeframe: mode === 'aggregated' ? 'M1' : undefined,
+    anchor: mode === 'aggregated' ? 'UTC2200' : undefined,
+    timeFrom: options.timeFrom,
+    timeTo: options.timeTo,
+    limit: options.limit ?? 1000,
+  })
 
   return payload.rows.map((row) => ({
     timestamp: Number(row.time) * 1000,

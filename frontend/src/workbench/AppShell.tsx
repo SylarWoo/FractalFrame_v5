@@ -21,6 +21,10 @@ function getInitialDrawerWidth() {
 export function AppShell() {
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false)
   const [rightDrawerWidth, setRightDrawerWidth] = useState(getInitialDrawerWidth)
+  const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; limit?: number }>({
+    symbol: 'XAUUSDm',
+    period: '1m',
+  })
 
   useEffect(() => {
     const resize = () => window.dispatchEvent(new Event('resize'))
@@ -51,11 +55,12 @@ export function AppShell() {
           ['--ff-right-drawer-width' as string]: `${rightDrawerWidth}px`,
         }}
       >
-        <ChartCoreHost period="1m" symbol="XAUUSDm" />
+        <ChartCoreHost limit={chartTarget.limit} period={chartTarget.period} symbol={chartTarget.symbol} />
         <RightDrawer
           drawerWidth={rightDrawerWidth}
           open={rightDrawerOpen}
           onClose={() => setRightDrawerOpen(false)}
+          onOpenChart={setChartTarget}
           onResize={setRightDrawerWidth}
           onToggle={() => setRightDrawerOpen((current) => !current)}
         />

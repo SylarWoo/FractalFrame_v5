@@ -115,6 +115,9 @@ export type Mt5M1CheckJobPayload = {
   chunkSize?: number
   maxCount?: number | null
   chunksCompleted?: number
+  currentBatchIndex?: number
+  currentBatchRequested?: number
+  currentBatchFetched?: number
   mt5RowsCount?: number
   progressPercent?: number | null
   firstTimeText?: string | null
@@ -142,8 +145,13 @@ export type StoreV5PullJobPayload = {
   status: string
   error?: string
   currentAction?: string
+  progressPercent?: number | null
+  progressLabel?: string
+  detailMessage?: string
   rowsFetched?: number
   rowsWritten?: number
+  rawRowsCount?: number
+  duplicateRows?: number
   trueM1RowsCount?: number
   discardedBeforeTrueM1RowsCount?: number
   gapCount?: number
@@ -151,10 +159,14 @@ export type StoreV5PullJobPayload = {
   chunksCompleted?: number
   fetchChunkSize?: number
   maxCount?: number | null
+  currentBatchIndex?: number
+  currentBatchRequested?: number
+  currentBatchFetched?: number
   probedRowsCount?: number
   writeBatchStart?: number
   writeBatchRows?: number
   writeBatchWritten?: number
+  pendingWriteRows?: number
   writeBatchSize?: number
   cleanupStatus?: string
   cleanupDeletedRows?: number
@@ -490,7 +502,7 @@ export async function queryStoreV5Ohlcv(options: {
     { headers: { Accept: 'application/json' }, cache: 'no-store' },
   )
   const payload = (await response.json()) as StoreV5QueryPayload
-  if (!response.ok) {
+  if (!response.ok || payload.ok !== true) {
     throw new Error(payload.error || `HTTP ${response.status}`)
   }
   return payload
