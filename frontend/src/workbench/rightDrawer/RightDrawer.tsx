@@ -1396,10 +1396,6 @@ export function RightDrawer({
       setStoreCheckError('请至少勾选一个聚合周期。')
       return
     }
-    if (!canAggregateStoreV5) {
-      setStoreCheckError('请先点“清理无效 M1”，生成 direct M1 后再聚合。')
-      return
-    }
     setStoreCheckLoading(true)
     setStoreCheckError('')
     setPullProgress(null)
@@ -1417,6 +1413,14 @@ export function RightDrawer({
     })
     setStoreActionStatus('正在从 M1 重建聚合周期...')
     try {
+      if (!canAggregateStoreV5) {
+        setStoreActionStatus('正在先清理无效 M1，生成 direct M1...')
+        await cleanStoreV5DirectM1(symbol)
+        const cleanedStatus = await fetchStoreV5Status(symbol)
+        setLocalStoreStatus(cleanedStatus)
+        savePersistedStoreV5Status(symbol, cleanedStatus, new Date().toISOString(), storePanelPersistenceEnabled)
+        setStoreActionStatus('direct M1 已生成，开始聚合...')
+      }
       const started = await startStoreV5AggregateJob(symbol, periods)
       activeAggregateJobRef.current = started.jobId
       setAggregateProgress(started)
@@ -1793,9 +1797,9 @@ export function RightDrawer({
                       </button>
                       <button disabled={storeCheckLoading || selectedAggregatePeriods.length === 0} onClick={handleDeleteSelectedAggregates} type="button">删除</button>
                       <button
-                        disabled={storeCheckLoading || selectedAggregatePeriods.length === 0 || !canAggregateStoreV5}
+                        disabled={storeCheckLoading || selectedAggregatePeriods.length === 0}
                         onClick={handleAggregateStore}
-                        title={!canAggregateStoreV5 ? '请先清理无效 M1，生成 direct M1' : undefined}
+                        title={!canAggregateStoreV5 ? '会先自动清理无效 M1，再聚合' : undefined}
                         type="button"
                       >
                         聚合

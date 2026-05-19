@@ -1,5 +1,6 @@
 import type { KLineData } from 'klinecharts'
 import { queryStoreV5Ohlcv } from '../workbench/rightDrawer/mt5SymbolsApi'
+import type { StoreV5QueryPayload } from '../workbench/rightDrawer/mt5SymbolsApi'
 
 function normalizeTimeframe(period: string) {
   const value = period.trim().toUpperCase()
@@ -18,16 +19,31 @@ export async function loadStoreV5KLineData(options: {
 }): Promise<KLineData[]> {
   const timeframe = normalizeTimeframe(options.period)
   const mode = timeframe === 'M1' ? 'direct' : 'aggregated'
-  const payload = await queryStoreV5Ohlcv({
-    symbol: options.symbol,
-    timeframe,
-    mode,
-    baseTimeframe: mode === 'aggregated' ? 'M1' : undefined,
-    anchor: mode === 'aggregated' ? 'UTC2200' : undefined,
-    timeFrom: options.timeFrom,
-    timeTo: options.timeTo,
-    limit: options.limit ?? 1000,
-  })
+  let payload: StoreV5QueryPayload
+  try {
+    payload = await queryStoreV5Ohlcv({
+      symbol: options.symbol,
+      timeframe,
+      mode,
+      baseTimeframe: mode === 'aggregated' ? 'M1' : undefined,
+      anchor: mode === 'aggregated' ? 'UTC2200' : undefined,
+      timeFrom: options.timeFrom,
+      timeTo: options.timeTo,
+      limit: options.limit ?? 1000,
+    })
+  } catch (error) {
+    if (timeframe !== 'M1' || !String(error instanceof Error ? error.message : error).includes('dataset_not_found')) {
+      throw error
+    }
+    payload = await queryStoreV5Ohlcv({
+      symbol: options.symbol,
+      timeframe,
+      mode: 'raw_direct',
+      timeFrom: options.timeFrom,
+      timeTo: options.timeTo,
+      limit: options.limit ?? 1000,
+    })
+  }
 
   return payload.rows.map((row) => ({
     timestamp: Number(row.time) * 1000,
