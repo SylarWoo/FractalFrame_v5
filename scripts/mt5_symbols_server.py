@@ -2491,6 +2491,8 @@ def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str
             results=results,
         )
         payload = aggregate_store_v5(symbol, timeframes=timeframes, rebuild=rebuild, store_root=store_root)
+        if payload.get("ok") is not True:
+            raise RuntimeError(str(payload.get("error") or payload.get("status") or "store_v5_aggregate_failed"))
         results.update(payload.get("results") or {})
         for timeframe in timeframes:
             target_result = results.get(timeframe) or {}

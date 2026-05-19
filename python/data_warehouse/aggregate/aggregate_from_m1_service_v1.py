@@ -115,6 +115,15 @@ def aggregate_from_m1_store_v5(
     direct_key = dataset_key(provider="mt5", symbol=symbol, mode="direct", timeframe="M1")
     direct_cell = manifest.get("datasets", {}).get(direct_key)
     if not _direct_ready(direct_cell):
+        raw_key = dataset_key(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1")
+        raw_cell = manifest.get("datasets", {}).get(raw_key)
+        if raw_cell and not direct_cell:
+            return {
+                "ok": False,
+                "error": "direct_m1_missing_clean_raw_m1_first",
+                "status": "raw_m1_ready_clean_pending",
+                "symbol": symbol,
+            }
         return {"ok": False, "error": "direct_m1_integrity_not_ready", "symbol": symbol}
 
     results: dict[str, Any] = {}

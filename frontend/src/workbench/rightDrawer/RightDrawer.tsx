@@ -676,6 +676,8 @@ export function RightDrawer({
   )
   const isCheckingMt5M1 = storeCheckLoading && m1CheckJob != null
   const isPullingStoreV5 = storeCheckLoading && (pullProgress != null || storeActionStatus.includes('拉取'))
+  const canAggregateStoreV5 = localStoreStatus?.directM1?.status !== 'raw_m1_ready_clean_pending'
+    && localStoreStatus?.directM1?.datasetKey?.includes(':direct:M1') === true
 
   function handleToggleStorePanelPersistence(enabled: boolean) {
     setStorePanelPersistenceEnabled(enabled)
@@ -1299,6 +1301,12 @@ export function RightDrawer({
     ))
   }
 
+  function toggleAllAggregatePeriods() {
+    setSelectedAggregatePeriods((current) => (
+      current.length === storeTableAggregatePeriods.length ? [] : [...storeTableAggregatePeriods]
+    ))
+  }
+
   function waitStoreV5AggregateJobBySse(jobId: string) {
     return new Promise<StoreV5AggregateJobPayload>((resolve, reject) => {
       let settled = false
@@ -1386,6 +1394,10 @@ export function RightDrawer({
     const periods = [...selectedAggregatePeriods]
     if (!selectedAggregatePeriods.length) {
       setStoreCheckError('请至少勾选一个聚合周期。')
+      return
+    }
+    if (!canAggregateStoreV5) {
+      setStoreCheckError('请先点“清理无效 M1”，生成 direct M1 后再聚合。')
       return
     }
     setStoreCheckLoading(true)
@@ -1762,11 +1774,32 @@ export function RightDrawer({
                     </table>
 
                     <div className="ff-store-direct-actions">
+                      <button
+                        data-state={
+                          selectedAggregatePeriods.length === 0
+                            ? 'none'
+                            : selectedAggregatePeriods.length === storeTableAggregatePeriods.length
+                              ? 'all'
+                              : 'mixed'
+                        }
+                        disabled={storeCheckLoading}
+                        onClick={toggleAllAggregatePeriods}
+                        type="button"
+                      >
+                        {selectedAggregatePeriods.length === storeTableAggregatePeriods.length ? '全不选' : '全选'}
+                      </button>
                       <button disabled={storeCheckLoading} onClick={handleRefreshStoreStatus} type="button">
                         {storeCheckLoading ? '刷新中' : '刷新仓库'}
                       </button>
                       <button disabled={storeCheckLoading || selectedAggregatePeriods.length === 0} onClick={handleDeleteSelectedAggregates} type="button">删除</button>
-                      <button disabled={storeCheckLoading || selectedAggregatePeriods.length === 0} onClick={handleAggregateStore} type="button">聚合</button>
+                      <button
+                        disabled={storeCheckLoading || selectedAggregatePeriods.length === 0 || !canAggregateStoreV5}
+                        onClick={handleAggregateStore}
+                        title={!canAggregateStoreV5 ? '请先清理无效 M1，生成 direct M1' : undefined}
+                        type="button"
+                      >
+                        聚合
+                      </button>
                     </div>
 
                     <div className="ff-chart-jump-controls">
