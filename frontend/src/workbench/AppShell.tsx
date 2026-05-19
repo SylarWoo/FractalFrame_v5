@@ -1,11 +1,64 @@
 import { useEffect, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { ChartCoreHost } from './chart/ChartCoreHost'
 import type { ChartLoadState } from './chart/ChartCoreHost'
+import {
+  LEFT_RAIL_BRUSH_SVGREPO_ICON_48,
+  LEFT_RAIL_CURSOR_ARROW_SVGREPO_ICON_48,
+  LEFT_RAIL_DRAWING_FAVORITES_STAR_SVGREPO_48,
+  LEFT_RAIL_FIB_RETRACEMENT_SVGREPO_ICON_48,
+  LEFT_RAIL_FIVE_POINT_PATTERN_SVGREPO_ICON_48,
+  LEFT_RAIL_HIDE_DRAWINGS_SVGREPO_ICON_48,
+  LEFT_RAIL_LOCK_DRAWINGS_SVGREPO_ICON_48,
+  LEFT_RAIL_LONG_POSITION_SVGREPO_ICON_48,
+  LEFT_RAIL_MAGNET_STRONG_SVGREPO_ICON_48,
+  LEFT_RAIL_MEASURE_RULER_SVGREPO_ICON_48,
+  LEFT_RAIL_RAY_SVGREPO_ICON_48,
+  LEFT_RAIL_REMOVE_SELECTED_DRAWINGS_SVGREPO_ICON_48,
+  LEFT_RAIL_STAY_IN_DRAWING_MODE_SVGREPO_ICON_48,
+  LEFT_RAIL_STICKER_EMOJI_SVGREPO_ICON_48,
+  LEFT_RAIL_TEXT_SVGREPO_ICON_48,
+  LEFT_RAIL_TREND_LINE_SVGREPO_ICON_48,
+  LEFT_RAIL_ZOOM_IN_SVGREPO_ICON_48,
+  LEFT_RAIL_ZOOM_OUT_SVGREPO_ICON_48,
+} from './leftRailV4Icons'
 import { RightDrawer } from './rightDrawer/RightDrawer'
 import { TopBar } from './topbar/TopBar'
 import './AppShell.css'
 
 const drawerWidthStorageKey = 'fractalframe:rightWidgetDrawerWidthPx:v1'
+const bottomDrawerOpenStorageKey = 'fractalframe:bottomDrawerOpen:v1'
+const bottomDrawerHeightStorageKey = 'fractalframe:bottomDrawerHeightPx:v1'
+
+const leftToolbarItems = [
+  { type: 'button', label: 'Cursor', svg: LEFT_RAIL_CURSOR_ARROW_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Trend line', svg: LEFT_RAIL_TREND_LINE_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Ray', svg: LEFT_RAIL_RAY_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Fib retracement', svg: LEFT_RAIL_FIB_RETRACEMENT_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Brush', svg: LEFT_RAIL_BRUSH_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Text', svg: LEFT_RAIL_TEXT_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Five point pattern', svg: LEFT_RAIL_FIVE_POINT_PATTERN_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Long position', svg: LEFT_RAIL_LONG_POSITION_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Sticker', svg: LEFT_RAIL_STICKER_EMOJI_SVGREPO_ICON_48 },
+  { type: 'divider' },
+  { type: 'button', label: 'Measure', svg: LEFT_RAIL_MEASURE_RULER_SVGREPO_ICON_48 },
+  { type: 'divider' },
+  { type: 'button', label: 'Magnet', svg: LEFT_RAIL_MAGNET_STRONG_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Stay in drawing mode', svg: LEFT_RAIL_STAY_IN_DRAWING_MODE_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Lock drawings', svg: LEFT_RAIL_LOCK_DRAWINGS_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Hide drawings', svg: LEFT_RAIL_HIDE_DRAWINGS_SVGREPO_ICON_48 },
+  { type: 'divider' },
+  { type: 'button', label: 'Zoom in', svg: LEFT_RAIL_ZOOM_IN_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Zoom out', svg: LEFT_RAIL_ZOOM_OUT_SVGREPO_ICON_48 },
+  { type: 'button', label: 'Remove drawings', svg: LEFT_RAIL_REMOVE_SELECTED_DRAWINGS_SVGREPO_ICON_48 },
+] as const
+
+const bottomPanels = [
+  { id: 'strategyTester', label: 'ST', title: 'Strategy Tester', placeholder: 'Strategy tester workspace' },
+  { id: 'logs', label: 'Logs', title: 'Logs', placeholder: 'Runtime logs workspace' },
+  { id: 'terminal', label: 'Term', title: 'Terminal', placeholder: 'Terminal workspace' },
+  { id: 'notes', label: 'Notes', title: 'Notes', placeholder: 'Notes workspace' },
+] as const
 
 function getInitialDrawerWidth() {
   const fallbackWidth = 280
@@ -19,9 +72,33 @@ function getInitialDrawerWidth() {
   }
 }
 
+function getInitialBottomDrawerOpen() {
+  try {
+    return window.localStorage.getItem(bottomDrawerOpenStorageKey) === '1'
+  } catch {
+    return false
+  }
+}
+
+function getInitialBottomDrawerHeight() {
+  const fallbackHeight = 300
+
+  try {
+    const raw = window.localStorage.getItem(bottomDrawerHeightStorageKey)
+    const value = raw == null ? fallbackHeight : Number(raw)
+    return Math.max(220, Math.min(520, Math.round(value)))
+  } catch {
+    return fallbackHeight
+  }
+}
+
 export function AppShell() {
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false)
   const [rightDrawerWidth, setRightDrawerWidth] = useState(getInitialDrawerWidth)
+  const [bottomDrawerOpen, setBottomDrawerOpen] = useState(getInitialBottomDrawerOpen)
+  const [bottomDrawerHeight, setBottomDrawerHeight] = useState(getInitialBottomDrawerHeight)
+  const [activeBottomPanel, setActiveBottomPanel] = useState<(typeof bottomPanels)[number]['id']>('strategyTester')
+  const [activeLeftTool, setActiveLeftTool] = useState('Cursor')
   const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null }>({
     symbol: 'XAUUSDm',
     period: '1m',
@@ -29,6 +106,8 @@ export function AppShell() {
   const [chartJump, setChartJump] = useState<{ id: number; timestamp?: number } | null>(null)
   const [chartStepLoad, setChartStepLoad] = useState<{ direction: 'left' | 'right'; id: number } | null>(null)
   const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
+
+  const currentBottomPanel = bottomPanels.find((panel) => panel.id === activeBottomPanel) ?? bottomPanels[0]
 
   useEffect(() => {
     const resize = () => window.dispatchEvent(new Event('resize'))
@@ -38,7 +117,7 @@ export function AppShell() {
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [rightDrawerOpen])
+  }, [bottomDrawerHeight, bottomDrawerOpen, rightDrawerOpen])
 
   useEffect(() => {
     try {
@@ -48,9 +127,57 @@ export function AppShell() {
     }
   }, [rightDrawerWidth])
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(bottomDrawerOpenStorageKey, bottomDrawerOpen ? '1' : '0')
+    } catch {
+      // Bottom drawer persistence is best-effort only.
+    }
+  }, [bottomDrawerOpen])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(bottomDrawerHeightStorageKey, String(bottomDrawerHeight))
+    } catch {
+      // Bottom drawer height persistence is best-effort only.
+    }
+  }, [bottomDrawerHeight])
+
+  const handleBottomResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+
+    const startY = event.clientY
+    const startHeight = bottomDrawerHeight
+    const pointerId = event.pointerId
+    const target = event.currentTarget
+
+    target.setPointerCapture(pointerId)
+    document.body.dataset.fractalframeBottomPanelResizing = 'true'
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextHeight = startHeight + (startY - moveEvent.clientY)
+      setBottomDrawerHeight(Math.max(220, Math.min(520, Math.round(nextHeight))))
+    }
+
+    const handlePointerUp = () => {
+      document.body.removeAttribute('data-fractalframe-bottom-panel-resizing')
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+
+      try {
+        target.releasePointerCapture(pointerId)
+      } catch {
+        // Capture can already be gone if the pointer left the document.
+      }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp, { once: true })
+  }
+
   return (
     <div className="ff-app-shell">
-      <TopBar />
+      <TopBar onOpenChart={setChartTarget} />
 
       <main
         className="ff-app-main"
@@ -59,14 +186,102 @@ export function AppShell() {
           ['--ff-right-drawer-width' as string]: `${rightDrawerWidth}px`,
         }}
       >
-        <ChartCoreHost
-          jump={chartJump}
-          onLoadStateChange={setChartLoadState}
-          period={chartTarget.period}
-          stepLoad={chartStepLoad}
-          symbol={chartTarget.symbol}
-          totalRows={chartTarget.totalRows}
-        />
+        <aside className="ff-left-rail" aria-label="Drawing toolbar">
+          {leftToolbarItems.map((item, index) => {
+            if (item.type === 'divider') {
+              return <div className="ff-left-rail__divider" key={`divider-${index}`} />
+            }
+
+            return (
+              <button
+                className="ff-left-tool-btn"
+                data-active={activeLeftTool === item.label}
+                key={item.label}
+                onClick={() => setActiveLeftTool(item.label)}
+                aria-pressed={activeLeftTool === item.label}
+                title={item.label}
+                type="button"
+                dangerouslySetInnerHTML={{ __html: item.svg }}
+              />
+            )
+          })}
+          <button
+            className="ff-left-tool-btn ff-left-rail__favorite"
+            title="Favorites"
+            type="button"
+            dangerouslySetInnerHTML={{ __html: LEFT_RAIL_DRAWING_FAVORITES_STAR_SVGREPO_48 }}
+          />
+        </aside>
+
+        <section
+          className="ff-chart-workspace"
+          data-bottom-drawer-open={bottomDrawerOpen}
+          style={{
+            ['--ff-bottom-drawer-height' as string]: bottomDrawerOpen ? `${bottomDrawerHeight}px` : '40px',
+          }}
+        >
+          <ChartCoreHost
+            jump={chartJump}
+            onLoadStateChange={setChartLoadState}
+            period={chartTarget.period}
+            stepLoad={chartStepLoad}
+            symbol={chartTarget.symbol}
+            totalRows={chartTarget.totalRows}
+          />
+
+          <section className="ff-bottom-shell" aria-label="Bottom workspace drawer">
+            <div className="ff-bottom-toggle-row">
+              <div className="ff-bottom-toggle-row__panel-toggles" role="tablist" aria-label="Bottom drawer tabs">
+                {bottomPanels.map((panel) => (
+                  <button
+                    aria-selected={activeBottomPanel === panel.id && bottomDrawerOpen}
+                    className="ff-bottom-panel-toggle-btn"
+                    data-active={activeBottomPanel === panel.id && bottomDrawerOpen ? 'true' : 'false'}
+                    key={panel.id}
+                    onClick={() => {
+                      setActiveBottomPanel(panel.id)
+                      setBottomDrawerOpen(true)
+                    }}
+                    role="tab"
+                    type="button"
+                  >
+                    {panel.label}
+                  </button>
+                ))}
+              </div>
+              <div className="ff-workspace-bottom-status">
+                {chartTarget.symbol} {chartTarget.period}
+              </div>
+            </div>
+
+            <section className="ff-bottom-panel" data-open={bottomDrawerOpen ? 'true' : 'false'}>
+              {bottomDrawerOpen && (
+                <div
+                  aria-label="Resize bottom panel"
+                  className="ff-bottom-panel__resize-handle"
+                  onPointerDown={handleBottomResizePointerDown}
+                  role="separator"
+                  tabIndex={0}
+                />
+              )}
+              <header className="ff-bottom-panel__header">
+                <span className="ff-bottom-panel__title">{currentBottomPanel.title}</span>
+                <button
+                  aria-label="Close bottom panel"
+                  className="ff-bottom-panel__close"
+                  onClick={() => setBottomDrawerOpen(false)}
+                  type="button"
+                >
+                  x
+                </button>
+              </header>
+              <div className="ff-bottom-panel__body">
+                <p className="ff-bottom-panel__placeholder">{currentBottomPanel.placeholder}</p>
+              </div>
+            </section>
+          </section>
+        </section>
+
         <RightDrawer
           chartLoadState={chartLoadState}
           drawerWidth={rightDrawerWidth}

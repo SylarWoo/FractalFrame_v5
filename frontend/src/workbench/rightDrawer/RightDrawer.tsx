@@ -39,6 +39,15 @@ type RightDrawerProps = {
 const minDrawerWidth = 220
 const maxDrawerWidth = 900
 const splitHeightStorageKey = 'fractalframe:mt5ImportCenterTopPaneHeightPx:v1'
+const watchlistTableHeightStorageKey = 'fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1'
+const watchlistSymbolsStorageKey = 'fractalframe:mt5ImportCenterWatchlistSymbols:v1'
+const shortcutMenuEnabledStorageKey = 'fractalframe:mt5ImportCenterShortcutMenuEnabled:v1'
+const shortcutMenuPeriodsStorageKey = 'fractalframe:mt5ImportCenterShortcutMenuPeriods:v1'
+const sharedSelectionStorageKey = 'fractalframe:mt5ImportCenterSharedSelection:v1'
+const shortcutMenuChangedEvent = 'fractalframe:mt5ImportCenterShortcutMenuChanged'
+const watchlistChangedEvent = 'fractalframe:mt5ImportCenterWatchlistChanged'
+const storeV5StatusChangedEvent = 'fractalframe:mt5ImportCenterStoreV5StatusChanged'
+const sharedSelectionChangedEvent = 'fractalframe:mt5ImportCenterSharedSelectionChanged'
 const columnWidthsStorageKey = 'fractalframe:mt5ImportCenterColumnWidthsPx:v1'
 const symbolSnapshotStorageKey = 'fractalframe:mt5ImportCenterSymbolSnapshot:v1'
 const mt5M1CheckResultsStorageKey = 'fractalframe:mt5ImportCenterM1CheckResults:v1'
@@ -96,6 +105,11 @@ type StoreTableRow = {
   rowsCount?: number | null
 }
 
+type SharedSelection = {
+  symbol: string
+  period: string
+}
+
 const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
   { key: 'details', label: '细节' },
   { key: 'store', label: '仓库' },
@@ -114,6 +128,18 @@ function getInitialTopPaneHeight() {
     const raw = window.localStorage.getItem(splitHeightStorageKey)
     const value = raw == null ? fallbackHeight : Number(raw)
     return Math.max(180, Math.min(760, Math.round(value)))
+  } catch {
+    return fallbackHeight
+  }
+}
+
+function getInitialWatchlistTableHeight() {
+  const fallbackHeight = 228
+
+  try {
+    const raw = window.localStorage.getItem(watchlistTableHeightStorageKey)
+    const value = raw == null ? fallbackHeight : Number(raw)
+    return Math.max(96, Math.min(1200, Math.round(value)))
   } catch {
     return fallbackHeight
   }
@@ -249,6 +275,7 @@ function savePersistedStoreV5Status(symbol: string, payload: StoreV5CheckPayload
         [symbol]: { checkedAt, payload },
       }),
     )
+    window.dispatchEvent(new Event(storeV5StatusChangedEvent))
   } catch {
     // Store status persistence is best-effort only.
   }
@@ -272,6 +299,79 @@ function saveStoreV5ListSymbols(symbols: string[], enabled = true) {
   } catch {
     // Store list persistence is best-effort only.
   }
+}
+
+function readWatchlistSymbols(): string[] {
+  try {
+    const raw = window.localStorage.getItem(watchlistSymbolsStorageKey)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function saveWatchlistSymbols(symbols: string[]) {
+  try {
+    window.localStorage.setItem(watchlistSymbolsStorageKey, JSON.stringify([...new Set(symbols)]))
+    window.dispatchEvent(new Event(watchlistChangedEvent))
+  } catch {
+    // Watchlist persistence is best-effort only.
+  }
+}
+
+function readShortcutMenuEnabled() {
+  try {
+    return window.localStorage.getItem(shortcutMenuEnabledStorageKey) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveShortcutMenuEnabled(enabled: boolean) {
+  try {
+    window.localStorage.setItem(shortcutMenuEnabledStorageKey, enabled ? '1' : '0')
+    window.dispatchEvent(new Event(shortcutMenuChangedEvent))
+  } catch {
+    // Shortcut menu persistence is best-effort only.
+  }
+}
+
+function saveShortcutMenuPeriods(periods: StoreTableRow[]) {
+  try {
+    window.localStorage.setItem(
+      shortcutMenuPeriodsStorageKey,
+      JSON.stringify(periods.map((row) => ({
+        period: row.period,
+        rowsCount: row.rowsCount ?? null,
+      }))),
+    )
+    window.dispatchEvent(new Event(shortcutMenuChangedEvent))
+  } catch {
+    // Shortcut period persistence is best-effort only.
+  }
+}
+
+function readSharedSelection(): SharedSelection {
+  try {
+    const raw = window.localStorage.getItem(sharedSelectionStorageKey)
+    const parsed = raw ? JSON.parse(raw) : null
+    return {
+      symbol: typeof parsed?.symbol === 'string' ? parsed.symbol : '',
+      period: typeof parsed?.period === 'string' ? parsed.period.toUpperCase() : '',
+    }
+  } catch {
+    return { symbol: '', period: '' }
+  }
+}
+
+function publishSharedSelection(symbol: string, period: string) {
+  try {
+    window.localStorage.setItem(sharedSelectionStorageKey, JSON.stringify({ symbol, period }))
+  } catch {
+    // Shared selection persistence is best-effort only.
+  }
+  window.dispatchEvent(new CustomEvent(sharedSelectionChangedEvent, { detail: { symbol, period } }))
 }
 
 function readPersistedStoreTableSelection(symbol: string, enabled = true): string {
@@ -388,6 +488,18 @@ function resolveLocalM1Rows(status: StoreV5CheckPayload | null) {
 
 function resolveLocalM1LastTime(status: StoreV5CheckPayload | null) {
   return status?.directM1?.lastTime ?? status?.rawDirectM1?.lastTime ?? null
+}
+
+function storeTableKeyForPeriod(period: string, rows: StoreTableRow[] = []) {
+  const normalized = period.toUpperCase()
+  const visibleRow = rows.find((row) => row.period.toUpperCase() === normalized)
+  if (visibleRow) return `${visibleRow.kind}-${visibleRow.period}`
+  return normalized === 'M1' ? 'm1-M1' : `aggregate-${normalized}`
+}
+
+function periodFromStoreTableKey(key: string) {
+  const parts = key.split('-')
+  return (parts[parts.length - 1] || '').toUpperCase()
 }
 
 function delay(ms: number) {
@@ -550,6 +662,7 @@ export function RightDrawer({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [topPaneHeight, setTopPaneHeight] = useState(getInitialTopPaneHeight)
+  const [watchlistTableHeight, setWatchlistTableHeight] = useState(getInitialWatchlistTableHeight)
   const [columnWidths, setColumnWidths] = useState(getInitialColumnWidths)
   const [selectedPanelTab, setSelectedPanelTab] = useState<SelectedPanelTab>('details')
   const [storePanelPersistenceEnabled, setStorePanelPersistenceEnabled] = useState(readStorePanelPersistenceEnabled)
@@ -565,6 +678,8 @@ export function RightDrawer({
   const [mt5M1LastCheckedAt, setMt5M1LastCheckedAt] = useState(() => initialPersistedM1Check?.checkedAt ?? '')
   const [localStoreStatus, setLocalStoreStatus] = useState<StoreV5CheckPayload | null>(() => initialPersistedStoreV5Status?.payload ?? null)
   const [storeV5ListSymbols, setStoreV5ListSymbols] = useState<string[]>(() => readStoreV5ListSymbols(storePanelPersistenceEnabled))
+  const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(readWatchlistSymbols)
+  const [shortcutMenuEnabled, setShortcutMenuEnabled] = useState(readShortcutMenuEnabled)
   const [selectedStoreTableKey, setSelectedStoreTableKey] = useState(() =>
     readPersistedStoreTableSelection(initialSnapshot?.selectedSymbol ?? '', storePanelPersistenceEnabled),
   )
@@ -610,6 +725,13 @@ export function RightDrawer({
   }, [selectedSymbol, symbols, visibleSymbols])
 
   const selectedDisplay = selectedRow ? resolveMt5SymbolDisplay(selectedRow) : null
+  const selectedIsInWatchlist = selectedRow ? watchlistSymbols.includes(selectedRow.symbol) : false
+  const watchlistRows = useMemo(() => {
+    const rowsBySymbol = new Map(symbols.map((row) => [row.symbol, row]))
+    return watchlistSymbols
+      .map((symbol) => rowsBySymbol.get(symbol))
+      .filter((row): row is Mt5SymbolRow => Boolean(row))
+  }, [symbols, watchlistSymbols])
 
   const visibleStoreAggregateRows = useMemo(() => {
     const cellsByPeriod = new Map(
@@ -645,10 +767,85 @@ export function RightDrawer({
       rowsCount: row.rowsCount,
     }))]
   }, [localStoreStatus, selectedRow?.symbol, storeV5ListSymbols, visibleStoreAggregateRows])
+  const watchlistDirectPeriods = useMemo<StoreTableRow[]>(() => {
+    const rowsCount = resolveLocalM1Rows(localStoreStatus)
+    if (typeof rowsCount !== 'number' || !Number.isFinite(rowsCount) || rowsCount <= 0) return []
+    return [{
+      period: 'M1',
+      count: formatCount(rowsCount),
+      updated: formatEpochSeconds(resolveLocalM1LastTime(localStoreStatus)),
+      kind: 'm1',
+      rowsCount,
+    }]
+  }, [localStoreStatus])
+  const watchlistAggregatedPeriods = useMemo<StoreTableRow[]>(() => {
+    const cellsByPeriod = new Map(
+      (localStoreStatus?.aggregated ?? [])
+        .filter((cell) => typeof cell.timeframe === 'string')
+        .map((cell) => [String(cell.timeframe).toUpperCase(), cell]),
+    )
+    return storeTableAggregatePeriods.flatMap((period) => {
+      const cell = cellsByPeriod.get(period)
+      const rowsCount = cell?.rowsCount
+      if (typeof rowsCount !== 'number' || !Number.isFinite(rowsCount) || rowsCount <= 0) return []
+      return [{
+        period,
+        count: formatCount(rowsCount),
+        updated: formatEpochSeconds(cell?.lastTime),
+        kind: 'aggregate' as const,
+        rowsCount,
+      }]
+    })
+  }, [localStoreStatus])
   const selectedStoreTableKeyIsVisible = useMemo(
     () => visibleStoreTableRows.some((row) => `${row.kind}-${row.period}` === selectedStoreTableKey),
     [selectedStoreTableKey, visibleStoreTableRows],
   )
+
+  useEffect(() => {
+    const syncSelection = (event: Event) => {
+      const detail = event instanceof CustomEvent ? event.detail as Partial<SharedSelection> : readSharedSelection()
+      const nextSymbol = typeof detail.symbol === 'string' ? detail.symbol : ''
+      const nextPeriod = typeof detail.period === 'string' ? detail.period.toUpperCase() : ''
+
+      if (nextSymbol && nextSymbol !== selectedSymbol) {
+        const persistedCheck = readPersistedM1CheckResult(nextSymbol, storePanelPersistenceEnabled)
+        const persistedStoreStatus = readPersistedStoreV5Status(nextSymbol, storePanelPersistenceEnabled)
+        setSelectedSymbol(nextSymbol)
+        setStoreCheck(persistedCheck?.payload ?? null)
+        setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')
+        setLocalStoreStatus(persistedStoreStatus?.payload ?? null)
+        setStoreCheckError('')
+        setStoreActionStatus('')
+        if (symbols.length) {
+          saveSymbolSnapshot({
+            selectedSymbol: nextSymbol,
+            status,
+            symbols,
+          })
+        }
+      }
+
+      if (nextPeriod) {
+        setSelectedStoreTableKey(storeTableKeyForPeriod(nextPeriod, visibleStoreTableRows))
+      }
+    }
+
+    window.addEventListener(sharedSelectionChangedEvent, syncSelection)
+    return () => window.removeEventListener(sharedSelectionChangedEvent, syncSelection)
+  }, [selectedSymbol, status, storePanelPersistenceEnabled, symbols, visibleStoreTableRows])
+
+  useEffect(() => {
+    if (!shortcutMenuEnabled) return
+    saveShortcutMenuPeriods([...watchlistDirectPeriods, ...watchlistAggregatedPeriods])
+  }, [shortcutMenuEnabled, watchlistAggregatedPeriods, watchlistDirectPeriods])
+
+  useEffect(() => {
+    const shared = readSharedSelection()
+    if (!shared.period) return
+    const nextKey = storeTableKeyForPeriod(shared.period, visibleStoreTableRows)
+    if (selectedStoreTableKey !== nextKey) setSelectedStoreTableKey(nextKey)
+  }, [selectedStoreTableKey, visibleStoreTableRows])
 
   useEffect(() => {
     if (!selectedRow?.symbol || !selectedStoreTableKeyIsVisible || !selectedStoreTableKey) return
@@ -781,6 +978,7 @@ export function RightDrawer({
     const handle = event.currentTarget
 
     ownerDocument.body.setAttribute('data-fractalframe-right-widget-drawer-splitting', 'true')
+    handle.setAttribute('data-dragging', 'true')
     handle.setPointerCapture(event.pointerId)
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
@@ -860,6 +1058,48 @@ export function RightDrawer({
     ownerDocument.addEventListener('pointercancel', finishResize)
   }
 
+  function handleWatchlistTableResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault()
+
+    const startY = event.clientY
+    const startHeight = watchlistTableHeight
+    const drawer = event.currentTarget.closest('.ff-right-drawer')
+    const tableWrap = event.currentTarget.previousElementSibling as HTMLElement | null
+    const drawerBottom = drawer?.getBoundingClientRect().bottom ?? window.innerHeight
+    const tableTop = tableWrap?.getBoundingClientRect().top ?? event.clientY
+    const maxHeight = Math.max(96, Math.round(drawerBottom - tableTop - 14))
+    const ownerDocument = event.currentTarget.ownerDocument
+    const handle = event.currentTarget
+
+    ownerDocument.body.setAttribute('data-fractalframe-right-widget-drawer-splitting', 'true')
+    handle.setAttribute('data-dragging', 'true')
+    handle.setPointerCapture(event.pointerId)
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const deltaY = moveEvent.clientY - startY
+      const next = Math.max(96, Math.min(maxHeight, Math.round(startHeight + deltaY)))
+      setWatchlistTableHeight(next)
+      try {
+        window.localStorage.setItem(watchlistTableHeightStorageKey, String(next))
+      } catch {
+        // Watchlist table height persistence is best-effort only.
+      }
+    }
+
+    const finishResize = (upEvent: PointerEvent) => {
+      ownerDocument.removeEventListener('pointermove', handlePointerMove)
+      ownerDocument.removeEventListener('pointerup', finishResize)
+      ownerDocument.removeEventListener('pointercancel', finishResize)
+      ownerDocument.body.removeAttribute('data-fractalframe-right-widget-drawer-splitting')
+      handle.removeAttribute('data-dragging')
+      handle.releasePointerCapture(upEvent.pointerId)
+    }
+
+    ownerDocument.addEventListener('pointermove', handlePointerMove)
+    ownerDocument.addEventListener('pointerup', finishResize)
+    ownerDocument.addEventListener('pointercancel', finishResize)
+  }
+
   function resetColumnWidth(column: ColumnKey) {
     setColumnWidths((current) => {
       const next = { ...current, [column]: defaultColumnWidths[column] }
@@ -875,13 +1115,20 @@ export function RightDrawer({
   function handleSelectSymbol(symbol: string) {
     const persistedCheck = readPersistedM1CheckResult(symbol, storePanelPersistenceEnabled)
     const persistedStoreStatus = readPersistedStoreV5Status(symbol, storePanelPersistenceEnabled)
+    const period = periodFromStoreTableKey(selectedStoreTableKey) || readSharedSelection().period || 'M1'
     setSelectedSymbol(symbol)
     setStoreCheck(persistedCheck?.payload ?? null)
     setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')
     setLocalStoreStatus(persistedStoreStatus?.payload ?? null)
-    setSelectedStoreTableKey(readPersistedStoreTableSelection(symbol, storePanelPersistenceEnabled))
+    setSelectedStoreTableKey(storeTableKeyForPeriod(period, visibleStoreTableRows))
     setStoreCheckError('')
     setStoreActionStatus('')
+    publishSharedSelection(symbol, period)
+    onOpenChart?.({
+      symbol,
+      period: period === 'M1' ? '1m' : period,
+      totalRows: null,
+    })
     if (symbols.length) {
       saveSymbolSnapshot({
         selectedSymbol: symbol,
@@ -1265,17 +1512,53 @@ export function RightDrawer({
     })
   }
 
+  function handleSetSelectedWatchlistLoaded(loaded: boolean) {
+    const symbol = selectedRow?.symbol
+    if (!symbol) return
+    setWatchlistSymbols((current) => {
+      const next = loaded
+        ? current.includes(symbol) ? current : [...current, symbol]
+        : current.filter((item) => item !== symbol)
+      saveWatchlistSymbols(next)
+      return next
+    })
+  }
+
+  function handleSetShortcutMenuLoaded(loaded: boolean) {
+    if (!loaded) {
+      setShortcutMenuEnabled(false)
+      saveShortcutMenuEnabled(false)
+      return
+    }
+
+    if (selectedRow?.symbol && !watchlistSymbols.includes(selectedRow.symbol)) {
+      setWatchlistSymbols((current) => {
+        const next = current.includes(selectedRow.symbol) ? current : [...current, selectedRow.symbol]
+        saveWatchlistSymbols(next)
+        return next
+      })
+    }
+    saveShortcutMenuPeriods([...watchlistDirectPeriods, ...watchlistAggregatedPeriods])
+    setShortcutMenuEnabled(true)
+    saveShortcutMenuEnabled(true)
+  }
+
   function handleOpenStoreTableRow(row: StoreTableRow) {
     const symbol = selectedRow?.symbol
     if (!symbol) return
     const key = `${row.kind}-${row.period}`
     setSelectedStoreTableKey(key)
     savePersistedStoreTableSelection(symbol, key, storePanelPersistenceEnabled)
+    publishSharedSelection(symbol, row.period)
     onOpenChart?.({
       symbol,
       period: row.period === 'M1' ? '1m' : row.period,
       totalRows: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : null,
     })
+  }
+
+  function handleOpenWatchlistPeriod(row: StoreTableRow) {
+    handleOpenStoreTableRow(row)
   }
 
   function handleJumpChartToTime() {
@@ -1606,8 +1889,52 @@ export function RightDrawer({
           <section className="ff-mt5-pane ff-mt5-pane--bottom" aria-label="MT5 lower workspace">
             {selectedRow && selectedDisplay && (
               <section className="ff-import-selected" aria-label="Selected MT5 symbol">
-                <h3>{selectedRow.symbol} · {selectedDisplay.chineseName}</h3>
-                <p>{selectedDisplay.assetType}</p>
+                <div className="ff-import-selected-head">
+                  <div className="ff-import-selected-head__text">
+                    <h3>{selectedRow.symbol} · {selectedDisplay.chineseName}</h3>
+                    <p>{selectedDisplay.assetType}</p>
+                  </div>
+                  <div className="ff-import-selected-head__actions">
+                    <div className="ff-import-load-row">
+                      <span>添加自选列表：</span>
+                      <div className="ff-import-load-switch" aria-label="添加自选列表">
+                        <button
+                          data-active={selectedIsInWatchlist}
+                          onClick={() => handleSetSelectedWatchlistLoaded(true)}
+                          type="button"
+                        >
+                          Load
+                        </button>
+                        <button
+                          data-active={!selectedIsInWatchlist}
+                          onClick={() => handleSetSelectedWatchlistLoaded(false)}
+                          type="button"
+                        >
+                          Unload
+                        </button>
+                      </div>
+                    </div>
+                    <div className="ff-import-load-row">
+                      <span>添加快捷菜单：</span>
+                      <div className="ff-import-load-switch" aria-label="添加快捷菜单">
+                        <button
+                          data-active={shortcutMenuEnabled}
+                          onClick={() => handleSetShortcutMenuLoaded(true)}
+                          type="button"
+                        >
+                          Load
+                        </button>
+                        <button
+                          data-active={!shortcutMenuEnabled}
+                          onClick={() => handleSetShortcutMenuLoaded(false)}
+                          type="button"
+                        >
+                          Unload
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div className="ff-import-selected-tabs" role="tablist" aria-label="MT5 symbol panels">
                   {selectedPanelTabs.map((tab) => (
                     <button
@@ -1833,6 +2160,104 @@ export function RightDrawer({
                       {formatChartLoadStatus(chartLoadState)}
                     </div>
 
+                  </div>
+                )}
+
+                {selectedPanelTab === 'watchlist' && (
+                  <div className="ff-import-watchlist-panel" role="tabpanel">
+                    <div
+                      className="ff-watchlist-table-wrap"
+                      style={{ height: `${watchlistTableHeight}px` }}
+                    >
+                      <table className="ff-watchlist-table" aria-label="Watchlist">
+                        <thead>
+                          <tr>
+                            <th>SYMBOL</th>
+                            <th>中文名称</th>
+                            <th>资产类型</th>
+                            <th>LAST</th>
+                            <th>CHG</th>
+                            <th>CHG%</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {watchlistRows.map((row) => {
+                            const display = resolveMt5SymbolDisplay(row)
+                            return (
+                              <tr
+                                data-selected={selectedSymbol === row.symbol}
+                                key={row.symbol}
+                                onClick={() => handleSelectSymbol(row.symbol)}
+                                tabIndex={0}
+                              >
+                                <td title={row.symbol}>{row.symbol}</td>
+                                <td title={display.chineseName}>{display.chineseName}</td>
+                                <td title={display.assetType}>{display.assetType}</td>
+                                <td>-</td>
+                                <td>-</td>
+                                <td>-</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div
+                      className="ff-watchlist-table-splitter"
+                      onDoubleClick={() => {
+                        setWatchlistTableHeight(228)
+                        try {
+                          window.localStorage.setItem(watchlistTableHeightStorageKey, '228')
+                        } catch {
+                          // Watchlist table height persistence is best-effort only.
+                        }
+                      }}
+                      onPointerDown={handleWatchlistTableResizePointerDown}
+                      role="separator"
+                      aria-orientation="horizontal"
+                      aria-label="Resize watchlist table"
+                      tabIndex={0}
+                    />
+                    {(watchlistDirectPeriods.length > 0 || watchlistAggregatedPeriods.length > 0) && (
+                      <div className="ff-watchlist-periods" aria-label="Watchlist available periods">
+                        {watchlistDirectPeriods.length > 0 && (
+                          <section className="ff-watchlist-periods__group">
+                            <h4>Direct source</h4>
+                            <div className="ff-watchlist-periods__buttons">
+                              {watchlistDirectPeriods.map((row) => (
+                                <button
+                                  data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
+                                  key={`${row.kind}-${row.period}`}
+                                  onClick={() => handleOpenWatchlistPeriod(row)}
+                                  title={`${row.period} · ${row.count} 条 · ${row.updated}`}
+                                  type="button"
+                                >
+                                  {row.period}
+                                </button>
+                              ))}
+                            </div>
+                          </section>
+                        )}
+                        {watchlistAggregatedPeriods.length > 0 && (
+                          <section className="ff-watchlist-periods__group">
+                            <h4>Aggregated source</h4>
+                            <div className="ff-watchlist-periods__buttons">
+                              {watchlistAggregatedPeriods.map((row) => (
+                                <button
+                                  data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
+                                  key={`${row.kind}-${row.period}`}
+                                  onClick={() => handleOpenWatchlistPeriod(row)}
+                                  title={`${row.period} · ${row.count} 条 · ${row.updated}`}
+                                  type="button"
+                                >
+                                  {row.period}
+                                </button>
+                              ))}
+                            </div>
+                          </section>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </section>

@@ -1,15 +1,125 @@
 .ff-topbar {
+  position: relative;
   display: flex;
   height: 40px;
   align-items: center;
+  gap: 16px;
   padding: 0 12px;
   border-bottom: 1px solid #e5e7eb;
   background: #ffffff;
+  overflow: visible;
 }
 
 .ff-topbar__brand {
   color: #020617;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
+}
+
+.ff-shortcut-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 28px;
+  min-width: 0;
+}
+
+.ff-shortcut-symbol {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.ff-shortcut-symbol__toggle {
+  display: inline-flex;
+  height: 28px;
+  min-width: 122px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #edf0f3;
+  border-radius: 4px;
+  background: #f3f4f6;
+  color: #111827;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 26px;
+  padding: 0 9px;
+}
+
+.ff-shortcut-symbol__toggle:hover {
+  background: #eef2f7;
+}
+
+.ff-shortcut-symbol__menu {
+  position: absolute;
+  top: 33px;
+  left: 0;
+  z-index: 90;
+  display: grid;
+  min-width: 148px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  padding: 5px;
+}
+
+.ff-shortcut-symbol__menu button {
+  height: 27px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #111827;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 8px;
+  text-align: left;
+}
+
+.ff-shortcut-symbol__menu button:hover {
+  background: #f3f4f6;
+}
+
+.ff-shortcut-symbol__menu button[data-active='true'] {
+  background: #111827;
+  color: #ffffff;
+}
+
+.ff-shortcut-periods {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  min-width: 0;
+}
+
+.ff-shortcut-periods button {
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #111827;
+  cursor: pointer;
+  font-family: Arial, Tahoma, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 24px;
+  padding: 0 7px;
+}
+
+.ff-shortcut-periods button:hover {
+  border-color: #f3f4f6;
+  background: #f3f4f6;
+}
+
+.ff-shortcut-periods button[data-active='true'] {
+  border-color: #e5e7eb;
+  background: #e5e7eb;
+  color: #111827;
+  font-weight: 500;
+  box-shadow: none;
 }
