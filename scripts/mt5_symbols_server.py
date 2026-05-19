@@ -1260,6 +1260,7 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 timeframe="M1",
                 store_root=root,
                 source="mt5_terminal",
+                deduplicate_existing_time=False,
                 manifest_extra={
                     "mt5RowsCount": len(raw_rows),
                     "trueM1RowsCount": rows_written_total + len(canonical_batch),
@@ -1324,11 +1325,37 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             )
             return
 
+        manifest_extra = {
+            "mt5RowsCount": validation["mt5RowsCount"],
+            "trueM1RowsCount": validation["trueM1RowsCount"],
+            "discardedBeforeAnchorRowsCount": validation["discardedBeforeAnchorRowsCount"],
+            "discardedBeforeTrueM1RowsCount": validation["discardedBeforeTrueM1RowsCount"],
+            "firstAnchorTime": validation["firstAnchorTime"],
+            "firstAnchorText": validation["firstAnchorText"],
+            "firstTrueM1Time": validation["firstTrueM1Time"],
+            "firstTrueM1Text": validation["firstTrueM1Text"],
+            "lastTrueM1Time": validation["lastTrueM1Time"],
+            "firstHourM1CheckOk": validation["firstHourM1CheckOk"],
+            "firstHourExpectedRows": validation["firstHourExpectedRows"],
+            "firstHourTrueRows": validation["firstHourTrueRows"],
+            "gapCount": validation["gapCount"],
+            "firstGap": validation["firstGap"],
+            "m1IntegrityStatus": validation["m1IntegrityStatus"],
+            "lastImportAt": utc_now_iso(),
+            "lastImportMode": mode,
+            "lastPullMethod": "copy_rates_from_pos_streaming",
+            "lastPullChunkSize": step,
+            "lastAddedRows": validation["trueM1RowsCount"],
+            "lastDuplicateRows": duplicate_rows_total,
+            "dirty": False,
+            "compactRecommended": False,
+        }
+        discarded_prefix = int(validation.get("discardedBeforeTrueM1RowsCount") or 0)
         cutoff_time = int(validation.get("firstTrueM1Time") or validation.get("firstAnchorTime"))
         _set_pull_job(
             job_id,
             phase="cleaning",
-            status="store_v5_pull_cleaning_invalid_prefix",
+            status="store_v5_pull_cleaning_invalid_prefix" if discarded_prefix else "store_v5_pull_no_invalid_prefix",
             currentAction="cleanup_invalid_prefix",
             rowsFetched=validation["mt5RowsCount"],
             rowsWritten=rows_written_total,
@@ -1337,36 +1364,28 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             gapCount=validation["gapCount"],
             cleanupStatus="running",
         )
-        cleanup = cleanup_direct_m1_prefix_before_time_v5(
-            root,
-            symbol,
-            cutoff_time,
-            {
-                "mt5RowsCount": validation["mt5RowsCount"],
-                "trueM1RowsCount": validation["trueM1RowsCount"],
-                "discardedBeforeAnchorRowsCount": validation["discardedBeforeAnchorRowsCount"],
-                "discardedBeforeTrueM1RowsCount": validation["discardedBeforeTrueM1RowsCount"],
-                "firstAnchorTime": validation["firstAnchorTime"],
-                "firstAnchorText": validation["firstAnchorText"],
-                "firstTrueM1Time": validation["firstTrueM1Time"],
-                "firstTrueM1Text": validation["firstTrueM1Text"],
-                "lastTrueM1Time": validation["lastTrueM1Time"],
-                "firstHourM1CheckOk": validation["firstHourM1CheckOk"],
-                "firstHourExpectedRows": validation["firstHourExpectedRows"],
-                "firstHourTrueRows": validation["firstHourTrueRows"],
-                "gapCount": validation["gapCount"],
-                "firstGap": validation["firstGap"],
-                "m1IntegrityStatus": validation["m1IntegrityStatus"],
-                "lastImportAt": utc_now_iso(),
-                "lastImportMode": mode,
-                "lastPullMethod": "copy_rates_from_pos_streaming_then_cleanup",
-                "lastPullChunkSize": step,
-                "lastAddedRows": validation["trueM1RowsCount"],
-                "lastDuplicateRows": duplicate_rows_total,
-                "dirty": False,
-                "compactRecommended": False,
-            },
+        if discarded_prefix:
+            manifest_extra["lastPullMethod"] = "copy_rates_from_pos_streaming_then_cleanup"
+            cleanup = cleanup_direct_m1_prefix_before_time_v5(root, symbol, cutoff_time, manifest_extra)
+        else:
+            finalize_write = append_ohlcv_part_v5(
+                [],
+                provider="mt5",
+                symbol=symbol,
+                mode="direct",
+                timeframe="M1",
+                store_root=root,
+                source="mt5_terminal",
+                deduplicate_existing_time=False,
+                manifest_extra=manifest_extra,
             )
+            cleanup = {
+                "deletedRows": 0,
+                "keptRows": validation["trueM1RowsCount"],
+                "partsCount": finalize_write.get("manifestCell", {}).get("partsCount"),
+                "firstTime": validation["firstTrueM1Time"],
+                "lastTime": validation["lastTrueM1Time"],
+            }
         mark_aggregated_dirty_for_symbol(root, provider="mt5", symbol=symbol)
         _set_pull_job(
             job_id,
