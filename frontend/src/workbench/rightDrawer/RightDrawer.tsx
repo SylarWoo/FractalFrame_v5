@@ -822,7 +822,12 @@ export function RightDrawer({
       let pullMode = 'refresh'
       try {
         const currentStore = await fetchStoreV5Status(symbol)
-        if (currentStore.directM1?.lastTime != null || currentStore.directM1?.rowsCount != null) {
+        if (
+          currentStore.rawDirectM1?.lastTime != null ||
+          currentStore.rawDirectM1?.rowsCount != null ||
+          currentStore.directM1?.lastTime != null ||
+          currentStore.directM1?.rowsCount != null
+        ) {
           pullMode = 'incremental'
         }
       } catch {

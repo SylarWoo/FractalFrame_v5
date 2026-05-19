@@ -54,6 +54,16 @@ def _find_first_m1_run_index(rows: list[dict[str, Any]], min_consecutive_rows: i
     return None
 
 
+def _initial_consecutive_rows(rows: list[dict[str, Any]], start_index: int) -> int:
+    candidate_rows = rows[start_index:]
+    initial_run_rows = 1 if candidate_rows else 0
+    for previous, current in zip(candidate_rows, candidate_rows[1:]):
+        if _row_time(current) - _row_time(previous) != SECONDS_PER_MINUTE:
+            break
+        initial_run_rows += 1
+    return initial_run_rows
+
+
 def validate_true_m1_rows_v1(
     rows: list[dict[str, Any]],
     *,
@@ -66,7 +76,18 @@ def validate_true_m1_rows_v1(
     mt5_count = len(rows)
     ordered = _dedupe_sort(rows)
     if require_utc_anchor:
-        candidate_start_index = next((i for i, row in enumerate(ordered) if _is_anchor_time(_row_time(row), anchor_hour_utc)), None)
+        anchor_indexes = [i for i, row in enumerate(ordered) if _is_anchor_time(_row_time(row), anchor_hour_utc)]
+        if require_first_hour_complete:
+            candidate_start_index = next(
+                (
+                    i
+                    for i in anchor_indexes
+                    if _initial_consecutive_rows(ordered, i) >= min_initial_consecutive_rows
+                ),
+                None,
+            )
+        else:
+            candidate_start_index = anchor_indexes[0] if anchor_indexes else None
         error = "no_utc_2200_anchor_found"
     else:
         candidate_start_index = _find_first_m1_run_index(ordered, min_initial_consecutive_rows)
@@ -82,11 +103,7 @@ def validate_true_m1_rows_v1(
 
     first_true_m1_time = _row_time(ordered[candidate_start_index])
     candidate_rows = ordered[candidate_start_index:]
-    initial_run_rows = 1
-    for previous, current in zip(candidate_rows, candidate_rows[1:]):
-        if _row_time(current) - _row_time(previous) != SECONDS_PER_MINUTE:
-            break
-        initial_run_rows += 1
+    initial_run_rows = _initial_consecutive_rows(ordered, candidate_start_index)
     first_hour_ok = initial_run_rows >= min_initial_consecutive_rows
 
     true_rows: list[dict[str, Any]] = []

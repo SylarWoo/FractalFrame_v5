@@ -363,8 +363,10 @@ def check_store_v5(symbol: str, store_root: Path | None = None) -> dict[str, Any
     from python.data_warehouse.store_v5.store_v5_paths import dataset_key, resolve_store_root
 
     root = resolve_store_root(store_root)
+    raw_key = dataset_key(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1")
     direct_key = dataset_key(provider="mt5", symbol=symbol, mode="direct", timeframe="M1")
     manifest = load_manifest_v5(root)
+    raw_direct = manifest.get("datasets", {}).get(raw_key)
     direct = manifest.get("datasets", {}).get(direct_key)
     aggregated = [
         cell
@@ -376,10 +378,24 @@ def check_store_v5(symbol: str, store_root: Path | None = None) -> dict[str, Any
     if not direct:
         return {
             "ok": True,
-            "status": "store_v5_direct_m1_missing",
+            "status": "store_v5_direct_m1_missing" if not raw_direct else "store_v5_raw_m1_ready_clean_pending",
             "provider": "store_v5",
             "storeVersion": "v5",
             "symbol": symbol,
+            "rawDirectM1": {
+                "datasetKey": raw_key,
+                "mt5RowsCount": raw_direct.get("mt5RowsCount"),
+                "rawRowsCount": raw_direct.get("rawRowsCount"),
+                "rowsCount": raw_direct.get("rowsCount"),
+                "firstTime": raw_direct.get("firstTime"),
+                "lastTime": raw_direct.get("lastTime"),
+                "firstTimeText": format_utc_text(raw_direct.get("firstTime")),
+                "lastTimeText": format_utc_text(raw_direct.get("lastTime")),
+                "cleanStatus": raw_direct.get("cleanStatus"),
+                "lastImportAt": raw_direct.get("lastImportAt"),
+                "status": raw_direct.get("status"),
+                "rootPath": raw_direct.get("rootPath"),
+            } if raw_direct else None,
             "directM1": None,
             "aggregated": aggregated,
             "publishedAt": utc_now_iso(),
@@ -393,6 +409,20 @@ def check_store_v5(symbol: str, store_root: Path | None = None) -> dict[str, Any
         "provider": "store_v5",
         "storeVersion": "v5",
         "symbol": symbol,
+        "rawDirectM1": {
+            "datasetKey": raw_key,
+            "mt5RowsCount": raw_direct.get("mt5RowsCount") if raw_direct else None,
+            "rawRowsCount": raw_direct.get("rawRowsCount") if raw_direct else None,
+            "rowsCount": raw_direct.get("rowsCount") if raw_direct else None,
+            "firstTime": raw_direct.get("firstTime") if raw_direct else None,
+            "lastTime": raw_direct.get("lastTime") if raw_direct else None,
+            "firstTimeText": format_utc_text(raw_direct.get("firstTime")) if raw_direct else None,
+            "lastTimeText": format_utc_text(raw_direct.get("lastTime")) if raw_direct else None,
+            "cleanStatus": raw_direct.get("cleanStatus") if raw_direct else None,
+            "lastImportAt": raw_direct.get("lastImportAt") if raw_direct else None,
+            "status": raw_direct.get("status") if raw_direct else None,
+            "rootPath": raw_direct.get("rootPath") if raw_direct else None,
+        } if raw_direct else None,
         "directM1": {
             "datasetKey": direct_key,
             "mt5RowsCount": direct.get("mt5RowsCount"),
@@ -976,14 +1006,200 @@ def cleanup_direct_m1_prefix_before_time_v5(root: Path, symbol: str, cutoff_time
     }
 
 
-def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | None, store_root: Path | None, fetch_chunk: int = 200_000) -> None:
+def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | None, store_root: Path | None, fetch_chunk: int = 50_000) -> None:
     from python.data_warehouse.mt5.mt5_m1_integrity_validator_v1 import validate_incremental_true_m1_rows_v1, validate_true_m1_rows_v1
-    from python.data_warehouse.store_v5.manifest_v5 import delete_dataset_cell, get_dataset_cell, mark_aggregated_dirty_for_symbol
+    from python.data_warehouse.store_v5.manifest_v5 import delete_dataset_cell, get_dataset_cell, mark_aggregated_dirty_for_symbol, upsert_dataset_cell
     from python.data_warehouse.store_v5.ohlcv_schema_v5 import mt5_row_to_canonical
     from python.data_warehouse.store_v5.partitioned_parquet_writer_v5 import append_ohlcv_part_v5
     from python.data_warehouse.store_v5.store_v5_paths import STORE_VERSION, dataset_key, dataset_root, manifest_path, resolve_store_root
 
     root = resolve_store_root(store_root)
+    raw_key = dataset_key(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1")
+    direct_key = dataset_key(provider="mt5", symbol=symbol, mode="direct", timeframe="M1")
+    initialized = False
+    try:
+        import MetaTrader5 as mt5
+
+        if not mt5.initialize():
+            _set_pull_job(job_id, ok=False, phase="failed", status="mt5_initialize_failed", mt5LastError=mt5.last_error(), finishedAt=utc_now_iso())
+            return
+        initialized = True
+        if not mt5.symbol_select(symbol, True):
+            _set_pull_job(job_id, ok=False, phase="failed", status="mt5_symbol_select_failed", mt5LastError=mt5.last_error(), finishedAt=utc_now_iso())
+            return
+
+        step = max(1, int(fetch_chunk))
+        target = int(count) if count is not None and int(count) > 0 else None
+        if mode == "refresh":
+            raw_root = dataset_root(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1", store_root=root)
+            if raw_root.exists():
+                shutil.rmtree(raw_root)
+            delete_dataset_cell(root, raw_key)
+            pos = 0
+        else:
+            raw_cell = get_dataset_cell(root, raw_key)
+            if not raw_cell or raw_cell.get("lastTime") is None:
+                mode = "refresh"
+                raw_root = dataset_root(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1", store_root=root)
+                if raw_root.exists():
+                    shutil.rmtree(raw_root)
+                delete_dataset_cell(root, raw_key)
+                pos = 0
+            else:
+                pos = 0
+
+        _set_pull_job(
+            job_id,
+            phase="fetching",
+            status="store_v5_pull_raw_m1_fetching",
+            currentAction="copy_rates_from_pos",
+            rowsFetched=0,
+            rowsWritten=0,
+            chunksCompleted=0,
+            fetchChunkSize=step,
+            maxCount=target,
+        )
+
+        seen_times: set[int] = set()
+        rows_fetched_total = 0
+        rows_written_total = 0
+        duplicate_rows_total = 0
+        chunks = 0
+        first_time = None
+        last_time = None
+
+        while target is None or pos < target:
+            job = _get_pull_job(job_id)
+            if job and job.get("cancelRequested"):
+                _set_pull_job(job_id, ok=False, phase="cancelled", status="store_v5_pull_cancelled", finishedAt=utc_now_iso())
+                return
+
+            want = step if target is None else min(step, target - pos)
+            part = mt5_rates_to_rows(mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, pos, want))
+            if not part:
+                break
+            pos += len(part)
+            rows_fetched_total += len(part)
+
+            new_part: list[dict[str, Any]] = []
+            for row in part:
+                row_time = int(row.get("time") or 0)
+                if row_time <= 0 or row_time in seen_times:
+                    duplicate_rows_total += 1
+                    continue
+                seen_times.add(row_time)
+                new_part.append(row)
+
+            if new_part:
+                canonical_batch = [mt5_row_to_canonical(row, provider="mt5", symbol=symbol, timeframe="M1") for row in new_part]
+                batch_first = min((int(row["time"]) for row in canonical_batch), default=None)
+                batch_last = max((int(row["time"]) for row in canonical_batch), default=None)
+                first_time = batch_first if first_time is None else min(first_time, batch_first or first_time)
+                last_time = batch_last if last_time is None else max(last_time, batch_last or last_time)
+                write = append_ohlcv_part_v5(
+                    canonical_batch,
+                    provider="mt5",
+                    symbol=symbol,
+                    mode="raw_direct",
+                    timeframe="M1",
+                    store_root=root,
+                    source="mt5_terminal",
+                    deduplicate_existing_time=(mode != "refresh"),
+                    manifest_extra={
+                        "mt5RowsCount": rows_fetched_total,
+                        "rawRowsCount": rows_written_total + int(len(canonical_batch)),
+                        "firstRawM1Time": first_time,
+                        "lastRawM1Time": last_time,
+                        "rawIngestStatus": "raw_m1_written",
+                        "cleanStatus": "pending",
+                        "lastImportAt": utc_now_iso(),
+                        "lastImportMode": mode,
+                        "lastPullMethod": "copy_rates_from_pos_streaming_raw_direct",
+                        "lastPullChunkSize": step,
+                        "lastAddedRows": len(canonical_batch),
+                        "lastDuplicateRows": duplicate_rows_total,
+                        "dirty": False,
+                        "compactRecommended": True,
+                    },
+                )
+                rows_written_total += int(write.get("rowsWritten") or 0)
+                duplicate_rows_total += int(write.get("duplicateRows") or 0)
+
+            chunks += 1
+            _set_pull_job(
+                job_id,
+                phase="streaming",
+                status="store_v5_pull_raw_m1_streaming",
+                currentAction="copy_rates_from_pos_and_append_raw_direct_m1",
+                rowsFetched=rows_fetched_total,
+                rowsWritten=rows_written_total,
+                rawRowsCount=rows_written_total,
+                chunksCompleted=chunks,
+                fetchChunkSize=step,
+                maxCount=target,
+                writeBatchRows=len(new_part),
+                writeBatchWritten=len(new_part),
+                firstTimeText=format_utc_text(first_time),
+                lastTimeText=format_utc_text(last_time),
+                cleanStatus="pending",
+            )
+            if len(part) < want:
+                break
+
+        direct_cell = get_dataset_cell(root, direct_key)
+        if direct_cell:
+            upsert_dataset_cell(
+                root,
+                direct_key,
+                {
+                    **direct_cell,
+                    "status": "stale",
+                    "dirty": True,
+                    "cleanStatus": "stale",
+                    "staleReason": "raw_direct_updated",
+                    "updatedAt": utc_now_iso(),
+                },
+            )
+        mark_aggregated_dirty_for_symbol(root, provider="mt5", symbol=symbol)
+        report = {
+            "ok": True,
+            "status": "mt5_m1_raw_refresh_completed" if mode == "refresh" else "mt5_m1_raw_incremental_completed",
+            "symbol": symbol,
+            "storeVersion": STORE_VERSION,
+            "importMode": mode,
+            "datasetMode": "raw_direct",
+            "mt5RowsCount": rows_fetched_total,
+            "rawRowsCount": rows_written_total,
+            "rowsWritten": rows_written_total,
+            "duplicateRows": duplicate_rows_total,
+            "firstRawM1Time": first_time,
+            "lastRawM1Time": last_time,
+            "cleanStatus": "pending",
+            "manifestPath": str(manifest_path(root)),
+        }
+        _set_pull_job(
+            job_id,
+            ok=True,
+            phase="completed",
+            status=report["status"],
+            rowsFetched=rows_fetched_total,
+            rowsWritten=rows_written_total,
+            rawRowsCount=rows_written_total,
+            cleanStatus="pending",
+            firstTimeText=format_utc_text(first_time),
+            lastTimeText=format_utc_text(last_time),
+            result=report,
+            finishedAt=utc_now_iso(),
+        )
+    except Exception as exc:
+        _set_pull_job(job_id, ok=False, phase="failed", status="store_v5_pull_exception", error=str(exc), finishedAt=utc_now_iso())
+    finally:
+        if initialized:
+            try:
+                mt5.shutdown()
+            except Exception:
+                pass
+    return
     if mode == "incremental":
         _set_pull_job(job_id, phase="fetching", status="store_v5_pull_incremental_fetching", currentAction="copy_rates_from_pos")
         initialized = False
@@ -1467,7 +1683,7 @@ def start_store_v5_pull_job(symbol: str, *, mode: str, count: int | None, store_
             "rowsFetched": 0,
             "rowsWritten": 0,
             "chunksCompleted": 0,
-            "fetchChunkSize": 200_000,
+            "fetchChunkSize": 50_000,
             "maxCount": count,
             "createdAt": now,
             "updatedAt": now,
@@ -1563,7 +1779,7 @@ def pull_store_v5(symbol: str, mode: str, count: int, store_root: Path | None = 
         count=count,
         store_root=store_root,
     )
-    if mode == "incremental" and report.get("error") == "direct_m1_manifest_missing_for_incremental":
+    if mode == "incremental" and report.get("error") in {"direct_m1_manifest_missing_for_incremental", "raw_direct_m1_manifest_missing_for_incremental"}:
         report = pull_mt5_m1_to_store_v5(
             symbol=symbol,
             import_mode="refresh",
@@ -1572,6 +1788,12 @@ def pull_store_v5(symbol: str, mode: str, count: int, store_root: Path | None = 
         )
         report["fallbackFrom"] = "incremental"
     return report
+
+
+def clean_store_v5_direct_m1(symbol: str, store_root: Path | None = None) -> dict[str, Any]:
+    from python.data_warehouse.mt5.mt5_m1_clean_service_v1 import clean_raw_m1_to_direct_store_v5
+
+    return clean_raw_m1_to_direct_store_v5(symbol=symbol, store_root=store_root, rebuild=True)
 
 
 def aggregate_store_v5(symbol: str, timeframes: list[str], rebuild: bool, store_root: Path | None = None) -> dict[str, Any]:
@@ -1619,6 +1841,22 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
         self.send_response(204)
         self.send_cors_headers()
         self.end_headers()
+
+    def do_POST(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/market-data/v1/store-v5/direct-m1/clean":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            try:
+                payload = clean_store_v5_direct_m1(symbol, store_root=self.store_root)
+                self.send_json(200 if payload.get("ok") is True else 400, payload)
+            except Exception as exc:
+                self.send_json(500, {"ok": False, "status": "store_v5_clean_failed", "error": str(exc)})
+            return
+        self.send_json(404, {"ok": False, "status": "not_found", "error": parsed.path})
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -1794,6 +2032,19 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
                 self.send_json(200 if payload.get("ok") is True else 400, payload)
             except Exception as exc:
                 self.send_json(500, {"ok": False, "status": "store_v5_pull_failed", "error": str(exc)})
+            return
+
+        if parsed.path == "/api/market-data/v1/store-v5/direct-m1/clean":
+            query = parse_qs(parsed.query)
+            symbol = (query.get("symbol") or [""])[0].strip()
+            if not symbol:
+                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
+                return
+            try:
+                payload = clean_store_v5_direct_m1(symbol, store_root=self.store_root)
+                self.send_json(200 if payload.get("ok") is True else 400, payload)
+            except Exception as exc:
+                self.send_json(500, {"ok": False, "status": "store_v5_clean_failed", "error": str(exc)})
             return
 
         if parsed.path == "/api/market-data/v1/store-v5/aggregate":

@@ -34,6 +34,10 @@ def direct_m1_relative_root(provider: str, symbol: str) -> Path:
     return Path("datasets") / f"provider={provider}" / f"symbol={symbol}" / "mode=direct" / "timeframe=M1"
 
 
+def raw_direct_m1_relative_root(provider: str, symbol: str) -> Path:
+    return Path("datasets") / f"provider={provider}" / f"symbol={symbol}" / "mode=raw_direct" / "timeframe=M1"
+
+
 def aggregated_relative_root(
     provider: str,
     symbol: str,
@@ -61,6 +65,10 @@ def dataset_relative_root(
     base_timeframe: str | None = None,
     anchor: str | None = None,
 ) -> Path:
+    if mode == "raw_direct":
+        if timeframe != "M1":
+            raise ValueError("StoreV5 raw direct datasets are M1 only")
+        return raw_direct_m1_relative_root(provider, symbol)
     if mode == "direct":
         if timeframe != "M1":
             raise ValueError("StoreV5 direct datasets are M1 only")
@@ -101,6 +109,10 @@ def dataset_key(
     base_timeframe: str | None = None,
     anchor: str | None = None,
 ) -> str:
+    if mode == "raw_direct":
+        if timeframe != "M1":
+            raise ValueError("Raw Direct StoreV5 dataset key is M1 only")
+        return f"{provider}:{symbol}:raw_direct:M1"
     if mode == "direct":
         if timeframe != "M1":
             raise ValueError("Direct StoreV5 dataset key is M1 only")

@@ -66,6 +66,21 @@ export type StoreV5DirectM1 = {
   validationError?: string | null
 }
 
+export type StoreV5RawDirectM1 = {
+  datasetKey?: string
+  mt5RowsCount?: number | null
+  rawRowsCount?: number | null
+  rowsCount?: number | null
+  firstTime?: number | null
+  lastTime?: number | null
+  firstTimeText?: string | null
+  lastTimeText?: string | null
+  cleanStatus?: string | null
+  lastImportAt?: string | null
+  status?: string | null
+  rootPath?: string | null
+}
+
 export type StoreV5AggregatedCell = {
   timeframe?: string
   rowsCount?: number | null
@@ -82,6 +97,7 @@ export type StoreV5CheckPayload = {
   provider?: string
   storeVersion?: string
   symbol: string
+  rawDirectM1?: StoreV5RawDirectM1 | null
   directM1: StoreV5DirectM1 | null
   aggregated: StoreV5AggregatedCell[]
   publishedAt?: string
@@ -161,6 +177,17 @@ export type StoreV5AggregatePayload = {
     rowsWritten?: number
     dirty?: boolean
   }>
+}
+
+export type StoreV5CleanPayload = {
+  ok: boolean
+  status?: string
+  error?: string
+  symbol: string
+  rowsWritten?: number
+  mt5RowsCount?: number
+  trueM1RowsCount?: number
+  cleanStatus?: string
 }
 
 export type StoreV5DeletePayload = {
@@ -421,6 +448,20 @@ export async function aggregateStoreV5(symbol: string): Promise<StoreV5Aggregate
   const payload = (await response.json()) as StoreV5AggregatePayload
   if (!response.ok || payload.ok !== true) {
     throw new Error(payload.error || `HTTP ${response.status}`)
+  }
+  return payload
+}
+
+export async function cleanStoreV5DirectM1(symbol: string): Promise<StoreV5CleanPayload> {
+  const params = new URLSearchParams()
+  params.set('symbol', symbol)
+  const response = await fetch(
+    `${resolveMt5ApiBase()}/api/market-data/v1/store-v5/direct-m1/clean?${params.toString()}`,
+    { method: 'POST', headers: { Accept: 'application/json' }, cache: 'no-store' },
+  )
+  const payload = (await response.json()) as StoreV5CleanPayload
+  if (!response.ok || payload.ok !== true) {
+    throw new Error(payload.error || payload.status || `HTTP ${response.status}`)
   }
   return payload
 }
