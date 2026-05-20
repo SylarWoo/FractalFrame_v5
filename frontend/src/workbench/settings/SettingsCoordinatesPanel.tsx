@@ -16,14 +16,14 @@ export function SettingsCoordinatesPanel() {
     <div className="ff-settings-coordinates-panel">
       <section className="ff-settings-coordinates-group">
         <div className="ff-settings-symbol-kicker">价格坐标</div>
-        <div className="ff-settings-coordinate-row">
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--price-control">
           <span>货币和单位</span>
           <OpenableSelect ariaLabel="货币和单位" defaultValue="always" options={[
             { label: '总是显示', value: 'always' },
             { label: '隐藏', value: 'hidden' },
           ]} />
         </div>
-        <div className="ff-settings-coordinate-row">
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--wide-select">
           <span>坐标模式（A和L）</span>
           <OpenableSelect ariaLabel="坐标模式" defaultValue="on-move" options={[
             { label: '鼠标移动时可见', value: 'on-move' },
@@ -31,12 +31,12 @@ export function SettingsCoordinatesPanel() {
             { label: '隐藏', value: 'hidden' },
           ]} />
         </div>
-        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--lock">
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--lock ff-settings-coordinate-row--price-control">
           <input type="checkbox" />
           <span>锁定价格对K线比例</span>
           <input disabled value="32.1366597" readOnly />
         </div>
-        <div className="ff-settings-coordinate-row">
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--price-control">
           <span>坐标放置</span>
           <OpenableSelect ariaLabel="坐标放置" defaultValue="auto" options={[
             { label: '自动', value: 'auto' },
@@ -135,7 +135,7 @@ export function SettingsCoordinatesPanel() {
         <SettingsCheckRow checked onCheckedChange={setShowWeekday} storageKey="coordinates.time.showWeekday">
           标签上的星期几
         </SettingsCheckRow>
-        <div className="ff-settings-coordinate-row">
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--wide-select">
           <span>日期格式</span>
           <OpenableSelect
             ariaLabel="日期格式"

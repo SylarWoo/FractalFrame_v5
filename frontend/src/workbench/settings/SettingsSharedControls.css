@@ -83,7 +83,7 @@
 
 .ff-settings-multicheck-select {
   position: relative;
-  width: 180px;
+  width: 120px;
 }
 
 .ff-settings-multicheck-select__menu {
@@ -93,7 +93,7 @@
   z-index: 130;
   box-sizing: border-box;
   display: grid;
-  width: 180px;
+  width: 120px;
   overflow: hidden;
   border: 1px solid #e0e3eb;
   border-radius: 4px;

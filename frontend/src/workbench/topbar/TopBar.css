@@ -3,7 +3,7 @@
   display: flex;
   height: 40px;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   padding: 0 12px;
   border-bottom: 1px solid #e5e7eb;
   background: #ffffff;
@@ -19,11 +19,15 @@
 }
 
 .ff-shortcut-menu {
+  position: relative;
   display: inline-flex;
+  width: var(--ff-shortcut-menu-width, 490px);
+  max-width: calc(100vw - 132px);
   align-items: center;
   gap: 6px;
   height: 28px;
   min-width: 0;
+  padding-right: 8px;
 }
 
 .ff-shortcut-symbol {
@@ -34,7 +38,7 @@
 .ff-shortcut-symbol__toggle {
   display: inline-flex;
   height: 28px;
-  min-width: 108px;
+  min-width: 98px;
   align-items: center;
   justify-content: flex-start;
   border: 1px solid #edf0f3;
@@ -46,12 +50,12 @@
   font-size: 14px;
   font-weight: 700;
   line-height: 26px;
-  padding: 0 7px;
+  padding: 0 6px;
 }
 
 .ff-shortcut-symbol__toggle span {
   display: inline-block;
-  transform: scaleX(0.88);
+  transform: scaleX(0.96);
   transform-origin: left center;
 }
 
@@ -65,7 +69,7 @@
   left: 0;
   z-index: 90;
   display: grid;
-  min-width: 128px;
+  min-width: 116px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
   border-radius: 3px;
@@ -90,7 +94,7 @@
 
 .ff-shortcut-symbol__menu button span {
   display: inline-block;
-  transform: scaleX(0.88);
+  transform: scaleX(0.96);
   transform-origin: left center;
 }
 
@@ -105,13 +109,16 @@
 
 .ff-shortcut-periods {
   display: inline-flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 1px;
   height: 28px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .ff-shortcut-periods button {
+  flex: 0 0 auto;
   height: 26px;
   border: 1px solid transparent;
   border-radius: 4px;
@@ -136,4 +143,70 @@
   color: #111827;
   font-weight: 500;
   box-shadow: none;
+}
+
+.ff-shortcut-menu__resize-handle {
+  position: absolute;
+  top: 3px;
+  right: 0;
+  width: 7px;
+  height: 22px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.ff-shortcut-menu__resize-handle::before {
+  position: absolute;
+  top: 0;
+  right: 3px;
+  width: 1px;
+  height: 22px;
+  background: #d1d5db;
+  content: '';
+}
+
+.ff-shortcut-menu__resize-handle:hover::before,
+body[data-fractalframe-topbar-resizing='true'] .ff-shortcut-menu__resize-handle::before {
+  background: #94a3b8;
+}
+
+body[data-fractalframe-topbar-resizing='true'] {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+.ff-topbar-icon-btn {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ff-topbar-icon-btn:hover {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+}
+
+.ff-topbar-icon-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.ff-topbar-icon-btn svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }

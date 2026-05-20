@@ -30,7 +30,7 @@
 
 .ff-settings-layout-row {
   display: grid;
-  grid-template-columns: 82px 150px auto;
+  grid-template-columns: 82px 120px auto;
   min-height: 34px;
   align-items: center;
   gap: 8px;
@@ -44,7 +44,7 @@
 }
 
 .ff-settings-layout-row .ff-openable-select {
-  width: 150px;
+  width: 120px;
   justify-self: start;
 }
 
@@ -77,6 +77,14 @@
 
 .ff-settings-layout-row--text .ff-openable-select {
   width: 100px;
+}
+
+.ff-settings-layout-row--wide-select {
+  grid-template-columns: 82px 150px auto;
+}
+
+.ff-settings-layout-row--wide-select .ff-openable-select {
+  width: 150px;
 }
 
 .ff-settings-layout-swatches {

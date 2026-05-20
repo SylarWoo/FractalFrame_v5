@@ -4,6 +4,8 @@ const storageKeys = {
   activeDrawer: 'fractalframe:rightWidgetActiveDrawer:v1',
   m1CheckResults: 'fractalframe:mt5ImportCenterM1CheckResults:v1',
   selectedTab: 'fractalframe:mt5ImportCenterSelectedTab:v1',
+  shortcutMenuEnabled: 'fractalframe:mt5ImportCenterShortcutMenuEnabled:v1',
+  shortcutMenuPeriods: 'fractalframe:mt5ImportCenterShortcutMenuPeriods:v1',
   sharedSelection: 'fractalframe:mt5ImportCenterSharedSelection:v1',
   storePanelSelection: 'fractalframe:mt5ImportCenterStorePanelSelectedTableKey:v1',
   storeStatus: 'fractalframe:mt5ImportCenterStoreV5Status:v1',
@@ -176,7 +178,9 @@ async function seedWorkbenchStorage(page: import('@playwright/test').Page) {
     window.localStorage.setItem(keys.activeDrawer, 'mt5')
     window.localStorage.setItem(keys.selectedTab, 'store')
     window.localStorage.setItem(keys.sharedSelection, JSON.stringify({ symbol: selectedSymbol, period: 'M1' }))
-    window.localStorage.setItem(keys.watchlistSymbols, JSON.stringify([selectedSymbol]))
+    window.localStorage.setItem(keys.shortcutMenuEnabled, '1')
+    window.localStorage.setItem(keys.shortcutMenuPeriods, JSON.stringify(['M1', 'H1', 'H4']))
+    window.localStorage.setItem(keys.watchlistSymbols, JSON.stringify([selectedSymbol, 'BTCUSDm', 'EURUSDm']))
     window.localStorage.setItem(keys.symbolSnapshot, JSON.stringify({
       selectedSymbol,
       status: '共 1 个品种，本地已保存，刷新后自动恢复（当前显示 1 个）',
@@ -231,6 +235,21 @@ test('workbench renders chart, MT5 drawer, StoreV5 panel, and settings drawer', 
 
   expect(pageErrors).toEqual([])
   expect(consoleErrors).toEqual([])
+})
+
+test('shortcut symbol menu closes on outside click', async ({ page }) => {
+  await mockMt5Api(page)
+  await seedWorkbenchStorage(page)
+  await page.goto('/')
+
+  const toggle = page.locator('.ff-shortcut-symbol__toggle')
+  const menu = page.locator('.ff-shortcut-symbol__menu')
+
+  await expect(toggle).toBeVisible()
+  await toggle.click()
+  await expect(menu).toBeVisible()
+  await page.locator('.ff-chart-core-host').click({ position: { x: 300, y: 200 } })
+  await expect(menu).toBeHidden()
 })
 
 test('StoreV5 pull shows mocked job progress', async ({ page }) => {

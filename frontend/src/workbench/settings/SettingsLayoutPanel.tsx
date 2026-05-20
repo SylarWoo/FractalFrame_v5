@@ -30,7 +30,7 @@ export function SettingsLayoutPanel() {
               writeSettingsSymbolStateValue('layout.grid.mode', value)
             }}
             options={[
-              { label: '垂直和...', value: 'both' },
+              { label: '垂直和水平', value: 'both' },
               { label: '垂直', value: 'vertical' },
               { label: '水平', value: 'horizontal' },
               { label: '隐藏', value: 'hidden' },
@@ -91,7 +91,7 @@ export function SettingsLayoutPanel() {
 
       <section className="ff-settings-layout-group">
         <div className="ff-settings-layout-kicker">按钮</div>
-        <div className="ff-settings-layout-row">
+        <div className="ff-settings-layout-row ff-settings-layout-row--wide-select">
           <span>导航</span>
           <OpenableSelect ariaLabel="导航" defaultValue="on-move" options={[
             { label: '鼠标移动时可见', value: 'on-move' },
@@ -99,7 +99,7 @@ export function SettingsLayoutPanel() {
             { label: '隐藏', value: 'hidden' },
           ]} />
         </div>
-        <div className="ff-settings-layout-row">
+        <div className="ff-settings-layout-row ff-settings-layout-row--wide-select">
           <span>窗格</span>
           <OpenableSelect ariaLabel="窗格" defaultValue="on-move" options={[
             { label: '鼠标移动时可见', value: 'on-move' },
@@ -124,7 +124,7 @@ export function SettingsLayoutPanel() {
         <div className="ff-settings-layout-row">
           <span>右</span>
           <input aria-label="右侧利润率" defaultValue="10" />
-          <em>根K线</em>
+          <em>根线</em>
         </div>
       </section>
     </div>
