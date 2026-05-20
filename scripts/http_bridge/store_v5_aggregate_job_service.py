@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .jobs import AGGREGATE_JOBS, AGGREGATE_JOBS_CONDITION, AGGREGATE_JOBS_LOCK
+from .jobs import AGGREGATE_JOBS, AGGREGATE_JOBS_CONDITION, AGGREGATE_JOBS_LOCK, InMemoryJobStore
 from .store_v5_operations_service import aggregate_store_v5
 from .store_v5_status_service import utc_now_iso
 
@@ -22,36 +22,22 @@ def _public_aggregate_job_snapshot(job: dict[str, Any]) -> dict[str, Any]:
     return snapshot
 
 
+AGGREGATE_JOB_STORE = InMemoryJobStore(
+    AGGREGATE_JOBS,
+    AGGREGATE_JOBS_LOCK,
+    condition=AGGREGATE_JOBS_CONDITION,
+    snapshot=_public_aggregate_job_snapshot,
+    clock=utc_now_iso,
+    evented=True,
+)
+
+
 def _set_aggregate_job(job_id: str, **updates: Any) -> dict[str, Any]:
-    with AGGREGATE_JOBS_CONDITION:
-        job = AGGREGATE_JOBS.get(job_id)
-        if not job:
-            return {}
-        job.update(updates)
-        job["updatedAt"] = utc_now_iso()
-        events = job.setdefault("events", [])
-        event_id = int(job.get("lastEventId") or 0) + 1
-        job["lastEventId"] = event_id
-        phase = str(job.get("phase") or "")
-        event_name = "progress"
-        if phase == "completed":
-            event_name = "done"
-        elif phase == "failed":
-            event_name = "error"
-        elif phase == "cancelled":
-            event_name = "cancelled"
-        snapshot = _public_aggregate_job_snapshot(job)
-        events.append({"id": event_id, "event": event_name, "data": snapshot})
-        if len(events) > 500:
-            del events[:-500]
-        AGGREGATE_JOBS_CONDITION.notify_all()
-        return snapshot
+    return AGGREGATE_JOB_STORE.update(job_id, **updates)
 
 
 def _get_aggregate_job(job_id: str) -> dict[str, Any] | None:
-    with AGGREGATE_JOBS_LOCK:
-        job = AGGREGATE_JOBS.get(job_id)
-        return _public_aggregate_job_snapshot(job) if job else None
+    return AGGREGATE_JOB_STORE.get(job_id)
 
 
 def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str], rebuild: bool, store_root: Path | None = None) -> None:
@@ -133,30 +119,28 @@ def start_store_v5_aggregate_job(symbol: str, *, timeframes: list[str], rebuild:
     job_id = uuid.uuid4().hex
     now = utc_now_iso()
     targets = [item.strip().upper() for item in timeframes if item.strip()]
-    with AGGREGATE_JOBS_CONDITION:
-        job = {
-            "ok": True,
-            "jobId": job_id,
-            "symbol": symbol,
-            "phase": "queued",
-            "status": "store_v5_aggregate_queued",
-            "progressPercent": 0,
-            "progressLabel": "Preparing aggregation",
-            "targets": targets,
-            "currentTarget": None,
-            "currentIndex": 0,
-            "totalTargets": len(targets),
-            "results": {},
-            "rebuild": bool(rebuild),
-            "createdAt": now,
-            "updatedAt": now,
-            "lastEventId": 1,
-            "events": [],
-        }
-        snapshot = _public_aggregate_job_snapshot(job)
-        job["events"].append({"id": 1, "event": "progress", "data": snapshot})
-        AGGREGATE_JOBS[job_id] = job
-        AGGREGATE_JOBS_CONDITION.notify_all()
+    job = {
+        "ok": True,
+        "jobId": job_id,
+        "symbol": symbol,
+        "phase": "queued",
+        "status": "store_v5_aggregate_queued",
+        "progressPercent": 0,
+        "progressLabel": "Preparing aggregation",
+        "targets": targets,
+        "currentTarget": None,
+        "currentIndex": 0,
+        "totalTargets": len(targets),
+        "results": {},
+        "rebuild": bool(rebuild),
+        "createdAt": now,
+        "updatedAt": now,
+        "lastEventId": 1,
+        "events": [],
+    }
+    snapshot = _public_aggregate_job_snapshot(job)
+    job["events"].append({"id": 1, "event": "progress", "data": snapshot})
+    AGGREGATE_JOB_STORE.create(job_id, job)
     threading.Thread(
         target=run_store_v5_aggregate_job,
         args=(job_id, symbol),

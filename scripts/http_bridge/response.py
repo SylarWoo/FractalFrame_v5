@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 from http.server import BaseHTTPRequestHandler
 from typing import Any
 
 
 def send_cors_headers(handler: BaseHTTPRequestHandler) -> None:
-    handler.send_header("Access-Control-Allow-Origin", "*")
-    handler.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+    handler.send_header("Access-Control-Allow-Origin", os.environ.get("FRACTALFRAME_CORS_ORIGIN", "*"))
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     handler.send_header("Access-Control-Allow-Headers", "Accept, Content-Type")
     handler.send_header("Cache-Control", "no-store")
 

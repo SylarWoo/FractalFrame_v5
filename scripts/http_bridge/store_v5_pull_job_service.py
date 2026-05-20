@@ -5,11 +5,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .jobs import PULL_JOBS, PULL_JOBS_CONDITION
 from .store_v5_pull_context import build_pull_context
 from .store_v5_pull_fetch_service import fetch_store_v5_raw_m1
 from .store_v5_pull_finalize_service import finalize_store_v5_pull_job
-from .store_v5_pull_job_state import get_pull_job, public_pull_job_snapshot, set_pull_job
+from .store_v5_pull_job_state import PULL_JOB_STORE, public_pull_job_snapshot, get_pull_job, set_pull_job
 from .store_v5_pull_write_service import flush_pending_rows
 from .store_v5_status_service import format_utc_text, utc_now_iso
 
@@ -188,40 +187,38 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
 def start_store_v5_pull_job(symbol: str, *, mode: str, count: int | None, store_root: Path | None = None) -> dict[str, Any]:
     job_id = uuid.uuid4().hex
     now = utc_now_iso()
-    with PULL_JOBS_CONDITION:
-        job = {
-            "ok": True,
-            "jobId": job_id,
-            "symbol": symbol,
-            "mode": mode,
-            "phase": "queued",
-            "status": "store_v5_pull_queued",
-            "currentAction": "waiting_to_start",
-            "progressPercent": 0,
-            "rowsFetched": 0,
-            "rowsWritten": 0,
-            "rawRowsCount": 0,
-            "duplicateRows": 0,
-            "chunksCompleted": 0,
-            "fetchChunkSize": 500_000,
-            "maxCount": count,
-            "currentBatchIndex": 0,
-            "currentBatchRequested": 0,
-            "currentBatchFetched": 0,
-            "writeBatchRows": 0,
-            "writeBatchWritten": 0,
-            "pendingWriteRows": 0,
-            "progressLabel": "Preparing MT5 M1 pull",
-            "detailMessage": "Waiting for StoreV5 pull job to start",
-            "createdAt": now,
-            "updatedAt": now,
-            "lastEventId": 1,
-            "events": [],
-        }
-        snapshot = public_pull_job_snapshot(job)
-        job["events"].append({"id": 1, "event": "progress", "data": snapshot})
-        PULL_JOBS[job_id] = job
-        PULL_JOBS_CONDITION.notify_all()
+    job = {
+        "ok": True,
+        "jobId": job_id,
+        "symbol": symbol,
+        "mode": mode,
+        "phase": "queued",
+        "status": "store_v5_pull_queued",
+        "currentAction": "waiting_to_start",
+        "progressPercent": 0,
+        "rowsFetched": 0,
+        "rowsWritten": 0,
+        "rawRowsCount": 0,
+        "duplicateRows": 0,
+        "chunksCompleted": 0,
+        "fetchChunkSize": 500_000,
+        "maxCount": count,
+        "currentBatchIndex": 0,
+        "currentBatchRequested": 0,
+        "currentBatchFetched": 0,
+        "writeBatchRows": 0,
+        "writeBatchWritten": 0,
+        "pendingWriteRows": 0,
+        "progressLabel": "Preparing MT5 M1 pull",
+        "detailMessage": "Waiting for StoreV5 pull job to start",
+        "createdAt": now,
+        "updatedAt": now,
+        "lastEventId": 1,
+        "events": [],
+    }
+    snapshot = public_pull_job_snapshot(job)
+    job["events"].append({"id": 1, "event": "progress", "data": snapshot})
+    PULL_JOB_STORE.create(job_id, job)
     thread = threading.Thread(
         target=run_store_v5_pull_job,
         args=(job_id, symbol),

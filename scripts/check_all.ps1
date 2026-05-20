@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $frontendRoot = Join-Path $repoRoot "frontend"
 $pythonExe = Join-Path $repoRoot ".venv\Scripts\python.exe"
+$env:NPM_CONFIG_MIN_RELEASE_AGE = $null
 
 function Invoke-Check {
   param(
@@ -36,8 +37,16 @@ try {
 
   Push-Location $frontendRoot
   try {
+    Invoke-Check "Frontend lint" {
+      npm run lint
+    }
+
     Invoke-Check "Frontend logic tests" {
       npm run test:logic
+    }
+
+    Invoke-Check "Frontend e2e smoke" {
+      npm run test:e2e
     }
 
     Invoke-Check "Frontend production build" {

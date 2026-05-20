@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Any
+from typing import Any, Callable
 
 
 M1_CHECK_JOBS: dict[str, dict[str, Any]] = {}
@@ -16,3 +16,75 @@ AGGREGATE_JOBS: dict[str, dict[str, Any]] = {}
 AGGREGATE_JOBS_LOCK = threading.Lock()
 AGGREGATE_JOBS_CONDITION = threading.Condition(AGGREGATE_JOBS_LOCK)
 AGGREGATE_JOB_TERMINAL_PHASES = {"completed", "failed", "cancelled"}
+
+
+SnapshotFn = Callable[[dict[str, Any]], dict[str, Any]]
+ClockFn = Callable[[], str]
+
+
+class InMemoryJobStore:
+    def __init__(
+        self,
+        jobs: dict[str, dict[str, Any]],
+        lock: threading.Lock,
+        *,
+        condition: threading.Condition | None = None,
+        snapshot: SnapshotFn | None = None,
+        clock: ClockFn | None = None,
+        evented: bool = False,
+    ) -> None:
+        self.jobs = jobs
+        self.lock = lock
+        self.condition = condition
+        self.snapshot = snapshot or (lambda job: dict(job))
+        self.clock = clock
+        self.evented = evented
+
+    def create(self, job_id: str, job: dict[str, Any]) -> dict[str, Any]:
+        with self._guard():
+            self.jobs[job_id] = job
+            self._notify()
+            return self.snapshot(job)
+
+    def get(self, job_id: str) -> dict[str, Any] | None:
+        with self.lock:
+            job = self.jobs.get(job_id)
+            return self.snapshot(job) if job else None
+
+    def update(self, job_id: str, **updates: Any) -> dict[str, Any]:
+        with self._guard():
+            job = self.jobs.get(job_id)
+            if not job:
+                return {}
+            job.update(updates)
+            if self.clock:
+                job["updatedAt"] = self.clock()
+            snapshot = self.snapshot(job)
+            if self.evented:
+                self._append_event(job, snapshot)
+            self._notify()
+            return snapshot
+
+    def _append_event(self, job: dict[str, Any], snapshot: dict[str, Any]) -> None:
+        events = job.setdefault("events", [])
+        event_id = int(job.get("lastEventId") or 0) + 1
+        job["lastEventId"] = event_id
+        phase = str(job.get("phase") or "")
+        event_name = "progress"
+        if phase == "completed":
+            event_name = "done"
+        elif phase == "failed":
+            event_name = "error"
+        elif phase == "cancelled":
+            event_name = "cancelled"
+        snapshot["lastEventId"] = event_id
+        events.append({"id": event_id, "event": event_name, "data": snapshot})
+        if len(events) > 500:
+            del events[:-500]
+
+    def _guard(self) -> threading.Lock | threading.Condition:
+        return self.condition or self.lock
+
+    def _notify(self) -> None:
+        if self.condition:
+            self.condition.notify_all()

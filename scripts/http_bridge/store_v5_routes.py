@@ -19,9 +19,9 @@ def handle_store_v5_post(handler: Any, parsed: ParseResult, services: Any) -> bo
         return True
     try:
         payload = services.clean_store_v5_direct_m1(symbol, store_root=handler.store_root)
-        handler.send_json(200 if payload.get("ok") is True else 400, payload)
+        _send_payload_result(handler, payload)
     except Exception as exc:
-        handler.send_json(500, {"ok": False, "status": "store_v5_clean_failed", "error": str(exc)})
+        _send_exception(handler, "store_v5_clean_failed", exc)
     return True
 
 
@@ -35,7 +35,7 @@ def handle_store_v5_get(handler: Any, parsed: ParseResult, services: Any) -> boo
         try:
             handler.send_json(200, services.check_store_v5(symbol, store_root=handler.store_root))
         except Exception as exc:
-            handler.send_json(500, {"ok": False, "status": "store_v5_status_failed", "error": str(exc)})
+            _send_exception(handler, "store_v5_status_failed", exc)
         return True
 
     if parsed.path == "/api/market-data/v1/store-v5/m1/repair-gaps":
@@ -48,9 +48,9 @@ def handle_store_v5_get(handler: Any, parsed: ParseResult, services: Any) -> boo
             return True
         try:
             payload = services.repair_store_v5_m1_gaps(symbol, lookback_minutes=lookback_minutes, max_gap_minutes=max_gap_minutes, store_root=handler.store_root)
-            handler.send_json(200 if payload.get("ok") is True else 500, payload)
+            _send_payload_result(handler, payload, failure_status=500)
         except Exception as exc:
-            handler.send_json(500, {"ok": False, "status": "store_v5_m1_gap_repair_failed", "error": str(exc)})
+            _send_exception(handler, "store_v5_m1_gap_repair_failed", exc)
         return True
 
     if parsed.path == "/api/market-data/v1/store-v5/delete":
@@ -61,9 +61,9 @@ def handle_store_v5_get(handler: Any, parsed: ParseResult, services: Any) -> boo
             return True
         try:
             payload = services.delete_store_v5_symbol(symbol, store_root=handler.store_root)
-            handler.send_json(200 if payload.get("ok") is True else 400, payload)
+            _send_payload_result(handler, payload)
         except Exception as exc:
-            handler.send_json(500, {"ok": False, "status": "store_v5_delete_failed", "error": str(exc)})
+            _send_exception(handler, "store_v5_delete_failed", exc)
         return True
 
     if parsed.path == "/api/market-data/v1/store-v5/aggregated/delete":
@@ -78,9 +78,9 @@ def handle_store_v5_get(handler: Any, parsed: ParseResult, services: Any) -> boo
             return True
         try:
             payload = services.delete_store_v5_aggregated_timeframes(symbol, timeframes=timeframes, store_root=handler.store_root)
-            handler.send_json(200 if payload.get("ok") is True else 400, payload)
+            _send_payload_result(handler, payload)
         except Exception as exc:
-            handler.send_json(500, {"ok": False, "status": "store_v5_aggregated_delete_failed", "error": str(exc)})
+            _send_exception(handler, "store_v5_aggregated_delete_failed", exc)
         return True
 
     if parsed.path == "/api/market-data/v1/store-v5/pull/start":
@@ -158,9 +158,9 @@ def handle_store_v5_get(handler: Any, parsed: ParseResult, services: Any) -> boo
             return True
         try:
             payload = services.pull_store_v5(symbol, mode=mode, count=count, store_root=handler.store_root)
-            handler.send_json(200 if payload.get("ok") is True else 400, payload)
+            _send_payload_result(handler, payload)
         except Exception as exc:
-            handler.send_json(500, {"ok": False, "status": "store_v5_pull_failed", "error": str(exc)})
+            _send_exception(handler, "store_v5_pull_failed", exc)
         return True
 
     if parsed.path == "/api/market-data/v1/store-v5/direct-m1/clean":
@@ -176,9 +176,9 @@ def handle_store_v5_get(handler: Any, parsed: ParseResult, services: Any) -> boo
             return True
         try:
             payload = services.aggregate_store_v5(symbol, timeframes=timeframes, rebuild=rebuild, store_root=handler.store_root)
-            handler.send_json(200 if payload.get("ok") is True else 400, payload)
+            _send_payload_result(handler, payload)
         except Exception as exc:
-            handler.send_json(500, {"ok": False, "status": "store_v5_aggregate_failed", "error": str(exc)})
+            _send_exception(handler, "store_v5_aggregate_failed", exc)
         return True
 
     if parsed.path == "/api/market-data/v1/store-v5/query":
@@ -186,10 +186,18 @@ def handle_store_v5_get(handler: Any, parsed: ParseResult, services: Any) -> boo
             payload = services.query_store_v5_ohlcv(parse_qs(parsed.query), store_root=handler.store_root)
             handler.send_json(200, payload)
         except Exception as exc:
-            handler.send_json(500, {"ok": False, "status": "store_v5_query_failed", "error": str(exc)})
+            _send_exception(handler, "store_v5_query_failed", exc)
         return True
 
     return False
+
+
+def _send_payload_result(handler: Any, payload: dict[str, Any], *, success_status: int = 200, failure_status: int = 400) -> None:
+    handler.send_json(success_status if payload.get("ok") is True else failure_status, payload)
+
+
+def _send_exception(handler: Any, status: str, exc: Exception) -> None:
+    handler.send_json(500, {"ok": False, "status": status, "error": str(exc)})
 
 
 def _send_job(handler: Any, query: dict[str, list[str]], get_job: Any) -> bool:
