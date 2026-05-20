@@ -7,11 +7,15 @@ import {
 } from './mt5SymbolsApi'
 
 function mockFetch(payload: unknown, ok = true, status = 200) {
-  const fetchMock = vi.fn(async (_url: string, _options?: RequestInit) => ({
-    json: async () => payload,
-    ok,
-    status,
-  }))
+  const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
+    void url
+    void options
+    return {
+      json: async () => payload,
+      ok,
+      status,
+    }
+  })
   vi.stubGlobal('fetch', fetchMock)
   return fetchMock
 }

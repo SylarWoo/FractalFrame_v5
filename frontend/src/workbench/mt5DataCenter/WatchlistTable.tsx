@@ -1,4 +1,4 @@
-import type { PointerEvent as ReactPointerEvent } from 'react'
+﻿import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Mt5RealtimeTick, Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 import { resolveMt5SymbolDisplay } from '../rightDrawer/mt5SymbolDisplay'
 import {
@@ -58,8 +58,8 @@ export function WatchlistTable({
           <thead>
             <tr>
               <th>SYMBOL</th>
-              <th>中文名称</th>
-              <th>资产类型</th>
+              <th>{'\u4e2d\u6587\u540d\u79f0'}</th>
+              <th>{'\u8d44\u4ea7\u7c7b\u578b'}</th>
               <th>LAST</th>
               <th>CHG</th>
               <th>CHG%</th>
@@ -113,7 +113,7 @@ export function WatchlistTable({
                     data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
                     key={`${row.kind}-${row.period}`}
                     onClick={() => onOpenWatchlistPeriod(row)}
-                    title={`${row.period} · ${row.count} 条 · ${row.updated}`}
+                    title={`${row.period} · ${row.count} rows · ${row.updated}`}
                     type="button"
                   >
                     {row.period}
@@ -131,7 +131,7 @@ export function WatchlistTable({
                     data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
                     key={`${row.kind}-${row.period}`}
                     onClick={() => onOpenWatchlistPeriod(row)}
-                    title={`${row.period} · ${row.count} 条 · ${row.updated}`}
+                    title={`${row.period} · ${row.count} rows · ${row.updated}`}
                     type="button"
                   >
                     {row.period}
@@ -176,3 +176,4 @@ export function WatchlistTable({
     </div>
   )
 }
+

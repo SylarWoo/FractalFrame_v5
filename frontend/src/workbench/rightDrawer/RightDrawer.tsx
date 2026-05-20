@@ -9,12 +9,27 @@ import { SymbolTable } from '../mt5DataCenter/SymbolTable'
 import type { SymbolTableColumnKey } from '../mt5DataCenter/SymbolTable'
 import { StoreV5Panel } from '../mt5DataCenter/StoreV5Panel'
 import { WatchlistTable } from '../mt5DataCenter/WatchlistTable'
-import { readJson, readString, writeJson, writeString } from '../persistence/jsonStorage'
+import { writeJson, writeString } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
-import { delay, formatCount, formatDetailValue, formatEpochSeconds, formatStoreOperationLine, formatSymbolStatus, normalizeStoredStatus, parseChartJumpTime, periodFromStoreTableKey, resolveLocalM1LastTime, resolveLocalM1Rows, resolveStoreOperationProgress, selectedDetailRows, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
+import { delay, formatDetailValue, formatStoreOperationLine, formatSymbolStatus, normalizeStoredStatus, parseChartJumpTime, periodFromStoreTableKey, resolveLocalM1Rows, resolveStoreOperationProgress, selectedDetailRows, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
 import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedRealtimeSnapshot, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readStoreV5ListSymbols, readWatchlistRealtimeEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedM1CheckResult, savePersistedRealtimeSnapshot, savePersistedStoreTableSelection, savePersistedStoreV5Status, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistRealtimeEnabled, saveWatchlistSymbols, sharedSelectionChangedEvent } from '../mt5DataCenter/storeV5Persistence'
 import type { SelectedPanelTab, SharedSelection } from '../mt5DataCenter/storeV5Persistence'
+import {
+  buildVisibleStoreTableRows,
+  buildWatchlistAggregatedPeriods,
+  buildWatchlistDirectPeriods,
+  resolveStoreV5AggregateTargets,
+  storeTableAggregatePeriods,
+} from './rightDrawerStoreTables'
+import {
+  clampColumnWidth,
+  clampDrawerWidth,
+  defaultColumnWidths,
+  getInitialColumnWidths,
+  getInitialTopPaneHeight,
+  getInitialWatchlistTableHeight,
+} from './rightDrawerLayout'
 import {
   cancelMt5M1CheckJob,
   cancelStoreV5PullJob,
@@ -52,89 +67,16 @@ type RightDrawerProps = {
 
 const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))
 
-const minDrawerWidth = 220
-const maxDrawerWidth = 900
-const storeTableAggregatePeriods = ['M5', 'M15', 'M30', 'H1', 'H2', 'H3', 'H4', 'D1', 'W1', 'MN1']
 const storeV5M1RepairLookbackMinutes = 720
 const storeV5M1RepairMaxGapMinutes = 720
 
-const defaultColumnWidths = {
-  symbol: 96,
-  name: 126,
-  type: 64,
-}
-
 type ColumnKey = SymbolTableColumnKey
-function resolveStoreV5AggregateTargets(status: StoreV5CheckPayload) {
-  return status.aggregated
-    .map((cell) => String(cell.timeframe || '').toUpperCase())
-    .filter((period) => storeTableAggregatePeriods.includes(period))
-}
-
 const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
   { key: 'details', label: '细节' },
   { key: 'store', label: '仓库' },
   { key: 'watchlist', label: '自选列表' },
   { key: 'settings', label: '设置' },
 ]
-function clampDrawerWidth(width: number) {
-  return Math.max(minDrawerWidth, Math.min(maxDrawerWidth, Math.round(width)))
-}
-
-function getInitialTopPaneHeight() {
-  const fallbackHeight = 430
-
-  try {
-    const raw = readString(storageKeys.importCenterTopPaneHeightPx)
-    const value = raw === '' ? fallbackHeight : Number(raw)
-    return Math.max(180, Math.min(760, Math.round(value)))
-  } catch {
-    return fallbackHeight
-  }
-}
-
-function getInitialWatchlistTableHeight() {
-  const fallbackHeight = 228
-
-  try {
-    const raw = readString(storageKeys.importCenterWatchlistTableHeightPx)
-    const value = raw === '' ? fallbackHeight : Number(raw)
-    return Math.max(96, Math.min(1200, Math.round(value)))
-  } catch {
-    return fallbackHeight
-  }
-}
-
-function getInitialColumnWidths() {
-  try {
-    const parsed = readJson<Partial<Record<ColumnKey, number>> | null>(storageKeys.importCenterColumnWidthsPx, null)
-    if (!parsed || typeof parsed !== 'object') return defaultColumnWidths
-    return {
-      symbol: clampColumnWidth(Number(parsed.symbol), 'symbol'),
-      name: clampColumnWidth(Number(parsed.name), 'name'),
-      type: clampColumnWidth(Number(parsed.type), 'type'),
-    }
-  } catch {
-    return defaultColumnWidths
-  }
-}
-
-function clampColumnWidth(width: number, column: ColumnKey) {
-  const minByColumn: Record<ColumnKey, number> = {
-    symbol: 46,
-    name: 52,
-    type: 40,
-  }
-  const maxByColumn: Record<ColumnKey, number> = {
-    symbol: 180,
-    name: 260,
-    type: 140,
-  }
-  const fallback = defaultColumnWidths[column]
-  const value = Number.isFinite(width) ? width : fallback
-  return Math.max(minByColumn[column], Math.min(maxByColumn[column], Math.round(value)))
-}
-
 export function RightDrawer({
   activeDrawer,
   chartLoadState,
@@ -246,70 +188,11 @@ export function RightDrawer({
     setWatchlistRealtimeLog((current) => [`${timestamp}  ${message}`, ...current].slice(0, 8))
   }
 
-  const visibleStoreAggregateRows = useMemo(() => {
-    const cellsByPeriod = new Map(
-      (localStoreStatus?.aggregated ?? [])
-        .filter((cell) => typeof cell.timeframe === 'string')
-        .map((cell) => [String(cell.timeframe).toUpperCase(), cell]),
-    )
-    return storeTableAggregatePeriods.map((period) => {
-      const cell = cellsByPeriod.get(period)
-      return {
-        period,
-        count: formatCount(cell?.rowsCount),
-        updated: cell ? formatEpochSeconds(cell.lastTime) : '未聚合',
-        rowsCount: cell?.rowsCount ?? null,
-      }
-    })
-  }, [localStoreStatus])
   const visibleStoreTableRows = useMemo<StoreTableRow[]>(() => {
-    const rows: StoreTableRow[] = []
-    if (selectedRow?.symbol && storeV5ListSymbols.includes(selectedRow.symbol)) {
-      const rowsCount = resolveLocalM1Rows(localStoreStatus)
-      rows.push({
-        period: 'M1',
-        count: formatCount(rowsCount),
-        updated: formatEpochSeconds(resolveLocalM1LastTime(localStoreStatus)),
-        kind: 'm1',
-        rowsCount,
-      })
-    }
-    return [...rows, ...visibleStoreAggregateRows.map((row) => ({
-      ...row,
-      kind: 'aggregate' as const,
-      rowsCount: row.rowsCount,
-    }))]
-  }, [localStoreStatus, selectedRow?.symbol, storeV5ListSymbols, visibleStoreAggregateRows])
-  const watchlistDirectPeriods = useMemo<StoreTableRow[]>(() => {
-    const rowsCount = resolveLocalM1Rows(localStoreStatus)
-    if (typeof rowsCount !== 'number' || !Number.isFinite(rowsCount) || rowsCount <= 0) return []
-    return [{
-      period: 'M1',
-      count: formatCount(rowsCount),
-      updated: formatEpochSeconds(resolveLocalM1LastTime(localStoreStatus)),
-      kind: 'm1',
-      rowsCount,
-    }]
-  }, [localStoreStatus])
-  const watchlistAggregatedPeriods = useMemo<StoreTableRow[]>(() => {
-    const cellsByPeriod = new Map(
-      (localStoreStatus?.aggregated ?? [])
-        .filter((cell) => typeof cell.timeframe === 'string')
-        .map((cell) => [String(cell.timeframe).toUpperCase(), cell]),
-    )
-    return storeTableAggregatePeriods.flatMap((period) => {
-      const cell = cellsByPeriod.get(period)
-      const rowsCount = cell?.rowsCount
-      if (typeof rowsCount !== 'number' || !Number.isFinite(rowsCount) || rowsCount <= 0) return []
-      return [{
-        period,
-        count: formatCount(rowsCount),
-        updated: formatEpochSeconds(cell?.lastTime),
-        kind: 'aggregate' as const,
-        rowsCount,
-      }]
-    })
-  }, [localStoreStatus])
+    return buildVisibleStoreTableRows({ localStoreStatus, selectedRow, storeV5ListSymbols })
+  }, [localStoreStatus, selectedRow, storeV5ListSymbols])
+  const watchlistDirectPeriods = useMemo<StoreTableRow[]>(() => buildWatchlistDirectPeriods(localStoreStatus), [localStoreStatus])
+  const watchlistAggregatedPeriods = useMemo<StoreTableRow[]>(() => buildWatchlistAggregatedPeriods(localStoreStatus), [localStoreStatus])
   const selectedStoreTableKeyIsVisible = useMemo(
     () => visibleStoreTableRows.some((row) => `${row.kind}-${row.period}` === selectedStoreTableKey),
     [selectedStoreTableKey, visibleStoreTableRows],

@@ -1,4 +1,4 @@
-import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
+﻿import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 import { resolveMt5SymbolDisplay } from '../rightDrawer/mt5SymbolDisplay'
 import './SymbolTable.css'
@@ -40,7 +40,7 @@ export function SymbolTable({
         <thead>
           <tr>
             <th>
-              交易品种
+              {'\u4ea4\u6613\u54c1\u79cd'}
               <span
                 className="ff-symbol-table__column-resizer"
                 onDoubleClick={() => onResetColumnWidth('symbol')}
@@ -48,7 +48,7 @@ export function SymbolTable({
               />
             </th>
             <th>
-              中文名称
+              {'\u4e2d\u6587\u540d\u79f0'}
               <span
                 className="ff-symbol-table__column-resizer"
                 onDoubleClick={() => onResetColumnWidth('name')}
@@ -56,7 +56,7 @@ export function SymbolTable({
               />
             </th>
             <th>
-              类型
+              {'\u7c7b\u578b'}
               <span
                 className="ff-symbol-table__column-resizer"
                 onDoubleClick={() => onResetColumnWidth('type')}
@@ -64,7 +64,7 @@ export function SymbolTable({
               />
             </th>
             <th>
-              鎻忚堪
+              {'\u63cf\u8ff0'}
             </th>
           </tr>
         </thead>

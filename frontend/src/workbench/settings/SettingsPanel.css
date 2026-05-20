@@ -1,35 +1,4 @@
-﻿.ff-settings-drawer__body {
-  display: grid;
-  align-content: start;
-  gap: 0;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding: 12px var(--ff-mt5-panel-x);
-}
-
-.ff-settings-tabs {
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 0;
-}
-
-.ff-settings-tabs__item {
-  height: 24px;
-  font-size: 11px;
-  font-weight: 650;
-}
-
-.ff-settings-panel {
-  min-height: 180px;
-  padding-top: 12px;
-}
-
-.ff-settings-empty-panel {
-  min-height: 180px;
-}
-
-.ff-settings-events-panel {
+﻿.ff-settings-events-panel {
   display: grid;
   box-sizing: border-box;
   width: 384px;
@@ -612,5 +581,6 @@
   font: 12px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
   padding: 0 30px 0 9px;
 }
+
 
 
