@@ -25,18 +25,13 @@ import {
 import { RightDrawer } from './rightDrawer/RightDrawer'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
 import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
+import { readBooleanFlag, readJson, readString, removeStorageItem, writeBooleanFlag, writeString } from './persistence/jsonStorage'
+import { storageKeys } from './persistence/storageKeys'
 import { readSettingsStringValue, settingsSymbolChangedEvent } from './settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from './settings/chartSettingsSchema'
 import { TopBar } from './topbar/TopBar'
 import './openableControl.css'
 import './AppShell.css'
-
-const drawerWidthStorageKey = 'fractalframe:rightWidgetDrawerWidthPx:v1'
-const rightDrawerActiveStorageKey = 'fractalframe:rightWidgetActiveDrawer:v1'
-const bottomDrawerOpenStorageKey = 'fractalframe:bottomDrawerOpen:v1'
-const bottomDrawerHeightStorageKey = 'fractalframe:bottomDrawerHeightPx:v1'
-const sharedSelectionStorageKey = 'fractalframe:mt5ImportCenterSharedSelection:v1'
-const symbolSnapshotStorageKey = 'fractalframe:mt5ImportCenterSymbolSnapshot:v1'
 
 const leftToolbarItems = [
   { type: 'button', label: 'Cursor', svg: LEFT_RAIL_CURSOR_ARROW_SVGREPO_ICON_48 },
@@ -72,8 +67,8 @@ function getInitialDrawerWidth() {
   const fallbackWidth = 280
 
   try {
-    const raw = window.localStorage.getItem(drawerWidthStorageKey)
-    const value = raw == null ? fallbackWidth : Number(raw)
+    const raw = readString(storageKeys.rightWidgetDrawerWidthPx, '')
+    const value = raw === '' ? fallbackWidth : Number(raw)
     return Math.max(220, Math.min(900, Math.round(value)))
   } catch {
     return fallbackWidth
@@ -81,19 +76,15 @@ function getInitialDrawerWidth() {
 }
 
 function getInitialBottomDrawerOpen() {
-  try {
-    return window.localStorage.getItem(bottomDrawerOpenStorageKey) === '1'
-  } catch {
-    return false
-  }
+  return readBooleanFlag(storageKeys.bottomDrawerOpen)
 }
 
 function getInitialBottomDrawerHeight() {
   const fallbackHeight = 300
 
   try {
-    const raw = window.localStorage.getItem(bottomDrawerHeightStorageKey)
-    const value = raw == null ? fallbackHeight : Number(raw)
+    const raw = readString(storageKeys.bottomDrawerHeightPx, '')
+    const value = raw === '' ? fallbackHeight : Number(raw)
     return Math.max(220, Math.min(520, Math.round(value)))
   } catch {
     return fallbackHeight
@@ -101,24 +92,15 @@ function getInitialBottomDrawerHeight() {
 }
 
 function getInitialRightDrawerActive(): 'mt5' | 'settings' | null {
-  try {
-    const value = window.localStorage.getItem(rightDrawerActiveStorageKey)
-    return value === 'mt5' || value === 'settings' ? value : null
-  } catch {
-    return null
-  }
+  const value = readString(storageKeys.rightWidgetActiveDrawer)
+  return value === 'mt5' || value === 'settings' ? value : null
 }
 
 function readSharedSelection() {
-  try {
-    const raw = window.localStorage.getItem(sharedSelectionStorageKey)
-    const parsed = raw ? JSON.parse(raw) : null
-    return {
-      symbol: typeof parsed?.symbol === 'string' && parsed.symbol ? parsed.symbol : 'XAUUSDm',
-      period: typeof parsed?.period === 'string' && parsed.period ? parsed.period : 'M1',
-    }
-  } catch {
-    return { symbol: 'XAUUSDm', period: 'M1' }
+  const parsed = readJson<{ symbol?: string; period?: string } | null>(storageKeys.importCenterSharedSelection, null)
+  return {
+    symbol: typeof parsed?.symbol === 'string' && parsed.symbol ? parsed.symbol : 'XAUUSDm',
+    period: typeof parsed?.period === 'string' && parsed.period ? parsed.period : 'M1',
   }
 }
 
@@ -127,14 +109,9 @@ function periodToChartPeriod(period: string) {
 }
 
 function readSymbolDisplayName(symbol: string) {
-  try {
-    const raw = window.localStorage.getItem(symbolSnapshotStorageKey)
-    const parsed = raw ? JSON.parse(raw) as { symbols?: Mt5SymbolRow[] } : null
-    const row = parsed?.symbols?.find((item) => item.symbol === symbol)
-    return row ? resolveMt5SymbolDisplay(row).chineseName : ''
-  } catch {
-    return ''
-  }
+  const parsed = readJson<{ symbols?: Mt5SymbolRow[] } | null>(storageKeys.importCenterSymbolSnapshot, null)
+  const row = parsed?.symbols?.find((item) => item.symbol === symbol)
+  return row ? resolveMt5SymbolDisplay(row).chineseName : ''
 }
 
 function resolveWorkspaceTimezone() {
@@ -228,39 +205,23 @@ export function AppShell() {
   }, [])
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(drawerWidthStorageKey, String(rightDrawerWidth))
-    } catch {
-      // Width persistence is best-effort only.
-    }
+    writeString(storageKeys.rightWidgetDrawerWidthPx, String(rightDrawerWidth))
   }, [rightDrawerWidth])
 
   useEffect(() => {
-    try {
-      if (activeRightDrawer) {
-        window.localStorage.setItem(rightDrawerActiveStorageKey, activeRightDrawer)
-      } else {
-        window.localStorage.removeItem(rightDrawerActiveStorageKey)
-      }
-    } catch {
-      // Right drawer open state persistence is best-effort only.
+    if (activeRightDrawer) {
+      writeString(storageKeys.rightWidgetActiveDrawer, activeRightDrawer)
+    } else {
+      removeStorageItem(storageKeys.rightWidgetActiveDrawer)
     }
   }, [activeRightDrawer])
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(bottomDrawerOpenStorageKey, bottomDrawerOpen ? '1' : '0')
-    } catch {
-      // Bottom drawer persistence is best-effort only.
-    }
+    writeBooleanFlag(storageKeys.bottomDrawerOpen, bottomDrawerOpen)
   }, [bottomDrawerOpen])
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(bottomDrawerHeightStorageKey, String(bottomDrawerHeight))
-    } catch {
-      // Bottom drawer height persistence is best-effort only.
-    }
+    writeString(storageKeys.bottomDrawerHeightPx, String(bottomDrawerHeight))
   }, [bottomDrawerHeight])
 
   const handleBottomResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {

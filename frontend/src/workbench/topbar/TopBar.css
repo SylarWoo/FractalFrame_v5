@@ -12,15 +12,16 @@
 
 .ff-topbar__brand {
   color: #020617;
+  font-family: Arial, Tahoma, 'Segoe UI', sans-serif;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
 }
 
 .ff-shortcut-menu {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   height: 28px;
   min-width: 0;
 }
@@ -33,19 +34,25 @@
 .ff-shortcut-symbol__toggle {
   display: inline-flex;
   height: 28px;
-  min-width: 122px;
+  min-width: 108px;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
   border: 1px solid #edf0f3;
   border-radius: 4px;
   background: #f3f4f6;
   color: #111827;
   cursor: pointer;
+  font-family: Arial, Tahoma, 'Segoe UI', sans-serif;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 26px;
-  padding: 0 9px;
+  padding: 0 7px;
+}
+
+.ff-shortcut-symbol__toggle span {
+  display: inline-block;
+  transform: scaleX(0.88);
+  transform-origin: left center;
 }
 
 .ff-shortcut-symbol__toggle:hover {
@@ -58,13 +65,13 @@
   left: 0;
   z-index: 90;
   display: grid;
-  min-width: 148px;
+  min-width: 128px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
   border-radius: 3px;
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
-  padding: 5px;
+  padding: 4px;
 }
 
 .ff-shortcut-symbol__menu button {
@@ -74,10 +81,17 @@
   background: transparent;
   color: #111827;
   cursor: pointer;
+  font-family: Arial, Tahoma, 'Segoe UI', sans-serif;
   font-size: 14px;
-  font-weight: 600;
-  padding: 0 8px;
+  font-weight: 700;
+  padding: 0 7px;
   text-align: left;
+}
+
+.ff-shortcut-symbol__menu button span {
+  display: inline-block;
+  transform: scaleX(0.88);
+  transform-origin: left center;
 }
 
 .ff-shortcut-symbol__menu button:hover {
@@ -92,7 +106,7 @@
 .ff-shortcut-periods {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 1px;
   height: 28px;
   min-width: 0;
 }
@@ -108,7 +122,7 @@
   font-size: 14px;
   font-weight: 400;
   line-height: 24px;
-  padding: 0 7px;
+  padding: 0 5px;
 }
 
 .ff-shortcut-periods button:hover {

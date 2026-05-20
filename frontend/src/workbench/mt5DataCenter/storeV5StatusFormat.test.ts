@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { formatStoreOperationLine, resolveStoreOperationProgress } from './storeV5StatusFormat'
-import type { StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
+import {
+  formatChartLoadStatus,
+  formatStoreOperationLine,
+  resolveLocalM1Rows,
+  resolveStoreOperationProgress,
+  storeTableKeyForPeriod,
+} from './storeV5StatusFormat'
+import type { StoreV5CheckPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
 
 describe('StoreV5 status formatting', () => {
   it('formats pull progress from structured job state', () => {
@@ -30,5 +36,33 @@ describe('StoreV5 status formatting', () => {
     }
 
     expect(resolveStoreOperationProgress(job, null, null)).toEqual({ hasEstimate: true, width: 42 })
+  })
+
+  it('resolves local M1 rows from legacy and current status shapes', () => {
+    const status: StoreV5CheckPayload = {
+      ok: true,
+      status: 'ok',
+      symbol: 'XAUUSDm',
+      directM1: null,
+      rawDirectM1: { rawRowsCount: 12 },
+      aggregated: [],
+    }
+
+    expect(resolveLocalM1Rows(status)).toBe(12)
+  })
+
+  it('maps store table keys and chart load status consistently', () => {
+    expect(storeTableKeyForPeriod('m1')).toBe('m1-M1')
+    expect(storeTableKeyForPeriod('h4')).toBe('aggregate-H4')
+    expect(formatChartLoadStatus({
+      error: false,
+      loading: false,
+      loadingMore: true,
+      period: 'H4',
+      requestedRows: 10000,
+      rows: 500,
+      symbol: 'XAUUSDm',
+      totalRows: 20000,
+    })).toContain('加载历史')
   })
 })

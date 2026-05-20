@@ -1,0 +1,26 @@
+export const storageKeys = {
+  bottomDrawerHeightPx: 'fractalframe:bottomDrawerHeightPx:v1',
+  bottomDrawerOpen: 'fractalframe:bottomDrawerOpen:v1',
+  importCenterColumnWidthsPx: 'fractalframe:mt5ImportCenterColumnWidthsPx:v1',
+  importCenterM1CheckResults: 'fractalframe:mt5ImportCenterM1CheckResults:v1',
+  importCenterQuery: 'fractalframe:mt5ImportCenterQuery:v1',
+  importCenterSelectedTab: 'fractalframe:mt5ImportCenterSelectedTab:v1',
+  importCenterShortcutMenuEnabled: 'fractalframe:mt5ImportCenterShortcutMenuEnabled:v1',
+  importCenterShortcutMenuPeriods: 'fractalframe:mt5ImportCenterShortcutMenuPeriods:v1',
+  importCenterSharedSelection: 'fractalframe:mt5ImportCenterSharedSelection:v1',
+  importCenterStorePanelPersistenceEnabled: 'fractalframe:mt5ImportCenterStorePanelPersistenceEnabled:v1',
+  importCenterStorePanelSelectedTableKey: 'fractalframe:mt5ImportCenterStorePanelSelectedTableKey:v1',
+  importCenterStoreV5ListSymbols: 'fractalframe:mt5ImportCenterStoreV5ListSymbols:v1',
+  importCenterStoreV5Status: 'fractalframe:mt5ImportCenterStoreV5Status:v1',
+  importCenterSymbolSnapshot: 'fractalframe:mt5ImportCenterSymbolSnapshot:v1',
+  importCenterTopPaneHeightPx: 'fractalframe:mt5ImportCenterTopPaneHeightPx:v1',
+  importCenterWatchlistRealtimeEnabled: 'fractalframe:mt5ImportCenterWatchlistRealtimeEnabled:v1',
+  importCenterWatchlistRealtimeSnapshot: 'fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1',
+  importCenterWatchlistSymbols: 'fractalframe:mt5ImportCenterWatchlistSymbols:v1',
+  importCenterWatchlistTableHeightPx: 'fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1',
+  rightWidgetActiveDrawer: 'fractalframe:rightWidgetActiveDrawer:v1',
+  rightWidgetDrawerWidthPx: 'fractalframe:rightWidgetDrawerWidthPx:v1',
+  settingsSymbolPanel: 'fractalframe:settingsSymbolPanel:v1',
+} as const
+
+export type StorageKeyName = keyof typeof storageKeys

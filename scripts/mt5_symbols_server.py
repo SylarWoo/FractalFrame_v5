@@ -11,25 +11,28 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 from http_bridge.jobs import (
     AGGREGATE_JOBS,
     AGGREGATE_JOBS_CONDITION,
     AGGREGATE_JOBS_LOCK,
-    AGGREGATE_JOB_TERMINAL_PHASES,
     M1_CHECK_JOBS,
     M1_CHECK_JOBS_LOCK,
     PULL_JOBS,
     PULL_JOBS_CONDITION,
     PULL_JOBS_LOCK,
-    PULL_JOB_TERMINAL_PHASES,
 )
-from http_bridge.query_params import clamp_limit, clamp_m1_check_chunk, clamp_m1_check_count, query_bool, safe_query_int
+from http_bridge.query_params import safe_query_int
 from http_bridge.response import send_cors_headers as send_cors_headers_response
 from http_bridge.response import send_json as send_json_response
-from http_bridge.response import start_sse, write_sse_event
-from http_bridge.route_helpers import first_query_value, parse_timeframes, required_job_id, required_symbol
+from http_bridge.response import write_sse_event
+from http_bridge.mt5_m1_check_routes import handle_mt5_m1_check_get
+from http_bridge.mt5_symbol_routes import handle_mt5_symbols_get
+from http_bridge.sse import send_aggregate_job_events as send_aggregate_job_events_sse
+from http_bridge.sse import send_mt5_tick_events as send_mt5_tick_events_sse
+from http_bridge.sse import send_pull_job_events as send_pull_job_events_sse
+from http_bridge.store_v5_routes import handle_store_v5_get, handle_store_v5_post
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -2881,351 +2884,21 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/api/market-data/v1/store-v5/direct-m1/clean":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            try:
-                payload = clean_store_v5_direct_m1(symbol, store_root=self.store_root)
-                self.send_json(200 if payload.get("ok") is True else 400, payload)
-            except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "store_v5_clean_failed", "error": str(exc)})
+        services = sys.modules[__name__]
+        if handle_store_v5_post(self, parsed, services):
             return
         self.send_json(404, {"ok": False, "status": "not_found", "error": parsed.path})
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/api/market-data/v1/mt5/ticks/events":
-            query = parse_qs(parsed.query)
-            symbols = parse_symbols_query((query.get("symbols") or [""])[0])
-            interval_ms = max(200, min(safe_query_int((query.get("intervalMs") or query.get("interval_ms") or [None])[0], 500) or 500, 5_000))
-            if not symbols:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbols_required"})
-                return
-            self.send_mt5_tick_events(symbols, interval_ms=interval_ms)
+        services = sys.modules[__name__]
+        if handle_mt5_symbols_get(self, parsed, services):
             return
-
-        if parsed.path == "/api/market-data/v1/mt5/m1/check/start":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            mode = (query.get("mode") or ["refresh"])[0].strip().lower()
-            chunk = clamp_m1_check_chunk((query.get("chunk") or [None])[0], default=200_000)
-            max_count = clamp_m1_check_count((query.get("maxCount") or query.get("max_count") or [None])[0], default=10_000_000)
-            pause_ms = max(0, min(safe_query_int((query.get("pauseMs") or query.get("pause_ms") or [None])[0], 50) or 0, 5_000))
-            since_time = safe_query_int((query.get("sinceTime") or query.get("since_time") or [None])[0], None)
-            base_first_time = safe_query_int((query.get("baseFirstTime") or query.get("base_first_time") or [None])[0], None)
-            base_last_time = safe_query_int((query.get("baseLastTime") or query.get("base_last_time") or [None])[0], None)
-            base_true_m1_rows_count = safe_query_int((query.get("baseTrueM1RowsCount") or query.get("base_true_m1_rows_count") or [None])[0], 0) or 0
-            base_mt5_rows_count = safe_query_int((query.get("baseMt5RowsCount") or query.get("base_mt5_rows_count") or [None])[0], 0) or 0
-            overlap_bars = safe_query_int((query.get("overlapBars") or query.get("overlap_bars") or [None])[0], 1000) or 1000
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            if mode not in {"refresh", "incremental"}:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "unsupported_check_mode"})
-                return
-            if mode == "incremental" and since_time is None:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "since_time_required"})
-                return
-            self.send_json(
-                202,
-                start_mt5_m1_staged_check(
-                    symbol,
-                    chunk=chunk,
-                    max_count=max_count,
-                    pause_ms=pause_ms,
-                    mode=mode,
-                    since_time=since_time,
-                    base_first_time=base_first_time,
-                    base_last_time=base_last_time,
-                    base_true_m1_rows_count=base_true_m1_rows_count,
-                    base_mt5_rows_count=base_mt5_rows_count,
-                    overlap_bars=overlap_bars,
-                ),
-            )
+        if handle_mt5_m1_check_get(self, parsed, services):
             return
-
-        if parsed.path == "/api/market-data/v1/mt5/m1/check/progress":
-            query = parse_qs(parsed.query)
-            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
-            if not job_id:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
-                return
-            job = _get_m1_check_job(job_id)
-            if not job:
-                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
-                return
-            self.send_json(200, job)
+        if handle_store_v5_get(self, parsed, services):
             return
-
-        if parsed.path == "/api/market-data/v1/mt5/m1/check/cancel":
-            query = parse_qs(parsed.query)
-            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
-            if not job_id:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
-                return
-            job = _set_m1_check_job(job_id, cancelRequested=True, status="mt5_m1_check_cancel_requested")
-            if not job:
-                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
-                return
-            self.send_json(200, job)
-            return
-
-        if parsed.path in {"/api/market-data/v1/mt5/m1/check", "/api/market-data/v1/store-v5/check"}:
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            count = clamp_m1_check_count((query.get("count") or [None])[0], default=200_000)
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            try:
-                payload = check_mt5_m1_live(symbol, count=count)
-                self.send_json(200, payload)
-            except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "mt5_m1_check_failed", "error": str(exc)})
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/status":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            try:
-                payload = check_store_v5(symbol, store_root=self.store_root)
-                self.send_json(200, payload)
-            except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "store_v5_status_failed", "error": str(exc)})
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/m1/repair-gaps":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            lookback_minutes = safe_query_int((query.get("lookbackMinutes") or query.get("lookback_minutes") or [None])[0], 360) or 360
-            max_gap_minutes = safe_query_int((query.get("maxGapMinutes") or query.get("max_gap_minutes") or [None])[0], 240) or 240
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            try:
-                payload = repair_store_v5_m1_gaps(
-                    symbol,
-                    lookback_minutes=lookback_minutes,
-                    max_gap_minutes=max_gap_minutes,
-                    store_root=self.store_root,
-                )
-                self.send_json(200 if payload.get("ok") is True else 500, payload)
-            except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "store_v5_m1_gap_repair_failed", "error": str(exc)})
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/delete":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            try:
-                payload = delete_store_v5_symbol(symbol, store_root=self.store_root)
-                self.send_json(200 if payload.get("ok") is True else 400, payload)
-            except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "store_v5_delete_failed", "error": str(exc)})
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/aggregated/delete":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            raw_timeframes = (query.get("timeframes") or [""])[0]
-            timeframes = [item.strip().upper() for item in raw_timeframes.split(",") if item.strip()]
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            if not timeframes:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "timeframes_required"})
-                return
-            try:
-                payload = delete_store_v5_aggregated_timeframes(symbol, timeframes=timeframes, store_root=self.store_root)
-                self.send_json(200 if payload.get("ok") is True else 400, payload)
-            except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "store_v5_aggregated_delete_failed", "error": str(exc)})
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/pull/start":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            mode = (query.get("mode") or ["incremental"])[0].strip().lower()
-            count_text = (query.get("count") or [None])[0]
-            count = None if mode == "refresh" and count_text in {None, ""} else clamp_m1_check_count(count_text, default=10_000_000)
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            if mode not in {"refresh", "incremental"}:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "unsupported_import_mode"})
-                return
-            self.send_json(202, start_store_v5_pull_job(symbol, mode=mode, count=count, store_root=self.store_root))
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/pull/progress":
-            query = parse_qs(parsed.query)
-            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
-            if not job_id:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
-                return
-            job = _get_pull_job(job_id)
-            if not job:
-                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
-                return
-            self.send_json(200, job)
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/pull/events":
-            query = parse_qs(parsed.query)
-            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
-            if not job_id:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
-                return
-            if not _get_pull_job(job_id):
-                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
-                return
-            self.send_pull_job_events(job_id)
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/pull/cancel":
-            query = parse_qs(parsed.query)
-            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
-            if not job_id:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
-                return
-            job = _set_pull_job(job_id, cancelRequested=True, status="store_v5_pull_cancel_requested")
-            if not job:
-                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
-                return
-            self.send_json(200, job)
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/aggregate/start":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            raw_timeframes = (query.get("timeframes") or ["M5,M15,M30,H1,H2,H3,H4,D1,W1,MN1"])[0]
-            timeframes = [item.strip().upper() for item in raw_timeframes.split(",") if item.strip()]
-            rebuild = query_bool((query.get("rebuild") or ["0"])[0], default=False)
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            if not timeframes:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "timeframes_required"})
-                return
-            self.send_json(202, start_store_v5_aggregate_job(symbol, timeframes=timeframes, rebuild=rebuild, store_root=self.store_root))
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/aggregate/progress":
-            query = parse_qs(parsed.query)
-            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
-            if not job_id:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
-                return
-            job = _get_aggregate_job(job_id)
-            if not job:
-                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
-                return
-            self.send_json(200, job)
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/aggregate/events":
-            query = parse_qs(parsed.query)
-            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
-            if not job_id:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
-                return
-            if not _get_aggregate_job(job_id):
-                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
-                return
-            self.send_aggregate_job_events(job_id)
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/aggregate/cancel":
-            query = parse_qs(parsed.query)
-            job_id = (query.get("jobId") or query.get("job_id") or [""])[0].strip()
-            if not job_id:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
-                return
-            job = _set_aggregate_job(job_id, cancelRequested=True, status="store_v5_aggregate_cancel_requested")
-            if not job:
-                self.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
-                return
-            self.send_json(200, job)
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/pull":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            mode = (query.get("mode") or ["incremental"])[0].strip().lower()
-            count = clamp_m1_check_count((query.get("count") or [None])[0], default=10_000_000)
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            try:
-                payload = pull_store_v5(symbol, mode=mode, count=count, store_root=self.store_root)
-                self.send_json(200 if payload.get("ok") is True else 400, payload)
-            except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "store_v5_pull_failed", "error": str(exc)})
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/direct-m1/clean":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            try:
-                payload = clean_store_v5_direct_m1(symbol, store_root=self.store_root)
-                self.send_json(200 if payload.get("ok") is True else 400, payload)
-            except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "store_v5_clean_failed", "error": str(exc)})
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/aggregate":
-            query = parse_qs(parsed.query)
-            symbol = (query.get("symbol") or [""])[0].strip()
-            raw_timeframes = (query.get("timeframes") or ["M5,M15,M30,H1,H2,H3,H4,D1,W1,MN1"])[0]
-            timeframes = [item.strip().upper() for item in raw_timeframes.split(",") if item.strip()]
-            rebuild = query_bool((query.get("rebuild") or ["1"])[0], default=True)
-            if not symbol:
-                self.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
-                return
-            try:
-                payload = aggregate_store_v5(symbol, timeframes=timeframes, rebuild=rebuild, store_root=self.store_root)
-                self.send_json(200 if payload.get("ok") is True else 400, payload)
-            except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "store_v5_aggregate_failed", "error": str(exc)})
-            return
-
-        if parsed.path == "/api/market-data/v1/store-v5/query":
-            query = parse_qs(parsed.query)
-            try:
-                payload = query_store_v5_ohlcv(query, store_root=self.store_root)
-                self.send_json(200, payload)
-            except Exception as exc:
-                self.send_json(500, {"ok": False, "status": "store_v5_query_failed", "error": str(exc)})
-            return
-
-        if parsed.path not in {"/api/market-data/v1/mt5/symbols", "/api/market/mt5/symbols"}:
-            self.send_json(404, {"ok": False, "status": "not_found", "error": parsed.path})
-            return
-
-        query = parse_qs(parsed.query)
-        text_query = (query.get("query") or [""])[0]
-        market = (query.get("market") or [""])[0]
-        limit = clamp_limit((query.get("limit") or ["50000"])[0])
-        refresh = (query.get("refresh") or ["0"])[0].lower() in {"1", "true", "yes"}
-
-        payload = (
-            scan_mt5_symbols(self.cache_root, query=text_query, market=market, limit=limit)
-            if refresh
-            else read_symbol_cache(self.cache_root, query=text_query, market=market, limit=limit)
-        )
-        self.send_json(200 if payload.get("ok") is True else 503, payload)
+        self.send_json(404, {"ok": False, "status": "not_found", "error": parsed.path})
 
     def send_cors_headers(self) -> None:
         send_cors_headers_response(self)
@@ -3234,190 +2907,23 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
         send_json_response(self, status, payload)
 
     def send_mt5_tick_events(self, symbols: list[str], interval_ms: int) -> None:
-        start_sse(self)
-
-        try:
-            import MetaTrader5 as mt5
-        except ImportError as exc:
-            self.write_sse_event(1, "error", {
-                "ok": False,
-                "status": "mt5_realtime_unavailable",
-                "error": str(exc),
-                "symbols": symbols,
-                "publishedAt": utc_now_iso(),
-            })
-            return
-
-        initialized = False
-        event_id = 1
-        try:
-            if not mt5.initialize():
-                self.write_sse_event(event_id, "error", {
-                    "ok": False,
-                    "status": "mt5_realtime_init_failed",
-                    "error": "mt5_initialize_failed",
-                    "mt5LastError": mt5.last_error(),
-                    "symbols": symbols,
-                    "publishedAt": utc_now_iso(),
-                })
-                return
-            initialized = True
-
-            selected_symbols: list[str] = []
-            day_open_by_symbol: dict[str, float | None] = {}
-            for symbol in symbols:
-                if mt5.symbol_select(symbol, True):
-                    selected_symbols.append(symbol)
-                    day_open_by_symbol[symbol] = resolve_mt5_day_open(mt5, symbol)
-
-            if not selected_symbols:
-                self.write_sse_event(event_id, "error", {
-                    "ok": False,
-                    "status": "mt5_realtime_symbol_select_failed",
-                    "error": "all_symbol_select_failed",
-                    "symbols": symbols,
-                    "mt5LastError": mt5.last_error(),
-                    "publishedAt": utc_now_iso(),
-                })
-                return
-
-            self.write_sse_event(event_id, "ready", {
-                "ok": True,
-                "status": "mt5_realtime_ready",
-                "symbols": selected_symbols,
-                "intervalMs": interval_ms,
-                "publishedAt": utc_now_iso(),
-            })
-
-            sleep_seconds = interval_ms / 1000
-            while True:
-                event_id += 1
-                ticks = [
-                    payload
-                    for symbol in selected_symbols
-                    if (payload := mt5_tick_to_payload(mt5, symbol, day_open_by_symbol.get(symbol))) is not None
-                ]
-                self.write_sse_event(event_id, "ticks", {
-                    "ok": True,
-                    "status": "mt5_realtime_ticks",
-                    "symbols": selected_symbols,
-                    "ticks": ticks,
-                    "publishedAt": utc_now_iso(),
-                })
-                time.sleep(sleep_seconds)
-        except (BrokenPipeError, ConnectionResetError, OSError):
-            return
-        except Exception as exc:
-            try:
-                self.write_sse_event(event_id + 1, "error", {
-                    "ok": False,
-                    "status": "mt5_realtime_exception",
-                    "error": str(exc),
-                    "symbols": symbols,
-                    "publishedAt": utc_now_iso(),
-                })
-            except (BrokenPipeError, ConnectionResetError, OSError):
-                return
-        finally:
-            if initialized:
-                try:
-                    mt5.shutdown()
-                except Exception:
-                    pass
+        send_mt5_tick_events_sse(
+            self,
+            symbols,
+            interval_ms,
+            utc_now_iso=utc_now_iso,
+            mt5_tick_to_payload=mt5_tick_to_payload,
+            resolve_mt5_day_open=resolve_mt5_day_open,
+        )
 
     def write_sse_event(self, event_id: int, event_name: str, data: dict[str, Any]) -> None:
         write_sse_event(self, event_id, event_name, data)
 
     def send_pull_job_events(self, job_id: str) -> None:
-        start_sse(self)
-
-        last_sent = 0
-        while True:
-            with PULL_JOBS_CONDITION:
-                job = PULL_JOBS.get(job_id)
-                if not job:
-                    events = [{
-                        "id": last_sent + 1,
-                        "event": "error",
-                        "data": {"ok": False, "jobId": job_id, "phase": "failed", "status": "job_not_found", "error": "job_not_found"},
-                    }]
-                else:
-                    PULL_JOBS_CONDITION.wait_for(
-                        lambda: any(int(event.get("id") or 0) > last_sent for event in job.get("events", []))
-                        or str(job.get("phase") or "") in PULL_JOB_TERMINAL_PHASES,
-                        timeout=15,
-                    )
-                    events = [
-                        event for event in job.get("events", [])
-                        if int(event.get("id") or 0) > last_sent
-                    ]
-                    if not events:
-                        events = [{"id": last_sent, "event": "ping", "data": {"ok": True, "jobId": job_id, "phase": job.get("phase"), "updatedAt": utc_now_iso()}}]
-
-            should_close = False
-            for event in events:
-                event_id = int(event.get("id") or last_sent)
-                event_name = str(event.get("event") or "progress")
-                data = event.get("data") if isinstance(event.get("data"), dict) else {}
-                if event_id > last_sent:
-                    last_sent = event_id
-                if event_name in {"done", "error", "cancelled"}:
-                    should_close = True
-                try:
-                    self.wfile.write(f"id: {event_id}\n".encode("utf-8"))
-                    self.wfile.write(f"event: {event_name}\n".encode("utf-8"))
-                    self.wfile.write(f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8"))
-                    self.wfile.flush()
-                except (BrokenPipeError, ConnectionResetError, OSError):
-                    return
-            if should_close:
-                return
+        send_pull_job_events_sse(self, job_id, utc_now_iso=utc_now_iso)
 
     def send_aggregate_job_events(self, job_id: str) -> None:
-        start_sse(self)
-
-        last_sent = 0
-        while True:
-            with AGGREGATE_JOBS_CONDITION:
-                job = AGGREGATE_JOBS.get(job_id)
-                if not job:
-                    events = [{
-                        "id": last_sent + 1,
-                        "event": "error",
-                        "data": {"ok": False, "jobId": job_id, "phase": "failed", "status": "job_not_found", "error": "job_not_found"},
-                    }]
-                else:
-                    AGGREGATE_JOBS_CONDITION.wait_for(
-                        lambda: any(int(event.get("id") or 0) > last_sent for event in job.get("events", []))
-                        or str(job.get("phase") or "") in AGGREGATE_JOB_TERMINAL_PHASES,
-                        timeout=15,
-                    )
-                    events = [
-                        event for event in job.get("events", [])
-                        if int(event.get("id") or 0) > last_sent
-                    ]
-                    if not events:
-                        events = [{"id": last_sent, "event": "ping", "data": {"ok": True, "jobId": job_id, "phase": job.get("phase"), "updatedAt": utc_now_iso()}}]
-
-            should_close = False
-            for event in events:
-                event_id = int(event.get("id") or last_sent)
-                event_name = str(event.get("event") or "progress")
-                data = event.get("data") if isinstance(event.get("data"), dict) else {}
-                if event_id > last_sent:
-                    last_sent = event_id
-                if event_name in {"done", "error", "cancelled"}:
-                    should_close = True
-                try:
-                    self.wfile.write(f"id: {event_id}\n".encode("utf-8"))
-                    self.wfile.write(f"event: {event_name}\n".encode("utf-8"))
-                    self.wfile.write(f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8"))
-                    self.wfile.flush()
-                except (BrokenPipeError, ConnectionResetError, OSError):
-                    return
-            if should_close:
-                return
-
+        send_aggregate_job_events_sse(self, job_id, utc_now_iso=utc_now_iso)
     def log_message(self, format: str, *args: Any) -> None:
         print(f"[mt5_symbols_server] {self.address_string()} - {format % args}")
 
@@ -3455,4 +2961,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
 

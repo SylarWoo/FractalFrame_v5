@@ -135,11 +135,11 @@
   border: 1px solid transparent;
   border-radius: 3px;
   background: transparent;
-  color: #4b5563;
+  color: #111827;
   cursor: pointer;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  font-family: SimHei, 'Microsoft YaHei', Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;
   user-select: none;

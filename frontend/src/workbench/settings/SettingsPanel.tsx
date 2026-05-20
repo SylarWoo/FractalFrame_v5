@@ -4,6 +4,7 @@ import { OpenableSelect } from '../controls/OpenableSelect'
 import { readSettingsBooleanValue, readSettingsNumberStringValue, readSettingsStringValue, readSettingsSymbolState, settingsSymbolChangedEvent, writeSettingsSymbolStateValue } from '../settingsSymbolState'
 import { openChartColorPalettePopoverV1 } from '../rightDrawer/color_palette/chartColorPalettePopoverV1.js'
 import { chartSettingDefaults, chartSettingKeys } from './chartSettingsSchema'
+import './SettingsPanel.css'
 
 export type SettingsPanelTab = 'symbol' | 'status' | 'coordinates' | 'layout' | 'trading' | 'alerts' | 'events'
 

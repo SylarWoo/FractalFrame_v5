@@ -1,0 +1,94 @@
+﻿.ff-symbol-table-wrap {
+  box-sizing: border-box;
+  min-height: 0;
+  margin: 0 var(--ff-mt5-panel-x);
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-top: 1px solid #dbe3ef;
+  border-right: 1px solid #dbe3ef;
+  border-bottom: 1px solid #dbe3ef;
+  border-left: 1px solid #dbe3ef;
+}
+
+.ff-symbol-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.ff-symbol-table th,
+.ff-symbol-table td {
+  height: 23px;
+  border: 0;
+  border-right: 1px solid #dbe3ef;
+  border-bottom: 1px solid #dbe3ef;
+  padding: 0 6px;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ff-symbol-table th:last-child,
+.ff-symbol-table td:last-child {
+  border-right: 0;
+}
+
+.ff-symbol-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.ff-symbol-table__column-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 2;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.ff-symbol-table__column-resizer::before {
+  position: absolute;
+  top: 5px;
+  right: 3px;
+  bottom: 5px;
+  width: 1px;
+  background: transparent;
+  content: '';
+}
+
+.ff-symbol-table th:hover .ff-symbol-table__column-resizer::before,
+body[data-fractalframe-mt5-column-resizing='true'] .ff-symbol-table__column-resizer::before {
+  background: #94a3b8;
+}
+
+.ff-symbol-table tbody tr {
+  cursor: pointer;
+}
+
+.ff-symbol-table tbody tr:hover td {
+  background: #eef5ff;
+}
+
+.ff-symbol-table tr[data-selected='true'] td {
+  background: #dff0fb;
+  color: #075985;
+  font-weight: 800;
+}
+
+.ff-symbol-table__empty {
+  height: 72px !important;
+  color: #64748b;
+  text-align: center !important;
+}
+
+

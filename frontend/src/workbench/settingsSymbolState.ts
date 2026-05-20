@@ -1,23 +1,18 @@
-export const settingsSymbolStorageKey = 'fractalframe:settingsSymbolPanel:v1'
-export const settingsSymbolChangedEvent = 'fractalframe:settingsSymbolPanelChanged'
+import { readJson, writeJson } from './persistence/jsonStorage'
+import { storageKeys } from './persistence/storageKeys'
+import { dispatchWorkbenchEvent, workbenchEvents } from './persistence/workbenchEvents'
+
+export const settingsSymbolStorageKey = storageKeys.settingsSymbolPanel
+export const settingsSymbolChangedEvent = workbenchEvents.settingsSymbolChanged
 
 export function readSettingsSymbolState(): Record<string, unknown> {
-  try {
-    const raw = window.localStorage.getItem(settingsSymbolStorageKey)
-    return raw ? JSON.parse(raw) as Record<string, unknown> : {}
-  } catch {
-    return {}
-  }
+  return readJson<Record<string, unknown>>(settingsSymbolStorageKey, {})
 }
 
 export function writeSettingsSymbolStateValue(key: string, value: unknown) {
-  try {
-    const current = readSettingsSymbolState()
-    window.localStorage.setItem(settingsSymbolStorageKey, JSON.stringify({ ...current, [key]: value }))
-    window.dispatchEvent(new Event(settingsSymbolChangedEvent))
-  } catch {
-    // Settings persistence is best-effort only.
-  }
+  const current = readSettingsSymbolState()
+  const written = writeJson(settingsSymbolStorageKey, { ...current, [key]: value })
+  if (written) dispatchWorkbenchEvent(settingsSymbolChangedEvent)
 }
 
 export function readSettingsStringValue(storageKey: string, fallback: string) {

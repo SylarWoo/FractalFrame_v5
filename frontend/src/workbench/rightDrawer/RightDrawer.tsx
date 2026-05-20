@@ -1,10 +1,17 @@
 ﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import './RightDrawer.css'
+import '../mt5DataCenter/Mt5DataCenterPanel.css'
 import type { ChartLoadState } from '../chart/ChartCoreHost'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
 import { resolveMt5SymbolDisplay } from './mt5SymbolDisplay'
-import { delay, formatChartLoadStatus, formatCheckTime, formatCount, formatDetailValue, formatEpochSeconds, formatMarketChange, formatMarketPercent, formatMarketPrice, formatStoreOperationLine, formatSymbolStatus, formatUtcRange, normalizeStoredStatus, parseChartJumpTime, periodFromStoreTableKey, resolveLocalM1LastTime, resolveLocalM1Rows, resolveStoreOperationProgress, selectedDetailRows, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
+import { SymbolTable } from '../mt5DataCenter/SymbolTable'
+import type { SymbolTableColumnKey } from '../mt5DataCenter/SymbolTable'
+import { StoreV5Panel } from '../mt5DataCenter/StoreV5Panel'
+import { WatchlistTable } from '../mt5DataCenter/WatchlistTable'
+import { readJson, readString, writeJson, writeString } from '../persistence/jsonStorage'
+import { storageKeys } from '../persistence/storageKeys'
+import { delay, formatCount, formatDetailValue, formatEpochSeconds, formatStoreOperationLine, formatSymbolStatus, normalizeStoredStatus, parseChartJumpTime, periodFromStoreTableKey, resolveLocalM1LastTime, resolveLocalM1Rows, resolveStoreOperationProgress, selectedDetailRows, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
 import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedRealtimeSnapshot, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readStoreV5ListSymbols, readWatchlistRealtimeEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedM1CheckResult, savePersistedRealtimeSnapshot, savePersistedStoreTableSelection, savePersistedStoreV5Status, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistRealtimeEnabled, saveWatchlistSymbols, sharedSelectionChangedEvent } from '../mt5DataCenter/storeV5Persistence'
 import type { SelectedPanelTab, SharedSelection } from '../mt5DataCenter/storeV5Persistence'
@@ -47,9 +54,6 @@ const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((modul
 
 const minDrawerWidth = 220
 const maxDrawerWidth = 900
-const splitHeightStorageKey = 'fractalframe:mt5ImportCenterTopPaneHeightPx:v1'
-const watchlistTableHeightStorageKey = 'fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1'
-const columnWidthsStorageKey = 'fractalframe:mt5ImportCenterColumnWidthsPx:v1'
 const storeTableAggregatePeriods = ['M5', 'M15', 'M30', 'H1', 'H2', 'H3', 'H4', 'D1', 'W1', 'MN1']
 const storeV5M1RepairLookbackMinutes = 720
 const storeV5M1RepairMaxGapMinutes = 720
@@ -60,7 +64,7 @@ const defaultColumnWidths = {
   type: 64,
 }
 
-type ColumnKey = keyof typeof defaultColumnWidths
+type ColumnKey = SymbolTableColumnKey
 function resolveStoreV5AggregateTargets(status: StoreV5CheckPayload) {
   return status.aggregated
     .map((cell) => String(cell.timeframe || '').toUpperCase())
@@ -81,8 +85,8 @@ function getInitialTopPaneHeight() {
   const fallbackHeight = 430
 
   try {
-    const raw = window.localStorage.getItem(splitHeightStorageKey)
-    const value = raw == null ? fallbackHeight : Number(raw)
+    const raw = readString(storageKeys.importCenterTopPaneHeightPx)
+    const value = raw === '' ? fallbackHeight : Number(raw)
     return Math.max(180, Math.min(760, Math.round(value)))
   } catch {
     return fallbackHeight
@@ -93,8 +97,8 @@ function getInitialWatchlistTableHeight() {
   const fallbackHeight = 228
 
   try {
-    const raw = window.localStorage.getItem(watchlistTableHeightStorageKey)
-    const value = raw == null ? fallbackHeight : Number(raw)
+    const raw = readString(storageKeys.importCenterWatchlistTableHeightPx)
+    const value = raw === '' ? fallbackHeight : Number(raw)
     return Math.max(96, Math.min(1200, Math.round(value)))
   } catch {
     return fallbackHeight
@@ -103,8 +107,7 @@ function getInitialWatchlistTableHeight() {
 
 function getInitialColumnWidths() {
   try {
-    const raw = window.localStorage.getItem(columnWidthsStorageKey)
-    const parsed = raw ? JSON.parse(raw) : null
+    const parsed = readJson<Partial<Record<ColumnKey, number>> | null>(storageKeys.importCenterColumnWidthsPx, null)
     if (!parsed || typeof parsed !== 'object') return defaultColumnWidths
     return {
       symbol: clampColumnWidth(Number(parsed.symbol), 'symbol'),
@@ -660,8 +663,6 @@ export function RightDrawer({
     () => resolveStoreOperationProgress(pullProgress, m1CheckJob, aggregateProgress),
     [aggregateProgress, m1CheckJob, pullProgress],
   )
-  const isCheckingMt5M1 = storeCheckLoading && m1CheckJob != null
-  const isPullingStoreV5 = storeCheckLoading && pullProgress != null
   const canAggregateStoreV5 = localStoreStatus?.directM1?.status !== 'raw_m1_ready_clean_pending'
     && localStoreStatus?.directM1?.datasetKey?.includes(':direct:M1') === true
 
@@ -775,7 +776,7 @@ export function RightDrawer({
       const next = Math.max(180, Math.min(maxHeight, Math.round(startHeight + deltaY)))
       setTopPaneHeight(next)
       try {
-        window.localStorage.setItem(splitHeightStorageKey, String(next))
+        writeString(storageKeys.importCenterTopPaneHeightPx, String(next))
       } catch {
         // Split persistence is best-effort only.
       }
@@ -826,7 +827,7 @@ export function RightDrawer({
           [column]: Math.min(clampColumnWidth(startWidth + deltaX, column), maxToKeepTableFilled),
         }
         try {
-          window.localStorage.setItem(columnWidthsStorageKey, JSON.stringify(next))
+          writeJson(storageKeys.importCenterColumnWidthsPx, next)
         } catch {
           // Column width persistence is best-effort only.
         }
@@ -869,7 +870,7 @@ export function RightDrawer({
       const next = Math.max(96, Math.min(maxHeight, Math.round(startHeight + deltaY)))
       setWatchlistTableHeight(next)
       try {
-        window.localStorage.setItem(watchlistTableHeightStorageKey, String(next))
+        writeString(storageKeys.importCenterWatchlistTableHeightPx, String(next))
       } catch {
         // Watchlist table height persistence is best-effort only.
       }
@@ -893,7 +894,7 @@ export function RightDrawer({
     setColumnWidths((current) => {
       const next = { ...current, [column]: defaultColumnWidths[column] }
       try {
-        window.localStorage.setItem(columnWidthsStorageKey, JSON.stringify(next))
+        writeJson(storageKeys.importCenterColumnWidthsPx, next)
       } catch {
         // Column width persistence is best-effort only.
       }
@@ -1673,74 +1674,16 @@ export function RightDrawer({
               {status}
             </div>
 
-            <div className="ff-symbol-table-wrap" ref={tableWrapRef}>
-              <table className="ff-symbol-table">
-                <colgroup>
-                  <col style={{ width: `${columnWidths.symbol}px` }} />
-                  <col style={{ width: `${columnWidths.name}px` }} />
-                  <col style={{ width: `${columnWidths.type}px` }} />
-                  <col />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th>
-                      交易品种
-                      <span
-                        className="ff-symbol-table__column-resizer"
-                        onDoubleClick={() => resetColumnWidth('symbol')}
-                        onPointerDown={(event) => handleColumnResizePointerDown(event, 'symbol')}
-                      />
-                    </th>
-                    <th>
-                      中文名称
-                      <span
-                        className="ff-symbol-table__column-resizer"
-                        onDoubleClick={() => resetColumnWidth('name')}
-                        onPointerDown={(event) => handleColumnResizePointerDown(event, 'name')}
-                      />
-                    </th>
-                    <th>
-                      类型
-                      <span
-                        className="ff-symbol-table__column-resizer"
-                        onDoubleClick={() => resetColumnWidth('type')}
-                        onPointerDown={(event) => handleColumnResizePointerDown(event, 'type')}
-                      />
-                    </th>
-                    <th>
-                      鎻忚堪
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleSymbols.map((row) => {
-                    const display = resolveMt5SymbolDisplay(row)
-                    return (
-                      <tr
-                        data-selected={selectedSymbol === row.symbol}
-                        key={row.symbol}
-                        onClick={() => handleSelectSymbol(row.symbol)}
-                        tabIndex={0}
-                      >
-                        <td title={row.symbol}>{row.symbol}</td>
-                        <td title={display.chineseName}>{display.chineseName}</td>
-                        <td title={display.assetType}>{display.assetType}</td>
-                        <td title={display.description || row.description || row.name || row.path || '-'}>
-                          {display.description || row.description || row.name || row.path || '-'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {!visibleSymbols.length && (
-                    <tr>
-                      <td className="ff-symbol-table__empty" colSpan={4}>
-                        {loading ? 'Scanning MT5 symbols...' : 'No symbols. Click Scan MT5.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <SymbolTable
+              columnWidths={columnWidths}
+              loading={loading}
+              onColumnResizePointerDown={handleColumnResizePointerDown}
+              onResetColumnWidth={resetColumnWidth}
+              onSelectSymbol={handleSelectSymbol}
+              selectedSymbol={selectedSymbol}
+              tableWrapRef={tableWrapRef}
+              visibleSymbols={visibleSymbols}
+            />
           </section>
 
           <div
@@ -1847,320 +1790,75 @@ export function RightDrawer({
                 )}
 
                 {selectedPanelTab === 'store' && (
-                  <div className="ff-import-store-panel" role="tabpanel">
-                    <section className="ff-store-card ff-store-card--direct">
-                      <label className="ff-store-persistence-toggle">
-                        <input
-                          checked={storePanelPersistenceEnabled}
-                          onChange={(event) => handleToggleStorePanelPersistence(event.target.checked)}
-                          type="checkbox"
-                        />
-                        <span>持久化</span>
-                      </label>
-                      <div className="ff-store-direct-summary">
-                        <strong>本地仓库 M1</strong>
-                        {storeCheck?.directM1 ? (
-                          <>
-                            <span>MT5 条数：{formatCount(storeCheck.directM1.mt5RowsCount)}</span>
-                            <span>真实条数：{formatCount(storeCheck.directM1.trueM1RowsCount)} · 最后检查：{formatCheckTime(mt5M1LastCheckedAt)}</span>
-                            <span>
-                              真实 M1 范围：{formatUtcRange(storeCheck.directM1.firstTimeText, storeCheck.directM1.lastTimeText)}
-                            </span>
-                            {storeCheck.directM1.validationError && (
-                              <span className="ff-store-direct-summary__error">
-                                校验失败：{storeCheck.directM1.validationError}
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <span>MT5 条数：-</span>
-                            <span>真实条数：-</span>
-                            <span>真实 M1 范围：-</span>
-                          </>
-                        )}
-                        <span>
-                          本地 M1 数据：{localStoreStatus?.directM1?.rowsCount != null
-                            ? `${formatCount(localStoreStatus.directM1.rowsCount)} 条 · 最后更新时间：${formatCheckTime(localStoreStatus.directM1.lastImportAt)}`
-                            : '无数据'}
-                        </span>
-                        {storeCheckError && (
-                          <span className="ff-store-direct-summary__error">{storeCheckError}</span>
-                        )}
-                      </div>
-                    </section>
-
-                    {storeOperationLine && (
-                      <div className="ff-store-status-line">
-                        <div className="ff-store-status-line__row">
-                          <span>{storeOperationLine}</span>
-                          {m1CheckJob?.jobId && (
-                            <button onClick={handleCancelMt5M1Check} type="button">取消</button>
-                          )}
-                          {pullProgress?.jobId && pullProgress.phase !== 'completed' && (
-                            <button onClick={handleCancelPullStore} type="button">取消</button>
-                          )}
-                        </div>
-                        {storeOperationProgress && (
-                          <div
-                            className="ff-store-status-line__bar"
-                            data-estimated={storeOperationProgress.hasEstimate}
-                            aria-hidden="true"
-                          >
-                            <span style={{ width: `${storeOperationProgress.width}%` }} />
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="ff-store-direct-actions">
-                      <button disabled={storeCheckLoading} onClick={handleCheckMt5M1Staged} type="button">
-                        {isCheckingMt5M1 ? '检查中' : '检查 MT5 数据'}
-                      </button>
-                      <button disabled={storeCheckLoading} onClick={handleRefreshStoreStatus} type="button">检查本地仓库</button>
-                      <button disabled={storeCheckLoading} onClick={handlePullStore} type="button">
-                        {isPullingStoreV5 ? '拉取中' : '拉取'}
-                      </button>
-                      <button disabled={storeCheckLoading} onClick={handleDeleteLocalStore} type="button">删除本地数据</button>
-                      <button disabled={storeCheckLoading} onClick={handleCleanLocalM1} type="button">清理无效 M1</button>
-                      <button disabled={storeCheckLoading} onClick={handleAddM1ToStoreList} type="button">加入列表</button>
-                    </div>
-                    <table className="ff-store-detail-table ff-store-aggregate-table">
-                      <thead>
-                        <tr>
-                          <th>周期</th>
-                          <th>条数</th>
-                          <th>最后K线</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {visibleStoreTableRows.map((row) => (
-                          <tr
-                            data-selected={selectedStoreTableKeyIsVisible && selectedStoreTableKey === `${row.kind}-${row.period}`}
-                            key={`${row.kind}-${row.period}`}
-                            onClick={() => handleOpenStoreTableRow(row)}
-                          >
-                            <td>
-                              {row.kind === 'aggregate' ? (
-                                <label className="ff-store-period-check" onClick={(event) => event.stopPropagation()}>
-                                  <input
-                                    checked={selectedAggregatePeriods.includes(row.period)}
-                                    disabled={storeCheckLoading}
-                                    onChange={() => toggleAggregatePeriod(row.period)}
-                                    type="checkbox"
-                                  />
-                                  <strong>{row.period}</strong>
-                                </label>
-                              ) : (
-                                <strong>{row.period}</strong>
-                              )}
-                            </td>
-                            <td>{row.count}</td>
-                            <td>{row.updated}</td>
-                          </tr>
-                        ))}
-                        {!visibleStoreTableRows.length && (
-                          <tr>
-                            <td className="ff-symbol-table__empty" colSpan={3}>
-                              暂无 StoreV5 聚合周期。请先拉取 M1，再执行聚合。
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-
-                    <div className="ff-store-direct-actions ff-store-direct-actions--aggregate">
-                      <button
-                        data-state={
-                          selectedAggregatePeriods.length === 0
-                            ? 'none'
-                            : selectedAggregatePeriods.length === storeTableAggregatePeriods.length
-                              ? 'all'
-                              : 'mixed'
-                        }
-                        disabled={storeCheckLoading}
-                        onClick={toggleAllAggregatePeriods}
-                        type="button"
-                      >
-                        {selectedAggregatePeriods.length === storeTableAggregatePeriods.length ? '全不选' : '全选'}
-                      </button>
-                      <button disabled={storeCheckLoading} onClick={handleRefreshStoreStatus} type="button">
-                        {storeCheckLoading ? '刷新中' : '刷新仓库'}
-                      </button>
-                      <button disabled={storeCheckLoading || selectedAggregatePeriods.length === 0} onClick={handleDeleteSelectedAggregates} type="button">删除</button>
-                      <button
-                        disabled={storeCheckLoading || selectedAggregatePeriods.length === 0}
-                        onClick={handleAggregateStore}
-                        title={!canAggregateStoreV5 ? '会先自动清理无效 M1，再聚合' : undefined}
-                        type="button"
-                      >
-                        聚合
-                      </button>
-                    </div>
-
-                    <div className="ff-chart-jump-controls">
-                      <input
-                        aria-label="跳转日期时间"
-                        onChange={(event) => {
-                          setChartJumpInput(event.target.value)
-                          setChartJumpError('')
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            handleJumpChartToTime()
-                          }
-                        }}
-                        placeholder="YYYY-MM-DD HH:mm"
-                        type="text"
-                        value={chartJumpInput}
-                      />
-                      <button onClick={handleJumpChartToTime} type="button">跳转</button>
-                      <button onClick={handleResetChartToLatest} type="button">回到当前</button>
-                      <button onClick={() => onLoadChartStep?.('left')} type="button">向左10000</button>
-                      <button onClick={() => onLoadChartStep?.('right')} type="button">向右10000</button>
-                      {chartJumpError && <span>{chartJumpError}</span>}
-                    </div>
-
-                    <div className="ff-chart-load-status">
-                      {formatChartLoadStatus(chartLoadState)}
-                    </div>
-
-                  </div>
+                  <StoreV5Panel
+                    canAggregateStoreV5={canAggregateStoreV5}
+                    chartJumpError={chartJumpError}
+                    chartJumpInput={chartJumpInput}
+                    chartLoadState={chartLoadState}
+                    localStoreStatus={localStoreStatus}
+                    m1CheckJob={m1CheckJob}
+                    mt5M1LastCheckedAt={mt5M1LastCheckedAt}
+                    onAddM1ToStoreList={handleAddM1ToStoreList}
+                    onAggregateStore={handleAggregateStore}
+                    onCancelMt5M1Check={handleCancelMt5M1Check}
+                    onCancelPullStore={handleCancelPullStore}
+                    onCheckMt5M1Staged={handleCheckMt5M1Staged}
+                    onCleanLocalM1={handleCleanLocalM1}
+                    onDeleteLocalStore={handleDeleteLocalStore}
+                    onDeleteSelectedAggregates={handleDeleteSelectedAggregates}
+                    onJumpChartToTime={handleJumpChartToTime}
+                    onLoadChartStep={onLoadChartStep}
+                    onOpenStoreTableRow={handleOpenStoreTableRow}
+                    onPullStore={handlePullStore}
+                    onRefreshStoreStatus={handleRefreshStoreStatus}
+                    onResetChartToLatest={handleResetChartToLatest}
+                    onSetChartJumpError={setChartJumpError}
+                    onSetChartJumpInput={setChartJumpInput}
+                    onToggleAggregatePeriod={toggleAggregatePeriod}
+                    onToggleAllAggregatePeriods={toggleAllAggregatePeriods}
+                    onToggleStorePanelPersistence={handleToggleStorePanelPersistence}
+                    pullProgress={pullProgress}
+                    selectedAggregatePeriods={selectedAggregatePeriods}
+                    selectedStoreTableKey={selectedStoreTableKey}
+                    selectedStoreTableKeyIsVisible={selectedStoreTableKeyIsVisible}
+                    storeCheck={storeCheck}
+                    storeCheckError={storeCheckError}
+                    storeCheckLoading={storeCheckLoading}
+                    storeOperationLine={storeOperationLine}
+                    storeOperationProgress={storeOperationProgress}
+                    storePanelPersistenceEnabled={storePanelPersistenceEnabled}
+                    storeTableAggregatePeriods={storeTableAggregatePeriods}
+                    visibleStoreTableRows={visibleStoreTableRows}
+                  />
                 )}
 
                 {selectedPanelTab === 'watchlist' && (
-                  <div className="ff-import-watchlist-panel" role="tabpanel">
-                    <div
-                      className="ff-watchlist-table-wrap"
-                      style={{ height: `${watchlistTableHeight}px` }}
-                    >
-                      <table className="ff-watchlist-table" aria-label="Watchlist">
-                        <thead>
-                          <tr>
-                            <th>SYMBOL</th>
-                            <th>中文名称</th>
-                            <th>资产类型</th>
-                            <th>LAST</th>
-                            <th>CHG</th>
-                            <th>CHG%</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {watchlistRows.map((row) => {
-                            const display = resolveMt5SymbolDisplay(row)
-                            const tick = watchlistTicks[row.symbol]
-                            return (
-                              <tr
-                                data-selected={selectedSymbol === row.symbol}
-                                data-realtime={watchlistRealtimeEnabled && tick ? 'true' : 'false'}
-                                key={row.symbol}
-                                onClick={() => handleSelectSymbol(row.symbol)}
-                                tabIndex={0}
-                              >
-                                <td title={row.symbol}>{row.symbol}</td>
-                                <td title={display.chineseName}>{display.chineseName}</td>
-                                <td title={display.assetType}>{display.assetType}</td>
-                                <td title={tick?.publishedAt ?? ''}>{formatMarketPrice(tick?.last)}</td>
-                                <td data-direction={(tick?.change ?? 0) > 0 ? 'up' : (tick?.change ?? 0) < 0 ? 'down' : 'flat'}>
-                                  {formatMarketChange(tick?.change)}
-                                </td>
-                                <td data-direction={(tick?.changePercent ?? 0) > 0 ? 'up' : (tick?.changePercent ?? 0) < 0 ? 'down' : 'flat'}>
-                                  {formatMarketPercent(tick?.changePercent)}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div
-                      className="ff-watchlist-table-splitter"
-                      onDoubleClick={() => {
-                        setWatchlistTableHeight(228)
-                        try {
-                          window.localStorage.setItem(watchlistTableHeightStorageKey, '228')
-                        } catch {
-                          // Watchlist table height persistence is best-effort only.
-                        }
-                      }}
-                      onPointerDown={handleWatchlistTableResizePointerDown}
-                      role="separator"
-                      aria-orientation="horizontal"
-                      aria-label="Resize watchlist table"
-                      tabIndex={0}
-                    />
-                    {(watchlistDirectPeriods.length > 0 || watchlistAggregatedPeriods.length > 0) && (
-                      <div className="ff-watchlist-periods" aria-label="Watchlist available periods">
-                        {watchlistDirectPeriods.length > 0 && (
-                          <section className="ff-watchlist-periods__group">
-                            <h4>Direct source</h4>
-                            <div className="ff-watchlist-periods__buttons">
-                              {watchlistDirectPeriods.map((row) => (
-                                <button
-                                  data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
-                                  key={`${row.kind}-${row.period}`}
-                                  onClick={() => handleOpenWatchlistPeriod(row)}
-                                  title={`${row.period} · ${row.count} 条 · ${row.updated}`}
-                                  type="button"
-                                >
-                                  {row.period}
-                                </button>
-                              ))}
-                            </div>
-                          </section>
-                        )}
-                        {watchlistAggregatedPeriods.length > 0 && (
-                          <section className="ff-watchlist-periods__group">
-                            <h4>Aggregated source</h4>
-                            <div className="ff-watchlist-periods__buttons">
-                              {watchlistAggregatedPeriods.map((row) => (
-                                <button
-                                  data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
-                                  key={`${row.kind}-${row.period}`}
-                                  onClick={() => handleOpenWatchlistPeriod(row)}
-                                  title={`${row.period} · ${row.count} 条 · ${row.updated}`}
-                                  type="button"
-                                >
-                                  {row.period}
-                                </button>
-                              ))}
-                            </div>
-                          </section>
-                        )}
-                      </div>
-                    )}
-                    <div className="ff-watchlist-realtime-controls">
-                      <button
-                        className="ff-watchlist-realtime-toggle"
-                        data-active={watchlistRealtimeEnabled}
-                        data-ready={watchlistRealtimeReady}
-                        onClick={() => setWatchlistRealtimeEnabled((current) => !current)}
-                        type="button"
-                        aria-pressed={watchlistRealtimeEnabled}
-                      >
-                        <span>{watchlistRealtimeEnabled && !watchlistRealtimeReady ? 'Syncing' : 'Realtime'}</span>
-                        <i aria-hidden="true" />
-                      </button>
-                      {watchlistRealtimeStatus && (
-                        <span className="ff-watchlist-realtime-status">
-                          {watchlistRealtimeStatus || 'Live'}
-                          {watchlistLastTickAt ? ` · ${watchlistLastTickAt}` : ''}
-                        </span>
-                      )}
-                    </div>
-                    {watchlistRealtimeLog.length > 0 && (
-                      <div className="ff-watchlist-realtime-log" aria-label="Realtime sync log">
-                        <div className="ff-watchlist-realtime-log__title">
-                          {watchlistRealtimeReady ? 'Realtime Feed' : 'Realtime Sync'}
-                        </div>
-                        <div className="ff-watchlist-realtime-log__body">
-                          {watchlistRealtimeLog.map((line, index) => (
-                            <div key={`${line}-${index}`}>{line}</div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <WatchlistTable
+                    onOpenWatchlistPeriod={handleOpenWatchlistPeriod}
+                    onResizePointerDown={handleWatchlistTableResizePointerDown}
+                    onResetHeight={() => {
+                      setWatchlistTableHeight(228)
+                      try {
+                        writeString(storageKeys.importCenterWatchlistTableHeightPx, '228')
+                      } catch {
+                        // Watchlist table height persistence is best-effort only.
+                      }
+                    }}
+                    onSelectSymbol={handleSelectSymbol}
+                    onToggleRealtime={() => setWatchlistRealtimeEnabled((current) => !current)}
+                    selectedStoreTableKey={selectedStoreTableKey}
+                    selectedSymbol={selectedSymbol}
+                    watchlistAggregatedPeriods={watchlistAggregatedPeriods}
+                    watchlistDirectPeriods={watchlistDirectPeriods}
+                    watchlistLastTickAt={watchlistLastTickAt}
+                    watchlistRealtimeEnabled={watchlistRealtimeEnabled}
+                    watchlistRealtimeLog={watchlistRealtimeLog}
+                    watchlistRealtimeReady={watchlistRealtimeReady}
+                    watchlistRealtimeStatus={watchlistRealtimeStatus}
+                    watchlistRows={watchlistRows}
+                    watchlistTableHeight={watchlistTableHeight}
+                    watchlistTicks={watchlistTicks}
+                  />
                 )}
               </section>
             )}
