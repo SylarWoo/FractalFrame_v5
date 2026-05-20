@@ -1,8 +1,7 @@
-﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import './RightDrawer.css'
 import '../mt5DataCenter/Mt5DataCenterPanel.css'
-import type { ChartLoadState } from '../chart/ChartCoreHost'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
 import { formatSymbolStatus, normalizeStoredStatus, parseChartJumpTime, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
@@ -15,25 +14,13 @@ import { useStoreV5Jobs } from './useStoreV5Jobs'
 import { useWatchlistRealtime } from './useWatchlistRealtime'
 import { RightDrawerFrame } from './RightDrawerFrame'
 import { RightDrawerMt5Body } from './RightDrawerMt5Body'
+import { RightDrawerSettingsHost } from './RightDrawerSettingsHost'
+import type { RightDrawerProps } from './RightDrawerTypes'
 import {
   fetchMt5Symbols,
 } from '../../services/mt5/mt5SymbolsApi'
 import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 
-type RightDrawerProps = {
-  activeDrawer: 'mt5' | 'settings' | null
-  chartLoadState?: ChartLoadState | null
-  drawerWidth: number
-  onClose: () => void
-  onJumpChartToTime?: (timestamp: number) => void
-  onLoadChartStep?: (direction: 'left' | 'right') => void
-  onResize: (width: number) => void
-  onResetChartToLatest?: () => void
-  onToggleDrawer: (drawer: 'mt5' | 'settings') => void
-  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number }) => void
-}
-
-const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))
 
 export function RightDrawer({
   activeDrawer,
@@ -340,12 +327,10 @@ export function RightDrawer({
   return (
     <RightDrawerFrame activeDrawer={activeDrawer} onClose={onClose} onResize={onResize} onResizePointerDown={handleResizePointerDown} onToggleDrawer={onToggleDrawer} open={open} topPaneHeight={topPaneHeight}>
         {activeDrawer === 'settings' ? (
-          <Suspense fallback={<div className="ff-settings-drawer__body" />}>
-            <SettingsPanel
-              selectedTab={selectedSettingsPanelTab}
-              onSelectedTabChange={setSelectedSettingsPanelTab}
-            />
-          </Suspense>
+          <RightDrawerSettingsHost
+            selectedTab={selectedSettingsPanelTab}
+            onSelectedTabChange={setSelectedSettingsPanelTab}
+          />
         ) : (
           <RightDrawerMt5Body
             canAggregateStoreV5={canAggregateStoreV5} chartJumpError={chartJumpError} chartJumpInput={chartJumpInput}

@@ -1,0 +1,72 @@
+﻿.ff-import-detail,
+.ff-import-store {
+  margin: 14px 30px 0;
+  border-top: 1px solid #cbd5e1;
+  padding-top: 12px;
+}
+
+.ff-import-detail h3,
+.ff-import-store h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.ff-import-detail p,
+.ff-import-store p {
+  margin: 4px 0 10px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.ff-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  border-top: 1px solid #dbe3ef;
+  border-left: 1px solid #dbe3ef;
+  font-size: 12px;
+}
+
+.ff-detail-grid span,
+.ff-detail-grid strong {
+  min-height: 26px;
+  border-right: 1px solid #dbe3ef;
+  border-bottom: 1px solid #dbe3ef;
+  padding: 5px 8px;
+}
+
+.ff-detail-grid span {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.ff-detail-grid strong {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ff-timeframe-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 24px;
+  padding: 12px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+}
+
+.ff-timeframe-grid label {
+  display: grid;
+  grid-template-columns: auto 40px 1fr;
+  gap: 6px;
+  align-items: center;
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.ff-timeframe-grid em {
+  color: #64748b;
+  font-style: normal;
+}
+

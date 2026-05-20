@@ -1,10 +1,10 @@
-/**
+﻿/**
  * TradingView-style line color popover: preset grid, custom colors, opacity,
- * thickness (1–N), line style (maps to lightweight-charts LineStyle),
- * optional “自选” tab with hex + SV + hue.
+ * thickness (1鈥揘), line style (maps to lightweight-charts LineStyle),
+ * optional 鈥滆嚜閫夆€?tab with hex + SV + hue.
  *
- * TradingView 不单独提供该 UI；Lightweight Charts 仅有图表 API（含 LineStyle 枚举）。
- * 可选 NPM：@simonwep/pickr、vanilla-colorful、react-color 等。
+ * TradingView 涓嶅崟鐙彁渚涜 UI锛汱ightweight Charts 浠呮湁鍥捐〃 API锛堝惈 LineStyle 鏋氫妇锛夈€?
+ * 鍙€?NPM锛欯simonwep/pickr銆乿anilla-colorful銆乺eact-color 绛夈€?
  */
 
 
@@ -50,6 +50,7 @@ import {
   closeChartColorPalettePopoverV1,
   getChartColorPalettePopoverStateV1,
 } from './chartColorPalettePopoverStateV1.js'
+import { markChartColorPaletteAnchorOpenV1 } from './chartColorPalettePopoverLifecycleV1.js'
 
 export { applySwatchLineBarPreviewV1, ensureChartColorPaletteStyles, lineStyleLwToUi, normalizeHex6 }
 
@@ -58,15 +59,15 @@ export { applySwatchLineBarPreviewV1, ensureChartColorPaletteStyles, lineStyleLw
  * @param {Document} opts.doc
  * @param {HTMLElement} opts.anchorEl
  * @param {string} [opts.initialHex]
- * @param {number} [opts.initialOpacity] 0–1
+ * @param {number} [opts.initialOpacity] 0鈥?
  * @param {boolean} [opts.showOpacity]
  * @param {boolean} [opts.showThickness]
- * @param {number} [opts.thicknessSteps] default 4 (RSI 主线可传 6)
+ * @param {number} [opts.thicknessSteps] default 4 (RSI 涓荤嚎鍙紶 6)
  * @param {number} [opts.initialThickness]
  * @param {boolean} [opts.showLineStyle]
  * @param {'solid'|'dashed'|'dotted'} [opts.initialLineStyle]
  * @param {boolean} [opts.showCustomColorsRow]
- * @param {boolean} [opts.showCustomPicker] 色板 | 自选（hex + SV + 色相）
+ * @param {boolean} [opts.showCustomPicker] 鑹叉澘 | 鑷€夛紙hex + SV + 鑹茬浉锛?
  * @param {(p: { hex: string, opacity: number, hexOpaque: string, thickness?: number, lineStyle?: string, lineStyleLw?: number }) => void} opts.onPick
  */
 export function openChartColorPalettePopoverV1(opts = {}) {
@@ -160,7 +161,7 @@ export function openChartColorPalettePopoverV1(opts = {}) {
   }
   if (showCustomColorsRow) renderCustomRow()
 
-  const { row: opacityRow, label: opacityLabel } = createChartColorPaletteSettingRowV1(doc, '不透明度')
+  const { row: opacityRow, label: opacityLabel } = createChartColorPaletteSettingRowV1(doc, 'Opacity')
   let range = null
   let num = null
   if (showOpacity) {
@@ -192,7 +193,7 @@ export function openChartColorPalettePopoverV1(opts = {}) {
     syncRangeTrack()
   }
 
-  const { row: thickRow, label: thickLabel } = createChartColorPaletteSettingRowV1(doc, '厚度')
+  const { row: thickRow, label: thickLabel } = createChartColorPaletteSettingRowV1(doc, 'Thickness')
   if (showThickness) {
     const seg = createChartColorPaletteSegmentV1(doc)
     for (let w = 1; w <= thicknessSteps; w += 1) {
@@ -209,7 +210,7 @@ export function openChartColorPalettePopoverV1(opts = {}) {
     thickRow.append(thickLabel, seg)
   }
 
-  const { row: lineRow, label: lineLabel } = createChartColorPaletteSettingRowV1(doc, '线条样式')
+  const { row: lineRow, label: lineLabel } = createChartColorPaletteSettingRowV1(doc, 'Line style')
   if (showLineStyle) {
     const seg = createChartColorPaletteSegmentV1(doc)
     const defs = [
@@ -331,20 +332,8 @@ export function openChartColorPalettePopoverV1(opts = {}) {
   st.el = root
   st.anchor = opts.anchorEl
   st.finalize = () => emit()
-  // 阶段 G：弹窗打开时主动给 anchor 写「打开态」标记，
-  // Open state is styled by chartColorSwatchStylesV1 through the shared swatch host classes.
-  try {
-    opts.anchorEl.setAttribute('data-open', 'true')
-    opts.anchorEl.setAttribute('aria-expanded', 'true')
-  } catch {
-    /* ignore */
-  }
-  try {
-    opts.anchorEl.setAttribute('data-open', 'true')
-    opts.anchorEl.setAttribute('aria-expanded', 'true')
-  } catch {
-    /* ignore */
-  }
+  // 闃舵 G锛氬脊绐楁墦寮€鏃朵富鍔ㄧ粰 anchor 鍐欍€屾墦寮€鎬併€嶆爣璁帮紝
+  markChartColorPaletteAnchorOpenV1(opts.anchorEl)
 
   const popoverEvents = bindChartColorPalettePopoverEventsV1({
     doc,
@@ -388,11 +377,11 @@ export function openChartColorPalettePopoverV1(opts = {}) {
  * @param {boolean} [p.features.customColorsRow]
  * @param {boolean} [p.features.customPicker]
  * @param {number} [p.initialThickness]
- * @param {() => number} [p.resolveInitialThickness] 打开色板时取当前线宽（避免旁路线宽 input 已改但 popover 仍用挂载初值）
+ * @param {() => number} [p.resolveInitialThickness] 鎵撳紑鑹叉澘鏃跺彇褰撳墠绾垮锛堥伩鍏嶆梺璺嚎瀹?input 宸叉敼浣?popover 浠嶇敤鎸傝浇鍒濆€硷級
  * @param {string} [p.initialLineStyle]
- * @param {'tile'|'line'|'background'} [p.variant] tile=纯色方块；line=线色+横线；background=背景色块 34×34 / 24×24，无横线
- * @param {{ chromaHex: string, opacity: number }} [p.initialPickMeta] 自 store 恢复（面板整树 replaceChildren 后闭包会丢）
- * @param {(out: object) => void} [p.onExtendedPick]  thickness / lineStyleLw 等（在写回颜色后触发）
+ * @param {'tile'|'line'|'background'} [p.variant] tile=绾壊鏂瑰潡锛沴ine=绾胯壊+妯嚎锛沚ackground=鑳屾櫙鑹插潡 34脳34 / 24脳24锛屾棤妯嚎
+ * @param {{ chromaHex: string, opacity: number }} [p.initialPickMeta] 鑷?store 鎭㈠锛堥潰鏉挎暣鏍?replaceChildren 鍚庨棴鍖呬細涓級
+ * @param {(out: object) => void} [p.onExtendedPick]  thickness / lineStyleLw 绛夛紙鍦ㄥ啓鍥為鑹插悗瑙﹀彂锛?
  */
 
 export function createChartColorSwatchHostV1(p) {
