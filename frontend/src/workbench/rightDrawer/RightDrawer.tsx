@@ -1,40 +1,24 @@
 ﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { FormEvent } from 'react'
 import './RightDrawer.css'
 import '../mt5DataCenter/Mt5DataCenterPanel.css'
 import type { ChartLoadState } from '../chart/ChartCoreHost'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
-import { resolveMt5SymbolDisplay } from './mt5SymbolDisplay'
 import { SymbolTable } from '../mt5DataCenter/SymbolTable'
-import type { SymbolTableColumnKey } from '../mt5DataCenter/SymbolTable'
 import { StoreV5Panel } from '../mt5DataCenter/StoreV5Panel'
 import { WatchlistTable } from '../mt5DataCenter/WatchlistTable'
-import { writeJson, writeString } from '../persistence/jsonStorage'
-import { storageKeys } from '../persistence/storageKeys'
 import { delay, formatDetailValue, formatStoreOperationLine, formatSymbolStatus, normalizeStoredStatus, parseChartJumpTime, periodFromStoreTableKey, resolveLocalM1Rows, resolveStoreOperationProgress, selectedDetailRows, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
-import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedRealtimeSnapshot, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readStoreV5ListSymbols, readWatchlistRealtimeEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedM1CheckResult, savePersistedRealtimeSnapshot, savePersistedStoreTableSelection, savePersistedStoreV5Status, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistRealtimeEnabled, saveWatchlistSymbols, sharedSelectionChangedEvent } from '../mt5DataCenter/storeV5Persistence'
-import type { SelectedPanelTab, SharedSelection } from '../mt5DataCenter/storeV5Persistence'
-import {
-  buildVisibleStoreTableRows,
-  buildWatchlistAggregatedPeriods,
-  buildWatchlistDirectPeriods,
-  resolveStoreV5AggregateTargets,
-  storeTableAggregatePeriods,
-} from './rightDrawerStoreTables'
-import {
-  clampColumnWidth,
-  clampDrawerWidth,
-  defaultColumnWidths,
-  getInitialColumnWidths,
-  getInitialTopPaneHeight,
-  getInitialWatchlistTableHeight,
-} from './rightDrawerLayout'
+import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readStoreV5ListSymbols, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedM1CheckResult, savePersistedStoreTableSelection, savePersistedStoreV5Status, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
+import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
+import { resolveStoreV5AggregateTargets, storeTableAggregatePeriods } from './rightDrawerStoreTables'
+import { useRightDrawerResize } from './useRightDrawerResize'
+import { useRightDrawerSelection } from './useRightDrawerSelection'
+import { useWatchlistRealtime } from './useWatchlistRealtime'
 import {
   cancelMt5M1CheckJob,
   cancelStoreV5PullJob,
   cleanStoreV5DirectM1,
-  createMt5TicksEventSource,
   createStoreV5AggregateEventSource,
   createStoreV5PullEventSource,
   deleteStoreV5AggregatedTimeframes,
@@ -50,7 +34,7 @@ import {
   startStoreV5PullJob,
   startMt5M1CheckJob,
 } from '../../services/mt5/mt5SymbolsApi'
-import type { Mt5M1CheckJobPayload, Mt5RealtimeTick, Mt5SymbolRow, StoreV5AggregateJobPayload, StoreV5CheckPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
+import type { Mt5M1CheckJobPayload, Mt5SymbolRow, StoreV5AggregateJobPayload, StoreV5CheckPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
 
 type RightDrawerProps = {
   activeDrawer: 'mt5' | 'settings' | null
@@ -70,7 +54,6 @@ const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((modul
 const storeV5M1RepairLookbackMinutes = 720
 const storeV5M1RepairMaxGapMinutes = 720
 
-type ColumnKey = SymbolTableColumnKey
 const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
   { key: 'details', label: '细节' },
   { key: 'store', label: '仓库' },
@@ -90,7 +73,6 @@ export function RightDrawer({
   onOpenChart,
 }: RightDrawerProps) {
   const initialSnapshot = useMemo(getInitialSymbolSnapshot, [])
-  const initialRealtimeSnapshot = useMemo(readPersistedRealtimeSnapshot, [])
   const initialSharedSelection = useMemo(readSharedSelection, [])
   const [query, setQuery] = useState(readImportCenterQuery)
   const [symbols, setSymbols] = useState<Mt5SymbolRow[]>(() => initialSnapshot?.symbols ?? [])
@@ -100,9 +82,6 @@ export function RightDrawer({
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [topPaneHeight, setTopPaneHeight] = useState(getInitialTopPaneHeight)
-  const [watchlistTableHeight, setWatchlistTableHeight] = useState(getInitialWatchlistTableHeight)
-  const [columnWidths, setColumnWidths] = useState(getInitialColumnWidths)
   const [selectedPanelTab, setSelectedPanelTab] = useState<SelectedPanelTab>(readImportCenterSelectedTab)
   const [selectedSettingsPanelTab, setSelectedSettingsPanelTab] = useState<SettingsPanelTab>('symbol')
   const [storePanelPersistenceEnabled, setStorePanelPersistenceEnabled] = useState(readStorePanelPersistenceEnabled)
@@ -119,12 +98,6 @@ export function RightDrawer({
   const [localStoreStatus, setLocalStoreStatus] = useState<StoreV5CheckPayload | null>(() => initialPersistedStoreV5Status?.payload ?? null)
   const [storeV5ListSymbols, setStoreV5ListSymbols] = useState<string[]>(() => readStoreV5ListSymbols(storePanelPersistenceEnabled))
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(readWatchlistSymbols)
-  const [watchlistRealtimeEnabled, setWatchlistRealtimeEnabled] = useState(readWatchlistRealtimeEnabled)
-  const [watchlistRealtimeReady, setWatchlistRealtimeReady] = useState(false)
-  const [watchlistRealtimeStatus, setWatchlistRealtimeStatus] = useState('')
-  const [watchlistRealtimeLog, setWatchlistRealtimeLog] = useState<string[]>(() => initialRealtimeSnapshot.log ?? [])
-  const [watchlistTicks, setWatchlistTicks] = useState<Record<string, Mt5RealtimeTick>>(() => initialRealtimeSnapshot.ticks ?? {})
-  const [watchlistLastTickAt, setWatchlistLastTickAt] = useState(() => initialRealtimeSnapshot.lastTickAt ?? '')
   const [shortcutMenuEnabled, setShortcutMenuEnabled] = useState(readShortcutMenuEnabled)
   const [selectedStoreTableKey, setSelectedStoreTableKey] = useState(() =>
     readPersistedStoreTableSelection(initialSharedSelection.symbol || initialSnapshot?.selectedSymbol || '', storePanelPersistenceEnabled),
@@ -138,7 +111,6 @@ export function RightDrawer({
   const [m1CheckJob, setM1CheckJob] = useState<Mt5M1CheckJobPayload | null>(null)
   const [pullProgress, setPullProgress] = useState<StoreV5PullJobPayload | null>(null)
   const [aggregateProgress, setAggregateProgress] = useState<StoreV5AggregateJobPayload | null>(null)
-  const tableWrapRef = useRef<HTMLDivElement | null>(null)
   const activeM1CheckJobRef = useRef('')
   const activePullJobRef = useRef('')
   const activeAggregateJobRef = useRef('')
@@ -146,119 +118,69 @@ export function RightDrawer({
   const pullEventSourceRef = useRef<EventSource | null>(null)
   const aggregateEventSourceRef = useRef<EventSource | null>(null)
   const open = activeDrawer != null
-  const watchlistTicksEventSourceRef = useRef<EventSource | null>(null)
-  const watchlistRealtimeRunRef = useRef(0)
+  const {
+    columnWidths,
+    handleColumnResizePointerDown,
+    handleResizePointerDown,
+    handleSplitPointerDown,
+    handleWatchlistTableResizePointerDown,
+    resetColumnWidth,
+    resetTopPaneHeight,
+    resetWatchlistTableHeight,
+    tableWrapRef,
+    topPaneHeight,
+    watchlistTableHeight,
+  } = useRightDrawerResize({ drawerWidth, onResize })
 
-  const visibleSymbols = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    if (!normalizedQuery) return symbols
-    return symbols.filter((row) => {
-      const display = resolveMt5SymbolDisplay(row)
-      return [
-        row.symbol,
-        row.name,
-        row.description,
-        row.path,
-        row.category,
-        display.chineseName,
-        display.assetType,
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedQuery)
-    })
-  }, [query, symbols])
+  const {
+    foregroundRealtimeSymbol,
+    selectedDisplay,
+    selectedIsInWatchlist,
+    selectedRow,
+    selectedStoreTableKeyIsVisible,
+    visibleStoreTableRows,
+    visibleSymbols,
+    watchlistAggregatedPeriods,
+    watchlistDirectPeriods,
+    watchlistRows,
+  } = useRightDrawerSelection({
+    query,
+    symbols,
+    selectedSymbol,
+    setSelectedSymbol,
+    status,
+    storePanelPersistenceEnabled,
+    setStoreCheck,
+    setMt5M1LastCheckedAt,
+    localStoreStatus,
+    setLocalStoreStatus,
+    storeV5ListSymbols,
+    watchlistSymbols,
+    shortcutMenuEnabled,
+    selectedStoreTableKey,
+    setSelectedStoreTableKey,
+    setStoreCheckError,
+    setStoreActionStatus,
+    autoOpenedStoreTableRef,
+    onOpenChart,
+  })
 
-  const selectedRow = useMemo(() => {
-    return symbols.find((row) => row.symbol === selectedSymbol) ?? visibleSymbols[0] ?? null
-  }, [selectedSymbol, symbols, visibleSymbols])
-
-  const selectedDisplay = selectedRow ? resolveMt5SymbolDisplay(selectedRow) : null
-  const selectedIsInWatchlist = selectedRow ? watchlistSymbols.includes(selectedRow.symbol) : false
-  const watchlistRows = useMemo(() => {
-    const rowsBySymbol = new Map(symbols.map((row) => [row.symbol, row]))
-    return watchlistSymbols
-      .map((symbol) => rowsBySymbol.get(symbol))
-      .filter((row): row is Mt5SymbolRow => Boolean(row))
-  }, [symbols, watchlistSymbols])
-  const foregroundRealtimeSymbol = selectedRow?.symbol ?? ''
-
-  function pushWatchlistRealtimeLog(message: string) {
-    const timestamp = new Date().toLocaleTimeString()
-    setWatchlistRealtimeLog((current) => [`${timestamp}  ${message}`, ...current].slice(0, 8))
-  }
-
-  const visibleStoreTableRows = useMemo<StoreTableRow[]>(() => {
-    return buildVisibleStoreTableRows({ localStoreStatus, selectedRow, storeV5ListSymbols })
-  }, [localStoreStatus, selectedRow, storeV5ListSymbols])
-  const watchlistDirectPeriods = useMemo<StoreTableRow[]>(() => buildWatchlistDirectPeriods(localStoreStatus), [localStoreStatus])
-  const watchlistAggregatedPeriods = useMemo<StoreTableRow[]>(() => buildWatchlistAggregatedPeriods(localStoreStatus), [localStoreStatus])
-  const selectedStoreTableKeyIsVisible = useMemo(
-    () => visibleStoreTableRows.some((row) => `${row.kind}-${row.period}` === selectedStoreTableKey),
-    [selectedStoreTableKey, visibleStoreTableRows],
-  )
-
-  useEffect(() => {
-    const syncSelection = (event: Event) => {
-      const detail = event instanceof CustomEvent ? event.detail as Partial<SharedSelection> : readSharedSelection()
-      const nextSymbol = typeof detail.symbol === 'string' ? detail.symbol : ''
-      const nextPeriod = typeof detail.period === 'string' ? detail.period.toUpperCase() : ''
-
-      if (nextSymbol && nextSymbol !== selectedSymbol) {
-        const persistedCheck = readPersistedM1CheckResult(nextSymbol, storePanelPersistenceEnabled)
-        const persistedStoreStatus = readPersistedStoreV5Status(nextSymbol, storePanelPersistenceEnabled)
-        setSelectedSymbol(nextSymbol)
-        setStoreCheck(persistedCheck?.payload ?? null)
-        setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')
-        setLocalStoreStatus(persistedStoreStatus?.payload ?? null)
-        setStoreCheckError('')
-        setStoreActionStatus('')
-        if (symbols.length) {
-          saveSymbolSnapshot({
-            selectedSymbol: nextSymbol,
-            status,
-            symbols,
-          })
-        }
-      }
-
-      if (nextPeriod) {
-        setSelectedStoreTableKey(storeTableKeyForPeriod(nextPeriod, visibleStoreTableRows))
-      }
-    }
-
-    window.addEventListener(sharedSelectionChangedEvent, syncSelection)
-    return () => window.removeEventListener(sharedSelectionChangedEvent, syncSelection)
-  }, [selectedSymbol, status, storePanelPersistenceEnabled, symbols, visibleStoreTableRows])
-
-  useEffect(() => {
-    if (!shortcutMenuEnabled) return
-    saveShortcutMenuPeriods([...watchlistDirectPeriods, ...watchlistAggregatedPeriods])
-  }, [shortcutMenuEnabled, watchlistAggregatedPeriods, watchlistDirectPeriods])
-
-  useEffect(() => {
-    const shared = readSharedSelection()
-    if (!shared.period) return
-    const nextKey = storeTableKeyForPeriod(shared.period, visibleStoreTableRows)
-    if (selectedStoreTableKey !== nextKey) setSelectedStoreTableKey(nextKey)
-  }, [selectedStoreTableKey, visibleStoreTableRows])
-
-  useEffect(() => {
-    if (!selectedRow?.symbol || !selectedStoreTableKeyIsVisible || !selectedStoreTableKey) return
-
-    const autoOpenKey = `${selectedRow.symbol}:${selectedStoreTableKey}`
-    if (autoOpenedStoreTableRef.current === autoOpenKey) return
-
-    const row = visibleStoreTableRows.find((item) => `${item.kind}-${item.period}` === selectedStoreTableKey)
-    if (!row) return
-
-    autoOpenedStoreTableRef.current = autoOpenKey
-    onOpenChart?.({
-      symbol: selectedRow.symbol,
-      period: row.period === 'M1' ? '1m' : row.period,
-      totalRows: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : null,
-    })
-  }, [onOpenChart, selectedRow?.symbol, selectedStoreTableKey, selectedStoreTableKeyIsVisible, visibleStoreTableRows])
+  const {
+    setWatchlistRealtimeEnabled,
+    watchlistLastTickAt,
+    watchlistRealtimeEnabled,
+    watchlistRealtimeLog,
+    watchlistRealtimeReady,
+    watchlistRealtimeStatus,
+    watchlistTicks,
+  } = useWatchlistRealtime({
+    foregroundRealtimeSymbol,
+    selectedRowSymbol: selectedRow?.symbol ?? '',
+    selectedStoreTableKey,
+    storePanelPersistenceEnabled,
+    setLocalStoreStatus,
+    onOpenChart,
+  })
 
   useEffect(() => {
     saveImportCenterQuery(query)
@@ -267,276 +189,6 @@ export function RightDrawer({
   useEffect(() => {
     saveImportCenterSelectedTab(selectedPanelTab)
   }, [selectedPanelTab])
-
-  useEffect(() => {
-    saveWatchlistRealtimeEnabled(watchlistRealtimeEnabled)
-  }, [watchlistRealtimeEnabled])
-
-  useEffect(() => {
-    savePersistedRealtimeSnapshot({
-      lastTickAt: watchlistLastTickAt,
-      log: watchlistRealtimeLog,
-      ticks: watchlistTicks,
-    })
-  }, [watchlistLastTickAt, watchlistRealtimeLog, watchlistTicks])
-
-  useEffect(() => {
-    if (!watchlistRealtimeEnabled) {
-      watchlistRealtimeRunRef.current += 1
-      setWatchlistRealtimeReady(false)
-      setWatchlistRealtimeStatus('')
-      pushWatchlistRealtimeLog('Realtime stopped')
-      return
-    }
-
-    if (!foregroundRealtimeSymbol) {
-      setWatchlistRealtimeReady(false)
-      setWatchlistRealtimeStatus('No symbols')
-      pushWatchlistRealtimeLog('No foreground symbol, realtime not started')
-      return
-    }
-
-    const runId = watchlistRealtimeRunRef.current + 1
-    watchlistRealtimeRunRef.current = runId
-    setWatchlistRealtimeReady(false)
-    setWatchlistRealtimeStatus('Syncing')
-    setWatchlistRealtimeLog([])
-    pushWatchlistRealtimeLog(`Realtime requested for foreground symbol ${foregroundRealtimeSymbol}`)
-
-    const waitForPullJob = (jobId: string, symbol: string) => new Promise<void>((resolve, reject) => {
-      const source = createStoreV5PullEventSource(jobId)
-
-      const cleanup = () => source.close()
-      const fail = (message: string) => {
-        cleanup()
-        reject(new Error(message))
-      }
-
-      source.addEventListener('progress', (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent).data) as StoreV5PullJobPayload
-          if (watchlistRealtimeRunRef.current !== runId) {
-            cleanup()
-            resolve()
-            return
-          }
-          const line = `${symbol} ${payload.progressLabel || payload.status || 'Pulling M1'}`
-          setWatchlistRealtimeStatus(line)
-          pushWatchlistRealtimeLog(line)
-        } catch {
-          setWatchlistRealtimeStatus(`${symbol} Pulling M1`)
-        }
-      })
-      source.addEventListener('done', () => {
-        pushWatchlistRealtimeLog(`${symbol} M1 gap fill completed`)
-        cleanup()
-        resolve()
-      })
-      source.addEventListener('cancelled', () => fail(`${symbol} pull cancelled`))
-      source.addEventListener('error', (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent).data) as { error?: string; status?: string }
-          fail(payload.error || payload.status || `${symbol} pull failed`)
-        } catch {
-          fail(`${symbol} pull failed`)
-        }
-      })
-      source.onerror = () => fail(`${symbol} pull disconnected`)
-    })
-
-    const waitForAggregateJob = (jobId: string, symbol: string) => new Promise<void>((resolve, reject) => {
-      const source = createStoreV5AggregateEventSource(jobId)
-
-      const cleanup = () => source.close()
-      const fail = (message: string) => {
-        cleanup()
-        reject(new Error(message))
-      }
-
-      source.addEventListener('progress', (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent).data) as StoreV5AggregateJobPayload
-          if (watchlistRealtimeRunRef.current !== runId) {
-            cleanup()
-            resolve()
-            return
-          }
-          const line = `${symbol} ${payload.progressLabel || payload.status || 'Aggregating'}`
-          setWatchlistRealtimeStatus(line)
-          pushWatchlistRealtimeLog(line)
-        } catch {
-          setWatchlistRealtimeStatus(`${symbol} Aggregating`)
-        }
-      })
-      source.addEventListener('done', () => {
-        pushWatchlistRealtimeLog(`${symbol} aggregation completed`)
-        cleanup()
-        resolve()
-      })
-      source.addEventListener('cancelled', () => fail(`${symbol} aggregate cancelled`))
-      source.addEventListener('error', (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent).data) as { error?: string; status?: string }
-          fail(payload.error || payload.status || `${symbol} aggregate failed`)
-        } catch {
-          fail(`${symbol} aggregate failed`)
-        }
-      })
-      source.onerror = () => fail(`${symbol} aggregate disconnected`)
-    })
-
-    const runRealtimeSync = async () => {
-      try {
-        for (const symbol of [foregroundRealtimeSymbol]) {
-          if (watchlistRealtimeRunRef.current !== runId) return
-
-          setWatchlistRealtimeStatus(`${symbol} checking store`)
-          pushWatchlistRealtimeLog(`${symbol} checking local StoreV5 status`)
-          const statusPayload = await fetchStoreV5Status(symbol)
-          const hasLocalM1 = typeof resolveLocalM1Rows(statusPayload) === 'number'
-            && Number(resolveLocalM1Rows(statusPayload)) > 0
-
-          setWatchlistRealtimeStatus(`${symbol} pulling missing M1`)
-          pushWatchlistRealtimeLog(`${symbol} ${hasLocalM1 ? 'incremental M1 gap fill started' : 'full M1 download started'}`)
-          const pullJob = await startStoreV5PullJob(symbol, hasLocalM1 ? 'incremental' : 'refresh')
-          await waitForPullJob(pullJob.jobId, symbol)
-          if (watchlistRealtimeRunRef.current !== runId) return
-
-          setWatchlistRealtimeStatus(`${symbol} repairing M1 gaps`)
-          pushWatchlistRealtimeLog(`${symbol} scanning and repairing recent M1 window`)
-          const gapRepair = await repairStoreV5M1Gaps(symbol, {
-            lookbackMinutes: storeV5M1RepairLookbackMinutes,
-            maxGapMinutes: storeV5M1RepairMaxGapMinutes,
-          })
-          if ((gapRepair.gapsDetected ?? 0) > 0) {
-            pushWatchlistRealtimeLog(
-              `${symbol} gap repair: ${gapRepair.gapsDetected ?? 0} gaps, ${gapRepair.rowsWritten ?? 0} rows written`,
-            )
-          } else {
-            pushWatchlistRealtimeLog(`${symbol} M1 recent window repaired, ${gapRepair.rowsWritten ?? 0} rows written`)
-          }
-
-          const statusAfterPull = await fetchStoreV5Status(symbol)
-
-          const aggregateTargets = resolveStoreV5AggregateTargets(statusAfterPull)
-
-          if (aggregateTargets.length) {
-            setWatchlistRealtimeStatus(`${symbol} aggregating periods`)
-            pushWatchlistRealtimeLog(`${symbol} aggregating ${aggregateTargets.join(', ')}`)
-            const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets)
-            await waitForAggregateJob(aggregateJob.jobId, symbol)
-          } else {
-            pushWatchlistRealtimeLog(`${symbol} no aggregate periods to rebuild`)
-          }
-
-          const statusAfterSync = await fetchStoreV5Status(symbol)
-          if (symbol === selectedRow?.symbol) {
-            setLocalStoreStatus(statusAfterSync)
-            savePersistedStoreV5Status(symbol, statusAfterSync, new Date().toISOString(), storePanelPersistenceEnabled)
-          }
-        }
-
-        if (watchlistRealtimeRunRef.current !== runId) return
-        setWatchlistRealtimeReady(true)
-        setWatchlistRealtimeStatus('Starting realtime')
-        const period = periodFromStoreTableKey(selectedStoreTableKey) || readSharedSelection().period || 'M1'
-        const latestStatus = await fetchStoreV5Status(foregroundRealtimeSymbol)
-        const rowsForPeriod = period === 'M1'
-          ? resolveLocalM1Rows(latestStatus)
-          : latestStatus.aggregated.find((cell) => String(cell.timeframe || '').toUpperCase() === period)?.rowsCount
-        onOpenChart?.({
-          symbol: foregroundRealtimeSymbol,
-          period: period === 'M1' ? '1m' : period,
-          totalRows: typeof rowsForPeriod === 'number' && Number.isFinite(rowsForPeriod) ? rowsForPeriod : null,
-          reloadId: Date.now(),
-        })
-        pushWatchlistRealtimeLog('Gap fill and aggregation completed, starting tick realtime')
-      } catch (error) {
-        if (watchlistRealtimeRunRef.current !== runId) return
-        setWatchlistRealtimeReady(false)
-        setWatchlistRealtimeEnabled(false)
-        setWatchlistRealtimeStatus(error instanceof Error ? error.message : 'Sync failed')
-        pushWatchlistRealtimeLog(error instanceof Error ? `Realtime failed: ${error.message}` : 'Realtime failed')
-      }
-    }
-
-    void runRealtimeSync()
-
-    return () => {
-      if (watchlistRealtimeRunRef.current === runId) {
-        watchlistRealtimeRunRef.current += 1
-      }
-    }
-  }, [foregroundRealtimeSymbol, onOpenChart, selectedStoreTableKey, watchlistRealtimeEnabled])
-
-  useEffect(() => {
-    watchlistTicksEventSourceRef.current?.close()
-    watchlistTicksEventSourceRef.current = null
-
-    if (!watchlistRealtimeEnabled || !watchlistRealtimeReady) return
-
-    setWatchlistRealtimeStatus('Connecting')
-    if (!foregroundRealtimeSymbol) return
-
-    const source = createMt5TicksEventSource([foregroundRealtimeSymbol], 500)
-    watchlistTicksEventSourceRef.current = source
-
-    source.addEventListener('ready', () => {
-      setWatchlistRealtimeStatus('Live')
-      pushWatchlistRealtimeLog('Realtime feed connected')
-    })
-
-    source.addEventListener('ticks', (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent).data) as { ticks?: Mt5RealtimeTick[] }
-        const ticks = Array.isArray(payload.ticks) ? payload.ticks : []
-        if (!ticks.length) return
-        const updatedSymbols = ticks.map((tick) => tick.symbol).filter(Boolean)
-        setWatchlistTicks((current) => {
-          const next = { ...current }
-          ticks.forEach((tick) => {
-            if (tick.symbol) next[tick.symbol] = tick
-          })
-          return next
-        })
-        ticks.forEach((tick) => {
-          if (!tick.symbol) return
-          window.dispatchEvent(new CustomEvent('fractalframe:mt5RealtimeTick', { detail: tick }))
-        })
-        if (updatedSymbols.length) {
-          setWatchlistLastTickAt(new Date().toLocaleTimeString())
-        }
-        setWatchlistRealtimeStatus('Live')
-      } catch {
-        setWatchlistRealtimeStatus('Parse error')
-        pushWatchlistRealtimeLog('Realtime tick parse error')
-      }
-    })
-
-    source.addEventListener('error', (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent).data) as { error?: string; status?: string }
-        const line = payload.error || payload.status || 'Error'
-        setWatchlistRealtimeStatus(line)
-        pushWatchlistRealtimeLog(`Realtime error: ${line}`)
-      } catch {
-        setWatchlistRealtimeStatus('Disconnected')
-        pushWatchlistRealtimeLog('Realtime disconnected')
-      }
-    })
-
-    source.onerror = () => {
-      setWatchlistRealtimeStatus('Reconnecting')
-      pushWatchlistRealtimeLog('Realtime reconnecting')
-    }
-
-    return () => {
-      source.close()
-      if (watchlistTicksEventSourceRef.current === source) {
-        watchlistTicksEventSourceRef.current = null
-      }
-    }
-  }, [foregroundRealtimeSymbol, watchlistRealtimeEnabled, watchlistRealtimeReady])
 
   const storeOperationLine = useMemo(
     () => formatStoreOperationLine(pullProgress, m1CheckJob, aggregateProgress, storeActionStatus),
@@ -607,182 +259,6 @@ export function RightDrawer({
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-  }
-
-  function handleResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    event.preventDefault()
-
-    const startX = event.clientX
-    const startWidth = drawerWidth
-    const ownerDocument = event.currentTarget.ownerDocument
-    const handle = event.currentTarget
-
-    ownerDocument.body.setAttribute('data-fractalframe-right-widget-drawer-resizing', 'true')
-    handle.setPointerCapture(event.pointerId)
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const deltaX = moveEvent.clientX - startX
-      onResize(clampDrawerWidth(startWidth - deltaX))
-      window.dispatchEvent(new Event('resize'))
-    }
-
-    const finishResize = (upEvent: PointerEvent) => {
-      ownerDocument.removeEventListener('pointermove', handlePointerMove)
-      ownerDocument.removeEventListener('pointerup', finishResize)
-      ownerDocument.removeEventListener('pointercancel', finishResize)
-      ownerDocument.body.removeAttribute('data-fractalframe-right-widget-drawer-resizing')
-      handle.releasePointerCapture(upEvent.pointerId)
-      window.dispatchEvent(new Event('resize'))
-    }
-
-    ownerDocument.addEventListener('pointermove', handlePointerMove)
-    ownerDocument.addEventListener('pointerup', finishResize)
-    ownerDocument.addEventListener('pointercancel', finishResize)
-  }
-
-  function handleSplitPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    event.preventDefault()
-
-    const startY = event.clientY
-    const startHeight = topPaneHeight
-    const drawer = event.currentTarget.closest('.ff-right-drawer')
-    const maxHeight = Math.max(220, (drawer?.clientHeight ?? 760) - 190)
-    const ownerDocument = event.currentTarget.ownerDocument
-    const handle = event.currentTarget
-
-    ownerDocument.body.setAttribute('data-fractalframe-right-widget-drawer-splitting', 'true')
-    handle.setAttribute('data-dragging', 'true')
-    handle.setPointerCapture(event.pointerId)
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const deltaY = moveEvent.clientY - startY
-      const next = Math.max(180, Math.min(maxHeight, Math.round(startHeight + deltaY)))
-      setTopPaneHeight(next)
-      try {
-        writeString(storageKeys.importCenterTopPaneHeightPx, String(next))
-      } catch {
-        // Split persistence is best-effort only.
-      }
-    }
-
-    const finishSplit = (upEvent: PointerEvent) => {
-      ownerDocument.removeEventListener('pointermove', handlePointerMove)
-      ownerDocument.removeEventListener('pointerup', finishSplit)
-      ownerDocument.removeEventListener('pointercancel', finishSplit)
-      ownerDocument.body.removeAttribute('data-fractalframe-right-widget-drawer-splitting')
-      handle.releasePointerCapture(upEvent.pointerId)
-    }
-
-    ownerDocument.addEventListener('pointermove', handlePointerMove)
-    ownerDocument.addEventListener('pointerup', finishSplit)
-    ownerDocument.addEventListener('pointercancel', finishSplit)
-  }
-
-  function handleColumnResizePointerDown(
-    event: ReactPointerEvent<HTMLSpanElement>,
-    column: ColumnKey,
-  ) {
-    event.preventDefault()
-    event.stopPropagation()
-
-    const startX = event.clientX
-    const startWidth = columnWidths[column]
-    const tableWrap = tableWrapRef.current
-    const tableWidth = tableWrap?.clientWidth ?? 0
-    const ownerDocument = event.currentTarget.ownerDocument
-    const handle = event.currentTarget
-
-    ownerDocument.body.setAttribute('data-fractalframe-mt5-column-resizing', 'true')
-    handle.setPointerCapture(event.pointerId)
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const deltaX = moveEvent.clientX - startX
-      setColumnWidths((current) => {
-        const otherColumnsWidth = Object.entries(current).reduce((sum, [key, value]) => {
-          return key === column ? sum : sum + value
-        }, 0)
-        const maxToKeepTableFilled = Math.max(
-          defaultColumnWidths[column],
-          tableWidth - otherColumnsWidth - 90,
-        )
-        const next = {
-          ...current,
-          [column]: Math.min(clampColumnWidth(startWidth + deltaX, column), maxToKeepTableFilled),
-        }
-        try {
-          writeJson(storageKeys.importCenterColumnWidthsPx, next)
-        } catch {
-          // Column width persistence is best-effort only.
-        }
-        return next
-      })
-    }
-
-    const finishResize = (upEvent: PointerEvent) => {
-      ownerDocument.removeEventListener('pointermove', handlePointerMove)
-      ownerDocument.removeEventListener('pointerup', finishResize)
-      ownerDocument.removeEventListener('pointercancel', finishResize)
-      ownerDocument.body.removeAttribute('data-fractalframe-mt5-column-resizing')
-      handle.releasePointerCapture(upEvent.pointerId)
-    }
-
-    ownerDocument.addEventListener('pointermove', handlePointerMove)
-    ownerDocument.addEventListener('pointerup', finishResize)
-    ownerDocument.addEventListener('pointercancel', finishResize)
-  }
-
-  function handleWatchlistTableResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    event.preventDefault()
-
-    const startY = event.clientY
-    const startHeight = watchlistTableHeight
-    const drawer = event.currentTarget.closest('.ff-right-drawer')
-    const tableWrap = event.currentTarget.previousElementSibling as HTMLElement | null
-    const drawerBottom = drawer?.getBoundingClientRect().bottom ?? window.innerHeight
-    const tableTop = tableWrap?.getBoundingClientRect().top ?? event.clientY
-    const maxHeight = Math.max(96, Math.round(drawerBottom - tableTop - 14))
-    const ownerDocument = event.currentTarget.ownerDocument
-    const handle = event.currentTarget
-
-    ownerDocument.body.setAttribute('data-fractalframe-right-widget-drawer-splitting', 'true')
-    handle.setAttribute('data-dragging', 'true')
-    handle.setPointerCapture(event.pointerId)
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const deltaY = moveEvent.clientY - startY
-      const next = Math.max(96, Math.min(maxHeight, Math.round(startHeight + deltaY)))
-      setWatchlistTableHeight(next)
-      try {
-        writeString(storageKeys.importCenterWatchlistTableHeightPx, String(next))
-      } catch {
-        // Watchlist table height persistence is best-effort only.
-      }
-    }
-
-    const finishResize = (upEvent: PointerEvent) => {
-      ownerDocument.removeEventListener('pointermove', handlePointerMove)
-      ownerDocument.removeEventListener('pointerup', finishResize)
-      ownerDocument.removeEventListener('pointercancel', finishResize)
-      ownerDocument.body.removeAttribute('data-fractalframe-right-widget-drawer-splitting')
-      handle.removeAttribute('data-dragging')
-      handle.releasePointerCapture(upEvent.pointerId)
-    }
-
-    ownerDocument.addEventListener('pointermove', handlePointerMove)
-    ownerDocument.addEventListener('pointerup', finishResize)
-    ownerDocument.addEventListener('pointercancel', finishResize)
-  }
-
-  function resetColumnWidth(column: ColumnKey) {
-    setColumnWidths((current) => {
-      const next = { ...current, [column]: defaultColumnWidths[column] }
-      try {
-        writeJson(storageKeys.importCenterColumnWidthsPx, next)
-      } catch {
-        // Column width persistence is best-effort only.
-      }
-      return next
-    })
   }
 
   function handleSelectSymbol(symbol: string) {
@@ -1571,7 +1047,7 @@ export function RightDrawer({
 
           <div
             className="ff-mt5-pane-splitter"
-            onDoubleClick={() => setTopPaneHeight(430)}
+            onDoubleClick={resetTopPaneHeight}
             onPointerDown={handleSplitPointerDown}
             role="separator"
             aria-orientation="horizontal"
@@ -1719,14 +1195,7 @@ export function RightDrawer({
                   <WatchlistTable
                     onOpenWatchlistPeriod={handleOpenWatchlistPeriod}
                     onResizePointerDown={handleWatchlistTableResizePointerDown}
-                    onResetHeight={() => {
-                      setWatchlistTableHeight(228)
-                      try {
-                        writeString(storageKeys.importCenterWatchlistTableHeightPx, '228')
-                      } catch {
-                        // Watchlist table height persistence is best-effort only.
-                      }
-                    }}
+                    onResetHeight={resetWatchlistTableHeight}
                     onSelectSymbol={handleSelectSymbol}
                     onToggleRealtime={() => setWatchlistRealtimeEnabled((current) => !current)}
                     selectedStoreTableKey={selectedStoreTableKey}
