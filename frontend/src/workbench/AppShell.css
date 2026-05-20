@@ -95,6 +95,7 @@
 
 .ff-chart-workspace {
   grid-column: 2;
+  position: relative;
   display: grid;
   grid-template-rows: minmax(0, 1fr) var(--ff-bottom-drawer-height, 32px);
   min-width: 0;

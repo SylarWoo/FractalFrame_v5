@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import './RightDrawer.css'
 import '../mt5DataCenter/Mt5DataCenterPanel.css'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
-import { formatSymbolStatus, normalizeStoredStatus, parseChartJumpTime, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
+import { formatSymbolStatus, normalizeStoredStatus, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
 import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readStoreV5ListSymbols, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
 import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
@@ -24,13 +24,9 @@ import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 
 export function RightDrawer({
   activeDrawer,
-  chartLoadState,
   drawerWidth,
   onClose,
-  onJumpChartToTime,
-  onLoadChartStep,
   onResize,
-  onResetChartToLatest,
   onToggleDrawer,
   onOpenChart,
 }: RightDrawerProps) {
@@ -53,8 +49,6 @@ export function RightDrawer({
   const [selectedStoreTableKey, setSelectedStoreTableKey] = useState(() =>
     readPersistedStoreTableSelection(initialSharedSelection.symbol || initialSnapshot?.selectedSymbol || '', storePanelPersistenceEnabled),
   )
-  const [chartJumpInput, setChartJumpInput] = useState('')
-  const [chartJumpError, setChartJumpError] = useState('')
   const autoOpenedStoreTableRef = useRef('')
   const open = activeDrawer != null
   const {
@@ -309,21 +303,6 @@ export function RightDrawer({
     handleOpenStoreTableRow(row)
   }
 
-  function handleJumpChartToTime() {
-    const timestamp = parseChartJumpTime(chartJumpInput)
-    if (timestamp == null) {
-      setChartJumpError('请输入 YYYY-MM-DD HH:mm')
-      return
-    }
-    setChartJumpError('')
-    onJumpChartToTime?.(timestamp)
-  }
-
-  function handleResetChartToLatest() {
-    setChartJumpError('')
-    onResetChartToLatest?.()
-  }
-
   return (
     <RightDrawerFrame activeDrawer={activeDrawer} onClose={onClose} onResize={onResize} onResizePointerDown={handleResizePointerDown} onToggleDrawer={onToggleDrawer} open={open} topPaneHeight={topPaneHeight}>
         {activeDrawer === 'settings' ? (
@@ -333,22 +312,22 @@ export function RightDrawer({
           />
         ) : (
           <RightDrawerMt5Body
-            canAggregateStoreV5={canAggregateStoreV5} chartJumpError={chartJumpError} chartJumpInput={chartJumpInput}
-            chartLoadState={chartLoadState} columnWidths={columnWidths} error={error} loading={loading}
+            canAggregateStoreV5={canAggregateStoreV5}
+            columnWidths={columnWidths} error={error} loading={loading}
             localStoreStatus={localStoreStatus} m1CheckJob={m1CheckJob} mt5M1LastCheckedAt={mt5M1LastCheckedAt}
             onAddM1ToStoreList={handleAddM1ToStoreList} onAggregateStore={handleAggregateStore}
             onCancelMt5M1Check={handleCancelMt5M1Check} onCancelPullStore={handleCancelPullStore}
             onCheckMt5M1Staged={handleCheckMt5M1Staged} onCleanLocalM1={handleCleanLocalM1}
             onColumnResizePointerDown={handleColumnResizePointerDown}
             onDeleteLocalStore={handleDeleteLocalStore} onDeleteSelectedAggregates={handleDeleteSelectedAggregates}
-            onJumpChartToTime={handleJumpChartToTime} onLoadChartStep={onLoadChartStep} onLoadSymbols={loadSymbols}
+            onLoadSymbols={loadSymbols}
             onOpenStoreTableRow={handleOpenStoreTableRow} onOpenWatchlistPeriod={handleOpenWatchlistPeriod}
             onPullStore={handlePullStore} onRefreshStoreStatus={handleRefreshStoreStatus}
-            onResetChartToLatest={handleResetChartToLatest} onResetColumnWidth={resetColumnWidth}
+            onResetColumnWidth={resetColumnWidth}
             onResetTopPaneHeight={resetTopPaneHeight} onResetWatchlistHeight={resetWatchlistTableHeight}
             onResizeWatchlistPointerDown={handleWatchlistTableResizePointerDown}
             onSearch={handleSearch} onSelectSymbol={handleSelectSymbol}
-            onSetChartJumpError={setChartJumpError} onSetChartJumpInput={setChartJumpInput} onSetQuery={setQuery}
+            onSetQuery={setQuery}
             onSetSelectedPanelTab={setSelectedPanelTab}
             onSetSelectedWatchlistLoaded={handleSetSelectedWatchlistLoaded}
             onSetShortcutMenuLoaded={handleSetShortcutMenuLoaded} onSplitPointerDown={handleSplitPointerDown}

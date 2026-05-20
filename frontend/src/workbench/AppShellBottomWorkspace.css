@@ -26,6 +26,33 @@
   gap: 4px;
 }
 
+.ff-workspace-chart-load-status {
+  position: absolute;
+  left: 13px;
+  bottom: calc(var(--ff-bottom-drawer-height, 40px) + 37px);
+  z-index: 20;
+  max-width: min(420px, calc(100% - 16px));
+  overflow: hidden;
+  border: 0;
+  border-radius: 1px;
+  padding: 2px 7px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  color: #76808f;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.25;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.ff-workspace-chart-load-status strong {
+  color: #051441;
+  font-weight: 700;
+}
+
 .ff-bottom-panel-toggle-btn {
   margin: 0;
   padding: 4px 8px;

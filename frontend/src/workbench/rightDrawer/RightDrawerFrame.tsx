@@ -41,6 +41,15 @@ export function RightDrawerFrame({
             <circle cx="24" cy="24" r="7.5" />
           </svg>
         </button>
+        <button className="ff-right-rail__button" title="Store folder" type="button">
+          <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+            <path d="M41.68,13H24.77c-2-.1-5.93-4.23-8.19-4.23H6.68A2.18,2.18,0,0,0,4.5,11h0v7.29h39V14.87A1.83,1.83,0,0,0,41.68,13Z" />
+            <path d="M43.5,18.28H4.5V37A2.18,2.18,0,0,0,6.67,39.2H41.32A2.18,2.18,0,0,0,43.5,37h0Z" />
+            <line x1="32.17" y1="23.03" x2="37.85" y2="23.03" />
+            <line x1="32.17" y1="28.72" x2="35.86" y2="28.72" />
+            <line x1="32.17" y1="23.03" x2="32.17" y2="34.4" />
+          </svg>
+        </button>
       </div>
       <aside className="ff-right-drawer" data-open={open} aria-hidden={!open} style={{ ['--ff-mt5-top-pane-height' as string]: `${topPaneHeight}px` }}>
         <div className="ff-right-drawer__resize-handle" onDoubleClick={() => onResize(280)} onPointerDown={onResizePointerDown} role="separator" aria-orientation="vertical" aria-label="Resize right panel" tabIndex={0} />

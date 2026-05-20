@@ -9,11 +9,13 @@ from typing import Any
 from urllib.parse import urlparse
 
 from http_bridge.mt5_m1_check_service import (
-    _get_m1_check_job,
-    _set_m1_check_job,
     check_mt5_m1_live,
     mt5_rates_to_rows,
     start_mt5_m1_staged_check,
+)
+from http_bridge.mt5_m1_check_job_state import (
+    _get_m1_check_job,
+    _set_m1_check_job,
 )
 from http_bridge.diagnostics_service import check_mt5_diagnostics, job_history, runtime_observability, tail_bridge_logs
 from http_bridge.logging_config import configure_logging, get_logger

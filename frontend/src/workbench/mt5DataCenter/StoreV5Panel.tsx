@@ -1,11 +1,9 @@
-import type { ChartLoadState } from '../chart/ChartCoreHost'
-import type {
+﻿import type {
   Mt5M1CheckJobPayload,
   StoreV5CheckPayload,
   StoreV5PullJobPayload,
 } from '../../services/mt5/mt5SymbolsApi'
 import {
-  formatChartLoadStatus,
   formatCheckTime,
   formatCount,
   formatUtcRange,
@@ -20,9 +18,6 @@ type StoreOperationProgress = {
 
 type StoreV5PanelProps = {
   canAggregateStoreV5: boolean
-  chartJumpError: string
-  chartJumpInput: string
-  chartLoadState?: ChartLoadState | null
   localStoreStatus: StoreV5CheckPayload | null
   m1CheckJob: Mt5M1CheckJobPayload | null
   mt5M1LastCheckedAt: string
@@ -34,14 +29,9 @@ type StoreV5PanelProps = {
   onCleanLocalM1: () => void
   onDeleteLocalStore: () => void
   onDeleteSelectedAggregates: () => void
-  onJumpChartToTime: () => void
-  onLoadChartStep?: (direction: 'left' | 'right') => void
   onOpenStoreTableRow: (row: StoreTableRow) => void
   onPullStore: () => void
   onRefreshStoreStatus: () => void
-  onResetChartToLatest: () => void
-  onSetChartJumpError: (value: string) => void
-  onSetChartJumpInput: (value: string) => void
   onToggleAggregatePeriod: (period: string) => void
   onToggleAllAggregatePeriods: () => void
   onToggleStorePanelPersistence: (enabled: boolean) => void
@@ -61,9 +51,6 @@ type StoreV5PanelProps = {
 
 export function StoreV5Panel({
   canAggregateStoreV5,
-  chartJumpError,
-  chartJumpInput,
-  chartLoadState,
   localStoreStatus,
   m1CheckJob,
   mt5M1LastCheckedAt,
@@ -75,14 +62,9 @@ export function StoreV5Panel({
   onCleanLocalM1,
   onDeleteLocalStore,
   onDeleteSelectedAggregates,
-  onJumpChartToTime,
-  onLoadChartStep,
   onOpenStoreTableRow,
   onPullStore,
   onRefreshStoreStatus,
-  onResetChartToLatest,
-  onSetChartJumpError,
-  onSetChartJumpInput,
   onToggleAggregatePeriod,
   onToggleAllAggregatePeriods,
   onToggleStorePanelPersistence,
@@ -254,32 +236,6 @@ export function StoreV5Panel({
         </button>
       </div>
 
-      <div className="ff-chart-jump-controls">
-        <input
-          aria-label="跳转日期时间"
-          onChange={(event) => {
-            onSetChartJumpInput(event.target.value)
-            onSetChartJumpError('')
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              onJumpChartToTime()
-            }
-          }}
-          placeholder="YYYY-MM-DD HH:mm"
-          type="text"
-          value={chartJumpInput}
-        />
-        <button onClick={onJumpChartToTime} type="button">跳转</button>
-        <button onClick={onResetChartToLatest} type="button">回到当前</button>
-        <button onClick={() => onLoadChartStep?.('left')} type="button">向左10000</button>
-        <button onClick={() => onLoadChartStep?.('right')} type="button">向右10000</button>
-        {chartJumpError && <span>{chartJumpError}</span>}
-      </div>
-
-      <div className="ff-chart-load-status">
-        {formatChartLoadStatus(chartLoadState)}
-      </div>
     </div>
   )
 }

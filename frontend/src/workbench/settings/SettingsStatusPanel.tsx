@@ -31,7 +31,7 @@ export function SettingsStatusPanel() {
             value={titleMode}
           />
         </div>
-        <SettingsCheckRow>开市状态</SettingsCheckRow>
+        <SettingsCheckRow checked storageKey={chartSettingKeys.statusLocalDataLoadVisible}>本地数据加载</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusChartValuesVisible}>图表值</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleChangeVisible}>K线变化值</SettingsCheckRow>
         <SettingsCheckRow checked>成交量</SettingsCheckRow>

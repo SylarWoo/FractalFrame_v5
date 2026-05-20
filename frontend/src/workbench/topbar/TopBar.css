@@ -210,3 +210,131 @@ body[data-fractalframe-topbar-resizing='true'] {
   stroke-linejoin: round;
   stroke-width: 1.8;
 }
+
+.ff-topbar-calendar {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.ff-topbar-calendar__popover {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  z-index: 160;
+  width: 226px;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  color: #111827;
+  padding: 8px;
+}
+
+.ff-topbar-calendar__header {
+  display: grid;
+  grid-template-columns: 30px 28px 1fr 28px 30px;
+  height: 28px;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+
+.ff-topbar-calendar__header strong {
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.ff-topbar-calendar__header button {
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 24px;
+  padding: 0;
+}
+
+.ff-topbar-calendar__header button:hover,
+.ff-topbar-calendar__days button:hover {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+}
+
+.ff-topbar-calendar__weekdays,
+.ff-topbar-calendar__days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.ff-topbar-calendar__weekdays {
+  margin-bottom: 4px;
+}
+
+.ff-topbar-calendar__weekdays span {
+  height: 22px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+}
+
+.ff-topbar-calendar__days button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 26px;
+  padding: 0;
+  text-align: center;
+}
+
+.ff-topbar-calendar__days button[data-current-month='false'] {
+  color: #9ca3af;
+}
+
+.ff-topbar-calendar__days button[data-today='true'] {
+  border-color: #2563eb;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.ff-topbar-calendar__chart-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ff-topbar-calendar__chart-nav button {
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  font-family: Arial, Tahoma, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 26px;
+  padding: 0 6px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.ff-topbar-calendar__chart-nav button:hover {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+}

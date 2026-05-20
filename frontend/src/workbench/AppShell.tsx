@@ -27,9 +27,10 @@ import {
 import { RightDrawer } from './rightDrawer/RightDrawer'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
 import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
+import { formatChartLoadStatus } from './mt5DataCenter/storeV5StatusFormat'
 import { readBooleanFlag, readJson, readString, removeStorageItem, writeBooleanFlag, writeString } from './persistence/jsonStorage'
 import { storageKeys } from './persistence/storageKeys'
-import { readSettingsStringValue, settingsSymbolChangedEvent } from './settingsSymbolState'
+import { readSettingsBooleanValue, readSettingsStringValue, settingsSymbolChangedEvent } from './settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from './settings/chartSettingsSchema'
 import { TopBar } from './topbar/TopBar'
 import './openableControl.css'
@@ -143,6 +144,18 @@ function formatWorkspaceClock(timestamp: number, timezone: string) {
   return `${weekday} ${getDatePart(parts, 'year', '1970')}/${getDatePart(parts, 'month', '1')}/${getDatePart(parts, 'day', '1')} ${hour === '24' ? '00' : hour}:${getDatePart(parts, 'minute', '00')}:${getDatePart(parts, 'second', '00')}`
 }
 
+function renderChartLoadStatus(state: ChartLoadState | null) {
+  const text = formatChartLoadStatus(state)
+  const match = /^(\S+)(\s+.*)$/.exec(text)
+  if (!match) return text
+  return (
+    <>
+      <strong>{match[1]}</strong>
+      {match[2]}
+    </>
+  )
+}
+
 export function AppShell() {
   const [activeRightDrawer, setActiveRightDrawer] = useState<'mt5' | 'settings' | null>(getInitialRightDrawerActive)
   const [rightDrawerWidth, setRightDrawerWidth] = useState(getInitialDrawerWidth)
@@ -165,6 +178,10 @@ export function AppShell() {
   const [clockTimezone, setClockTimezone] = useState(resolveWorkspaceTimezone)
 
   const chartDisplayName = readSymbolDisplayName(chartTarget.symbol)
+  const chartLoadStatusVisible = readSettingsBooleanValue(
+    chartSettingKeys.statusLocalDataLoadVisible,
+    chartSettingDefaults.statusLocalDataLoadVisible,
+  )
   void symbolDisplayVersion
 
   useEffect(() => {
@@ -194,8 +211,12 @@ export function AppShell() {
 
   useEffect(() => {
     const refresh = () => setSymbolDisplayVersion((current) => current + 1)
+    window.addEventListener(settingsSymbolChangedEvent, refresh)
     window.addEventListener('storage', refresh)
-    return () => window.removeEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener(settingsSymbolChangedEvent, refresh)
+      window.removeEventListener('storage', refresh)
+    }
   }, [])
 
   useEffect(() => {
@@ -252,7 +273,12 @@ export function AppShell() {
 
   return (
     <div className="ff-app-shell">
-      <TopBar onOpenChart={setChartTarget} />
+      <TopBar
+        onJumpChartToTime={(timestamp) => setChartJump({ id: Date.now(), timestamp })}
+        onLoadChartStep={(direction) => setChartStepLoad({ direction, id: Date.now() })}
+        onOpenChart={setChartTarget}
+        onResetChartToLatest={() => setChartJump({ id: Date.now() })}
+      />
 
       <main
         className="ff-app-main"
@@ -305,7 +331,11 @@ export function AppShell() {
             symbol={chartTarget.symbol}
             totalRows={chartTarget.totalRows}
           />
-
+          {chartLoadStatusVisible && (
+            <div className="ff-workspace-chart-load-status" aria-label="Chart load status">
+              {renderChartLoadStatus(chartLoadState)}
+            </div>
+          )}
           <BottomWorkspace
             activeBottomPanel={activeBottomPanel}
             bottomDrawerOpen={bottomDrawerOpen}
@@ -321,13 +351,9 @@ export function AppShell() {
 
         <RightDrawer
           activeDrawer={activeRightDrawer}
-          chartLoadState={chartLoadState}
           drawerWidth={rightDrawerWidth}
           onClose={() => setActiveRightDrawer(null)}
-          onJumpChartToTime={(timestamp) => setChartJump({ id: Date.now(), timestamp })}
-          onLoadChartStep={(direction) => setChartStepLoad({ direction, id: Date.now() })}
           onOpenChart={setChartTarget}
-          onResetChartToLatest={() => setChartJump({ id: Date.now() })}
           onResize={setRightDrawerWidth}
           onToggleDrawer={(drawer) => setActiveRightDrawer((current) => (current === drawer ? null : drawer))}
         />

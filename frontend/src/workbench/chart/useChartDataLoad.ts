@@ -8,7 +8,9 @@ import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import {
   historyPageSize,
-  jumpWindowBars,
+  jumpBarSpace,
+  jumpDisplayWindowBars,
+  mergeKLineData,
   resolveHasMoreOlder,
   resolveInitialLimit,
 } from './chartCoreDataUtils'
@@ -149,35 +151,82 @@ type LoadOptions = {
   symbol: string
 }
 
+function findNearestDataIndex(chart: Chart, timestamp: number) {
+  const dataList = chart.getDataList()
+  if (!dataList.length) return -1
+
+  let nearestIndex = 0
+  let nearestDistance = Math.abs(Number(dataList[0]?.timestamp ?? 0) - timestamp)
+  for (let index = 1; index < dataList.length; index += 1) {
+    const distance = Math.abs(Number(dataList[index]?.timestamp ?? 0) - timestamp)
+    if (distance < nearestDistance) {
+      nearestDistance = distance
+      nearestIndex = index
+    }
+  }
+  return nearestIndex
+}
+
+function scrollJumpTargetIntoView(chart: Chart, timestamp: number) {
+  chart.setBarSpace(jumpBarSpace)
+
+  const targetIndex = findNearestDataIndex(chart, timestamp)
+  if (targetIndex < 0) return
+
+  const visibleRange = chart.getVisibleRange()
+  const visibleCount = Math.max(1, Math.floor(visibleRange.to - visibleRange.from))
+  const rightEdgeIndex = Math.min(chart.getDataList().length - 1, targetIndex + Math.floor(visibleCount / 2))
+  chart.scrollToDataIndex(rightEdgeIndex, 0)
+}
+
 function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: number }) {
   const periodSeconds = resolvePeriodSeconds(options.period)
-  const halfWindowSeconds = Math.floor(jumpWindowBars / 2) * periodSeconds
+  const backwardLimit = Math.floor(jumpDisplayWindowBars / 2)
+  const forwardLimit = jumpDisplayWindowBars - backwardLimit
   const targetSeconds = Math.floor(options.jumpTimestamp / 1000)
-  const timeFrom = targetSeconds - halfWindowSeconds
-  const timeTo = targetSeconds + halfWindowSeconds
+  const backwardTimeTo = targetSeconds + periodSeconds
+  const forwardTimeFrom = targetSeconds + periodSeconds + 1
 
-  chartInfo('[StoreV5Datafeed] request jump start', { symbol: options.symbol, period: options.period, limit: jumpWindowBars, timeFrom, timeTo })
-  loadStoreV5KLineData({ symbol: options.symbol, period: options.period, limit: jumpWindowBars, timeFrom, timeTo })
-    .then((data) => {
+  chartInfo('[StoreV5Datafeed] request jump start', {
+    symbol: options.symbol,
+    period: options.period,
+    backwardLimit,
+    backwardTimeTo,
+    forwardLimit,
+    forwardTimeFrom,
+  })
+  Promise.all([
+    loadStoreV5KLineData({ symbol: options.symbol, period: options.period, limit: backwardLimit, timeTo: backwardTimeTo }),
+    loadStoreV5KLineData({ symbol: options.symbol, period: options.period, limit: forwardLimit, timeFrom: forwardTimeFrom }),
+  ])
+    .then(([backwardData, forwardData]) => {
       if (options.shouldIgnore()) return
-      const hasMoreOlder = data.length >= jumpWindowBars
-      chartInfo('[StoreV5Datafeed] callback jump done', { rows: data.length, target: options.jumpTimestamp, hasMoreOlder })
+      const data = mergeKLineData(backwardData, forwardData)
+      const hasMoreOlder = backwardData.length >= backwardLimit
+      chartInfo('[StoreV5Datafeed] callback jump done', {
+        backwardRows: backwardData.length,
+        forwardRows: forwardData.length,
+        rows: data.length,
+        target: options.jumpTimestamp,
+        hasMoreOlder,
+      })
       chart.applyNewData(data, hasMoreOlder)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
         resetYAxisAutoScale(chart)
-        chart.scrollToTimestamp(options.jumpTimestamp, 0)
+        scrollJumpTargetIntoView(chart, options.jumpTimestamp)
         applySessionBreakIndicator(chart, options.symbol, options.period)
         window.setTimeout(() => {
           if (options.shouldIgnore()) return
           resetYAxisAutoScale(chart)
+          scrollJumpTargetIntoView(chart, options.jumpTimestamp)
           applySessionBreakIndicator(chart, options.symbol, options.period)
         }, 0)
         options.setLoadState({
           error: false,
           loadingMore: false,
           loading: false,
-          requestedRows: jumpWindowBars,
+          requestedRows: jumpDisplayWindowBars,
           rows: chart.getDataList().length || data.length,
         })
       }, 0))
@@ -186,7 +235,7 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
       if (options.shouldIgnore()) return
       chartError('[StoreV5Datafeed] request jump failed', error)
       chart.applyNewData([], false)
-      options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: jumpWindowBars, rows: 0 })
+      options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: jumpDisplayWindowBars, rows: 0 })
     })
 }
 
