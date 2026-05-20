@@ -1,12 +1,13 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import './RightDrawer.css'
 import type { ChartLoadState } from '../chart/ChartCoreHost'
-import { SettingsPanel } from '../settings/SettingsPanel'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
 import { resolveMt5SymbolDisplay } from './mt5SymbolDisplay'
 import { delay, formatChartLoadStatus, formatCheckTime, formatCount, formatDetailValue, formatEpochSeconds, formatMarketChange, formatMarketPercent, formatMarketPrice, formatStoreOperationLine, formatSymbolStatus, formatUtcRange, normalizeStoredStatus, parseChartJumpTime, periodFromStoreTableKey, resolveLocalM1LastTime, resolveLocalM1Rows, resolveStoreOperationProgress, selectedDetailRows, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
+import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedRealtimeSnapshot, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readStoreV5ListSymbols, readWatchlistRealtimeEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedM1CheckResult, savePersistedRealtimeSnapshot, savePersistedStoreTableSelection, savePersistedStoreV5Status, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistRealtimeEnabled, saveWatchlistSymbols, sharedSelectionChangedEvent } from '../mt5DataCenter/storeV5Persistence'
+import type { SelectedPanelTab, SharedSelection } from '../mt5DataCenter/storeV5Persistence'
 import {
   cancelMt5M1CheckJob,
   cancelStoreV5PullJob,
@@ -42,35 +43,13 @@ type RightDrawerProps = {
   onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number }) => void
 }
 
+const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))
+
 const minDrawerWidth = 220
 const maxDrawerWidth = 900
 const splitHeightStorageKey = 'fractalframe:mt5ImportCenterTopPaneHeightPx:v1'
 const watchlistTableHeightStorageKey = 'fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1'
-const watchlistSymbolsStorageKey = 'fractalframe:mt5ImportCenterWatchlistSymbols:v1'
-const shortcutMenuEnabledStorageKey = 'fractalframe:mt5ImportCenterShortcutMenuEnabled:v1'
-const shortcutMenuPeriodsStorageKey = 'fractalframe:mt5ImportCenterShortcutMenuPeriods:v1'
-const sharedSelectionStorageKey = 'fractalframe:mt5ImportCenterSharedSelection:v1'
-const shortcutMenuChangedEvent = 'fractalframe:mt5ImportCenterShortcutMenuChanged'
-const watchlistChangedEvent = 'fractalframe:mt5ImportCenterWatchlistChanged'
-const storeV5StatusChangedEvent = 'fractalframe:mt5ImportCenterStoreV5StatusChanged'
-const sharedSelectionChangedEvent = 'fractalframe:mt5ImportCenterSharedSelectionChanged'
 const columnWidthsStorageKey = 'fractalframe:mt5ImportCenterColumnWidthsPx:v1'
-const symbolSnapshotStorageKey = 'fractalframe:mt5ImportCenterSymbolSnapshot:v1'
-const mt5M1CheckResultsStorageKey = 'fractalframe:mt5ImportCenterM1CheckResults:v1'
-const storeV5StatusStorageKey = 'fractalframe:mt5ImportCenterStoreV5Status:v1'
-const storeV5ListSymbolsStorageKey = 'fractalframe:mt5ImportCenterStoreV5ListSymbols:v1'
-const storePanelPersistenceEnabledStorageKey = 'fractalframe:mt5ImportCenterStorePanelPersistenceEnabled:v1'
-const watchlistRealtimeEnabledStorageKey = 'fractalframe:mt5ImportCenterWatchlistRealtimeEnabled:v1'
-const watchlistRealtimeSnapshotStorageKey = 'fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1'
-const storePanelSelectedTableKeyStorageKey = 'fractalframe:mt5ImportCenterStorePanelSelectedTableKey:v1'
-const importCenterQueryStorageKey = 'fractalframe:mt5ImportCenterQuery:v1'
-const importCenterSelectedTabStorageKey = 'fractalframe:mt5ImportCenterSelectedTab:v1'
-const storePanelPersistenceKeys = [
-  mt5M1CheckResultsStorageKey,
-  storeV5StatusStorageKey,
-  storeV5ListSymbolsStorageKey,
-  storePanelSelectedTableKeyStorageKey,
-]
 const storeTableAggregatePeriods = ['M5', 'M15', 'M30', 'H1', 'H2', 'H3', 'H4', 'D1', 'W1', 'MN1']
 const storeV5M1RepairLookbackMinutes = 720
 const storeV5M1RepairMaxGapMinutes = 720
@@ -82,40 +61,6 @@ const defaultColumnWidths = {
 }
 
 type ColumnKey = keyof typeof defaultColumnWidths
-type SelectedPanelTab = 'details' | 'store' | 'watchlist' | 'settings'
-type SymbolSnapshot = {
-  selectedSymbol: string
-  status: string
-  symbols: Mt5SymbolRow[]
-  savedAt: string
-}
-
-type PersistedM1CheckResult = {
-  checkedAt: string
-  payload: StoreV5CheckPayload
-}
-
-type PersistedStoreV5Status = {
-  checkedAt: string
-  payload: StoreV5CheckPayload
-}
-
-type PersistedStoreTableSelection = {
-  key: string
-  symbol: string
-}
-
-type SharedSelection = {
-  symbol: string
-  period: string
-}
-
-type PersistedRealtimeSnapshot = {
-  lastTickAt?: string
-  log?: string[]
-  ticks?: Record<string, Mt5RealtimeTick>
-}
-
 function resolveStoreV5AggregateTargets(status: StoreV5CheckPayload) {
   return status.aggregated
     .map((cell) => String(cell.timeframe || '').toUpperCase())
@@ -168,324 +113,6 @@ function getInitialColumnWidths() {
     }
   } catch {
     return defaultColumnWidths
-  }
-}
-
-function getInitialSymbolSnapshot(): SymbolSnapshot | null {
-  try {
-    const raw = window.localStorage.getItem(symbolSnapshotStorageKey)
-    const parsed = raw ? JSON.parse(raw) : null
-    if (!parsed || typeof parsed !== 'object') return null
-    if (!Array.isArray(parsed.symbols)) return null
-
-    return {
-      selectedSymbol: typeof parsed.selectedSymbol === 'string' ? parsed.selectedSymbol : '',
-      status: typeof parsed.status === 'string' ? parsed.status : '',
-      symbols: parsed.symbols,
-      savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
-    }
-  } catch {
-    return null
-  }
-}
-
-function saveSymbolSnapshot(snapshot: Omit<SymbolSnapshot, 'savedAt'>) {
-  try {
-    window.localStorage.setItem(
-      symbolSnapshotStorageKey,
-      JSON.stringify({ ...snapshot, savedAt: new Date().toISOString() }),
-    )
-  } catch {
-    // Symbol persistence is best-effort only.
-  }
-}
-
-function readStorePanelPersistenceEnabled() {
-  try {
-    const raw = window.localStorage.getItem(storePanelPersistenceEnabledStorageKey)
-    return raw == null ? true : raw === '1'
-  } catch {
-    return true
-  }
-}
-
-function readWatchlistRealtimeEnabled() {
-  try {
-    return window.localStorage.getItem(watchlistRealtimeEnabledStorageKey) === '1'
-  } catch {
-    return false
-  }
-}
-
-function saveWatchlistRealtimeEnabled(enabled: boolean) {
-  try {
-    window.localStorage.setItem(watchlistRealtimeEnabledStorageKey, enabled ? '1' : '0')
-  } catch {
-    // Watchlist realtime persistence is best-effort only.
-  }
-}
-
-function readImportCenterQuery() {
-  try {
-    return window.localStorage.getItem(importCenterQueryStorageKey) ?? ''
-  } catch {
-    return ''
-  }
-}
-
-function saveImportCenterQuery(value: string) {
-  try {
-    window.localStorage.setItem(importCenterQueryStorageKey, value)
-  } catch {
-    // Query persistence is best-effort only.
-  }
-}
-
-function readImportCenterSelectedTab(): SelectedPanelTab {
-  try {
-    const value = window.localStorage.getItem(importCenterSelectedTabStorageKey)
-    return selectedPanelTabs.some((tab) => tab.key === value) ? value as SelectedPanelTab : 'details'
-  } catch {
-    return 'details'
-  }
-}
-
-function saveImportCenterSelectedTab(value: SelectedPanelTab) {
-  try {
-    window.localStorage.setItem(importCenterSelectedTabStorageKey, value)
-  } catch {
-    // Tab persistence is best-effort only.
-  }
-}
-
-function readPersistedRealtimeSnapshot(): PersistedRealtimeSnapshot {
-  try {
-    const raw = window.localStorage.getItem(watchlistRealtimeSnapshotStorageKey)
-    const parsed = raw ? JSON.parse(raw) : null
-    return {
-      lastTickAt: typeof parsed?.lastTickAt === 'string' ? parsed.lastTickAt : '',
-      log: Array.isArray(parsed?.log) ? parsed.log.filter((item: unknown): item is string => typeof item === 'string').slice(0, 8) : [],
-      ticks: parsed?.ticks && typeof parsed.ticks === 'object' ? parsed.ticks as Record<string, Mt5RealtimeTick> : {},
-    }
-  } catch {
-    return { lastTickAt: '', log: [], ticks: {} }
-  }
-}
-
-function savePersistedRealtimeSnapshot(snapshot: PersistedRealtimeSnapshot) {
-  try {
-    window.localStorage.setItem(watchlistRealtimeSnapshotStorageKey, JSON.stringify({
-      lastTickAt: snapshot.lastTickAt ?? '',
-      log: (snapshot.log ?? []).slice(0, 8),
-      ticks: snapshot.ticks ?? {},
-    }))
-  } catch {
-    // Realtime snapshot persistence is best-effort only.
-  }
-}
-
-function saveStorePanelPersistenceEnabled(enabled: boolean) {
-  try {
-    window.localStorage.setItem(storePanelPersistenceEnabledStorageKey, enabled ? '1' : '0')
-  } catch {
-    // Store panel persistence flag is best-effort only.
-  }
-}
-
-function clearStorePanelPersistence() {
-  try {
-    storePanelPersistenceKeys.forEach((key) => window.localStorage.removeItem(key))
-  } catch {
-    // Store panel persistence cleanup is best-effort only.
-  }
-}
-
-function readPersistedM1CheckResult(symbol: string, enabled = true): PersistedM1CheckResult | null {
-  if (!enabled) return null
-  if (!symbol) return null
-  try {
-    const raw = window.localStorage.getItem(mt5M1CheckResultsStorageKey)
-    const parsed = raw ? JSON.parse(raw) : null
-    const item = parsed?.[symbol]
-    if (!item || typeof item !== 'object' || !item.payload) return null
-    if (typeof item.checkedAt !== 'string') return null
-    return item as PersistedM1CheckResult
-  } catch {
-    return null
-  }
-}
-
-function savePersistedM1CheckResult(symbol: string, payload: StoreV5CheckPayload, checkedAt: string, enabled = true) {
-  if (!enabled) return
-  if (!symbol) return
-  try {
-    const raw = window.localStorage.getItem(mt5M1CheckResultsStorageKey)
-    const parsed = raw ? JSON.parse(raw) : {}
-    window.localStorage.setItem(
-      mt5M1CheckResultsStorageKey,
-      JSON.stringify({
-        ...(parsed && typeof parsed === 'object' ? parsed : {}),
-        [symbol]: { checkedAt, payload },
-      }),
-    )
-  } catch {
-    // Check result persistence is best-effort only.
-  }
-}
-
-function readPersistedStoreV5Status(symbol: string, enabled = true): PersistedStoreV5Status | null {
-  if (!enabled) return null
-  if (!symbol) return null
-  try {
-    const raw = window.localStorage.getItem(storeV5StatusStorageKey)
-    const parsed = raw ? JSON.parse(raw) : null
-    const item = parsed?.[symbol]
-    if (!item || typeof item !== 'object' || !item.payload) return null
-    if (typeof item.checkedAt !== 'string') return null
-    return item as PersistedStoreV5Status
-  } catch {
-    return null
-  }
-}
-
-function savePersistedStoreV5Status(symbol: string, payload: StoreV5CheckPayload, checkedAt = new Date().toISOString(), enabled = true) {
-  if (!enabled) return
-  if (!symbol) return
-  try {
-    const raw = window.localStorage.getItem(storeV5StatusStorageKey)
-    const parsed = raw ? JSON.parse(raw) : {}
-    window.localStorage.setItem(
-      storeV5StatusStorageKey,
-      JSON.stringify({
-        ...(parsed && typeof parsed === 'object' ? parsed : {}),
-        [symbol]: { checkedAt, payload },
-      }),
-    )
-    window.dispatchEvent(new Event(storeV5StatusChangedEvent))
-  } catch {
-    // Store status persistence is best-effort only.
-  }
-}
-
-function readStoreV5ListSymbols(enabled = true): string[] {
-  if (!enabled) return []
-  try {
-    const raw = window.localStorage.getItem(storeV5ListSymbolsStorageKey)
-    const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function saveStoreV5ListSymbols(symbols: string[], enabled = true) {
-  if (!enabled) return
-  try {
-    window.localStorage.setItem(storeV5ListSymbolsStorageKey, JSON.stringify([...new Set(symbols)]))
-  } catch {
-    // Store list persistence is best-effort only.
-  }
-}
-
-function readWatchlistSymbols(): string[] {
-  try {
-    const raw = window.localStorage.getItem(watchlistSymbolsStorageKey)
-    const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function saveWatchlistSymbols(symbols: string[]) {
-  try {
-    window.localStorage.setItem(watchlistSymbolsStorageKey, JSON.stringify([...new Set(symbols)]))
-    window.dispatchEvent(new Event(watchlistChangedEvent))
-  } catch {
-    // Watchlist persistence is best-effort only.
-  }
-}
-
-function readShortcutMenuEnabled() {
-  try {
-    return window.localStorage.getItem(shortcutMenuEnabledStorageKey) === '1'
-  } catch {
-    return false
-  }
-}
-
-function saveShortcutMenuEnabled(enabled: boolean) {
-  try {
-    window.localStorage.setItem(shortcutMenuEnabledStorageKey, enabled ? '1' : '0')
-    window.dispatchEvent(new Event(shortcutMenuChangedEvent))
-  } catch {
-    // Shortcut menu persistence is best-effort only.
-  }
-}
-
-function saveShortcutMenuPeriods(periods: StoreTableRow[]) {
-  try {
-    window.localStorage.setItem(
-      shortcutMenuPeriodsStorageKey,
-      JSON.stringify(periods.map((row) => ({
-        period: row.period,
-        rowsCount: row.rowsCount ?? null,
-      }))),
-    )
-    window.dispatchEvent(new Event(shortcutMenuChangedEvent))
-  } catch {
-    // Shortcut period persistence is best-effort only.
-  }
-}
-
-function readSharedSelection(): SharedSelection {
-  try {
-    const raw = window.localStorage.getItem(sharedSelectionStorageKey)
-    const parsed = raw ? JSON.parse(raw) : null
-    return {
-      symbol: typeof parsed?.symbol === 'string' ? parsed.symbol : '',
-      period: typeof parsed?.period === 'string' ? parsed.period.toUpperCase() : '',
-    }
-  } catch {
-    return { symbol: '', period: '' }
-  }
-}
-
-function publishSharedSelection(symbol: string, period: string) {
-  try {
-    window.localStorage.setItem(sharedSelectionStorageKey, JSON.stringify({ symbol, period }))
-  } catch {
-    // Shared selection persistence is best-effort only.
-  }
-  window.dispatchEvent(new CustomEvent(sharedSelectionChangedEvent, { detail: { symbol, period } }))
-}
-
-function readPersistedStoreTableSelection(symbol: string, enabled = true): string {
-  if (!enabled || !symbol) return ''
-  try {
-    const raw = window.localStorage.getItem(storePanelSelectedTableKeyStorageKey)
-    const parsed = raw ? JSON.parse(raw) : null
-    const item = parsed?.[symbol] as PersistedStoreTableSelection | undefined
-    return item?.symbol === symbol && typeof item.key === 'string' ? item.key : ''
-  } catch {
-    return ''
-  }
-}
-
-function savePersistedStoreTableSelection(symbol: string, key: string, enabled = true) {
-  if (!enabled || !symbol) return
-  try {
-    const raw = window.localStorage.getItem(storePanelSelectedTableKeyStorageKey)
-    const parsed = raw ? JSON.parse(raw) : {}
-    window.localStorage.setItem(
-      storePanelSelectedTableKeyStorageKey,
-      JSON.stringify({
-        ...(parsed && typeof parsed === 'object' ? parsed : {}),
-        [symbol]: { key, symbol },
-      }),
-    )
-  } catch {
-    // Store table selection persistence is best-effort only.
   }
 }
 
@@ -1784,7 +1411,7 @@ export function RightDrawer({
   function handleJumpChartToTime() {
     const timestamp = parseChartJumpTime(chartJumpInput)
     if (timestamp == null) {
-      setChartJumpError('璇疯緭鍏?YYYY-MM-DD HH:mm')
+      setChartJumpError('请输入 YYYY-MM-DD HH:mm')
       return
     }
     setChartJumpError('')
@@ -2021,10 +1648,12 @@ export function RightDrawer({
         </header>
 
         {activeDrawer === 'settings' ? (
-          <SettingsPanel
-            selectedTab={selectedSettingsPanelTab}
-            onSelectedTabChange={setSelectedSettingsPanelTab}
-          />
+          <Suspense fallback={<div className="ff-settings-drawer__body" />}>
+            <SettingsPanel
+              selectedTab={selectedSettingsPanelTab}
+              onSelectedTabChange={setSelectedSettingsPanelTab}
+            />
+          </Suspense>
         ) : (
         <div className="ff-right-drawer__body">
           <section className="ff-mt5-pane ff-mt5-pane--top">
@@ -2266,10 +1895,10 @@ export function RightDrawer({
                         <div className="ff-store-status-line__row">
                           <span>{storeOperationLine}</span>
                           {m1CheckJob?.jobId && (
-                            <button onClick={handleCancelMt5M1Check} type="button">鍙栨秷</button>
+                            <button onClick={handleCancelMt5M1Check} type="button">取消</button>
                           )}
                           {pullProgress?.jobId && pullProgress.phase !== 'completed' && (
-                            <button onClick={handleCancelPullStore} type="button">鍙栨秷</button>
+                            <button onClick={handleCancelPullStore} type="button">取消</button>
                           )}
                         </div>
                         {storeOperationProgress && (
@@ -2542,5 +2171,8 @@ export function RightDrawer({
     </>
   )
 }
+
+
+
 
 

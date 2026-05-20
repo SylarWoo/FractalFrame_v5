@@ -398,7 +398,7 @@ function resolveStatusTitle(symbol: string, displayName?: string) {
   const name = displayName?.trim() || symbol
   if (mode === 'symbol') return symbol
   if (mode === 'name') return name
-  return `${symbol} 路 ${name}`
+  return `${symbol} · ${name}`
 }
 
 function applyCandleTooltipStyle(chart: Chart, symbol: string, period: string, displayName?: string) {

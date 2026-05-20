@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import json
@@ -29,6 +29,7 @@ from http_bridge.query_params import clamp_limit, clamp_m1_check_chunk, clamp_m1
 from http_bridge.response import send_cors_headers as send_cors_headers_response
 from http_bridge.response import send_json as send_json_response
 from http_bridge.response import start_sse, write_sse_event
+from http_bridge.route_helpers import first_query_value, parse_timeframes, required_job_id, required_symbol
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1146,8 +1147,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 status="mt5_initialize_failed",
                 mt5LastError=mt5.last_error(),
                 progressPercent=None,
-                progressLabel="失败：MT5 初始化失败",
-                detailMessage="拉取开始前无法初始化 MT5",
+                progressLabel="Failed: MT5 initialize failed",
+                detailMessage="Unable to initialize MT5 before pull starts",
                 finishedAt=utc_now_iso(),
             )
             return
@@ -1160,8 +1161,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 status="mt5_symbol_select_failed",
                 mt5LastError=mt5.last_error(),
                 progressPercent=None,
-                progressLabel=f"失败：无法选择品种 {symbol}",
-                detailMessage="MT5 symbol_select 失败",
+                progressLabel=f"Failed: unable to select symbol {symbol}",
+                detailMessage="MT5 symbol_select failed",
                 finishedAt=utc_now_iso(),
             )
             return
@@ -1241,8 +1242,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             writeBatchRows=0,
             writeBatchWritten=0,
             pendingWriteRows=0,
-            progressLabel=f"开始读取 MT5 M1，每批 {step:,} 根",
-            detailMessage="正在从 MT5 读取 M1 数据",
+            progressLabel=f"Start reading MT5 M1, batch size {step:,} rows",
+            detailMessage="Reading M1 data from MT5",
         )
 
         seen_times: set[int] = set()
@@ -1301,8 +1302,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 firstTimeText=format_utc_text(first_time),
                 lastTimeText=format_utc_text(last_time),
                 cleanStatus="pending",
-                progressLabel=f"正在写入：本批 {batch_rows:,}，累计已写入 {rows_written_total:,}",
-                detailMessage="正在写入 StoreV5 raw_direct/M1 parquet",
+                progressLabel=f"Writing batch: {batch_rows:,}, total written {rows_written_total:,}",
+                detailMessage="Writing StoreV5 raw_direct/M1 parquet",
             )
             write = append_ohlcv_part_v5(
                 pending_rows,
@@ -1357,8 +1358,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 firstTimeText=format_utc_text(first_time),
                 lastTimeText=format_utc_text(last_time),
                 cleanStatus="pending",
-                progressLabel=f"写入完成：本批写入 {batch_written:,}，累计 {rows_written_total:,}",
-                detailMessage="本批 parquet 写入完成",
+                progressLabel=f"Batch written: {batch_written:,}, total {rows_written_total:,}",
+                detailMessage="Current parquet batch written",
             )
 
         if range_window is not None:
@@ -1373,8 +1374,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                     rowsWritten=0,
                     rawRowsCount=0,
                     duplicateRows=0,
-                    progressLabel="已取消",
-                    detailMessage="用户取消了 StoreV5 拉取任务",
+                    progressLabel="Cancelled",
+                    detailMessage="User cancelled StoreV5 pull job",
                     finishedAt=utc_now_iso(),
                 )
                 return
@@ -1401,8 +1402,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 writeBatchWritten=0,
                 pendingWriteRows=0,
                 cleanStatus="pending",
-                progressLabel=f"增量读取：从 {format_utc_text(from_time)} 到 {format_utc_text(to_time)}",
-                detailMessage="正在按 StoreV5 lastTime overlap 从 MT5 读取增量 M1",
+                progressLabel=f"Incremental read: {format_utc_text(from_time)} to {format_utc_text(to_time)}",
+                detailMessage="Reading incremental M1 from MT5 with StoreV5 lastTime overlap",
             )
             rates = mt5.copy_rates_range(
                 symbol,
@@ -1455,8 +1456,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 firstTimeText=format_utc_text(first_time),
                 lastTimeText=format_utc_text(last_time),
                 cleanStatus="pending",
-                progressLabel=f"增量读取完成：MT5 返回 {len(part):,}，新增候选 {len(new_part):,}，跳过 {duplicate_rows_total:,}",
-                detailMessage="已按 lastTime overlap 过滤已有 M1",
+                progressLabel=f"Incremental read done: MT5 returned {len(part):,}, new candidates {len(new_part):,}, skipped {duplicate_rows_total:,}",
+                detailMessage="Filtered existing M1 using lastTime overlap",
             )
 
         while range_window is None and (target is None or pos < target):
@@ -1471,8 +1472,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                     rowsWritten=rows_written_total,
                     rawRowsCount=rows_written_total,
                     duplicateRows=duplicate_rows_total,
-                    progressLabel="已取消",
-                    detailMessage="用户取消了 StoreV5 拉取任务",
+                    progressLabel="Cancelled",
+                    detailMessage="User cancelled StoreV5 pull job",
                     finishedAt=utc_now_iso(),
                 )
                 return
@@ -1502,10 +1503,10 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 lastTimeText=format_utc_text(last_time),
                 cleanStatus="pending",
                 progressLabel=(
-                    f"正在请求第 {current_batch_index} 批：计划读取 {want:,}，"
-                    f"累计已读取 {rows_fetched_total:,}" + (f" / {target:,}" if target else "")
+                    f"Requesting batch {current_batch_index}: planned {want:,}, "
+                    f"total read {rows_fetched_total:,}" + (f" / {target:,}" if target else "")
                 ),
-                detailMessage="正在等待 MT5 返回 M1 数据",
+                detailMessage="Waiting for MT5 M1 response",
             )
             part = mt5_rates_to_rows(mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, pos, want))
             if not part:
@@ -1553,8 +1554,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                         firstTimeText=format_utc_text(first_time),
                         lastTimeText=format_utc_text(last_time),
                         cleanStatus="pending",
-                        progressLabel=f"正在写入：本批 {len(pending_rows):,}，累计已写入 {rows_written_total:,}",
-                        detailMessage="正在写入 StoreV5 raw_direct/M1 parquet",
+                        progressLabel=f"Writing batch: {len(pending_rows):,}, total written {rows_written_total:,}",
+                        detailMessage="Writing StoreV5 raw_direct/M1 parquet",
                     )
                     flush_pending_rows()
 
@@ -1582,10 +1583,10 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
                 lastTimeText=format_utc_text(last_time),
                 cleanStatus="pending",
                 progressLabel=(
-                    f"正在读取第 {current_batch_index} 批：本批 {current_batch_fetched:,}，"
-                    f"累计 {rows_fetched_total:,}" + (f" / {target:,}" if target else "")
+                    f"Reading batch {current_batch_index}: current {current_batch_fetched:,}, "
+                    f"total {rows_fetched_total:,}" + (f" / {target:,}" if target else "")
                 ),
-                detailMessage="正在从 MT5 读取 M1 数据",
+                detailMessage="Reading M1 data from MT5",
             )
             if len(part) < want:
                 break
@@ -1609,8 +1610,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             firstTimeText=format_utc_text(first_time),
             lastTimeText=format_utc_text(last_time),
             cleanStatus="pending",
-            progressLabel=f"正在写入最后一批：{len(pending_rows):,}",
-            detailMessage="正在写入最后一批 StoreV5 parquet",
+            progressLabel=f"Writing final batch: {len(pending_rows):,}",
+            detailMessage="Writing final StoreV5 parquet batch",
         )
         flush_pending_rows(progress_floor=96)
 
@@ -1633,8 +1634,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             firstTimeText=format_utc_text(first_time),
             lastTimeText=format_utc_text(last_time),
             cleanStatus="pending",
-            progressLabel="正在更新 Manifest 与标记聚合状态",
-            detailMessage="正在刷新 StoreV5 manifest",
+            progressLabel="Updating manifest and aggregate dirty state",
+            detailMessage="Refreshing StoreV5 manifest",
         )
 
         direct_cell = get_dataset_cell(root, direct_key)
@@ -1772,8 +1773,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             cleanStatus="pending",
             firstTimeText=format_utc_text(first_time),
             lastTimeText=format_utc_text(last_time),
-            progressLabel=f"完成：读取 {rows_fetched_total:,}，写入 {rows_written_total:,}，重复 {duplicate_rows_total:,}",
-            detailMessage="本地 M1 raw_direct 已更新",
+            progressLabel=f"Completed: read {rows_fetched_total:,}, wrote {rows_written_total:,}, duplicates {duplicate_rows_total:,}",
+            detailMessage="Local M1 raw_direct updated",
             result=report,
             finishedAt=utc_now_iso(),
         )
@@ -1790,8 +1791,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             rowsWritten=int(local_vars.get("rows_written_total") or 0),
             rawRowsCount=int(local_vars.get("rows_written_total") or 0),
             duplicateRows=int(local_vars.get("duplicate_rows_total") or 0),
-            progressLabel=f"失败：{exc}",
-            detailMessage="拉取或写入过程中发生错误",
+            progressLabel=f"Failed: {exc}",
+            detailMessage="Error during pull or write",
             finishedAt=utc_now_iso(),
         )
     finally:
@@ -2296,8 +2297,8 @@ def start_store_v5_pull_job(symbol: str, *, mode: str, count: int | None, store_
             "writeBatchRows": 0,
             "writeBatchWritten": 0,
             "pendingWriteRows": 0,
-            "progressLabel": "准备开始拉取 MT5 M1",
-            "detailMessage": "正在等待 StoreV5 拉取任务启动",
+            "progressLabel": "Preparing MT5 M1 pull",
+            "detailMessage": "Waiting for StoreV5 pull job to start",
             "createdAt": now,
             "updatedAt": now,
             "lastEventId": 1,
@@ -2429,7 +2430,7 @@ def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str
             phase="running",
             status="store_v5_aggregate_running",
             progressPercent=1,
-            progressLabel=f"开始聚合：共 {len(timeframes)} 个周期",
+            progressLabel=f"Start aggregation: {len(timeframes)} periods",
             currentIndex=0,
             totalTargets=len(timeframes),
             results=results,
@@ -2441,7 +2442,7 @@ def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str
                 ok=False,
                 phase="cancelled",
                 status="store_v5_aggregate_cancelled",
-                progressLabel="已取消",
+                progressLabel="Cancelled",
                 finishedAt=utc_now_iso(),
             )
             return
@@ -2453,7 +2454,7 @@ def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str
             currentIndex=1,
             totalTargets=len(timeframes),
             progressPercent=5,
-            progressLabel=f"正在聚合：{','.join(timeframes)}",
+            progressLabel=f"Aggregating: {','.join(timeframes)}",
             results=results,
         )
         payload = aggregate_store_v5(symbol, timeframes=timeframes, rebuild=rebuild, store_root=store_root)
@@ -2477,7 +2478,7 @@ def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str
             phase="completed",
             status="store_v5_aggregate_completed",
             progressPercent=100,
-            progressLabel=f"聚合完成：{len(timeframes)} 个周期",
+            progressLabel=f"Aggregation completed: {len(timeframes)} periods",
             results=results,
             result=report,
             finishedAt=utc_now_iso(),
@@ -2490,7 +2491,7 @@ def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str
             status="store_v5_aggregate_failed",
             error=str(exc),
             progressPercent=None,
-            progressLabel=f"聚合失败：{exc}",
+            progressLabel=f"Aggregation failed: {exc}",
             results=results,
             finishedAt=utc_now_iso(),
         )
@@ -2508,7 +2509,7 @@ def start_store_v5_aggregate_job(symbol: str, *, timeframes: list[str], rebuild:
             "phase": "queued",
             "status": "store_v5_aggregate_queued",
             "progressPercent": 0,
-            "progressLabel": "准备开始聚合",
+            "progressLabel": "Preparing aggregation",
             "targets": targets,
             "currentTarget": None,
             "currentIndex": 0,
@@ -3454,3 +3455,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
