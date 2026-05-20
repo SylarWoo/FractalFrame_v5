@@ -13,6 +13,23 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from http_bridge.jobs import (
+    AGGREGATE_JOBS,
+    AGGREGATE_JOBS_CONDITION,
+    AGGREGATE_JOBS_LOCK,
+    AGGREGATE_JOB_TERMINAL_PHASES,
+    M1_CHECK_JOBS,
+    M1_CHECK_JOBS_LOCK,
+    PULL_JOBS,
+    PULL_JOBS_CONDITION,
+    PULL_JOBS_LOCK,
+    PULL_JOB_TERMINAL_PHASES,
+)
+from http_bridge.query_params import clamp_limit, clamp_m1_check_chunk, clamp_m1_check_count, query_bool, safe_query_int
+from http_bridge.response import send_cors_headers as send_cors_headers_response
+from http_bridge.response import send_json as send_json_response
+from http_bridge.response import start_sse, write_sse_event
+
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -20,44 +37,8 @@ if str(ROOT) not in sys.path:
 DEFAULT_CACHE_ROOT = ROOT / "runtime_data" / "instruments" / "mt5"
 SYMBOL_CACHE_FILE = "symbol_universe_info.json"
 SYMBOL_REPORT_FILE = "symbol_universe_scan_report.json"
-M1_CHECK_JOBS: dict[str, dict[str, Any]] = {}
-M1_CHECK_JOBS_LOCK = threading.Lock()
-PULL_JOBS: dict[str, dict[str, Any]] = {}
-PULL_JOBS_LOCK = threading.Lock()
-PULL_JOBS_CONDITION = threading.Condition(PULL_JOBS_LOCK)
-PULL_JOB_TERMINAL_PHASES = {"completed", "failed", "cancelled"}
-AGGREGATE_JOBS: dict[str, dict[str, Any]] = {}
-AGGREGATE_JOBS_LOCK = threading.Lock()
-AGGREGATE_JOBS_CONDITION = threading.Condition(AGGREGATE_JOBS_LOCK)
-AGGREGATE_JOB_TERMINAL_PHASES = {"completed", "failed", "cancelled"}
-
-
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-
-def clamp_limit(value: str | None, default: int = 50_000) -> int:
-    try:
-        parsed = int(value or default)
-    except ValueError:
-        parsed = default
-    return max(1, min(parsed, 50_000))
-
-
-def clamp_m1_check_count(value: str | None, default: int = 200_000) -> int:
-    try:
-        parsed = int(value or default)
-    except ValueError:
-        parsed = default
-    return max(1, min(parsed, 10_000_000))
-
-
-def clamp_m1_check_chunk(value: str | None, default: int = 200_000) -> int:
-    try:
-        parsed = int(value or default)
-    except ValueError:
-        parsed = default
-    return max(1_000, min(parsed, 500_000))
 
 
 def safe_bool(value: Any, default: bool | None = None) -> bool | None:
@@ -82,21 +63,6 @@ def safe_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
-
-
-def safe_query_int(value: str | None, default: int | None = None) -> int | None:
-    if value is None or value == "":
-        return default
-    try:
-        return int(value)
-    except ValueError:
-        return default
-
-
-def query_bool(value: str | None, default: bool = False) -> bool:
-    if value is None:
-        return default
-    return value.lower() in {"1", "true", "yes", "y", "on"}
 
 
 def namedtuple_to_dict(value: Any) -> dict[str, Any]:
@@ -3261,26 +3227,13 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
         self.send_json(200 if payload.get("ok") is True else 503, payload)
 
     def send_cors_headers(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Accept, Content-Type")
-        self.send_header("Cache-Control", "no-store")
+        send_cors_headers_response(self)
 
     def send_json(self, status: int, payload: dict[str, Any]) -> None:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_cors_headers()
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        send_json_response(self, status, payload)
 
     def send_mt5_tick_events(self, symbols: list[str], interval_ms: int) -> None:
-        self.send_response(200)
-        self.send_cors_headers()
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Connection", "keep-alive")
-        self.end_headers()
+        start_sse(self)
 
         try:
             import MetaTrader5 as mt5
@@ -3372,17 +3325,10 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
                     pass
 
     def write_sse_event(self, event_id: int, event_name: str, data: dict[str, Any]) -> None:
-        self.wfile.write(f"id: {event_id}\n".encode("utf-8"))
-        self.wfile.write(f"event: {event_name}\n".encode("utf-8"))
-        self.wfile.write(f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8"))
-        self.wfile.flush()
+        write_sse_event(self, event_id, event_name, data)
 
     def send_pull_job_events(self, job_id: str) -> None:
-        self.send_response(200)
-        self.send_cors_headers()
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Connection", "keep-alive")
-        self.end_headers()
+        start_sse(self)
 
         last_sent = 0
         while True:
@@ -3427,11 +3373,7 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
                 return
 
     def send_aggregate_job_events(self, job_id: str) -> None:
-        self.send_response(200)
-        self.send_cors_headers()
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Connection", "keep-alive")
-        self.end_headers()
+        start_sse(self)
 
         last_sent = 0
         while True:

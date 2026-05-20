@@ -1,6 +1,6 @@
 import type { KLineData } from 'klinecharts'
-import { queryStoreV5Ohlcv } from '../workbench/rightDrawer/mt5SymbolsApi'
-import type { StoreV5QueryPayload } from '../workbench/rightDrawer/mt5SymbolsApi'
+import { queryStoreV5Ohlcv } from '../services/mt5/mt5SymbolsApi'
+import type { StoreV5QueryPayload } from '../services/mt5/mt5SymbolsApi'
 
 function normalizeTimeframe(period: string) {
   const value = period.trim().toUpperCase()

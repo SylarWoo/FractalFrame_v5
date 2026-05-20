@@ -1,4 +1,4 @@
-import type { Mt5SymbolRow } from './mt5SymbolsApi'
+import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 
 type SymbolDisplay = {
   chineseName: string

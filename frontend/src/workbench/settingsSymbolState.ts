@@ -24,3 +24,16 @@ export function readSettingsStringValue(storageKey: string, fallback: string) {
   const saved = readSettingsSymbolState()[storageKey]
   return typeof saved === 'string' ? saved : fallback
 }
+
+export function readSettingsBooleanValue(storageKey: string, fallback: boolean) {
+  const saved = readSettingsSymbolState()[storageKey]
+  return typeof saved === 'boolean' ? saved : fallback
+}
+
+export function readSettingsNumberStringValue(storageKey: string, fallback: string) {
+  const saved = readSettingsSymbolState()[storageKey]
+  if (typeof saved !== 'string') return fallback
+  if (saved === 'system') return saved
+  const parsed = Number(saved)
+  return Number.isFinite(parsed) ? saved : fallback
+}

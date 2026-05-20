@@ -1,0 +1,255 @@
+﻿import type { ChartLoadState } from '../chart/ChartCoreHost'
+import type { Mt5M1CheckJobPayload, Mt5SymbolRow, StoreV5AggregateJobPayload, StoreV5CheckPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
+
+export type StoreTableRow = {
+  period: string
+  count: string
+  updated: string
+  kind: 'm1' | 'aggregate'
+  rowsCount?: number | null
+}
+
+export type DetailRow =
+  | readonly [string, string | number | boolean | null | undefined, string, string | number | boolean | null | undefined]
+  | readonly [string, string | number | boolean | null | undefined]
+
+export function formatSymbolStatus(totalCount: number, visibleCount: number, merge?: { added?: number; updated?: number }) {
+  return `共 ${totalCount} 个品种，本地已保存，刷新后自动恢复（当前显示 ${visibleCount} 个）`
+    + (merge ? ` · 新增 ${merge.added ?? 0}，更新 ${merge.updated ?? 0}` : '')
+}
+
+export function normalizeStoredStatus(status: string, symbolCount: number) {
+  if (
+    !status
+    || status.includes('symbol(s)')
+    || status.includes('stored locally')
+    || status.includes('viewport renders')
+    || status.includes('added')
+    || /^[\x00-\x7F\s.,;:()/-]+$/.test(status)
+  ) {
+    return symbolCount ? formatSymbolStatus(symbolCount, symbolCount) : '点击 Scan MT5 加载品种列表。'
+  }
+  return status
+}
+
+export function formatDetailValue(value: string | number | boolean | null | undefined) {
+  if (value === true) return 'yes'
+  if (value === false) return 'no'
+  if (value === null || value === undefined || value === '') return '-'
+  return String(value)
+}
+
+export function formatCount(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('en-US') : '-'
+}
+
+export function formatMarketPrice(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value.toLocaleString('en-US', { maximumFractionDigits: 6 })
+    : '-'
+}
+
+export function formatMarketChange(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${value.toLocaleString('en-US', { maximumFractionDigits: 6 })}`
+}
+
+export function formatMarketPercent(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${value.toFixed(2)}%`
+}
+
+export function formatChartLoadStatus(state: ChartLoadState | null | undefined) {
+  if (!state) return '-'
+  if (state.loading) return `${state.symbol} ${state.period} 加载中 ${state.requestedRows.toLocaleString()}`
+  if (state.error) return `${state.symbol} ${state.period} 加载失败`
+  const localRows = typeof state.totalRows === 'number' && Number.isFinite(state.totalRows)
+    ? state.totalRows
+    : state.requestedRows
+  return `${state.symbol} ${state.period} 已进入 ${state.rows.toLocaleString()} / 本地 ${localRows.toLocaleString()}${state.loadingMore ? ' · 加载历史' : ''}`
+}
+
+export function formatCountWithWan(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  if (Math.abs(value) < 10000) return value.toLocaleString('en-US')
+  const wan = value / 10000
+  return `${value.toLocaleString('en-US')}（${wan.toFixed(wan >= 100 ? 0 : 1)}W）`
+}
+
+export function formatCheckTime(value?: string | null) {
+  if (!value) return '-'
+  const time = Date.parse(value)
+  if (!Number.isFinite(time)) return value
+  return new Date(time).toLocaleString()
+}
+
+export function formatEpochSeconds(value?: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '-'
+  return new Date(value * 1000).toLocaleString()
+}
+
+export function parseChartJumpTime(value: string) {
+  const normalized = value.trim().replace('T', ' ')
+  if (!normalized) return null
+  const match = normalized.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:\s+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/)
+  if (!match) return null
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const hour = Number(match[4] ?? 0)
+  const minute = Number(match[5] ?? 0)
+  const second = Number(match[6] ?? 0)
+  const timestamp = new Date(year, month - 1, day, hour, minute, second).getTime()
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+export function resolveLocalM1Rows(status: StoreV5CheckPayload | null) {
+  return status?.directM1?.rowsCount
+    ?? status?.directM1?.trueM1RowsCount
+    ?? status?.rawDirectM1?.rowsCount
+    ?? status?.rawDirectM1?.rawRowsCount
+    ?? null
+}
+
+export function resolveLocalM1LastTime(status: StoreV5CheckPayload | null) {
+  return status?.directM1?.lastTime ?? status?.rawDirectM1?.lastTime ?? null
+}
+
+export function storeTableKeyForPeriod(period: string, rows: StoreTableRow[] = []) {
+  const normalized = period.toUpperCase()
+  const visibleRow = rows.find((row) => row.period.toUpperCase() === normalized)
+  if (visibleRow) return `${visibleRow.kind}-${visibleRow.period}`
+  return normalized === 'M1' ? 'm1-M1' : `aggregate-${normalized}`
+}
+
+export function periodFromStoreTableKey(key: string) {
+  const parts = key.split('-')
+  return (parts[parts.length - 1] || '').toUpperCase()
+}
+
+export function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+export function formatUtcRange(firstText?: string | null, lastText?: string | null) {
+  if (!firstText || !lastText) return '-'
+  return `${firstText.replace(':00 UTC', '')} ~ ${lastText.replace(':00 UTC', '')} (UTC)`
+}
+
+export function formatStoreOperationLine(
+  pullJob: StoreV5PullJobPayload | null,
+  checkJob: Mt5M1CheckJobPayload | null,
+  aggregateProgress: StoreV5AggregateJobPayload | null,
+  fallback: string,
+) {
+  if (pullJob) {
+    if (pullJob.progressLabel) return pullJob.progressLabel
+
+    const batchSize = pullJob.fetchChunkSize ?? pullJob.writeBatchSize ?? 200000
+    if (pullJob.phase === 'probing' || pullJob.phase === 'queued' || pullJob.phase === 'fetching') {
+      return `开始读取 ${formatCountWithWan(batchSize)}，已读取 ${formatCountWithWan(pullJob.rowsFetched)}`
+    }
+    if (pullJob.phase === 'streaming' || pullJob.phase === 'writing') {
+      const currentBatch = pullJob.writeBatchRows ?? batchSize
+      return `开始写入 ${formatCountWithWan(currentBatch)}，已写入 ${formatCountWithWan(pullJob.rowsWritten)}`
+    }
+    if (pullJob.phase === 'checking' || pullJob.phase === 'validating') return '已经写完，开始检查错误字段'
+    if (pullJob.phase === 'cleaning') {
+      const deleted = pullJob.cleanupDeletedRows != null ? `，已删除 ${formatCountWithWan(pullJob.cleanupDeletedRows)}` : ''
+      return `检查完成，删除错误字段${deleted}`
+    }
+    if (pullJob.phase === 'completed') return '完成，本地 M1 数据已更新'
+    if (pullJob.phase === 'cancelled') return '已取消'
+    if (pullJob.phase === 'failed') return `失败：${pullJob.error || pullJob.status}`
+    return pullJob.status || fallback
+  }
+  if (checkJob) {
+    const batchSize = checkJob.chunkSize ?? 200000
+    if (checkJob.phase === 'fetching' || checkJob.phase === 'queued') {
+      if (checkJob.currentBatchIndex && checkJob.currentBatchRequested) {
+        return `正在读取第 ${checkJob.currentBatchIndex} 批：计划 ${formatCountWithWan(checkJob.currentBatchRequested)}，已读取 ${formatCountWithWan(checkJob.mt5RowsCount)}`
+      }
+      return `开始读取 ${formatCountWithWan(batchSize)}，已读取 ${formatCountWithWan(checkJob.mt5RowsCount)}`
+    }
+    if (checkJob.phase === 'validating') return '已经读完，开始检查错误字段'
+    if (checkJob.phase === 'completed') return '检查完成'
+    if (checkJob.phase === 'cancelled') return '已取消'
+    if (checkJob.phase === 'failed') return `失败：${checkJob.error || checkJob.status}`
+    return checkJob.status || fallback
+  }
+  if (aggregateProgress) {
+    if (aggregateProgress.progressLabel) return aggregateProgress.progressLabel
+    if (aggregateProgress.phase === 'completed') {
+      return `聚合完成：${aggregateProgress.periods.join('、')}`
+    }
+    if (aggregateProgress.phase === 'failed') {
+      return `聚合失败：${aggregateProgress.currentPeriod ?? aggregateProgress.periods.join('、')}`
+    }
+    const current = aggregateProgress.currentPeriod ? `，当前 ${aggregateProgress.currentPeriod}` : ''
+    return `正在聚合：${aggregateProgress.completed}/${aggregateProgress.total}${current}`
+  }
+  return fallback
+}
+
+export function resolveStoreOperationProgress(
+  pullJob: StoreV5PullJobPayload | null,
+  checkJob: Mt5M1CheckJobPayload | null,
+  aggregateProgress: StoreV5AggregateJobPayload | null,
+) {
+  if (pullJob) {
+    if (pullJob.phase === 'completed') return { hasEstimate: true, width: 100 }
+    if (pullJob.phase === 'failed' || pullJob.phase === 'cancelled') return null
+    if (typeof pullJob.progressPercent === 'number') {
+      return {
+        hasEstimate: true,
+        width: Math.max(1, Math.min(99, Math.round(pullJob.progressPercent))),
+      }
+    }
+    if (pullJob.phase === 'writing') {
+      const written = typeof pullJob.rowsWritten === 'number' ? pullJob.rowsWritten : 0
+      const total = typeof pullJob.trueM1RowsCount === 'number' && pullJob.trueM1RowsCount > 0 ? pullJob.trueM1RowsCount : null
+      if (total) return { hasEstimate: true, width: Math.max(1, Math.min(99, Math.round((written / total) * 100))) }
+    }
+    const fetched = typeof pullJob.rowsFetched === 'number' ? pullJob.rowsFetched : 0
+    const total = typeof pullJob.maxCount === 'number' && pullJob.maxCount > 0 ? pullJob.maxCount : null
+    if (total) return { hasEstimate: true, width: Math.max(fetched > 0 ? 1 : 0, Math.min(99, Math.round((fetched / total) * 100))) }
+    return { hasEstimate: false, width: 45 }
+  }
+  if (checkJob) {
+    if (checkJob.phase === 'completed') return { hasEstimate: true, width: 100 }
+    if (checkJob.phase === 'failed' || checkJob.phase === 'cancelled') return null
+    if (typeof checkJob.progressPercent === 'number') {
+      return { hasEstimate: true, width: Math.max(1, Math.min(99, Math.round(checkJob.progressPercent))) }
+    }
+    return { hasEstimate: false, width: 45 }
+  }
+  if (aggregateProgress) {
+    if (aggregateProgress.phase === 'completed') return { hasEstimate: true, width: 100 }
+    if (aggregateProgress.phase === 'failed') return null
+    return {
+      hasEstimate: true,
+      width: Math.max(4, Math.min(99, Math.round((aggregateProgress.completed / Math.max(1, aggregateProgress.total)) * 100))),
+    }
+  }
+  return null
+}
+
+export function selectedDetailRows(row: Mt5SymbolRow): DetailRow[] {
+  return [
+    ['分类', row.category || row.market, '小数位', row.digits],
+    ['合约量', row.tradeContractSize, '点差', row.spreadFloat ? '浮动' : row.spread],
+    ['止损级别', row.tradeStopsLevel, '预付款货币', row.currencyMargin],
+    ['盈利货币', row.currencyProfit, '基础货币', row.currencyBase],
+    ['计算', row.tradeCalcMode, '图表模式', row.tradeMode],
+    ['交易模式', row.tradeMode, '执行模式', row.tradeCalcMode],
+    ['最小手数', row.volumeMin, '最大手数', row.volumeMax],
+    ['手数步进', row.volumeStep, 'Tick Size', row.tradeTickSize],
+    ['Tick Value', row.tradeTickValue, '可见', row.visible],
+    ['路径', row.path],
+  ]
+}
+
+

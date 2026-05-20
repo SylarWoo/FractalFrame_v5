@@ -24,8 +24,9 @@ import {
 } from './leftRailV4Icons'
 import { RightDrawer } from './rightDrawer/RightDrawer'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
-import type { Mt5SymbolRow } from './rightDrawer/mt5SymbolsApi'
+import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
 import { readSettingsStringValue, settingsSymbolChangedEvent } from './settingsSymbolState'
+import { chartSettingDefaults, chartSettingKeys } from './settings/chartSettingsSchema'
 import { TopBar } from './topbar/TopBar'
 import './openableControl.css'
 import './AppShell.css'
@@ -137,7 +138,7 @@ function readSymbolDisplayName(symbol: string) {
 }
 
 function resolveWorkspaceTimezone() {
-  const value = readSettingsStringValue('time.timezone', 'UTC')
+  const value = readSettingsStringValue(chartSettingKeys.timezone, chartSettingDefaults.timezone)
   return value === 'exchange' ? 'UTC' : value
 }
 

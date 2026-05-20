@@ -1,4 +1,4 @@
-pandas
-pyarrow
-duckdb
-MetaTrader5
+pandas==3.0.3
+pyarrow==24.0.0
+duckdb==1.5.2
+MetaTrader5==5.0.5735
