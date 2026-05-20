@@ -235,7 +235,8 @@ export function TopBar({ onOpenChart }: TopBarProps) {
         <div className="ff-shortcut-menu">
           <div className="ff-shortcut-symbol" data-open={open}>
             <button
-              className="ff-shortcut-symbol__toggle"
+              aria-expanded={open}
+              className="ff-shortcut-symbol__toggle ff-openable-control"
               onClick={() => setOpen((current) => !current)}
               type="button"
             >

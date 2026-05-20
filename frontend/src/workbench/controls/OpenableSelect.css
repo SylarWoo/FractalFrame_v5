@@ -1,0 +1,64 @@
+.ff-openable-select {
+  position: relative;
+  width: 150px;
+}
+
+.ff-openable-select__button {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 100%;
+  height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #d1d4dc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #131722;
+  cursor: pointer;
+  font: 12px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
+  padding: 0 9px;
+  text-align: left;
+}
+
+.ff-openable-select__chevron {
+  color: #131722;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.ff-openable-select__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 120;
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #e0e3eb;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
+  padding: 4px 0;
+}
+
+.ff-openable-select__option {
+  height: 31px;
+  border: 0;
+  background: transparent;
+  color: #131722;
+  cursor: pointer;
+  font: 12px/31px Arial, Tahoma, 'Segoe UI', sans-serif;
+  padding: 0 12px;
+  text-align: left;
+}
+
+.ff-openable-select__option:hover {
+  background: #f2f3f5;
+}
+
+.ff-openable-select__option[data-active='true'] {
+  background: #2f2f2f;
+  color: #ffffff;
+}

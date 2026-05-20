@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActionType, LoadDataType, YAxisType, dispose, init } from 'klinecharts'
-import type { Chart, KLineData } from 'klinecharts'
+import type { CandleTooltipCustomCallbackData, Chart, KLineData } from 'klinecharts'
 import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import { repairStoreV5M1Gaps } from '../rightDrawer/mt5SymbolsApi'
+import { readSettingsStringValue, readSettingsSymbolState, settingsSymbolChangedEvent } from '../settingsSymbolState'
 import './ChartCoreHost.css'
 
 const initialLoadLimit = 10_000
@@ -11,8 +12,8 @@ const historyPageSize = 10_000
 const jumpWindowBars = 50_000
 const realtimeTailRepairLookbackMinutes = 30
 const realtimeTailRepairMaxGapMinutes = 30
-
 type ChartCoreHostProps = {
+  displayName?: string
   jump?: { id: number; timestamp?: number } | null
   limit?: number
   onLoadStateChange?: (state: ChartLoadState) => void
@@ -81,6 +82,72 @@ function resetYAxisAutoScale(chart: Chart) {
   })
 }
 
+type SettingsSwatchValue = {
+  hex?: string
+  opacity?: number
+}
+
+function resolveSwatchColor(value: unknown, fallback: string) {
+  if (!value || typeof value !== 'object' || !('hex' in value)) return fallback
+  const swatch = value as SettingsSwatchValue
+  const hex = typeof swatch.hex === 'string' ? swatch.hex : fallback
+  const opacity = typeof swatch.opacity === 'number' && Number.isFinite(swatch.opacity)
+    ? Math.max(0, Math.min(swatch.opacity, 1))
+    : 1
+  if (opacity >= 0.999) return hex
+  return `${hex}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`
+}
+
+function readCandleBarStyle() {
+  const state = readSettingsSymbolState()
+
+  const bodyUp = resolveSwatchColor(state['candle.body.up'], '#26a69a')
+  const bodyDown = resolveSwatchColor(state['candle.body.down'], '#ef5350')
+  const borderUp = resolveSwatchColor(state['candle.border.up'], bodyUp)
+  const borderDown = resolveSwatchColor(state['candle.border.down'], bodyDown)
+  const wickUp = resolveSwatchColor(state['candle.wick.up'], bodyUp)
+  const wickDown = resolveSwatchColor(state['candle.wick.down'], bodyDown)
+
+  return {
+    upColor: bodyUp,
+    downColor: bodyDown,
+    noChangeColor: '#888888',
+    upBorderColor: borderUp,
+    downBorderColor: borderDown,
+    noChangeBorderColor: '#888888',
+    upWickColor: wickUp,
+    downWickColor: wickDown,
+    noChangeWickColor: '#888888',
+  }
+}
+
+function resolveCandleValueColor(data: KLineData, barStyle: ReturnType<typeof readCandleBarStyle>) {
+  const open = Number(data.open)
+  const close = Number(data.close)
+  if (!Number.isFinite(open) || !Number.isFinite(close) || close === open) return barStyle.noChangeColor
+  return close > open ? barStyle.upColor : barStyle.downColor
+}
+
+function readPricePrecision() {
+  const state = readSettingsSymbolState()
+  const raw = state['price.precision']
+  if (raw === 'system') return 3
+  const precision = typeof raw === 'string' ? Number(raw) : 6
+  return Number.isFinite(precision) ? Math.max(0, Math.min(Math.round(precision), 7)) : 6
+}
+
+function applyCandleBarStyle(chart: Chart) {
+  chart.setStyles({
+    candle: {
+      bar: readCandleBarStyle(),
+    },
+  })
+}
+
+function applyPriceVolumePrecision(chart: Chart) {
+  chart.setPriceVolumePrecision(readPricePrecision(), 0)
+}
+
 function mergeKLineData(...sets: KLineData[][]): KLineData[] {
   const rowsByTimestamp = new Map<number, KLineData>()
   sets.forEach((rows) => {
@@ -93,7 +160,49 @@ function mergeKLineData(...sets: KLineData[][]): KLineData[] {
   return [...rowsByTimestamp.values()].sort((left, right) => Number(left.timestamp) - Number(right.timestamp))
 }
 
-export function ChartCoreHost({ jump, limit, onLoadStateChange, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
+function resolveStatusTitle(symbol: string, displayName?: string) {
+  const mode = readSettingsStringValue('status.title.mode', 'symbol-name')
+  const name = displayName?.trim() || symbol
+  if (mode === 'symbol') return symbol
+  if (mode === 'name') return name
+  return `${symbol} · ${name}`
+}
+
+function applyCandleTooltipStyle(chart: Chart, symbol: string, period: string, displayName?: string) {
+  const settings = readSettingsSymbolState()
+  const chartValuesVisible = settings['status.chartValues.visible'] !== false
+  const candleChangeVisible = settings['status.candleChange.visible'] !== false
+  const barStyle = readCandleBarStyle()
+
+  chart.setStyles({
+    candle: {
+      bar: barStyle,
+      tooltip: {
+        custom: ({ current }: CandleTooltipCustomCallbackData) => {
+          const priceColor = resolveCandleValueColor(current, barStyle)
+          return [
+            {
+              title: `${resolveStatusTitle(symbol, displayName)} ${period}${chartValuesVisible ? '  O: ' : ''}`,
+              value: chartValuesVisible ? { text: '{open}', color: priceColor } : '',
+            },
+            ...(chartValuesVisible
+              ? [
+                  { title: 'H: ', value: { text: '{high}', color: priceColor } },
+                  { title: 'L: ', value: { text: '{low}', color: priceColor } },
+                  { title: 'C: ', value: { text: '{close}', color: priceColor } },
+                ]
+              : []),
+            ...(candleChangeVisible ? [{ title: 'Chg: ', value: '{change}' }] : []),
+            { title: 'Volume: ', value: '{volume}' },
+            { title: 'Time: ', value: '{time}' },
+          ]
+        },
+      },
+    },
+  })
+}
+
+export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
   const chartInstanceRef = useRef<Chart | null>(null)
   const chartRef = useRef<HTMLDivElement | null>(null)
   const requestSeqRef = useRef(0)
@@ -140,7 +249,10 @@ export function ChartCoreHost({ jump, limit, onLoadStateChange, period, reloadId
       },
     })
 
-    chart?.setPriceVolumePrecision(3, 0)
+    if (chart) {
+      applyPriceVolumePrecision(chart)
+      applyCandleBarStyle(chart)
+    }
     chartInstanceRef.current = chart ?? null
 
     const resize = () => {
@@ -167,24 +279,28 @@ export function ChartCoreHost({ jump, limit, onLoadStateChange, period, reloadId
   }, [])
 
   useEffect(() => {
+    const apply = () => {
+      const chart = chartInstanceRef.current
+      if (chart) {
+        applyPriceVolumePrecision(chart)
+        applyCandleTooltipStyle(chart, symbol, period, displayName)
+      }
+    }
+    apply()
+    window.addEventListener(settingsSymbolChangedEvent, apply)
+    window.addEventListener('storage', apply)
+    return () => {
+      window.removeEventListener(settingsSymbolChangedEvent, apply)
+      window.removeEventListener('storage', apply)
+    }
+  }, [displayName, period, symbol])
+
+  useEffect(() => {
     const chart = chartInstanceRef.current
     if (!chart) return
 
-    chart.setStyles({
-      candle: {
-        tooltip: {
-          custom: [
-            { title: `${symbol} ${period}  O: `, value: '{open}' },
-            { title: 'H: ', value: '{high}' },
-            { title: 'L: ', value: '{low}' },
-            { title: 'C: ', value: '{close}' },
-            { title: 'Volume: ', value: '{volume}' },
-            { title: 'Time: ', value: '{time}' },
-          ],
-        },
-      },
-    })
-  }, [period, symbol])
+    applyCandleTooltipStyle(chart, symbol, period, displayName)
+  }, [displayName, period, symbol])
 
   useEffect(() => {
     let disposed = false

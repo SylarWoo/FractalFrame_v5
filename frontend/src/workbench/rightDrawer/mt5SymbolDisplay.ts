@@ -375,6 +375,15 @@ function resolveFxPair(normalized: string, description: string) {
 }
 
 function resolveCommodity(normalized: string, descriptionLower: string) {
+  const metalPair = normalized.match(/^(XAU|XAG|XPT|XPD)(USD|EUR|GBP|JPY|AUD|CAD|CHF|CNH|CNY)/)
+  if (metalPair) {
+    const base = commodityNames[metalPair[1]]
+    const quote = currencyName(metalPair[2])
+    if (base && quote) {
+      return { name: `${base.name}/${quote}`, type: base.type }
+    }
+  }
+
   const symbolMatch = Object.entries(commodityNames).find(([key]) => normalized.startsWith(key))
   if (symbolMatch) return symbolMatch[1]
 

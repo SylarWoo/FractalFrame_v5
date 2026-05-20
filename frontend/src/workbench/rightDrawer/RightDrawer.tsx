@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent, PointerEvent as ReactPointerEvent } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from 'react'
 import './RightDrawer.css'
 import type { ChartLoadState } from '../chart/ChartCoreHost'
+import { OpenableSelect } from '../controls/OpenableSelect'
+import { readSettingsStringValue, readSettingsSymbolState, writeSettingsSymbolStateValue } from '../settingsSymbolState'
 import { resolveMt5SymbolDisplay } from './mt5SymbolDisplay'
+import { openChartColorPalettePopoverV1 } from './color_palette/chartColorPalettePopoverV1.js'
 import {
   cancelMt5M1CheckJob,
   cancelStoreV5PullJob,
@@ -26,15 +29,15 @@ import {
 import type { Mt5M1CheckJobPayload, Mt5RealtimeTick, Mt5SymbolRow, StoreV5AggregateJobPayload, StoreV5CheckPayload, StoreV5PullJobPayload } from './mt5SymbolsApi'
 
 type RightDrawerProps = {
+  activeDrawer: 'mt5' | 'settings' | null
   chartLoadState?: ChartLoadState | null
   drawerWidth: number
-  open: boolean
   onClose: () => void
   onJumpChartToTime?: (timestamp: number) => void
   onLoadChartStep?: (direction: 'left' | 'right') => void
   onResize: (width: number) => void
   onResetChartToLatest?: () => void
-  onToggle: () => void
+  onToggleDrawer: (drawer: 'mt5' | 'settings') => void
   onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number }) => void
 }
 
@@ -79,6 +82,7 @@ const defaultColumnWidths = {
 
 type ColumnKey = keyof typeof defaultColumnWidths
 type SelectedPanelTab = 'details' | 'store' | 'watchlist' | 'settings'
+type SettingsPanelTab = 'symbol' | 'status' | 'coordinates' | 'layout' | 'trading' | 'alerts' | 'events'
 type DetailRow =
   | readonly [string, string | number | boolean | null | undefined, string, string | number | boolean | null | undefined]
   | readonly [string, string | number | boolean | null | undefined]
@@ -136,6 +140,482 @@ const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
   { key: 'watchlist', label: '自选列表' },
   { key: 'settings', label: '设置' },
 ]
+const settingsPanelTabs: Array<{ key: SettingsPanelTab; label: string }> = [
+  { key: 'symbol', label: '商品代码' },
+  { key: 'status', label: '状态行' },
+  { key: 'coordinates', label: '坐标和线条' },
+  { key: 'layout', label: '版面' },
+  { key: 'trading', label: '交易' },
+  { key: 'alerts', label: '警报' },
+  { key: 'events', label: '事件' },
+]
+
+function resolveHexRgbString(hex: string) {
+  const normalized = hex.trim().replace(/^#/, '')
+  if (!/^[\da-f]{6}$/i.test(normalized)) return '38, 166, 154'
+  const value = Number.parseInt(normalized, 16)
+  return `${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}`
+}
+
+type SettingsSwatchValue = {
+  hex: string
+  opacity: number
+}
+
+let activeSettingsColorPopoverClose: (() => void) | null = null
+
+function readSettingsSwatchValue(storageKey: string | undefined, fallbackHex: string): SettingsSwatchValue {
+  if (!storageKey) return { hex: fallbackHex, opacity: 1 }
+  const saved = readSettingsSymbolState()[storageKey]
+  if (saved && typeof saved === 'object' && 'hex' in saved) {
+    const swatch = saved as Partial<SettingsSwatchValue>
+    const hex = typeof swatch.hex === 'string' ? swatch.hex : fallbackHex
+    const opacity = typeof swatch.opacity === 'number' && Number.isFinite(swatch.opacity) ? swatch.opacity : 1
+    return { hex, opacity }
+  }
+  return { hex: fallbackHex, opacity: 1 }
+}
+
+function SettingsColorSwatch({
+  color,
+  checkerboard = false,
+  storageKey,
+}: {
+  color?: string
+  checkerboard?: boolean
+  storageKey?: string
+}) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const [value, setValue] = useState(() => readSettingsSwatchValue(storageKey, color ?? '#26a69a'))
+  const isTransparent = !checkerboard && value.opacity < 0.999
+
+  return (
+    <button
+      aria-label="Color"
+      className="ff-settings-color-swatch ff-openable-control"
+      data-checkerboard={checkerboard}
+      data-transparent={isTransparent}
+      onClick={(event) => {
+        event.stopPropagation()
+        const anchorEl = buttonRef.current
+        if (!anchorEl) return
+        if (anchorEl.getAttribute('data-open') === 'true') {
+          activeSettingsColorPopoverClose?.()
+          activeSettingsColorPopoverClose = null
+          return
+        }
+        const popover = openChartColorPalettePopoverV1({
+          doc: document,
+          anchorEl,
+          initialHex: value.hex,
+          initialOpacity: value.opacity,
+          showCustomColorsRow: true,
+          showCustomPicker: true,
+          showOpacity: true,
+          onPick: (payload) => {
+            if (typeof payload?.hex === 'string') {
+              const nextValue = {
+                hex: payload.hex,
+                opacity: typeof payload.opacity === 'number' && Number.isFinite(payload.opacity) ? payload.opacity : 1,
+              }
+              setValue(nextValue)
+              if (storageKey) writeSettingsSymbolStateValue(storageKey, nextValue)
+            }
+          },
+        })
+        activeSettingsColorPopoverClose = popover.close
+      }}
+      ref={buttonRef}
+      style={
+        checkerboard
+          ? undefined
+          : ({
+              '--ff-settings-swatch-color': value.hex,
+              '--ff-settings-swatch-rgb': resolveHexRgbString(value.hex),
+              '--ff-settings-swatch-opacity': String(value.opacity),
+            } as CSSProperties)
+      }
+      type="button"
+    >
+      <span className="ff-settings-color-swatch__inner" />
+    </button>
+  )
+}
+
+function SettingsSymbolPanel() {
+  const [pricePrecision, setPricePrecision] = useState(() => readSettingsStringValue('price.precision', '6'))
+  const colorRows = [
+    { label: '主体', rowKey: 'candle.body', up: '#26a69a', down: '#ef5350' },
+    { label: '边框', rowKey: 'candle.border', up: '#26a69a', down: '#ef5350' },
+    { label: '影线', rowKey: 'candle.wick', up: '#26a69a', down: '#ef5350' },
+  ]
+  void colorRows
+
+  return (
+    <div className="ff-settings-symbol-panel">
+      <section className="ff-settings-symbol-group">
+        <div className="ff-settings-symbol-kicker">K线图</div>
+        <div className="ff-settings-symbol-checkline">
+          <input type="checkbox" />
+          <span>K线颜色基于前一收盘价</span>
+        </div>
+        {colorRows.map(({ label, rowKey, up, down }) => (
+          <div className="ff-settings-symbol-color-row" key={label}>
+            <div className="ff-settings-symbol-check-target">
+              <input type="checkbox" defaultChecked />
+              <span>{label}</span>
+            </div>
+            <div className="ff-settings-symbol-swatches">
+              <SettingsColorSwatch color={up} storageKey={`${rowKey}.up`} />
+              <SettingsColorSwatch color={down} storageKey={`${rowKey}.down`} />
+            </div>
+          </div>
+        ))}
+      </section>
+
+      <section className="ff-settings-symbol-group ff-settings-symbol-group--data">
+        <div className="ff-settings-symbol-kicker">数据修改</div>
+        <div className="ff-settings-symbol-field">
+          <span>时段</span>
+          <OpenableSelect
+            ariaLabel="时段"
+            defaultValue="electronic"
+            options={[
+              { label: '电子交易时间', value: 'electronic' },
+              { label: 'Regular', value: 'regular' },
+            ]}
+          />
+        </div>
+        <div className="ff-settings-symbol-field">
+          <span>电子交易时段背景</span>
+          <SettingsColorSwatch checkerboard storageKey="session.background" />
+        </div>
+        <div className="ff-settings-symbol-field">
+          <span>精确度</span>
+          <OpenableSelect
+            ariaLabel="精确度"
+            defaultValue="6"
+            onChange={(value) => {
+              setPricePrecision(value)
+              writeSettingsSymbolStateValue('price.precision', value)
+            }}
+            options={[
+              { label: '系统预设', value: 'system' },
+              { label: '整数', value: '0' },
+              { label: '1小数', value: '1' },
+              { label: '2小数', value: '2' },
+              { label: '3小数', value: '3' },
+              { label: '4小数', value: '4' },
+              { label: '5小数', value: '5' },
+              { label: '6小数', value: '6' },
+              { label: '7小数', value: '7' },
+            ]}
+            value={pricePrecision}
+          />
+        </div>
+        <div className="ff-settings-symbol-field">
+          <span>时区</span>
+          <OpenableSelect
+            ariaLabel="时区"
+            defaultValue="shanghai"
+            options={[
+              { label: '(UTC+8) 上海', value: 'shanghai' },
+              { label: 'Exchange', value: 'exchange' },
+            ]}
+          />
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function SettingsCheckRow({
+  checked = false,
+  children,
+  inset = false,
+  storageKey,
+}: {
+  checked?: boolean
+  children: React.ReactNode
+  inset?: boolean
+  storageKey?: string
+}) {
+  const [isChecked, setIsChecked] = useState(() => {
+    if (!storageKey) return checked
+    const saved = readSettingsSymbolState()[storageKey]
+    return typeof saved === 'boolean' ? saved : checked
+  })
+
+  return (
+    <div className="ff-settings-status-row" data-inset={inset}>
+      <input
+        checked={isChecked}
+        onChange={(event) => {
+          const next = event.currentTarget.checked
+          setIsChecked(next)
+          if (storageKey) writeSettingsSymbolStateValue(storageKey, next)
+        }}
+        type="checkbox"
+      />
+      <span>{children}</span>
+    </div>
+  )
+}
+
+function SettingsStatusPanel() {
+  const [titleMode, setTitleMode] = useState(() => readSettingsStringValue('status.title.mode', 'symbol-name'))
+
+  return (
+    <div className="ff-settings-status-panel">
+      <section className="ff-settings-status-group">
+        <div className="ff-settings-symbol-kicker">商品</div>
+        <SettingsCheckRow>Logo</SettingsCheckRow>
+        <div className="ff-settings-status-row">
+          <input defaultChecked type="checkbox" />
+          <span>标题</span>
+          <OpenableSelect
+            ariaLabel="标题"
+            defaultValue="symbol-name"
+            onChange={(value) => {
+              setTitleMode(value)
+              writeSettingsSymbolStateValue('status.title.mode', value)
+            }}
+            options={[
+              { label: '商品和名称', value: 'symbol-name' },
+              { label: '商品', value: 'symbol' },
+              { label: '名称', value: 'name' },
+            ]}
+            value={titleMode}
+          />
+        </div>
+        <SettingsCheckRow>开市状态</SettingsCheckRow>
+        <SettingsCheckRow checked storageKey="status.chartValues.visible">图表值</SettingsCheckRow>
+        <SettingsCheckRow checked storageKey="status.candleChange.visible">K线变化值</SettingsCheckRow>
+        <SettingsCheckRow checked>成交量</SettingsCheckRow>
+        <SettingsCheckRow>最后一天变化值</SettingsCheckRow>
+      </section>
+
+      <section className="ff-settings-status-group">
+        <div className="ff-settings-symbol-kicker">指标</div>
+        <SettingsCheckRow checked>标题</SettingsCheckRow>
+        <SettingsCheckRow checked inset>输入</SettingsCheckRow>
+        <SettingsCheckRow checked>数值</SettingsCheckRow>
+        <div className="ff-settings-status-row">
+          <input defaultChecked type="checkbox" />
+          <span>背景</span>
+          <div className="ff-settings-status-opacity" aria-hidden="true">
+            <span />
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function SettingsLineSample({
+  color = '#9ca3af',
+  secondary,
+}: {
+  color?: string
+  secondary?: string
+}) {
+  return (
+    <button className="ff-settings-line-sample" type="button">
+      <span
+        className="ff-settings-line-sample__chip"
+        style={
+          secondary
+            ? { background: `linear-gradient(45deg, ${color} 0 50%, ${secondary} 50% 100%)` }
+            : { background: color }
+        }
+      />
+      <span className="ff-settings-line-sample__line" />
+    </button>
+  )
+}
+
+function SettingsColorPair({ left, right }: { left: string; right: string }) {
+  return (
+    <div className="ff-settings-color-pair">
+      <button style={{ background: left }} type="button" />
+      <button style={{ background: right }} type="button" />
+    </div>
+  )
+}
+
+function SettingsCoordinatesPanel() {
+  return (
+    <div className="ff-settings-coordinates-panel">
+      <section className="ff-settings-coordinates-group">
+        <div className="ff-settings-symbol-kicker">价格坐标</div>
+
+        <div className="ff-settings-coordinate-row">
+          <span>货币和单位</span>
+          <OpenableSelect
+            ariaLabel="货币和单位"
+            defaultValue="always"
+            options={[
+              { label: '总是显示', value: 'always' },
+              { label: '隐藏', value: 'hidden' },
+            ]}
+          />
+        </div>
+
+        <div className="ff-settings-coordinate-row">
+          <span>坐标模式（A和L）</span>
+          <OpenableSelect
+            ariaLabel="坐标模式"
+            defaultValue="on-move"
+            options={[
+              { label: '鼠标移动时可见', value: 'on-move' },
+              { label: '总是可见', value: 'always' },
+              { label: '隐藏', value: 'hidden' },
+            ]}
+          />
+        </div>
+
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--lock">
+          <input type="checkbox" />
+          <span>锁定价格对K线比例</span>
+          <input disabled value="32.1366597" readOnly />
+        </div>
+
+        <div className="ff-settings-coordinate-row">
+          <span>坐标放置</span>
+          <OpenableSelect
+            ariaLabel="坐标放置"
+            defaultValue="auto"
+            options={[
+              { label: '自动', value: 'auto' },
+              { label: '左侧', value: 'left' },
+              { label: '右侧', value: 'right' },
+            ]}
+          />
+        </div>
+      </section>
+
+      <section className="ff-settings-coordinates-group">
+        <div className="ff-settings-symbol-kicker">价格标签和价格线</div>
+
+        <SettingsCheckRow checked>无重叠标签</SettingsCheckRow>
+        <div className="ff-settings-coordinate-check-help">
+          <input defaultChecked type="checkbox" />
+          <span>加号按钮</span>
+          <button type="button">?</button>
+        </div>
+        <SettingsCheckRow checked>当前K线结束倒计时</SettingsCheckRow>
+
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
+          <span>商品代码</span>
+          <OpenableSelect
+            ariaLabel="商品代码标签"
+            defaultValue="value-line"
+            options={[
+              { label: '值，线形图', value: 'value-line' },
+              { label: '值', value: 'value' },
+              { label: '隐藏', value: 'hidden' },
+            ]}
+          />
+          <SettingsLineSample color="#26a69a" secondary="#ef5350" />
+        </div>
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--nested">
+          <span />
+          <OpenableSelect
+            ariaLabel="商品代码位置"
+            defaultValue="axis"
+            options={[
+              { label: '根据坐标值', value: 'axis' },
+              { label: '最后价格', value: 'last' },
+            ]}
+          />
+        </div>
+
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
+          <span>前一天收盘</span>
+          <OpenableSelect
+            ariaLabel="前一天收盘"
+            defaultValue="hidden"
+            options={[
+              { label: '隐藏', value: 'hidden' },
+              { label: '显示', value: 'visible' },
+            ]}
+          />
+          <SettingsLineSample color="#9b9b9b" />
+        </div>
+
+        <div className="ff-settings-coordinate-row">
+          <span>指标和财务数据</span>
+          <OpenableSelect
+            ariaLabel="指标和财务数据"
+            defaultValue="hidden"
+            options={[
+              { label: '隐藏', value: 'hidden' },
+              { label: '显示', value: 'visible' },
+            ]}
+          />
+        </div>
+
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
+          <span>高点和低点</span>
+          <OpenableSelect
+            ariaLabel="高点和低点"
+            defaultValue="hidden"
+            options={[
+              { label: '隐藏', value: 'hidden' },
+              { label: '显示', value: 'visible' },
+            ]}
+          />
+          <SettingsLineSample color="#7fd3c7" secondary="#f08ca2" />
+        </div>
+
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
+          <span>Bid和Ask</span>
+          <OpenableSelect
+            ariaLabel="Bid和Ask"
+            defaultValue="hidden"
+            options={[
+              { label: '隐藏', value: 'hidden' },
+              { label: '显示', value: 'visible' },
+            ]}
+          />
+          <SettingsColorPair left="#85c4f2" right="#f6a0a1" />
+        </div>
+      </section>
+
+      <section className="ff-settings-coordinates-group">
+        <div className="ff-settings-symbol-kicker">时间坐标</div>
+        <SettingsCheckRow checked>标签上的星期几</SettingsCheckRow>
+
+        <div className="ff-settings-coordinate-row">
+          <span>日期格式</span>
+          <OpenableSelect
+            ariaLabel="日期格式"
+            defaultValue="weekday-date"
+            options={[
+              { label: '周一 1997/09/29', value: 'weekday-date' },
+              { label: '1997/09/29', value: 'date' },
+              { label: '29/09/1997', value: 'day-date' },
+            ]}
+          />
+        </div>
+
+        <div className="ff-settings-coordinate-row">
+          <span>时间小时格式</span>
+          <OpenableSelect
+            ariaLabel="时间小时格式"
+            defaultValue="24h"
+            options={[
+              { label: '24小时', value: '24h' },
+              { label: '12小时', value: '12h' },
+            ]}
+          />
+        </div>
+
+        <SettingsCheckRow>改变周期时保存图表左边缘位置</SettingsCheckRow>
+      </section>
+    </div>
+  )
+}
 
 function clampDrawerWidth(width: number) {
   return Math.max(minDrawerWidth, Math.min(maxDrawerWidth, Math.round(width)))
@@ -553,7 +1033,7 @@ function formatChartLoadStatus(state: ChartLoadState | null | undefined) {
   const localRows = typeof state.totalRows === 'number' && Number.isFinite(state.totalRows)
     ? state.totalRows
     : state.requestedRows
-  return `${state.symbol} ${state.period} 已进图 ${state.rows.toLocaleString()} / 本地 ${localRows.toLocaleString()}${state.loadingMore ? ' · 加载历史' : ''}`
+  return `${state.symbol} ${state.period} 已进入 ${state.rows.toLocaleString()} / 本地 ${localRows.toLocaleString()}${state.loadingMore ? ' · 加载历史' : ''}`
 }
 
 function formatCountWithWan(value: number | null | undefined) {
@@ -644,7 +1124,7 @@ function formatStoreOperationLine(
     if (pullJob.phase === 'checking' || pullJob.phase === 'validating') return '已经写完，开始检查错误字段'
     if (pullJob.phase === 'cleaning') {
       const deleted = pullJob.cleanupDeletedRows != null ? `，已删除 ${formatCountWithWan(pullJob.cleanupDeletedRows)}` : ''
-      return `检查完，删除错误字段${deleted}`
+      return `检查完成，删除错误字段${deleted}`
     }
     if (pullJob.phase === 'completed') return '完成，本地 M1 数据已更新'
     if (pullJob.phase === 'cancelled') return '已取消'
@@ -726,7 +1206,7 @@ function selectedDetailRows(row: Mt5SymbolRow): DetailRow[] {
   return [
     ['分类', row.category || row.market, '小数位', row.digits],
     ['合约量', row.tradeContractSize, '点差', row.spreadFloat ? '浮动' : row.spread],
-    ['停损级别', row.tradeStopsLevel, '预付款货币', row.currencyMargin],
+    ['止损级别', row.tradeStopsLevel, '预付款货币', row.currencyMargin],
     ['盈利货币', row.currencyProfit, '基础货币', row.currencyBase],
     ['计算', row.tradeCalcMode, '图表模式', row.tradeMode],
     ['交易模式', row.tradeMode, '执行模式', row.tradeCalcMode],
@@ -754,15 +1234,15 @@ function clampColumnWidth(width: number, column: ColumnKey) {
 }
 
 export function RightDrawer({
+  activeDrawer,
   chartLoadState,
   drawerWidth,
-  open,
   onClose,
   onJumpChartToTime,
   onLoadChartStep,
   onResize,
   onResetChartToLatest,
-  onToggle,
+  onToggleDrawer,
   onOpenChart,
 }: RightDrawerProps) {
   const initialSnapshot = useMemo(getInitialSymbolSnapshot, [])
@@ -780,6 +1260,7 @@ export function RightDrawer({
   const [watchlistTableHeight, setWatchlistTableHeight] = useState(getInitialWatchlistTableHeight)
   const [columnWidths, setColumnWidths] = useState(getInitialColumnWidths)
   const [selectedPanelTab, setSelectedPanelTab] = useState<SelectedPanelTab>(readImportCenterSelectedTab)
+  const [selectedSettingsPanelTab, setSelectedSettingsPanelTab] = useState<SettingsPanelTab>('symbol')
   const [storePanelPersistenceEnabled, setStorePanelPersistenceEnabled] = useState(readStorePanelPersistenceEnabled)
   const initialPersistedM1Check = useMemo(
     () => readPersistedM1CheckResult(selectedSymbol, storePanelPersistenceEnabled),
@@ -820,6 +1301,7 @@ export function RightDrawer({
   const autoOpenedStoreTableRef = useRef('')
   const pullEventSourceRef = useRef<EventSource | null>(null)
   const aggregateEventSourceRef = useRef<EventSource | null>(null)
+  const open = activeDrawer != null
   const watchlistTicksEventSourceRef = useRef<EventSource | null>(null)
   const watchlistRealtimeRunRef = useRef(0)
 
@@ -1280,7 +1762,7 @@ export function RightDrawer({
     [aggregateProgress, m1CheckJob, pullProgress],
   )
   const isCheckingMt5M1 = storeCheckLoading && m1CheckJob != null
-  const isPullingStoreV5 = storeCheckLoading && (pullProgress != null || storeActionStatus.includes('拉取'))
+  const isPullingStoreV5 = storeCheckLoading && (pullProgress != null || storeActionStatus.includes('鎷夊彇'))
   const canAggregateStoreV5 = localStoreStatus?.directM1?.status !== 'raw_m1_ready_clean_pending'
     && localStoreStatus?.directM1?.datasetKey?.includes(':direct:M1') === true
 
@@ -1299,7 +1781,7 @@ export function RightDrawer({
   async function loadSymbols(refresh: boolean) {
     setLoading(true)
     setError('')
-    setStatus(refresh ? '正在扫描 MT5 品种...' : '正在读取 MT5 品种缓存...')
+    setStatus(refresh ? '姝ｅ湪鎵弿 MT5 鍝佺...' : '姝ｅ湪璇诲彇 MT5 鍝佺缂撳瓨...')
 
     try {
       const payload = await fetchMt5Symbols({ limit: 50000, refresh })
@@ -1334,7 +1816,7 @@ export function RightDrawer({
       setSymbols([])
       setSelectedSymbol('')
       setError(message)
-      setStatus(`扫描失败：${message}`)
+      setStatus(`鎵弿澶辫触锛?{message}`)
     } finally {
       setLoading(false)
     }
@@ -1749,17 +2231,17 @@ export function RightDrawer({
     setStoreCheckLoading(true)
     setStoreCheckError('')
     setPullProgress(null)
-    setStoreActionStatus('正在读取 StoreV5 仓库状态...')
+    setStoreActionStatus('Reading StoreV5 status...')
     try {
-      setStoreActionStatus('正在扫描并修复 M1 中间缺口...')
+      setStoreActionStatus('Scanning and repairing M1 gaps...')
       const gapRepair = await repairStoreV5M1Gaps(symbol, {
         lookbackMinutes: storeV5M1RepairLookbackMinutes,
         maxGapMinutes: storeV5M1RepairMaxGapMinutes,
       })
       setStoreActionStatus(
         (gapRepair.gapsDetected ?? 0) > 0
-          ? `M1 缺口修复完成：发现 ${gapRepair.gapsDetected ?? 0} 个缺口，写入 ${gapRepair.rowsWritten ?? 0} 条。`
-          : 'M1 缺口检查完成：最近窗口没有中间缺口。',
+          ? `M1 gap repair complete: found ${gapRepair.gapsDetected ?? 0} gaps, wrote ${gapRepair.rowsWritten ?? 0} rows.`
+          : 'M1 gap check complete: no recent middle gaps.',
       )
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
@@ -1776,9 +2258,9 @@ export function RightDrawer({
       })
       window.setTimeout(() => {
         setAggregateProgress((current) => (current?.phase === 'completed' ? null : current))
-        setStoreActionStatus((current) => (current.includes('鑱氬悎瀹屾垚') ? '' : current))
+        setStoreActionStatus((current) => (current.includes('refresh') ? '' : current))
       }, 1600)
-      setStoreActionStatus('StoreV5 仓库状态已刷新。')
+      setStoreActionStatus('StoreV5 status refreshed.')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setStoreCheckError(message)
@@ -1802,7 +2284,7 @@ export function RightDrawer({
     setStoreCheckError('')
     setM1CheckJob(null)
     setPullProgress(null)
-    setStoreActionStatus('正在拉取 MT5 M1 写入 StoreV5...')
+    setStoreActionStatus('Pulling MT5 M1 into StoreV5...')
     try {
       let pullMode = 'refresh'
       try {
@@ -1820,8 +2302,8 @@ export function RightDrawer({
       }
       setStoreActionStatus(
         pullMode === 'incremental'
-          ? '正在增量拉取 MT5 M1 写入 StoreV5...'
-          : '正在首次拉取 MT5 M1 写入 StoreV5...',
+          ? 'Incremental MT5 M1 pull into StoreV5...'
+          : 'Initial MT5 M1 pull into StoreV5...',
       )
       const started = await startStoreV5PullJob(symbol, pullMode)
       activePullJobRef.current = started.jobId
@@ -1832,7 +2314,7 @@ export function RightDrawer({
         if (activePullJobRef.current !== started.jobId) throw err
         await waitStoreV5PullJobByPolling(started.jobId)
       }
-      setStoreActionStatus('正在扫描并修复最近 M1 窗口...')
+      setStoreActionStatus('Scanning and repairing recent M1 window...')
       await repairStoreV5M1Gaps(symbol, {
         lookbackMinutes: storeV5M1RepairLookbackMinutes,
         maxGapMinutes: storeV5M1RepairMaxGapMinutes,
@@ -1841,7 +2323,7 @@ export function RightDrawer({
       const repairedStatus = await fetchStoreV5Status(symbol)
       const aggregateTargets = resolveStoreV5AggregateTargets(repairedStatus)
       if (aggregateTargets.length) {
-        setStoreActionStatus(`正在聚合周期：${aggregateTargets.join('、')}...`)
+        setStoreActionStatus(`Aggregating periods: ${aggregateTargets.join(', ')}...`)
         const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets)
         activeAggregateJobRef.current = aggregateJob.jobId
         setAggregateProgress(aggregateJob)
@@ -1865,7 +2347,7 @@ export function RightDrawer({
         totalRows: typeof rowsForPeriod === 'number' && Number.isFinite(rowsForPeriod) ? rowsForPeriod : null,
         reloadId: Date.now(),
       })
-      setStoreActionStatus('拉取完成，仓库状态已刷新。')
+      setStoreActionStatus('Pull complete. Store status refreshed.')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setStoreCheckError(message)
@@ -1894,18 +2376,18 @@ export function RightDrawer({
   async function handleDeleteLocalStore() {
     const symbol = selectedRow?.symbol
     if (!symbol) return
-    const ok = window.confirm(`确认删除 ${symbol} 的本地 StoreV5 数据？此操作会清空本地 M1 和聚合周期。`)
+    const ok = window.confirm(`Delete local StoreV5 data for ${symbol}? This clears local M1 and aggregated periods.`)
     if (!ok) return
     setStoreCheckLoading(true)
     setStoreCheckError('')
     setPullProgress(null)
-    setStoreActionStatus('正在删除本地 StoreV5 数据...')
+    setStoreActionStatus('Deleting local StoreV5 data...')
     try {
       await deleteStoreV5Symbol(symbol)
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
       savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
-      setStoreActionStatus('本地 StoreV5 数据已删除。')
+      setStoreActionStatus('Local StoreV5 data deleted.')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setStoreCheckError(message)
@@ -1920,23 +2402,23 @@ export function RightDrawer({
     if (!symbol) return
     const periods = [...selectedAggregatePeriods]
     if (!periods.length) {
-      setStoreCheckError('请先勾选要删除的聚合周期。')
+      setStoreCheckError('Select aggregated periods to delete first.')
       return
     }
-    const ok = window.confirm(`确认删除 ${symbol} 的聚合周期：${periods.join('、')}？M1 不会删除。`)
+    const ok = window.confirm(`Delete aggregated periods for ${symbol}: ${periods.join(', ')}? M1 will not be deleted.`)
     if (!ok) return
     setStoreCheckLoading(true)
     setStoreCheckError('')
     setPullProgress(null)
     setM1CheckJob(null)
     setAggregateProgress(null)
-    setStoreActionStatus(`正在删除聚合周期：${periods.join('、')}...`)
+    setStoreActionStatus(`Deleting aggregated periods: ${periods.join(', ')}...`)
     try {
       await deleteStoreV5AggregatedTimeframes(symbol, periods)
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
       savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
-      setStoreActionStatus(`已删除聚合周期：${periods.join('、')}。`)
+      setStoreActionStatus(`Deleted aggregated periods: ${periods.join(', ')}.`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setStoreCheckError(message)
@@ -1952,13 +2434,13 @@ export function RightDrawer({
     setStoreCheckLoading(true)
     setStoreCheckError('')
     setPullProgress(null)
-    setStoreActionStatus('正在清理无效 1 分钟数据...')
+    setStoreActionStatus('Cleaning invalid 1-minute data...')
     try {
       await cleanStoreV5DirectM1(symbol)
       const payload = await fetchStoreV5Status(symbol)
       setLocalStoreStatus(payload)
       savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
-      setStoreActionStatus('本地 M1 已清理，并与真实 M1 数据对齐。')
+      setStoreActionStatus('Local M1 cleaned and aligned with true M1 data.')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setStoreCheckError(message)
@@ -2030,7 +2512,7 @@ export function RightDrawer({
   function handleJumpChartToTime() {
     const timestamp = parseChartJumpTime(chartJumpInput)
     if (timestamp == null) {
-      setChartJumpError('请输入 YYYY-MM-DD HH:mm')
+      setChartJumpError('璇疯緭鍏?YYYY-MM-DD HH:mm')
       return
     }
     setChartJumpError('')
@@ -2142,7 +2624,7 @@ export function RightDrawer({
     if (!symbol) return
     const periods = [...selectedAggregatePeriods]
     if (!selectedAggregatePeriods.length) {
-      setStoreCheckError('请至少勾选一个聚合周期。')
+      setStoreCheckError('Select at least one aggregated period.')
       return
     }
     setStoreCheckLoading(true)
@@ -2160,15 +2642,15 @@ export function RightDrawer({
       completed: 0,
       total: periods.length,
     })
-    setStoreActionStatus('正在从 M1 重建聚合周期...')
+    setStoreActionStatus('姝ｅ湪浠?M1 閲嶅缓鑱氬悎鍛ㄦ湡...')
     try {
       if (!canAggregateStoreV5) {
-        setStoreActionStatus('正在先清理无效 M1，生成 direct M1...')
+        setStoreActionStatus('姝ｅ湪鍏堟竻鐞嗘棤鏁?M1锛岀敓鎴?direct M1...')
         await cleanStoreV5DirectM1(symbol)
         const cleanedStatus = await fetchStoreV5Status(symbol)
         setLocalStoreStatus(cleanedStatus)
         savePersistedStoreV5Status(symbol, cleanedStatus, new Date().toISOString(), storePanelPersistenceEnabled)
-        setStoreActionStatus('direct M1 已生成，开始聚合...')
+        setStoreActionStatus('direct M1 宸茬敓鎴愶紝寮€濮嬭仛鍚?..')
       }
       const started = await startStoreV5AggregateJob(symbol, periods)
       activeAggregateJobRef.current = started.jobId
@@ -2196,7 +2678,7 @@ export function RightDrawer({
         setAggregateProgress((current) => (current?.phase === 'completed' ? null : current))
         setStoreActionStatus('')
       }, 1600)
-      setStoreActionStatus('聚合完成，仓库状态已刷新。')
+      setStoreActionStatus('Aggregation complete. Store status refreshed.')
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setAggregateProgress((current) => current ? { ...current, phase: 'failed' } : null)
@@ -2212,8 +2694,8 @@ export function RightDrawer({
       <div className="ff-right-rail" aria-label="Right toolbar">
         <button
           className="ff-right-rail__button"
-          data-active={open}
-          onClick={onToggle}
+          data-active={activeDrawer === 'mt5'}
+          onClick={() => onToggleDrawer('mt5')}
           title="MT5 Import Center"
           type="button"
         >
@@ -2229,6 +2711,8 @@ export function RightDrawer({
         </button>
         <button
           className="ff-right-rail__button"
+          data-active={activeDrawer === 'settings'}
+          onClick={() => onToggleDrawer('settings')}
           title="Settings"
           type="button"
         >
@@ -2258,12 +2742,39 @@ export function RightDrawer({
         />
 
         <header className="ff-right-drawer__header">
-          <h2>MT5 Import Center</h2>
+          <h2>{activeDrawer === 'settings' ? 'Settings' : 'MT5 Import Center'}</h2>
           <button className="ff-right-drawer__close" onClick={onClose} type="button">
             x
           </button>
         </header>
 
+        {activeDrawer === 'settings' ? (
+          <div className="ff-settings-drawer__body">
+            <div className="ff-import-selected-tabs ff-settings-tabs" role="tablist" aria-label="Settings panels">
+              {settingsPanelTabs.map((tab) => (
+                <button
+                  aria-selected={selectedSettingsPanelTab === tab.key}
+                  className="ff-import-selected-tabs__item ff-settings-tabs__item"
+                  data-active={selectedSettingsPanelTab === tab.key}
+                  key={tab.key}
+                  onClick={() => setSelectedSettingsPanelTab(tab.key)}
+                  role="tab"
+                  type="button"
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <section className="ff-settings-panel" role="tabpanel">
+                {selectedSettingsPanelTab === 'symbol' && <SettingsSymbolPanel />}
+                {selectedSettingsPanelTab === 'status' && <SettingsStatusPanel />}
+                {selectedSettingsPanelTab === 'coordinates' && <SettingsCoordinatesPanel />}
+                {selectedSettingsPanelTab !== 'symbol' && selectedSettingsPanelTab !== 'status' && selectedSettingsPanelTab !== 'coordinates' && (
+                  <div className="ff-settings-empty-panel" />
+                )}
+              </section>
+          </div>
+        ) : (
         <div className="ff-right-drawer__body">
           <section className="ff-mt5-pane ff-mt5-pane--top">
             <form className="ff-import-toolbar" onSubmit={handleSearch}>
@@ -2293,7 +2804,7 @@ export function RightDrawer({
                 <thead>
                   <tr>
                     <th>
-                      交易品种
+                      浜ゆ槗鍝佺
                       <span
                         className="ff-symbol-table__column-resizer"
                         onDoubleClick={() => resetColumnWidth('symbol')}
@@ -2301,7 +2812,7 @@ export function RightDrawer({
                       />
                     </th>
                     <th>
-                      中文名称
+                      涓枃鍚嶇О
                       <span
                         className="ff-symbol-table__column-resizer"
                         onDoubleClick={() => resetColumnWidth('name')}
@@ -2309,7 +2820,7 @@ export function RightDrawer({
                       />
                     </th>
                     <th>
-                      类型
+                      绫诲瀷
                       <span
                         className="ff-symbol-table__column-resizer"
                         onDoubleClick={() => resetColumnWidth('type')}
@@ -2317,7 +2828,7 @@ export function RightDrawer({
                       />
                     </th>
                     <th>
-                      描述
+                      鎻忚堪
                     </th>
                   </tr>
                 </thead>
@@ -2343,7 +2854,7 @@ export function RightDrawer({
                   {!visibleSymbols.length && (
                     <tr>
                       <td className="ff-symbol-table__empty" colSpan={4}>
-                        {loading ? '正在扫描 MT5 品种...' : '暂无品种。请点击 Scan MT5。'}
+                        {loading ? 'Scanning MT5 symbols...' : 'No symbols. Click Scan MT5.'}
                       </td>
                     </tr>
                   )}
@@ -2467,14 +2978,13 @@ export function RightDrawer({
                         <span>持久化</span>
                       </label>
                       <div className="ff-store-direct-summary">
-                        <strong>直连仓库 M1</strong>
+                        <strong>本地仓库 M1</strong>
                         {storeCheck?.directM1 ? (
                           <>
                             <span>MT5 条数：{formatCount(storeCheck.directM1.mt5RowsCount)}</span>
                             <span>真实条数：{formatCount(storeCheck.directM1.trueM1RowsCount)} · 最后检查：{formatCheckTime(mt5M1LastCheckedAt)}</span>
                             <span>
-                              真实 M1 范围：
-                              {formatUtcRange(storeCheck.directM1.firstTimeText, storeCheck.directM1.lastTimeText)}
+                              真实 M1 范围：{formatUtcRange(storeCheck.directM1.firstTimeText, storeCheck.directM1.lastTimeText)}
                             </span>
                             {storeCheck.directM1.validationError && (
                               <span className="ff-store-direct-summary__error">
@@ -2490,8 +3000,7 @@ export function RightDrawer({
                           </>
                         )}
                         <span>
-                          本地 M1 数据：
-                          {localStoreStatus?.directM1?.rowsCount != null
+                          本地 M1 数据：{localStoreStatus?.directM1?.rowsCount != null
                             ? `${formatCount(localStoreStatus.directM1.rowsCount)} 条 · 最后更新时间：${formatCheckTime(localStoreStatus.directM1.lastImportAt)}`
                             : '无数据'}
                         </span>
@@ -2506,10 +3015,10 @@ export function RightDrawer({
                         <div className="ff-store-status-line__row">
                           <span>{storeOperationLine}</span>
                           {m1CheckJob?.jobId && (
-                            <button onClick={handleCancelMt5M1Check} type="button">取消</button>
+                            <button onClick={handleCancelMt5M1Check} type="button">鍙栨秷</button>
                           )}
                           {pullProgress?.jobId && pullProgress.phase !== 'completed' && (
-                            <button onClick={handleCancelPullStore} type="button">取消</button>
+                            <button onClick={handleCancelPullStore} type="button">鍙栨秷</button>
                           )}
                         </div>
                         {storeOperationProgress && (
@@ -2573,8 +3082,7 @@ export function RightDrawer({
                         {!visibleStoreTableRows.length && (
                           <tr>
                             <td className="ff-symbol-table__empty" colSpan={3}>
-                              暂无 StoreV5 聚合周期。请先拉取 M1，再执行聚合。
-                            </td>
+                              鏆傛棤 StoreV5 鑱氬悎鍛ㄦ湡銆傝鍏堟媺鍙?M1锛屽啀鎵ц鑱氬悎銆?                            </td>
                           </tr>
                         )}
                       </tbody>
@@ -2602,16 +3110,16 @@ export function RightDrawer({
                       <button
                         disabled={storeCheckLoading || selectedAggregatePeriods.length === 0}
                         onClick={handleAggregateStore}
-                        title={!canAggregateStoreV5 ? '会先自动清理无效 M1，再聚合' : undefined}
+                        title={!canAggregateStoreV5 ? '浼氬厛鑷姩娓呯悊鏃犳晥 M1锛屽啀鑱氬悎' : undefined}
                         type="button"
                       >
-                        聚合
+                        鑱氬悎
                       </button>
                     </div>
 
                     <div className="ff-chart-jump-controls">
                       <input
-                        aria-label="跳转日期时间"
+                        aria-label="璺宠浆鏃ユ湡鏃堕棿"
                         onChange={(event) => {
                           setChartJumpInput(event.target.value)
                           setChartJumpError('')
@@ -2625,10 +3133,10 @@ export function RightDrawer({
                         type="text"
                         value={chartJumpInput}
                       />
-                      <button onClick={handleJumpChartToTime} type="button">跳转</button>
-                      <button onClick={handleResetChartToLatest} type="button">回到当前</button>
-                      <button onClick={() => onLoadChartStep?.('left')} type="button">向左10000</button>
-                      <button onClick={() => onLoadChartStep?.('right')} type="button">向右10000</button>
+                      <button onClick={handleJumpChartToTime} type="button">璺宠浆</button>
+                      <button onClick={handleResetChartToLatest} type="button">鍥炲埌褰撳墠</button>
+                      <button onClick={() => onLoadChartStep?.('left')} type="button">鍚戝乏10000</button>
+                      <button onClick={() => onLoadChartStep?.('right')} type="button">鍚戝彸10000</button>
                       {chartJumpError && <span>{chartJumpError}</span>}
                     </div>
 
@@ -2649,8 +3157,8 @@ export function RightDrawer({
                         <thead>
                           <tr>
                             <th>SYMBOL</th>
-                            <th>中文名称</th>
-                            <th>资产类型</th>
+                            <th>涓枃鍚嶇О</th>
+                            <th>璧勪骇绫诲瀷</th>
                             <th>LAST</th>
                             <th>CHG</th>
                             <th>CHG%</th>
@@ -2711,7 +3219,7 @@ export function RightDrawer({
                                   data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
                                   key={`${row.kind}-${row.period}`}
                                   onClick={() => handleOpenWatchlistPeriod(row)}
-                                  title={`${row.period} · ${row.count} 条 · ${row.updated}`}
+                                  title={`${row.period} 路 ${row.count} 鏉?路 ${row.updated}`}
                                   type="button"
                                 >
                                   {row.period}
@@ -2729,7 +3237,7 @@ export function RightDrawer({
                                   data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
                                   key={`${row.kind}-${row.period}`}
                                   onClick={() => handleOpenWatchlistPeriod(row)}
-                                  title={`${row.period} · ${row.count} 条 · ${row.updated}`}
+                                  title={`${row.period} 路 ${row.count} 鏉?路 ${row.updated}`}
                                   type="button"
                                 >
                                   {row.period}
@@ -2755,7 +3263,7 @@ export function RightDrawer({
                       {watchlistRealtimeStatus && (
                         <span className="ff-watchlist-realtime-status">
                           {watchlistRealtimeStatus || 'Live'}
-                          {watchlistLastTickAt ? ` · ${watchlistLastTickAt}` : ''}
+                          {watchlistLastTickAt ? ` 路 ${watchlistLastTickAt}` : ''}
                         </span>
                       )}
                     </div>
@@ -2777,6 +3285,7 @@ export function RightDrawer({
             )}
           </section>
         </div>
+        )}
       </aside>
     </>
   )

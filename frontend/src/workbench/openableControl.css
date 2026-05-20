@@ -1,0 +1,13 @@
+.ff-openable-control {
+  --ff-openable-control-blue: #2962ff;
+}
+
+.ff-openable-control:focus,
+.ff-openable-control:focus-visible,
+.ff-openable-control[data-open='true'],
+.ff-openable-control[aria-expanded='true'],
+[data-open='true'] > .ff-openable-control {
+  border-color: var(--ff-openable-control-blue) !important;
+  box-shadow: inset 0 0 0 1px var(--ff-openable-control-blue) !important;
+  outline: none;
+}

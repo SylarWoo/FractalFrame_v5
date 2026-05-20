@@ -23,14 +23,18 @@ import {
   LEFT_RAIL_ZOOM_OUT_SVGREPO_ICON_48,
 } from './leftRailV4Icons'
 import { RightDrawer } from './rightDrawer/RightDrawer'
+import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
+import type { Mt5SymbolRow } from './rightDrawer/mt5SymbolsApi'
 import { TopBar } from './topbar/TopBar'
+import './openableControl.css'
 import './AppShell.css'
 
 const drawerWidthStorageKey = 'fractalframe:rightWidgetDrawerWidthPx:v1'
-const rightDrawerOpenStorageKey = 'fractalframe:rightWidgetDrawerOpen:v1'
+const rightDrawerActiveStorageKey = 'fractalframe:rightWidgetActiveDrawer:v1'
 const bottomDrawerOpenStorageKey = 'fractalframe:bottomDrawerOpen:v1'
 const bottomDrawerHeightStorageKey = 'fractalframe:bottomDrawerHeightPx:v1'
 const sharedSelectionStorageKey = 'fractalframe:mt5ImportCenterSharedSelection:v1'
+const symbolSnapshotStorageKey = 'fractalframe:mt5ImportCenterSymbolSnapshot:v1'
 
 const leftToolbarItems = [
   { type: 'button', label: 'Cursor', svg: LEFT_RAIL_CURSOR_ARROW_SVGREPO_ICON_48 },
@@ -94,11 +98,12 @@ function getInitialBottomDrawerHeight() {
   }
 }
 
-function getInitialRightDrawerOpen() {
+function getInitialRightDrawerActive(): 'mt5' | 'settings' | null {
   try {
-    return window.localStorage.getItem(rightDrawerOpenStorageKey) === '1'
+    const value = window.localStorage.getItem(rightDrawerActiveStorageKey)
+    return value === 'mt5' || value === 'settings' ? value : null
   } catch {
-    return false
+    return null
   }
 }
 
@@ -119,8 +124,19 @@ function periodToChartPeriod(period: string) {
   return period.toUpperCase() === 'M1' ? '1m' : period
 }
 
+function readSymbolDisplayName(symbol: string) {
+  try {
+    const raw = window.localStorage.getItem(symbolSnapshotStorageKey)
+    const parsed = raw ? JSON.parse(raw) as { symbols?: Mt5SymbolRow[] } : null
+    const row = parsed?.symbols?.find((item) => item.symbol === symbol)
+    return row ? resolveMt5SymbolDisplay(row).chineseName : ''
+  } catch {
+    return ''
+  }
+}
+
 export function AppShell() {
-  const [rightDrawerOpen, setRightDrawerOpen] = useState(getInitialRightDrawerOpen)
+  const [activeRightDrawer, setActiveRightDrawer] = useState<'mt5' | 'settings' | null>(getInitialRightDrawerActive)
   const [rightDrawerWidth, setRightDrawerWidth] = useState(getInitialDrawerWidth)
   const [bottomDrawerOpen, setBottomDrawerOpen] = useState(getInitialBottomDrawerOpen)
   const [bottomDrawerHeight, setBottomDrawerHeight] = useState(getInitialBottomDrawerHeight)
@@ -136,8 +152,11 @@ export function AppShell() {
   const [chartJump, setChartJump] = useState<{ id: number; timestamp?: number } | null>(null)
   const [chartStepLoad, setChartStepLoad] = useState<{ direction: 'left' | 'right'; id: number } | null>(null)
   const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
+  const [symbolDisplayVersion, setSymbolDisplayVersion] = useState(0)
 
   const currentBottomPanel = bottomPanels.find((panel) => panel.id === activeBottomPanel) ?? bottomPanels[0]
+  const chartDisplayName = readSymbolDisplayName(chartTarget.symbol)
+  void symbolDisplayVersion
 
   useEffect(() => {
     const resize = () => window.dispatchEvent(new Event('resize'))
@@ -147,7 +166,13 @@ export function AppShell() {
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [bottomDrawerHeight, bottomDrawerOpen, rightDrawerOpen])
+  }, [bottomDrawerHeight, bottomDrawerOpen, activeRightDrawer])
+
+  useEffect(() => {
+    const refresh = () => setSymbolDisplayVersion((current) => current + 1)
+    window.addEventListener('storage', refresh)
+    return () => window.removeEventListener('storage', refresh)
+  }, [])
 
   useEffect(() => {
     try {
@@ -159,11 +184,15 @@ export function AppShell() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(rightDrawerOpenStorageKey, rightDrawerOpen ? '1' : '0')
+      if (activeRightDrawer) {
+        window.localStorage.setItem(rightDrawerActiveStorageKey, activeRightDrawer)
+      } else {
+        window.localStorage.removeItem(rightDrawerActiveStorageKey)
+      }
     } catch {
       // Right drawer open state persistence is best-effort only.
     }
-  }, [rightDrawerOpen])
+  }, [activeRightDrawer])
 
   useEffect(() => {
     try {
@@ -219,7 +248,7 @@ export function AppShell() {
 
       <main
         className="ff-app-main"
-        data-right-drawer-open={rightDrawerOpen}
+        data-right-drawer-open={activeRightDrawer != null}
         style={{
           ['--ff-right-drawer-width' as string]: `${rightDrawerWidth}px`,
         }}
@@ -259,6 +288,7 @@ export function AppShell() {
           }}
         >
           <ChartCoreHost
+            displayName={chartDisplayName}
             jump={chartJump}
             onLoadStateChange={setChartLoadState}
             period={chartTarget.period}
@@ -322,16 +352,16 @@ export function AppShell() {
         </section>
 
         <RightDrawer
+          activeDrawer={activeRightDrawer}
           chartLoadState={chartLoadState}
           drawerWidth={rightDrawerWidth}
-          open={rightDrawerOpen}
-          onClose={() => setRightDrawerOpen(false)}
+          onClose={() => setActiveRightDrawer(null)}
           onJumpChartToTime={(timestamp) => setChartJump({ id: Date.now(), timestamp })}
           onLoadChartStep={(direction) => setChartStepLoad({ direction, id: Date.now() })}
           onOpenChart={setChartTarget}
           onResetChartToLatest={() => setChartJump({ id: Date.now() })}
           onResize={setRightDrawerWidth}
-          onToggle={() => setRightDrawerOpen((current) => !current)}
+          onToggleDrawer={(drawer) => setActiveRightDrawer((current) => (current === drawer ? null : drawer))}
         />
       </main>
     </div>

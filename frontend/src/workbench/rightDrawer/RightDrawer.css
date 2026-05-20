@@ -130,6 +130,387 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
   overflow: hidden;
 }
 
+.ff-settings-drawer__body {
+  display: grid;
+  align-content: start;
+  gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px var(--ff-mt5-panel-x);
+}
+
+.ff-settings-tabs {
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 0;
+}
+
+.ff-settings-tabs__item {
+  height: 24px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.ff-settings-panel {
+  min-height: 180px;
+  padding-top: 12px;
+}
+
+.ff-settings-empty-panel {
+  min-height: 180px;
+}
+
+.ff-settings-symbol-panel {
+  display: grid;
+  width: 100%;
+  max-width: 450px;
+  gap: 26px;
+  color: #131722;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ff-settings-status-panel {
+  display: grid;
+  width: 100%;
+  max-width: 360px;
+  gap: 30px;
+  color: #131722;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ff-settings-status-group {
+  display: grid;
+  gap: 18px;
+}
+
+.ff-settings-status-row {
+  display: grid;
+  grid-template-columns: 20px max-content auto;
+  min-height: 20px;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-settings-status-row[data-inset='true'] {
+  padding-left: 26px;
+}
+
+.ff-settings-status-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #2f2f33;
+  cursor: pointer;
+}
+
+.ff-settings-status-row span {
+  min-width: 0;
+  color: #131722;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ff-settings-status-row .ff-openable-select {
+  width: 150px;
+  justify-self: start;
+}
+
+.ff-settings-status-opacity {
+  position: relative;
+  width: 148px;
+  height: 10px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(41, 98, 255, 0.12), rgba(41, 98, 255, 0.95)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4'%3E%3Cpath fill='%239aa3b2' d='M0 0h1v1H0zM2 0h1v1H2zM1 1h1v1H1zM3 1h1v1H3zM0 2h1v1H0zM2 2h1v1H2zM1 3h1v1H1zM3 3h1v1H3z'/%3E%3Cpath fill='%23fff' d='M1 0h1v1H1zM3 0h1v1H3zM0 1h1v1H0zM2 1h1v1H2zM1 2h1v1H1zM3 2h1v1H3zM0 3h1v1H0zM2 3h1v1H2z'/%3E%3C/svg%3E");
+  background-size: 100% 100%, 8px 8px;
+}
+
+.ff-settings-status-opacity span {
+  position: absolute;
+  top: 50%;
+  left: 43%;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #111827;
+  border-radius: 50%;
+  background: #ffffff;
+  transform: translate(-50%, -50%);
+}
+
+.ff-settings-coordinates-panel {
+  display: grid;
+  width: 100%;
+  max-width: 430px;
+  gap: 26px;
+  color: #131722;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ff-settings-coordinates-group {
+  display: grid;
+  gap: 14px;
+}
+
+.ff-settings-coordinate-row {
+  display: grid;
+  grid-template-columns: 154px 180px auto;
+  min-height: 34px;
+  align-items: center;
+  gap: 10px;
+}
+
+.ff-settings-coordinate-row > span {
+  min-width: 0;
+  color: #131722;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ff-settings-coordinate-row .ff-openable-select {
+  width: 180px;
+  justify-self: start;
+}
+
+.ff-settings-coordinate-row--lock {
+  grid-template-columns: 20px 154px 150px;
+  gap: 8px;
+}
+
+.ff-settings-coordinate-row--lock input[type='checkbox'],
+.ff-settings-coordinate-check-help input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #2f2f33;
+  cursor: pointer;
+}
+
+.ff-settings-coordinate-row--lock input[readonly] {
+  width: 150px;
+  height: 34px;
+  border: 1px solid #d1d4dc;
+  border-radius: 6px;
+  background: #f2f3f5;
+  color: #787b86;
+  font: 12px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
+  padding: 0 10px;
+}
+
+.ff-settings-coordinate-check-help {
+  display: grid;
+  grid-template-columns: 20px max-content 18px;
+  min-height: 24px;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-settings-coordinate-check-help span {
+  color: #131722;
+  font-size: 12px;
+}
+
+.ff-settings-coordinate-check-help button {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: #c8cbd3;
+  color: #ffffff;
+  font: 700 11px/16px Arial, Tahoma, 'Segoe UI', sans-serif;
+  padding: 0;
+}
+
+.ff-settings-coordinate-row--sample {
+  grid-template-columns: 154px 180px 76px;
+}
+
+.ff-settings-coordinate-row--nested {
+  margin-top: -10px;
+}
+
+.ff-settings-line-sample {
+  display: inline-flex;
+  width: 76px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #d1d4dc;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 0 8px;
+}
+
+.ff-settings-line-sample__chip {
+  width: 24px;
+  height: 24px;
+  border-radius: 2px;
+}
+
+.ff-settings-line-sample__line {
+  width: 30px;
+  height: 1px;
+  background: #2f2f33;
+}
+
+.ff-settings-color-pair {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.ff-settings-color-pair button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d1d4dc;
+  border-radius: 6px;
+  padding: 0;
+}
+
+.ff-settings-symbol-group {
+  display: grid;
+  gap: 12px;
+}
+
+.ff-settings-symbol-group--data {
+  gap: 14px;
+}
+
+.ff-settings-symbol-kicker {
+  color: #787b86;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.ff-settings-symbol-checkline,
+.ff-settings-symbol-color-row,
+.ff-settings-symbol-field {
+  display: grid;
+  grid-template-columns: 20px 78px auto;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-settings-symbol-checkline {
+  cursor: default;
+}
+
+.ff-settings-symbol-color-row {
+  grid-template-columns: 106px auto;
+}
+
+.ff-settings-symbol-check-target {
+  display: grid;
+  grid-template-columns: 20px max-content;
+  width: max-content;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+
+.ff-settings-symbol-checkline {
+  grid-template-columns: 20px max-content;
+  width: max-content;
+}
+
+.ff-settings-symbol-checkline input,
+.ff-settings-symbol-color-row input,
+.ff-settings-symbol-check-target input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #2f2f33;
+  cursor: pointer;
+}
+
+.ff-settings-symbol-checkline span,
+.ff-settings-symbol-checkline label,
+.ff-settings-symbol-color-row span,
+.ff-settings-symbol-check-target span,
+.ff-settings-symbol-check-target label,
+.ff-settings-symbol-field span {
+  min-width: 0;
+  color: #131722;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ff-settings-symbol-checkline label,
+.ff-settings-symbol-check-target label {
+  cursor: pointer;
+}
+
+.ff-settings-symbol-swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+}
+
+.ff-settings-color-swatch {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  border: 1px solid #d1d4dc;
+  border-radius: 5px;
+  background: #ffffff;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ff-settings-color-swatch__inner {
+  position: absolute;
+  inset: 4px;
+  border-radius: 3px;
+  background: var(--ff-settings-swatch-color, #26a69a);
+  content: '';
+}
+
+.ff-settings-color-swatch[data-transparent='true'] .ff-settings-color-swatch__inner {
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(
+      rgba(var(--ff-settings-swatch-rgb, 38, 166, 154), var(--ff-settings-swatch-opacity, 1)),
+      rgba(var(--ff-settings-swatch-rgb, 38, 166, 154), var(--ff-settings-swatch-opacity, 1))
+    ),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4'%3E%3Cpath fill='%239aa3b2' d='M0 0h1v1H0zM2 0h1v1H2zM1 1h1v1H1zM3 1h1v1H3zM0 2h1v1H0zM2 2h1v1H2zM1 3h1v1H1zM3 3h1v1H3z'/%3E%3Cpath fill='%23fff' d='M1 0h1v1H1zM3 0h1v1H3zM0 1h1v1H0zM2 1h1v1H2zM1 2h1v1H1zM3 2h1v1H3zM0 3h1v1H0zM2 3h1v1H2z'/%3E%3C/svg%3E");
+  background-position: 0 0, 0 0;
+  background-size: 100% 100%, 100% 100%;
+}
+
+.ff-settings-color-swatch[data-checkerboard='true'] .ff-settings-color-swatch__inner {
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4'%3E%3Cpath fill='%239aa3b2' d='M0 0h1v1H0zM2 0h1v1H2zM1 1h1v1H1zM3 1h1v1H3zM0 2h1v1H0zM2 2h1v1H2zM1 3h1v1H1zM3 3h1v1H3z'/%3E%3Cpath fill='%23fff' d='M1 0h1v1H1zM3 0h1v1H3zM0 1h1v1H0zM2 1h1v1H2zM1 2h1v1H1zM3 2h1v1H3zM0 3h1v1H0zM2 3h1v1H2z'/%3E%3C/svg%3E");
+  background-position: 0 0;
+  background-size: 100% 100%;
+}
+
+.ff-settings-symbol-field {
+  grid-template-columns: 148px 150px;
+  gap: 12px;
+}
+
+.ff-settings-symbol-field > .ff-settings-color-swatch {
+  justify-self: start;
+}
+
+.ff-settings-symbol-field select {
+  width: 150px;
+  height: 34px;
+  border: 1px solid #d1d4dc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #131722;
+  font: 12px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
+  padding: 0 30px 0 9px;
+}
+
 .ff-mt5-pane {
   min-height: 0;
   overflow: hidden;

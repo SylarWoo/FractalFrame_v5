@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .store_v5_paths import SCHEMA_VERSION, STORE_VERSION, ensure_store_layout, manifest_path
+
+_manifest_lock = threading.RLock()
 
 
 def utc_now_iso() -> str:
@@ -22,30 +26,40 @@ def empty_manifest() -> dict[str, Any]:
 
 
 def load_manifest_v5(store_root: str | Path | None = None) -> dict[str, Any]:
-    ensure_store_layout(store_root)
-    path = manifest_path(store_root)
-    if not path.exists():
-        manifest = empty_manifest()
-        save_manifest_v5(manifest, store_root)
+    with _manifest_lock:
+        ensure_store_layout(store_root)
+        path = manifest_path(store_root)
+        if not path.exists():
+            manifest = empty_manifest()
+            save_manifest_v5(manifest, store_root)
+            return manifest
+        text = path.read_text(encoding="utf-8")
+        try:
+            manifest = json.loads(text)
+        except json.JSONDecodeError as exc:
+            decoder = json.JSONDecoder()
+            manifest, end_index = decoder.raw_decode(text)
+            if text[end_index:].strip():
+                save_manifest_v5(manifest, store_root)
+            else:
+                raise exc
+        manifest.setdefault("schemaVersion", SCHEMA_VERSION)
+        manifest.setdefault("storeVersion", STORE_VERSION)
+        manifest.setdefault("datasets", {})
         return manifest
-    with path.open("r", encoding="utf-8") as f:
-        manifest = json.load(f)
-    manifest.setdefault("schemaVersion", SCHEMA_VERSION)
-    manifest.setdefault("storeVersion", STORE_VERSION)
-    manifest.setdefault("datasets", {})
-    return manifest
 
 
 def save_manifest_v5(manifest: dict[str, Any], store_root: str | Path | None = None) -> Path:
-    ensure_store_layout(store_root)
-    path = manifest_path(store_root)
-    manifest["updatedAt"] = utc_now_iso()
-    tmp = path.with_suffix(".json.tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=2, sort_keys=True)
-        f.write("\n")
-    tmp.replace(path)
-    return path
+    with _manifest_lock:
+        ensure_store_layout(store_root)
+        path = manifest_path(store_root)
+        manifest["updatedAt"] = utc_now_iso()
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2, sort_keys=True)
+            f.write("\n")
+        tmp.replace(path)
+        return path
 
 
 def get_dataset_cell(store_root: str | Path | None, key: str) -> dict[str, Any] | None:
