@@ -1,0 +1,71 @@
+﻿.ff-settings-events-panel {
+  display: grid;
+  box-sizing: border-box;
+  width: 384px;
+  min-height: 414px;
+  align-content: start;
+  gap: 18px;
+  color: #131722;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ff-settings-events-kicker {
+  color: #787b86;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.ff-settings-events-row {
+  display: grid;
+  grid-template-columns: 18px 88px 100px auto;
+  min-height: 24px;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-settings-events-row--nested {
+  grid-template-columns: 44px 62px 74px auto;
+  padding-left: 0;
+}
+
+.ff-settings-events-row input[type='checkbox'] {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #2f2f33;
+  cursor: pointer;
+}
+
+.ff-settings-events-row span {
+  min-width: 0;
+  color: #131722;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ff-settings-events-row--nested span {
+  color: #787b86;
+}
+
+.ff-settings-events-row .ff-openable-select {
+  width: 100px;
+}
+
+
+.ff-settings-events-row .ff-settings-line-swatch {
+  justify-self: start;
+}
+
+.ff-settings-events-help {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: #b7bbc4;
+  color: #ffffff;
+  cursor: default;
+  font: 700 11px/16px Arial, Tahoma, 'Segoe UI', sans-serif;
+  padding: 0;
+}

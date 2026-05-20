@@ -37,9 +37,11 @@ from http_bridge.store_v5_aggregate_job_service import (
 )
 from http_bridge.store_v5_gap_repair_service import repair_store_v5_m1_gaps
 from http_bridge.store_v5_pull_job_service import (
-    _get_pull_job,
-    _set_pull_job,
     start_store_v5_pull_job,
+)
+from http_bridge.store_v5_pull_job_state import (
+    get_pull_job as _get_pull_job,
+    set_pull_job as _set_pull_job,
 )
 from http_bridge.store_v5_status_service import (
     check_store_v5,

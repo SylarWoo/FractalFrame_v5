@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   publishSharedSelection,
   readSharedSelection,
@@ -13,6 +13,7 @@ import {
   periodToChartPeriod,
   readPeriodsForSymbol,
   readShortcutMenuPeriods,
+  resolveShortcutActivePeriod,
 } from './topbarPeriodUtils'
 import type { PeriodOption } from './topbarPeriodUtils'
 
@@ -37,9 +38,10 @@ export function useShortcutMenuState({ onOpenChart }: UseShortcutMenuStateOption
   })
   const [activePeriod, setActivePeriod] = useState(() => readSharedSelection().period || 'M1')
   const [open, setOpen] = useState(false)
-  const [refreshVersion, setRefreshVersion] = useState(0)
+  const [, refreshShortcutPeriods] = useState(0)
 
-  const periods = useMemo(readShortcutMenuPeriods, [symbols, refreshVersion])
+  const periods = readShortcutMenuPeriods()
+  const activeVisiblePeriod = resolveShortcutActivePeriod(activePeriod, periods)
 
   useEffect(() => {
     const refresh = () => {
@@ -47,7 +49,7 @@ export function useShortcutMenuState({ onOpenChart }: UseShortcutMenuStateOption
       const nextSymbols = readWatchlistSymbols()
       setEnabled(nextEnabled)
       setSymbols(nextSymbols)
-      setRefreshVersion((current) => current + 1)
+      refreshShortcutPeriods((current) => current + 1)
       setSelectedSymbol((current) => (
         current && nextSymbols.includes(current) ? current : nextSymbols[0] ?? ''
       ))
@@ -78,17 +80,10 @@ export function useShortcutMenuState({ onOpenChart }: UseShortcutMenuStateOption
     return () => window.removeEventListener(sharedSelectionChangedEvent, syncSelection)
   }, [])
 
-  useEffect(() => {
-    if (periods.some((item) => item.period === activePeriod)) return
-    const fallback = periods[0] ?? null
-    if (!fallback) return
-    setActivePeriod(fallback.period)
-  }, [activePeriod, periods])
-
   function selectSymbol(symbol: string) {
     setSelectedSymbol(symbol)
     setOpen(false)
-    const fallback = periods.find((item) => item.period === activePeriod) ?? periods[0] ?? null
+    const fallback = periods.find((item) => item.period === activeVisiblePeriod) ?? periods[0] ?? null
     if (!fallback) return
     setActivePeriod(fallback.period)
     publishSharedSelection(symbol, fallback.period)
@@ -115,7 +110,7 @@ export function useShortcutMenuState({ onOpenChart }: UseShortcutMenuStateOption
   }
 
   return {
-    activePeriod,
+    activePeriod: activeVisiblePeriod,
     enabled,
     open,
     openPeriod,

@@ -1,0 +1,87 @@
+﻿.ff-settings-layout-panel {
+  display: grid;
+  box-sizing: border-box;
+  width: 384px;
+  min-height: 824px;
+  align-content: start;
+  gap: 28px;
+  color: #131722;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ff-settings-layout-group {
+  display: grid;
+  gap: 14px;
+}
+
+.ff-settings-layout-title {
+  margin-bottom: 4px;
+  color: #787b86;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.ff-settings-layout-kicker {
+  color: #787b86;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.ff-settings-layout-row {
+  display: grid;
+  grid-template-columns: 82px 150px auto;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-settings-layout-row > span {
+  min-width: 0;
+  color: #131722;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ff-settings-layout-row .ff-openable-select {
+  width: 150px;
+  justify-self: start;
+}
+
+.ff-settings-layout-row > .ff-settings-color-swatch,
+.ff-settings-layout-row > .ff-settings-line-swatch {
+  justify-self: start;
+}
+
+.ff-settings-layout-row > input {
+  box-sizing: border-box;
+  width: 100px;
+  height: 34px;
+  border: 1px solid #d1d4dc;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #131722;
+  font: 12px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
+  padding: 0 9px;
+}
+
+.ff-settings-layout-row > em {
+  color: #131722;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.ff-settings-layout-row--text {
+  grid-template-columns: 82px 34px 100px;
+}
+
+.ff-settings-layout-row--text .ff-openable-select {
+  width: 100px;
+}
+
+.ff-settings-layout-swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+}

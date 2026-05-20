@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  createMt5TicksEventSource,
-  createStoreV5AggregateEventSource,
-  createStoreV5PullEventSource,
   fetchStoreV5Status,
   repairStoreV5M1Gaps,
   startStoreV5AggregateJob,
   startStoreV5PullJob,
 } from '../../services/mt5/mt5SymbolsApi'
-import type { Mt5RealtimeTick, StoreV5AggregateJobPayload, StoreV5CheckPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
+import type { Mt5RealtimeTick, StoreV5CheckPayload } from '../../services/mt5/mt5SymbolsApi'
 import { periodFromStoreTableKey, resolveLocalM1Rows } from '../mt5DataCenter/storeV5StatusFormat'
 import {
   readPersistedRealtimeSnapshot,
@@ -19,6 +16,12 @@ import {
   saveWatchlistRealtimeEnabled,
 } from '../mt5DataCenter/storeV5Persistence'
 import { resolveStoreV5AggregateTargets } from './rightDrawerStoreTables'
+import { useForegroundTickStream } from './useForegroundTickStream'
+import { useWatchlistRealtimeLog } from './useWatchlistRealtimeLog'
+import {
+  waitForWatchlistAggregateJob,
+  waitForWatchlistPullJob,
+} from './watchlistRealtimeJobWaiters'
 
 const storeV5M1RepairLookbackMinutes = 720
 const storeV5M1RepairMaxGapMinutes = 720
@@ -40,20 +43,17 @@ export function useWatchlistRealtime({
   setLocalStoreStatus,
   onOpenChart,
 }: UseWatchlistRealtimeOptions) {
-  const initialRealtimeSnapshot = useRef(readPersistedRealtimeSnapshot()).current
   const [watchlistRealtimeEnabled, setWatchlistRealtimeEnabled] = useState(readWatchlistRealtimeEnabled)
   const [watchlistRealtimeReady, setWatchlistRealtimeReady] = useState(false)
   const [watchlistRealtimeStatus, setWatchlistRealtimeStatus] = useState('')
-  const [watchlistRealtimeLog, setWatchlistRealtimeLog] = useState<string[]>(() => initialRealtimeSnapshot.log ?? [])
-  const [watchlistTicks, setWatchlistTicks] = useState<Record<string, Mt5RealtimeTick>>(() => initialRealtimeSnapshot.ticks ?? {})
-  const [watchlistLastTickAt, setWatchlistLastTickAt] = useState(() => initialRealtimeSnapshot.lastTickAt ?? '')
-  const watchlistTicksEventSourceRef = useRef<EventSource | null>(null)
+  const {
+    clearWatchlistRealtimeLog,
+    pushWatchlistRealtimeLog,
+    watchlistRealtimeLog,
+  } = useWatchlistRealtimeLog(readPersistedRealtimeSnapshot().log ?? [])
+  const [watchlistTicks, setWatchlistTicks] = useState<Record<string, Mt5RealtimeTick>>(() => readPersistedRealtimeSnapshot().ticks ?? {})
+  const [watchlistLastTickAt, setWatchlistLastTickAt] = useState(() => readPersistedRealtimeSnapshot().lastTickAt ?? '')
   const watchlistRealtimeRunRef = useRef(0)
-
-  function pushWatchlistRealtimeLog(message: string) {
-    const timestamp = new Date().toLocaleTimeString()
-    setWatchlistRealtimeLog((current) => [`${timestamp}  ${message}`, ...current].slice(0, 8))
-  }
 
   useEffect(() => {
     saveWatchlistRealtimeEnabled(watchlistRealtimeEnabled)
@@ -70,107 +70,32 @@ export function useWatchlistRealtime({
   useEffect(() => {
     if (!watchlistRealtimeEnabled) {
       watchlistRealtimeRunRef.current += 1
-      setWatchlistRealtimeReady(false)
-      setWatchlistRealtimeStatus('')
-      pushWatchlistRealtimeLog('Realtime stopped')
-      return
+      const timer = window.setTimeout(() => {
+        setWatchlistRealtimeReady(false)
+        setWatchlistRealtimeStatus('')
+        pushWatchlistRealtimeLog('Realtime stopped')
+      }, 0)
+      return () => window.clearTimeout(timer)
     }
 
     if (!foregroundRealtimeSymbol) {
-      setWatchlistRealtimeReady(false)
-      setWatchlistRealtimeStatus('No symbols')
-      pushWatchlistRealtimeLog('No foreground symbol, realtime not started')
-      return
+      const timer = window.setTimeout(() => {
+        setWatchlistRealtimeReady(false)
+        setWatchlistRealtimeStatus('No symbols')
+        pushWatchlistRealtimeLog('No foreground symbol, realtime not started')
+      }, 0)
+      return () => window.clearTimeout(timer)
     }
 
     const runId = watchlistRealtimeRunRef.current + 1
     watchlistRealtimeRunRef.current = runId
-    setWatchlistRealtimeReady(false)
-    setWatchlistRealtimeStatus('Syncing')
-    setWatchlistRealtimeLog([])
-    pushWatchlistRealtimeLog(`Realtime requested for foreground symbol ${foregroundRealtimeSymbol}`)
-
-    const waitForPullJob = (jobId: string, symbol: string) => new Promise<void>((resolve, reject) => {
-      const source = createStoreV5PullEventSource(jobId)
-      const cleanup = () => source.close()
-      const fail = (message: string) => {
-        cleanup()
-        reject(new Error(message))
-      }
-
-      source.addEventListener('progress', (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent).data) as StoreV5PullJobPayload
-          if (watchlistRealtimeRunRef.current !== runId) {
-            cleanup()
-            resolve()
-            return
-          }
-          const line = `${symbol} ${payload.progressLabel || payload.status || 'Pulling M1'}`
-          setWatchlistRealtimeStatus(line)
-          pushWatchlistRealtimeLog(line)
-        } catch {
-          setWatchlistRealtimeStatus(`${symbol} Pulling M1`)
-        }
-      })
-      source.addEventListener('done', () => {
-        pushWatchlistRealtimeLog(`${symbol} M1 gap fill completed`)
-        cleanup()
-        resolve()
-      })
-      source.addEventListener('cancelled', () => fail(`${symbol} pull cancelled`))
-      source.addEventListener('error', (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent).data) as { error?: string; status?: string }
-          fail(payload.error || payload.status || `${symbol} pull failed`)
-        } catch {
-          fail(`${symbol} pull failed`)
-        }
-      })
-      source.onerror = () => fail(`${symbol} pull disconnected`)
-    })
-
-    const waitForAggregateJob = (jobId: string, symbol: string) => new Promise<void>((resolve, reject) => {
-      const source = createStoreV5AggregateEventSource(jobId)
-      const cleanup = () => source.close()
-      const fail = (message: string) => {
-        cleanup()
-        reject(new Error(message))
-      }
-
-      source.addEventListener('progress', (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent).data) as StoreV5AggregateJobPayload
-          if (watchlistRealtimeRunRef.current !== runId) {
-            cleanup()
-            resolve()
-            return
-          }
-          const line = `${symbol} ${payload.progressLabel || payload.status || 'Aggregating'}`
-          setWatchlistRealtimeStatus(line)
-          pushWatchlistRealtimeLog(line)
-        } catch {
-          setWatchlistRealtimeStatus(`${symbol} Aggregating`)
-        }
-      })
-      source.addEventListener('done', () => {
-        pushWatchlistRealtimeLog(`${symbol} aggregation completed`)
-        cleanup()
-        resolve()
-      })
-      source.addEventListener('cancelled', () => fail(`${symbol} aggregate cancelled`))
-      source.addEventListener('error', (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent).data) as { error?: string; status?: string }
-          fail(payload.error || payload.status || `${symbol} aggregate failed`)
-        } catch {
-          fail(`${symbol} aggregate failed`)
-        }
-      })
-      source.onerror = () => fail(`${symbol} aggregate disconnected`)
-    })
 
     const runRealtimeSync = async () => {
+      setWatchlistRealtimeReady(false)
+      setWatchlistRealtimeStatus('Syncing')
+      clearWatchlistRealtimeLog()
+      pushWatchlistRealtimeLog(`Realtime requested for foreground symbol ${foregroundRealtimeSymbol}`)
+
       try {
         for (const symbol of [foregroundRealtimeSymbol]) {
           if (watchlistRealtimeRunRef.current !== runId) return
@@ -184,7 +109,11 @@ export function useWatchlistRealtime({
           setWatchlistRealtimeStatus(`${symbol} pulling missing M1`)
           pushWatchlistRealtimeLog(`${symbol} ${hasLocalM1 ? 'incremental M1 gap fill started' : 'full M1 download started'}`)
           const pullJob = await startStoreV5PullJob(symbol, hasLocalM1 ? 'incremental' : 'refresh')
-          await waitForPullJob(pullJob.jobId, symbol)
+          await waitForWatchlistPullJob(pullJob.jobId, symbol, {
+            isActive: () => watchlistRealtimeRunRef.current === runId,
+            pushLog: pushWatchlistRealtimeLog,
+            setStatus: setWatchlistRealtimeStatus,
+          })
           if (watchlistRealtimeRunRef.current !== runId) return
 
           setWatchlistRealtimeStatus(`${symbol} repairing M1 gaps`)
@@ -208,7 +137,11 @@ export function useWatchlistRealtime({
             setWatchlistRealtimeStatus(`${symbol} aggregating periods`)
             pushWatchlistRealtimeLog(`${symbol} aggregating ${aggregateTargets.join(', ')}`)
             const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets)
-            await waitForAggregateJob(aggregateJob.jobId, symbol)
+            await waitForWatchlistAggregateJob(aggregateJob.jobId, symbol, {
+              isActive: () => watchlistRealtimeRunRef.current === runId,
+              pushLog: pushWatchlistRealtimeLog,
+              setStatus: setWatchlistRealtimeStatus,
+            })
           } else {
             pushWatchlistRealtimeLog(`${symbol} no aggregate periods to rebuild`)
           }
@@ -242,6 +175,7 @@ export function useWatchlistRealtime({
         setWatchlistRealtimeStatus(error instanceof Error ? error.message : 'Sync failed')
         pushWatchlistRealtimeLog(error instanceof Error ? `Realtime failed: ${error.message}` : 'Realtime failed')
       }
+      return
     }
 
     void runRealtimeSync()
@@ -251,76 +185,17 @@ export function useWatchlistRealtime({
         watchlistRealtimeRunRef.current += 1
       }
     }
-  }, [foregroundRealtimeSymbol, onOpenChart, selectedRowSymbol, selectedStoreTableKey, setLocalStoreStatus, storePanelPersistenceEnabled, watchlistRealtimeEnabled])
+  }, [clearWatchlistRealtimeLog, foregroundRealtimeSymbol, onOpenChart, pushWatchlistRealtimeLog, selectedRowSymbol, selectedStoreTableKey, setLocalStoreStatus, storePanelPersistenceEnabled, watchlistRealtimeEnabled])
 
-  useEffect(() => {
-    watchlistTicksEventSourceRef.current?.close()
-    watchlistTicksEventSourceRef.current = null
-
-    if (!watchlistRealtimeEnabled || !watchlistRealtimeReady) return
-
-    setWatchlistRealtimeStatus('Connecting')
-    if (!foregroundRealtimeSymbol) return
-
-    const source = createMt5TicksEventSource([foregroundRealtimeSymbol], 500)
-    watchlistTicksEventSourceRef.current = source
-
-    source.addEventListener('ready', () => {
-      setWatchlistRealtimeStatus('Live')
-      pushWatchlistRealtimeLog('Realtime feed connected')
-    })
-
-    source.addEventListener('ticks', (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent).data) as { ticks?: Mt5RealtimeTick[] }
-        const ticks = Array.isArray(payload.ticks) ? payload.ticks : []
-        if (!ticks.length) return
-        const updatedSymbols = ticks.map((tick) => tick.symbol).filter(Boolean)
-        setWatchlistTicks((current) => {
-          const next = { ...current }
-          ticks.forEach((tick) => {
-            if (tick.symbol) next[tick.symbol] = tick
-          })
-          return next
-        })
-        ticks.forEach((tick) => {
-          if (!tick.symbol) return
-          window.dispatchEvent(new CustomEvent('fractalframe:mt5RealtimeTick', { detail: tick }))
-        })
-        if (updatedSymbols.length) {
-          setWatchlistLastTickAt(new Date().toLocaleTimeString())
-        }
-        setWatchlistRealtimeStatus('Live')
-      } catch {
-        setWatchlistRealtimeStatus('Parse error')
-        pushWatchlistRealtimeLog('Realtime tick parse error')
-      }
-    })
-
-    source.addEventListener('error', (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent).data) as { error?: string; status?: string }
-        const line = payload.error || payload.status || 'Error'
-        setWatchlistRealtimeStatus(line)
-        pushWatchlistRealtimeLog(`Realtime error: ${line}`)
-      } catch {
-        setWatchlistRealtimeStatus('Disconnected')
-        pushWatchlistRealtimeLog('Realtime disconnected')
-      }
-    })
-
-    source.onerror = () => {
-      setWatchlistRealtimeStatus('Reconnecting')
-      pushWatchlistRealtimeLog('Realtime reconnecting')
-    }
-
-    return () => {
-      source.close()
-      if (watchlistTicksEventSourceRef.current === source) {
-        watchlistTicksEventSourceRef.current = null
-      }
-    }
-  }, [foregroundRealtimeSymbol, watchlistRealtimeEnabled, watchlistRealtimeReady])
+  useForegroundTickStream({
+    enabled: watchlistRealtimeEnabled,
+    foregroundRealtimeSymbol,
+    pushLog: pushWatchlistRealtimeLog,
+    ready: watchlistRealtimeReady,
+    setLastTickAt: setWatchlistLastTickAt,
+    setStatus: setWatchlistRealtimeStatus,
+    setTicks: setWatchlistTicks,
+  })
 
   return {
     setWatchlistRealtimeEnabled,

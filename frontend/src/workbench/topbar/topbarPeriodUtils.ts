@@ -84,6 +84,12 @@ export function readShortcutMenuPeriods() {
   })
 }
 
+export function resolveShortcutActivePeriod(activePeriod: string, periods: PeriodOption[]) {
+  return periods.some((item) => item.period === activePeriod)
+    ? activePeriod
+    : periods[0]?.period ?? activePeriod
+}
+
 export function periodToChartPeriod(period: string) {
   return period === 'M1' ? '1m' : period
 }

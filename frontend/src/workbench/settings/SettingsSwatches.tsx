@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { openChartColorPalettePopoverV1 } from '../rightDrawer/color_palette/chartColorPalettePopoverV1.js'
 import { readSettingsSymbolState, settingsSymbolChangedEvent, writeSettingsSymbolStateValue } from '../settingsSymbolState'
+import './SettingsSharedControls.css'
 
 type SettingsSwatchValue = {
   hex: string

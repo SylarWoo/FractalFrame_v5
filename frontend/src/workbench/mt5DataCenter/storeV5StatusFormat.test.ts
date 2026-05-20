@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   formatChartLoadStatus,
   formatStoreOperationLine,
+  normalizeStoredStatus,
   resolveLocalM1Rows,
   resolveStoreOperationProgress,
+  stripNulCharacters,
   storeTableKeyForPeriod,
 } from './storeV5StatusFormat'
 import type { StoreV5CheckPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
@@ -64,5 +66,13 @@ describe('StoreV5 status formatting', () => {
       symbol: 'XAUUSDm',
       totalRows: 20000,
     })).toContain('加载历史')
+  })
+})
+
+describe('StoreV5 status NUL handling', () => {
+  it('strips NUL characters before normalizing stored status', () => {
+    expect(stripNulCharacters('本地\u0000已保存')).toBe('本地已保存')
+    expect(normalizeStoredStatus('本地\u0000已保存', 2)).toBe('本地已保存')
+    expect(normalizeStoredStatus('\u0000stored locally', 2)).toContain('2')
   })
 })

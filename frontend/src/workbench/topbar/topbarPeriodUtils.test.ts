@@ -6,6 +6,7 @@ import {
   readPeriodsForSymbol,
   readShortcutMenuPeriods,
   readShortcutPeriods,
+  resolveShortcutActivePeriod,
 } from './topbarPeriodUtils'
 
 function installStorage(initial: Record<string, string> = {}) {
@@ -78,5 +79,18 @@ describe('topbarPeriodUtils', () => {
       { period: 'H4', rowsCount: 40 },
       { period: 'D1', rowsCount: 7 },
     ])
+  })
+})
+
+describe('shortcut active period fallback', () => {
+  it('resolves fallback without mutating state in an effect', () => {
+    const periods = [
+      { period: 'M1', rowsCount: 100 },
+      { period: 'H4', rowsCount: 40 },
+    ]
+
+    expect(resolveShortcutActivePeriod('H4', periods)).toBe('H4')
+    expect(resolveShortcutActivePeriod('D1', periods)).toBe('M1')
+    expect(resolveShortcutActivePeriod('D1', [])).toBe('D1')
   })
 })

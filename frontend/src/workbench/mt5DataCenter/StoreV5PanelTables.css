@@ -1,0 +1,103 @@
+.ff-store-detail-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-top: 1px solid #dbe3ef;
+  border-left: 1px solid #dbe3ef;
+  table-layout: fixed;
+  font-size: 12px;
+}
+
+.ff-store-detail-table th,
+.ff-store-detail-table td {
+  height: 23px;
+  border-right: 1px solid #dbe3ef;
+  border-bottom: 1px solid #dbe3ef;
+  overflow: hidden;
+  padding: 0 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ff-store-detail-table th {
+  width: 88px;
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 500;
+  text-align: left;
+}
+
+.ff-store-detail-table td {
+  color: #0f172a;
+  font-weight: 500;
+  text-align: right;
+}
+
+.ff-store-detail-table td[colspan='3'] {
+  text-align: left;
+}
+
+.ff-store-aggregate-table th,
+.ff-store-aggregate-table td {
+  text-align: center;
+}
+
+.ff-store-aggregate-table th:first-child,
+.ff-store-aggregate-table td:first-child {
+  text-align: left;
+  width: 72px;
+}
+
+.ff-store-aggregate-table th:nth-child(2),
+.ff-store-aggregate-table td:nth-child(2) {
+  width: 90px;
+  text-align: left;
+}
+
+.ff-store-aggregate-table th:nth-child(3),
+.ff-store-aggregate-table td:nth-child(3) {
+  width: 128px;
+  text-align: left;
+}
+
+.ff-store-aggregate-table td:first-child strong {
+  font-weight: 800;
+}
+
+.ff-store-period-check {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 6px;
+  min-height: 18px;
+}
+
+.ff-store-period-check input {
+  accent-color: #2563eb;
+  cursor: pointer;
+  height: 14px;
+  margin: 0;
+  width: 14px;
+}
+
+.ff-store-period-check input:disabled {
+  cursor: default;
+}
+
+.ff-store-aggregate-table tbody tr {
+  cursor: pointer;
+}
+
+.ff-store-aggregate-table tbody tr:hover td {
+  background: #eef5ff;
+}
+
+.ff-store-aggregate-table tbody tr[data-selected='true'] td {
+  background: #dbeafe;
+}
+
+.ff-store-aggregate-table small {
+  color: #64748b;
+  font-size: 10px;
+}

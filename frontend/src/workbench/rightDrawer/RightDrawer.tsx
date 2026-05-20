@@ -4,37 +4,21 @@ import './RightDrawer.css'
 import '../mt5DataCenter/Mt5DataCenterPanel.css'
 import type { ChartLoadState } from '../chart/ChartCoreHost'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
-import { SymbolTable } from '../mt5DataCenter/SymbolTable'
-import { StoreV5Panel } from '../mt5DataCenter/StoreV5Panel'
-import { WatchlistTable } from '../mt5DataCenter/WatchlistTable'
-import { delay, formatDetailValue, formatStoreOperationLine, formatSymbolStatus, normalizeStoredStatus, parseChartJumpTime, periodFromStoreTableKey, resolveLocalM1Rows, resolveStoreOperationProgress, selectedDetailRows, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
+import { formatSymbolStatus, normalizeStoredStatus, parseChartJumpTime, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
-import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readStoreV5ListSymbols, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedM1CheckResult, savePersistedStoreTableSelection, savePersistedStoreV5Status, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
+import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readStoreV5ListSymbols, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
 import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
-import { resolveStoreV5AggregateTargets, storeTableAggregatePeriods } from './rightDrawerStoreTables'
+import { storeTableAggregatePeriods } from './rightDrawerStoreTables'
 import { useRightDrawerResize } from './useRightDrawerResize'
 import { useRightDrawerSelection } from './useRightDrawerSelection'
+import { useStoreV5Jobs } from './useStoreV5Jobs'
 import { useWatchlistRealtime } from './useWatchlistRealtime'
+import { RightDrawerFrame } from './RightDrawerFrame'
+import { RightDrawerMt5Body } from './RightDrawerMt5Body'
 import {
-  cancelMt5M1CheckJob,
-  cancelStoreV5PullJob,
-  cleanStoreV5DirectM1,
-  createStoreV5AggregateEventSource,
-  createStoreV5PullEventSource,
-  deleteStoreV5AggregatedTimeframes,
-  deleteStoreV5Symbol,
-  fetchMt5M1CheckJob,
   fetchMt5Symbols,
-  fetchStoreV5AggregateJob,
-  fetchStoreV5PullJob,
-  fetchStoreV5Check,
-  fetchStoreV5Status,
-  repairStoreV5M1Gaps,
-  startStoreV5AggregateJob,
-  startStoreV5PullJob,
-  startMt5M1CheckJob,
 } from '../../services/mt5/mt5SymbolsApi'
-import type { Mt5M1CheckJobPayload, Mt5SymbolRow, StoreV5AggregateJobPayload, StoreV5CheckPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
+import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 
 type RightDrawerProps = {
   activeDrawer: 'mt5' | 'settings' | null
@@ -51,15 +35,6 @@ type RightDrawerProps = {
 
 const SettingsPanel = lazy(() => import('../settings/SettingsPanel').then((module) => ({ default: module.SettingsPanel })))
 
-const storeV5M1RepairLookbackMinutes = 720
-const storeV5M1RepairMaxGapMinutes = 720
-
-const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
-  { key: 'details', label: '细节' },
-  { key: 'store', label: '仓库' },
-  { key: 'watchlist', label: '自选列表' },
-  { key: 'settings', label: '设置' },
-]
 export function RightDrawer({
   activeDrawer,
   chartLoadState,
@@ -72,8 +47,8 @@ export function RightDrawer({
   onToggleDrawer,
   onOpenChart,
 }: RightDrawerProps) {
-  const initialSnapshot = useMemo(getInitialSymbolSnapshot, [])
-  const initialSharedSelection = useMemo(readSharedSelection, [])
+  const initialSnapshot = useMemo(() => getInitialSymbolSnapshot(), [])
+  const initialSharedSelection = useMemo(() => readSharedSelection(), [])
   const [query, setQuery] = useState(readImportCenterQuery)
   const [symbols, setSymbols] = useState<Mt5SymbolRow[]>(() => initialSnapshot?.symbols ?? [])
   const [selectedSymbol, setSelectedSymbol] = useState(() => initialSharedSelection.symbol || initialSnapshot?.selectedSymbol || '')
@@ -85,38 +60,15 @@ export function RightDrawer({
   const [selectedPanelTab, setSelectedPanelTab] = useState<SelectedPanelTab>(readImportCenterSelectedTab)
   const [selectedSettingsPanelTab, setSelectedSettingsPanelTab] = useState<SettingsPanelTab>('symbol')
   const [storePanelPersistenceEnabled, setStorePanelPersistenceEnabled] = useState(readStorePanelPersistenceEnabled)
-  const initialPersistedM1Check = useMemo(
-    () => readPersistedM1CheckResult(selectedSymbol, storePanelPersistenceEnabled),
-    [selectedSymbol, storePanelPersistenceEnabled],
-  )
-  const initialPersistedStoreV5Status = useMemo(
-    () => readPersistedStoreV5Status(selectedSymbol, storePanelPersistenceEnabled),
-    [selectedSymbol, storePanelPersistenceEnabled],
-  )
-  const [storeCheck, setStoreCheck] = useState<StoreV5CheckPayload | null>(() => initialPersistedM1Check?.payload ?? null)
-  const [mt5M1LastCheckedAt, setMt5M1LastCheckedAt] = useState(() => initialPersistedM1Check?.checkedAt ?? '')
-  const [localStoreStatus, setLocalStoreStatus] = useState<StoreV5CheckPayload | null>(() => initialPersistedStoreV5Status?.payload ?? null)
   const [storeV5ListSymbols, setStoreV5ListSymbols] = useState<string[]>(() => readStoreV5ListSymbols(storePanelPersistenceEnabled))
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(readWatchlistSymbols)
   const [shortcutMenuEnabled, setShortcutMenuEnabled] = useState(readShortcutMenuEnabled)
   const [selectedStoreTableKey, setSelectedStoreTableKey] = useState(() =>
     readPersistedStoreTableSelection(initialSharedSelection.symbol || initialSnapshot?.selectedSymbol || '', storePanelPersistenceEnabled),
   )
-  const [selectedAggregatePeriods, setSelectedAggregatePeriods] = useState<string[]>([])
-  const [storeCheckLoading, setStoreCheckLoading] = useState(false)
-  const [storeCheckError, setStoreCheckError] = useState('')
-  const [storeActionStatus, setStoreActionStatus] = useState('')
   const [chartJumpInput, setChartJumpInput] = useState('')
   const [chartJumpError, setChartJumpError] = useState('')
-  const [m1CheckJob, setM1CheckJob] = useState<Mt5M1CheckJobPayload | null>(null)
-  const [pullProgress, setPullProgress] = useState<StoreV5PullJobPayload | null>(null)
-  const [aggregateProgress, setAggregateProgress] = useState<StoreV5AggregateJobPayload | null>(null)
-  const activeM1CheckJobRef = useRef('')
-  const activePullJobRef = useRef('')
-  const activeAggregateJobRef = useRef('')
   const autoOpenedStoreTableRef = useRef('')
-  const pullEventSourceRef = useRef<EventSource | null>(null)
-  const aggregateEventSourceRef = useRef<EventSource | null>(null)
   const open = activeDrawer != null
   const {
     columnWidths,
@@ -131,6 +83,41 @@ export function RightDrawer({
     topPaneHeight,
     watchlistTableHeight,
   } = useRightDrawerResize({ drawerWidth, onResize })
+  const {
+    canAggregateStoreV5,
+    handleAggregateStore,
+    handleCancelMt5M1Check,
+    handleCancelPullStore,
+    handleCheckMt5M1Staged,
+    handleCleanLocalM1,
+    handleDeleteLocalStore,
+    handleDeleteSelectedAggregates,
+    handlePullStore,
+    handleRefreshStoreStatus,
+    localStoreStatus,
+    m1CheckJob,
+    mt5M1LastCheckedAt,
+    pullProgress,
+    selectedAggregatePeriods,
+    setLocalStoreStatus,
+    setMt5M1LastCheckedAt,
+    setStoreActionStatus,
+    setStoreCheck,
+    setStoreCheckError,
+    storeCheck,
+    storeCheckError,
+    storeCheckLoading,
+    storeOperationLine,
+    storeOperationProgress,
+    toggleAggregatePeriod,
+    toggleAllAggregatePeriods,
+  } = useStoreV5Jobs({
+    selectedSymbol,
+    selectedRowSymbol: selectedSymbol,
+    selectedStoreTableKey,
+    storePanelPersistenceEnabled,
+    onOpenChart,
+  })
 
   const {
     foregroundRealtimeSymbol,
@@ -189,17 +176,6 @@ export function RightDrawer({
   useEffect(() => {
     saveImportCenterSelectedTab(selectedPanelTab)
   }, [selectedPanelTab])
-
-  const storeOperationLine = useMemo(
-    () => formatStoreOperationLine(pullProgress, m1CheckJob, aggregateProgress, storeActionStatus),
-    [aggregateProgress, m1CheckJob, pullProgress, storeActionStatus],
-  )
-  const storeOperationProgress = useMemo(
-    () => resolveStoreOperationProgress(pullProgress, m1CheckJob, aggregateProgress),
-    [aggregateProgress, m1CheckJob, pullProgress],
-  )
-  const canAggregateStoreV5 = localStoreStatus?.directM1?.status !== 'raw_m1_ready_clean_pending'
-    && localStoreStatus?.directM1?.datasetKey?.includes(':direct:M1') === true
 
   function handleToggleStorePanelPersistence(enabled: boolean) {
     setStorePanelPersistenceEnabled(enabled)
@@ -287,428 +263,6 @@ export function RightDrawer({
     }
   }
 
-  async function handleCheckMt5M1() {
-    const symbol = selectedRow?.symbol
-    if (!symbol) return
-    setStoreCheckLoading(true)
-    setStoreCheckError('')
-    setStoreActionStatus('正在检查 MT5 终端 M1...')
-
-    try {
-      const payload = await fetchStoreV5Check(symbol)
-      setStoreCheck(payload)
-      setStoreActionStatus('MT5 终端 M1 检查完成。')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setStoreCheckError(message)
-      setStoreCheck(null)
-      setStoreActionStatus('')
-    } finally {
-      setStoreCheckLoading(false)
-    }
-  }
-
-  void handleCheckMt5M1
-
-  async function handleCheckMt5M1Staged() {
-    const symbol = selectedRow?.symbol
-    if (!symbol) return
-    setStoreCheckLoading(true)
-    setStoreCheckError('')
-    setPullProgress(null)
-    setM1CheckJob(null)
-    setStoreActionStatus('')
-
-    try {
-      const previous = storeCheck?.directM1
-      const canIncremental = previous?.lastTime != null && (previous.trueM1RowsCount != null || previous.rowsCount != null)
-      const started = await startMt5M1CheckJob(symbol, canIncremental
-        ? {
-            chunk: 200000,
-            maxCount: 10000000,
-            mode: 'incremental',
-            sinceTime: previous.lastTime,
-            baseFirstTime: previous.firstTime,
-            baseLastTime: previous.lastTime,
-            baseTrueM1RowsCount: previous.trueM1RowsCount ?? previous.rowsCount,
-            baseMt5RowsCount: previous.mt5RowsCount ?? previous.trueM1RowsCount ?? previous.rowsCount,
-            overlapBars: 1000,
-          }
-        : { chunk: 200000, maxCount: 10000000, mode: 'refresh' })
-      activeM1CheckJobRef.current = started.jobId
-      setM1CheckJob(started)
-
-      while (activeM1CheckJobRef.current === started.jobId) {
-        await delay(600)
-        const current = await fetchMt5M1CheckJob(started.jobId)
-        setM1CheckJob(current)
-        if (current.phase === 'completed') {
-          if (current.result) {
-            const checkedAt = new Date().toISOString()
-            setStoreCheck(current.result)
-            setMt5M1LastCheckedAt(checkedAt)
-            savePersistedM1CheckResult(symbol, current.result, checkedAt, storePanelPersistenceEnabled)
-          }
-          setM1CheckJob(null)
-          break
-        }
-        if (current.phase === 'failed' || current.phase === 'cancelled') {
-          throw new Error(current.error || current.status || current.phase)
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setStoreCheckError(message)
-      setStoreActionStatus('')
-    } finally {
-      activeM1CheckJobRef.current = ''
-      setPullProgress(null)
-      setStoreCheckLoading(false)
-    }
-  }
-
-  async function handleCancelMt5M1Check() {
-    const jobId = m1CheckJob?.jobId
-    if (!jobId) return
-    activeM1CheckJobRef.current = ''
-    try {
-      const payload = await cancelMt5M1CheckJob(jobId)
-      setM1CheckJob(payload)
-      setStoreActionStatus('')
-    } catch (err) {
-      setStoreCheckError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setM1CheckJob(null)
-      setStoreCheckLoading(false)
-    }
-  }
-
-  async function handleCancelPullStore() {
-    const jobId = pullProgress?.jobId
-    if (!jobId) return
-    activePullJobRef.current = ''
-    try {
-      pullEventSourceRef.current?.close()
-    } catch {
-      // best effort
-    }
-    pullEventSourceRef.current = null
-    setPullProgress(null)
-    setStoreCheckLoading(false)
-    setStoreActionStatus('已取消')
-    try {
-      await cancelStoreV5PullJob(jobId)
-    } catch (err) {
-      setStoreCheckError(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  function waitStoreV5PullJobBySse(jobId: string) {
-    return new Promise<StoreV5PullJobPayload>((resolve, reject) => {
-      let settled = false
-      const finish = (fn: () => void) => {
-        if (settled) return
-        settled = true
-        try {
-          pullEventSourceRef.current?.close()
-        } catch {
-          // best effort
-        }
-        pullEventSourceRef.current = null
-        fn()
-      }
-      const applyPayload = (event: MessageEvent) => {
-        if (activePullJobRef.current !== jobId) return null
-        const payload = JSON.parse(event.data || '{}') as StoreV5PullJobPayload
-        setPullProgress(payload)
-        return payload
-      }
-
-      try {
-        const source = createStoreV5PullEventSource(jobId)
-        pullEventSourceRef.current = source
-        source.addEventListener('progress', (event) => {
-          try {
-            applyPayload(event as MessageEvent)
-          } catch {
-            // ignore malformed progress
-          }
-        })
-        source.addEventListener('done', (event) => {
-          try {
-            const payload = applyPayload(event as MessageEvent)
-            finish(() => resolve(payload as StoreV5PullJobPayload))
-          } catch (err) {
-            finish(() => reject(err))
-          }
-        })
-        source.addEventListener('cancelled', (event) => {
-          try {
-            applyPayload(event as MessageEvent)
-          } catch {
-            // ignore malformed cancelled payload
-          }
-          finish(() => reject(new Error('store_v5_pull_cancelled')))
-        })
-        source.addEventListener('error', (event) => {
-          const messageEvent = event as MessageEvent
-          if (messageEvent.data) {
-            try {
-              const payload = applyPayload(messageEvent)
-              finish(() => reject(new Error(payload?.error || payload?.status || 'store_v5_pull_failed')))
-              return
-            } catch {
-              // fall through to generic error
-            }
-          }
-          if (!settled && activePullJobRef.current === jobId) {
-            finish(() => reject(new Error('store_v5_pull_sse_disconnected')))
-          }
-        })
-      } catch (err) {
-        finish(() => reject(err))
-      }
-    })
-  }
-
-  async function waitStoreV5PullJobByPolling(jobId: string) {
-    while (activePullJobRef.current === jobId) {
-      await delay(600)
-      const current = await fetchStoreV5PullJob(jobId)
-      setPullProgress(current)
-      if (current.phase === 'completed') return current
-      if (current.phase === 'failed' || current.phase === 'cancelled') {
-        throw new Error(current.error || current.status || current.phase)
-      }
-    }
-    throw new Error('store_v5_pull_cancelled')
-  }
-
-  async function handleRefreshStoreStatus() {
-    const symbol = selectedRow?.symbol
-    if (!symbol) return
-    setStoreCheckLoading(true)
-    setStoreCheckError('')
-    setPullProgress(null)
-    setStoreActionStatus('Reading StoreV5 status...')
-    try {
-      setStoreActionStatus('Scanning and repairing M1 gaps...')
-      const gapRepair = await repairStoreV5M1Gaps(symbol, {
-        lookbackMinutes: storeV5M1RepairLookbackMinutes,
-        maxGapMinutes: storeV5M1RepairMaxGapMinutes,
-      })
-      setStoreActionStatus(
-        (gapRepair.gapsDetected ?? 0) > 0
-          ? `M1 gap repair complete: found ${gapRepair.gapsDetected ?? 0} gaps, wrote ${gapRepair.rowsWritten ?? 0} rows.`
-          : 'M1 gap check complete: no recent middle gaps.',
-      )
-      const payload = await fetchStoreV5Status(symbol)
-      setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
-      const period = periodFromStoreTableKey(selectedStoreTableKey) || readSharedSelection().period || 'M1'
-      const rowsForPeriod = period === 'M1'
-        ? resolveLocalM1Rows(payload)
-        : payload.aggregated.find((cell) => String(cell.timeframe || '').toUpperCase() === period)?.rowsCount
-      onOpenChart?.({
-        symbol,
-        period: period === 'M1' ? '1m' : period,
-        totalRows: typeof rowsForPeriod === 'number' && Number.isFinite(rowsForPeriod) ? rowsForPeriod : null,
-        reloadId: Date.now(),
-      })
-      window.setTimeout(() => {
-        setAggregateProgress((current) => (current?.phase === 'completed' ? null : current))
-        setStoreActionStatus((current) => (current.includes('refresh') ? '' : current))
-      }, 1600)
-      setStoreActionStatus('StoreV5 status refreshed.')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setStoreCheckError(message)
-      setStoreActionStatus('')
-    } finally {
-      activeAggregateJobRef.current = ''
-      try {
-        aggregateEventSourceRef.current?.close()
-      } catch {
-        // best effort
-      }
-      aggregateEventSourceRef.current = null
-      setStoreCheckLoading(false)
-    }
-  }
-
-  async function handlePullStore() {
-    const symbol = selectedRow?.symbol
-    if (!symbol) return
-    setStoreCheckLoading(true)
-    setStoreCheckError('')
-    setM1CheckJob(null)
-    setPullProgress(null)
-    setStoreActionStatus('Pulling MT5 M1 into StoreV5...')
-    try {
-      let pullMode = 'refresh'
-      try {
-        const currentStore = await fetchStoreV5Status(symbol)
-        if (
-          currentStore.rawDirectM1?.lastTime != null ||
-          currentStore.rawDirectM1?.rowsCount != null ||
-          currentStore.directM1?.lastTime != null ||
-          currentStore.directM1?.rowsCount != null
-        ) {
-          pullMode = 'incremental'
-        }
-      } catch {
-        pullMode = 'refresh'
-      }
-      setStoreActionStatus(
-        pullMode === 'incremental'
-          ? 'Incremental MT5 M1 pull into StoreV5...'
-          : 'Initial MT5 M1 pull into StoreV5...',
-      )
-      const started = await startStoreV5PullJob(symbol, pullMode)
-      activePullJobRef.current = started.jobId
-      setPullProgress(started)
-      try {
-        await waitStoreV5PullJobBySse(started.jobId)
-      } catch (err) {
-        if (activePullJobRef.current !== started.jobId) throw err
-        await waitStoreV5PullJobByPolling(started.jobId)
-      }
-      setStoreActionStatus('Scanning and repairing recent M1 window...')
-      await repairStoreV5M1Gaps(symbol, {
-        lookbackMinutes: storeV5M1RepairLookbackMinutes,
-        maxGapMinutes: storeV5M1RepairMaxGapMinutes,
-      })
-
-      const repairedStatus = await fetchStoreV5Status(symbol)
-      const aggregateTargets = resolveStoreV5AggregateTargets(repairedStatus)
-      if (aggregateTargets.length) {
-        setStoreActionStatus(`Aggregating periods: ${aggregateTargets.join(', ')}...`)
-        const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets)
-        activeAggregateJobRef.current = aggregateJob.jobId
-        setAggregateProgress(aggregateJob)
-        try {
-          await waitStoreV5AggregateJobBySse(aggregateJob.jobId)
-        } catch (err) {
-          if (activeAggregateJobRef.current !== aggregateJob.jobId) throw err
-          await waitStoreV5AggregateJobByPolling(aggregateJob.jobId)
-        }
-      }
-      const payload = await fetchStoreV5Status(symbol)
-      setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
-      const period = periodFromStoreTableKey(selectedStoreTableKey) || readSharedSelection().period || 'M1'
-      const rowsForPeriod = period === 'M1'
-        ? resolveLocalM1Rows(payload)
-        : payload.aggregated.find((cell) => String(cell.timeframe || '').toUpperCase() === period)?.rowsCount
-      onOpenChart?.({
-        symbol,
-        period: period === 'M1' ? '1m' : period,
-        totalRows: typeof rowsForPeriod === 'number' && Number.isFinite(rowsForPeriod) ? rowsForPeriod : null,
-        reloadId: Date.now(),
-      })
-      setStoreActionStatus('Pull complete. Store status refreshed.')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setStoreCheckError(message)
-      setStoreActionStatus('')
-    } finally {
-      activePullJobRef.current = ''
-      try {
-        pullEventSourceRef.current?.close()
-      } catch {
-        // best effort
-      }
-      pullEventSourceRef.current = null
-      activeAggregateJobRef.current = ''
-      try {
-        aggregateEventSourceRef.current?.close()
-      } catch {
-        // best effort
-      }
-      aggregateEventSourceRef.current = null
-      setPullProgress(null)
-      setAggregateProgress((current) => (current?.phase === 'completed' ? null : current))
-      setStoreCheckLoading(false)
-    }
-  }
-
-  async function handleDeleteLocalStore() {
-    const symbol = selectedRow?.symbol
-    if (!symbol) return
-    const ok = window.confirm(`Delete local StoreV5 data for ${symbol}? This clears local M1 and aggregated periods.`)
-    if (!ok) return
-    setStoreCheckLoading(true)
-    setStoreCheckError('')
-    setPullProgress(null)
-    setStoreActionStatus('Deleting local StoreV5 data...')
-    try {
-      await deleteStoreV5Symbol(symbol)
-      const payload = await fetchStoreV5Status(symbol)
-      setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
-      setStoreActionStatus('Local StoreV5 data deleted.')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setStoreCheckError(message)
-      setStoreActionStatus('')
-    } finally {
-      setStoreCheckLoading(false)
-    }
-  }
-
-  async function handleDeleteSelectedAggregates() {
-    const symbol = selectedRow?.symbol
-    if (!symbol) return
-    const periods = [...selectedAggregatePeriods]
-    if (!periods.length) {
-      setStoreCheckError('Select aggregated periods to delete first.')
-      return
-    }
-    const ok = window.confirm(`Delete aggregated periods for ${symbol}: ${periods.join(', ')}? M1 will not be deleted.`)
-    if (!ok) return
-    setStoreCheckLoading(true)
-    setStoreCheckError('')
-    setPullProgress(null)
-    setM1CheckJob(null)
-    setAggregateProgress(null)
-    setStoreActionStatus(`Deleting aggregated periods: ${periods.join(', ')}...`)
-    try {
-      await deleteStoreV5AggregatedTimeframes(symbol, periods)
-      const payload = await fetchStoreV5Status(symbol)
-      setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
-      setStoreActionStatus(`Deleted aggregated periods: ${periods.join(', ')}.`)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setStoreCheckError(message)
-      setStoreActionStatus('')
-    } finally {
-      setStoreCheckLoading(false)
-    }
-  }
-
-  async function handleCleanLocalM1() {
-    const symbol = selectedRow?.symbol
-    if (!symbol) return
-    setStoreCheckLoading(true)
-    setStoreCheckError('')
-    setPullProgress(null)
-    setStoreActionStatus('Cleaning invalid 1-minute data...')
-    try {
-      await cleanStoreV5DirectM1(symbol)
-      const payload = await fetchStoreV5Status(symbol)
-      setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
-      setStoreActionStatus('Local M1 cleaned and aligned with true M1 data.')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setStoreCheckError(message)
-      setStoreActionStatus('')
-    } finally {
-      setStoreCheckLoading(false)
-    }
-  }
-
   function handleAddM1ToStoreList() {
     const symbol = selectedRow?.symbol
     if (!symbol) return
@@ -783,230 +337,8 @@ export function RightDrawer({
     onResetChartToLatest?.()
   }
 
-  function toggleAggregatePeriod(period: string) {
-    setSelectedAggregatePeriods((current) => (
-      current.includes(period)
-        ? current.filter((item) => item !== period)
-        : [...current, period]
-    ))
-  }
-
-  function toggleAllAggregatePeriods() {
-    setSelectedAggregatePeriods((current) => (
-      current.length === storeTableAggregatePeriods.length ? [] : [...storeTableAggregatePeriods]
-    ))
-  }
-
-  function waitStoreV5AggregateJobBySse(jobId: string) {
-    return new Promise<StoreV5AggregateJobPayload>((resolve, reject) => {
-      let settled = false
-      const finish = (fn: () => void) => {
-        if (settled) return
-        settled = true
-        try {
-          aggregateEventSourceRef.current?.close()
-        } catch {
-          // best effort
-        }
-        aggregateEventSourceRef.current = null
-        fn()
-      }
-      const applyPayload = (event: MessageEvent) => {
-        if (activeAggregateJobRef.current !== jobId) return null
-        const payload = JSON.parse(event.data || '{}') as StoreV5AggregateJobPayload
-        setAggregateProgress(payload)
-        return payload
-      }
-
-      try {
-        const source = createStoreV5AggregateEventSource(jobId)
-        aggregateEventSourceRef.current = source
-        source.addEventListener('progress', (event) => {
-          try {
-            applyPayload(event as MessageEvent)
-          } catch {
-            // ignore malformed progress
-          }
-        })
-        source.addEventListener('done', (event) => {
-          try {
-            const payload = applyPayload(event as MessageEvent)
-            finish(() => resolve(payload as StoreV5AggregateJobPayload))
-          } catch (err) {
-            finish(() => reject(err))
-          }
-        })
-        source.addEventListener('cancelled', (event) => {
-          try {
-            applyPayload(event as MessageEvent)
-          } catch {
-            // ignore malformed cancelled payload
-          }
-          finish(() => reject(new Error('store_v5_aggregate_cancelled')))
-        })
-        source.addEventListener('error', (event) => {
-          const messageEvent = event as MessageEvent
-          if (messageEvent.data) {
-            try {
-              const payload = applyPayload(messageEvent)
-              finish(() => reject(new Error(payload?.error || payload?.status || 'store_v5_aggregate_failed')))
-              return
-            } catch {
-              // fall through to generic error
-            }
-          }
-          if (!settled && activeAggregateJobRef.current === jobId) {
-            finish(() => reject(new Error('store_v5_aggregate_sse_disconnected')))
-          }
-        })
-      } catch (err) {
-        finish(() => reject(err))
-      }
-    })
-  }
-
-  async function waitStoreV5AggregateJobByPolling(jobId: string) {
-    while (activeAggregateJobRef.current === jobId) {
-      await delay(600)
-      const current = await fetchStoreV5AggregateJob(jobId)
-      setAggregateProgress(current)
-      if (current.phase === 'completed') return current
-      if (current.phase === 'failed' || current.phase === 'cancelled') {
-        throw new Error(current.error || current.status || current.phase)
-      }
-    }
-    throw new Error('store_v5_aggregate_cancelled')
-  }
-
-  async function handleAggregateStore() {
-    const symbol = selectedRow?.symbol
-    if (!symbol) return
-    const periods = [...selectedAggregatePeriods]
-    if (!selectedAggregatePeriods.length) {
-      setStoreCheckError('Select at least one aggregated period.')
-      return
-    }
-    setStoreCheckLoading(true)
-    setStoreCheckError('')
-    setPullProgress(null)
-    setM1CheckJob(null)
-    setAggregateProgress({
-      ok: true,
-      jobId: '',
-      symbol,
-      phase: 'running',
-      status: 'store_v5_aggregate_running',
-      periods,
-      currentPeriod: periods[0],
-      completed: 0,
-      total: periods.length,
-    })
-    setStoreActionStatus('正在从 M1 重建聚合周期...')
-    try {
-      if (!canAggregateStoreV5) {
-        setStoreActionStatus('正在先清理无效 M1，生成 direct M1...')
-        await cleanStoreV5DirectM1(symbol)
-        const cleanedStatus = await fetchStoreV5Status(symbol)
-        setLocalStoreStatus(cleanedStatus)
-        savePersistedStoreV5Status(symbol, cleanedStatus, new Date().toISOString(), storePanelPersistenceEnabled)
-        setStoreActionStatus('direct M1 已生成，开始聚合...')
-      }
-      const started = await startStoreV5AggregateJob(symbol, periods)
-      activeAggregateJobRef.current = started.jobId
-      setAggregateProgress(started)
-      try {
-        await waitStoreV5AggregateJobBySse(started.jobId)
-      } catch (err) {
-        if (activeAggregateJobRef.current !== started.jobId) throw err
-        await waitStoreV5AggregateJobByPolling(started.jobId)
-      }
-      setAggregateProgress({
-        ok: true,
-        jobId: activeAggregateJobRef.current,
-        symbol,
-        phase: 'completed',
-        status: 'store_v5_aggregate_completed',
-        periods,
-        completed: periods.length,
-        total: periods.length,
-      })
-      const payload = await fetchStoreV5Status(symbol)
-      setLocalStoreStatus(payload)
-      savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
-      window.setTimeout(() => {
-        setAggregateProgress((current) => (current?.phase === 'completed' ? null : current))
-        setStoreActionStatus('')
-      }, 1600)
-      setStoreActionStatus('Aggregation complete. Store status refreshed.')
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      setAggregateProgress((current) => current ? { ...current, phase: 'failed' } : null)
-      setStoreCheckError(message)
-      setStoreActionStatus('')
-    } finally {
-      setStoreCheckLoading(false)
-    }
-  }
-
   return (
-    <>
-      <div className="ff-right-rail" aria-label="Right toolbar">
-        <button
-          className="ff-right-rail__button"
-          data-active={activeDrawer === 'mt5'}
-          onClick={() => onToggleDrawer('mt5')}
-          title="MT5 Import Center"
-          type="button"
-        >
-          <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-            <path d="M43.5,14.9312c0,4.251-8.73,7.6971-19.5,7.6971S4.5,19.1822,4.5,14.9312,13.23,7.234,24,7.234,43.5,10.68,43.5,14.9312Z" />
-            <path d="M43.5,23.9991c0,4.251-8.73,7.6971-19.5,7.6971S4.5,28.25,4.5,23.9991" />
-            <path d="M43.5,33.0688c0,4.251-8.73,7.6972-19.5,7.6972S4.5,37.32,4.5,33.0688" />
-            <path d="M4.5,33.0688v-9.07" />
-            <path d="M43.5,33.0688v-9.07" />
-            <path d="M43.5,23.9991v-9.07" />
-            <path d="M4.5,24V14.93" />
-          </svg>
-        </button>
-        <button
-          className="ff-right-rail__button"
-          data-active={activeDrawer === 'settings'}
-          onClick={() => onToggleDrawer('settings')}
-          title="Settings"
-          type="button"
-        >
-          <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-            <polygon points="34.75 5.38 13.25 5.38 2.5 24 13.25 42.62 34.75 42.62 45.5 24 34.75 5.38" />
-            <circle cx="24" cy="24" r="7.5" />
-          </svg>
-        </button>
-      </div>
-
-      <aside
-        className="ff-right-drawer"
-        data-open={open}
-        aria-hidden={!open}
-        style={{
-          ['--ff-mt5-top-pane-height' as string]: `${topPaneHeight}px`,
-        }}
-      >
-        <div
-          className="ff-right-drawer__resize-handle"
-          onDoubleClick={() => onResize(280)}
-          onPointerDown={handleResizePointerDown}
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize right panel"
-          tabIndex={0}
-        />
-
-        <header className="ff-right-drawer__header">
-          <h2>{activeDrawer === 'settings' ? 'Settings' : 'MT5 Import Center'}</h2>
-          <button className="ff-right-drawer__close" onClick={onClose} type="button">
-            x
-          </button>
-        </header>
-
+    <RightDrawerFrame activeDrawer={activeDrawer} onClose={onClose} onResize={onResize} onResizePointerDown={handleResizePointerDown} onToggleDrawer={onToggleDrawer} open={open} topPaneHeight={topPaneHeight}>
         {activeDrawer === 'settings' ? (
           <Suspense fallback={<div className="ff-settings-drawer__body" />}>
             <SettingsPanel
@@ -1015,210 +347,46 @@ export function RightDrawer({
             />
           </Suspense>
         ) : (
-        <div className="ff-right-drawer__body">
-          <section className="ff-mt5-pane ff-mt5-pane--top">
-            <form className="ff-import-toolbar" onSubmit={handleSearch}>
-              <input
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search..."
-                value={query}
-              />
-              <button className="ff-import-toolbar__search" type="submit">Search</button>
-              <button disabled={loading} onClick={() => loadSymbols(true)} type="button">
-                {loading ? 'Scanning...' : 'Scan MT5'}
-              </button>
-            </form>
-
-            <div className="ff-import-note" data-error={Boolean(error)}>
-              {status}
-            </div>
-
-            <SymbolTable
-              columnWidths={columnWidths}
-              loading={loading}
-              onColumnResizePointerDown={handleColumnResizePointerDown}
-              onResetColumnWidth={resetColumnWidth}
-              onSelectSymbol={handleSelectSymbol}
-              selectedSymbol={selectedSymbol}
-              tableWrapRef={tableWrapRef}
-              visibleSymbols={visibleSymbols}
-            />
-          </section>
-
-          <div
-            className="ff-mt5-pane-splitter"
-            onDoubleClick={resetTopPaneHeight}
-            onPointerDown={handleSplitPointerDown}
-            role="separator"
-            aria-orientation="horizontal"
-            aria-label="Resize MT5 panel split"
-            tabIndex={0}
+          <RightDrawerMt5Body
+            canAggregateStoreV5={canAggregateStoreV5} chartJumpError={chartJumpError} chartJumpInput={chartJumpInput}
+            chartLoadState={chartLoadState} columnWidths={columnWidths} error={error} loading={loading}
+            localStoreStatus={localStoreStatus} m1CheckJob={m1CheckJob} mt5M1LastCheckedAt={mt5M1LastCheckedAt}
+            onAddM1ToStoreList={handleAddM1ToStoreList} onAggregateStore={handleAggregateStore}
+            onCancelMt5M1Check={handleCancelMt5M1Check} onCancelPullStore={handleCancelPullStore}
+            onCheckMt5M1Staged={handleCheckMt5M1Staged} onCleanLocalM1={handleCleanLocalM1}
+            onColumnResizePointerDown={handleColumnResizePointerDown}
+            onDeleteLocalStore={handleDeleteLocalStore} onDeleteSelectedAggregates={handleDeleteSelectedAggregates}
+            onJumpChartToTime={handleJumpChartToTime} onLoadChartStep={onLoadChartStep} onLoadSymbols={loadSymbols}
+            onOpenStoreTableRow={handleOpenStoreTableRow} onOpenWatchlistPeriod={handleOpenWatchlistPeriod}
+            onPullStore={handlePullStore} onRefreshStoreStatus={handleRefreshStoreStatus}
+            onResetChartToLatest={handleResetChartToLatest} onResetColumnWidth={resetColumnWidth}
+            onResetTopPaneHeight={resetTopPaneHeight} onResetWatchlistHeight={resetWatchlistTableHeight}
+            onResizeWatchlistPointerDown={handleWatchlistTableResizePointerDown}
+            onSearch={handleSearch} onSelectSymbol={handleSelectSymbol}
+            onSetChartJumpError={setChartJumpError} onSetChartJumpInput={setChartJumpInput} onSetQuery={setQuery}
+            onSetSelectedPanelTab={setSelectedPanelTab}
+            onSetSelectedWatchlistLoaded={handleSetSelectedWatchlistLoaded}
+            onSetShortcutMenuLoaded={handleSetShortcutMenuLoaded} onSplitPointerDown={handleSplitPointerDown}
+            onToggleAggregatePeriod={toggleAggregatePeriod} onToggleAllAggregatePeriods={toggleAllAggregatePeriods}
+            onToggleRealtime={() => setWatchlistRealtimeEnabled((current) => !current)}
+            onToggleStorePanelPersistence={handleToggleStorePanelPersistence}
+            pullProgress={pullProgress} query={query} selectedAggregatePeriods={selectedAggregatePeriods}
+            selectedDisplay={selectedDisplay} selectedIsInWatchlist={selectedIsInWatchlist}
+            selectedPanelTab={selectedPanelTab} selectedRow={selectedRow} selectedStoreTableKey={selectedStoreTableKey}
+            selectedStoreTableKeyIsVisible={selectedStoreTableKeyIsVisible}
+            selectedSymbol={selectedSymbol} shortcutMenuEnabled={shortcutMenuEnabled} status={status}
+            storeCheck={storeCheck} storeCheckError={storeCheckError} storeCheckLoading={storeCheckLoading}
+            storeOperationLine={storeOperationLine} storeOperationProgress={storeOperationProgress}
+            storePanelPersistenceEnabled={storePanelPersistenceEnabled} storeTableAggregatePeriods={storeTableAggregatePeriods}
+            tableWrapRef={tableWrapRef} visibleStoreTableRows={visibleStoreTableRows} visibleSymbols={visibleSymbols}
+            watchlistAggregatedPeriods={watchlistAggregatedPeriods}
+            watchlistDirectPeriods={watchlistDirectPeriods} watchlistLastTickAt={watchlistLastTickAt}
+            watchlistRealtimeEnabled={watchlistRealtimeEnabled} watchlistRealtimeLog={watchlistRealtimeLog}
+            watchlistRealtimeReady={watchlistRealtimeReady} watchlistRealtimeStatus={watchlistRealtimeStatus}
+            watchlistRows={watchlistRows} watchlistTableHeight={watchlistTableHeight} watchlistTicks={watchlistTicks}
           />
-
-          <section className="ff-mt5-pane ff-mt5-pane--bottom" aria-label="MT5 lower workspace">
-            {selectedRow && selectedDisplay && (
-              <section className="ff-import-selected" aria-label="Selected MT5 symbol">
-                <div className="ff-import-selected-head">
-                  <div className="ff-import-selected-head__text">
-                    <h3>{selectedRow.symbol} · {selectedDisplay.chineseName}</h3>
-                    <p>{selectedDisplay.assetType}</p>
-                  </div>
-                  <div className="ff-import-selected-head__actions">
-                    <div className="ff-import-load-row">
-                      <span>添加自选列表：</span>
-                      <div className="ff-import-load-switch" aria-label="添加自选列表">
-                        <button
-                          data-active={selectedIsInWatchlist}
-                          onClick={() => handleSetSelectedWatchlistLoaded(true)}
-                          type="button"
-                        >
-                          Load
-                        </button>
-                        <button
-                          data-active={!selectedIsInWatchlist}
-                          onClick={() => handleSetSelectedWatchlistLoaded(false)}
-                          type="button"
-                        >
-                          Unload
-                        </button>
-                      </div>
-                    </div>
-                    <div className="ff-import-load-row">
-                      <span>添加快捷菜单：</span>
-                      <div className="ff-import-load-switch" aria-label="添加快捷菜单">
-                        <button
-                          data-active={shortcutMenuEnabled}
-                          onClick={() => handleSetShortcutMenuLoaded(true)}
-                          type="button"
-                        >
-                          Load
-                        </button>
-                        <button
-                          data-active={!shortcutMenuEnabled}
-                          onClick={() => handleSetShortcutMenuLoaded(false)}
-                          type="button"
-                        >
-                          Unload
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="ff-import-selected-tabs" role="tablist" aria-label="MT5 symbol panels">
-                  {selectedPanelTabs.map((tab) => (
-                    <button
-                      aria-selected={selectedPanelTab === tab.key}
-                      className="ff-import-selected-tabs__item"
-                      data-active={selectedPanelTab === tab.key}
-                      key={tab.key}
-                      onClick={() => setSelectedPanelTab(tab.key)}
-                      role="tab"
-                      type="button"
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-
-                {selectedPanelTab === 'details' && (
-                  <div className="ff-import-selected-detail" role="tabpanel">
-                    {selectedDetailRows(selectedRow).map(([leftLabel, leftValue, rightLabel, rightValue]) => (
-                      <div
-                        className="ff-import-selected-detail__row"
-                        data-wide={rightLabel == null}
-                        key={`${leftLabel}-${rightLabel ?? 'wide'}`}
-                      >
-                        <span>{leftLabel}</span>
-                        {rightLabel == null ? (
-                          <strong
-                            className="ff-import-selected-detail__wide-value"
-                            title={formatDetailValue(leftValue)}
-                          >
-                            {formatDetailValue(leftValue)}
-                          </strong>
-                        ) : (
-                          <>
-                            <strong title={formatDetailValue(leftValue)}>{formatDetailValue(leftValue)}</strong>
-                            <span>{rightLabel}</span>
-                            <strong title={formatDetailValue(rightValue)}>{formatDetailValue(rightValue)}</strong>
-                          </>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {selectedPanelTab === 'store' && (
-                  <StoreV5Panel
-                    canAggregateStoreV5={canAggregateStoreV5}
-                    chartJumpError={chartJumpError}
-                    chartJumpInput={chartJumpInput}
-                    chartLoadState={chartLoadState}
-                    localStoreStatus={localStoreStatus}
-                    m1CheckJob={m1CheckJob}
-                    mt5M1LastCheckedAt={mt5M1LastCheckedAt}
-                    onAddM1ToStoreList={handleAddM1ToStoreList}
-                    onAggregateStore={handleAggregateStore}
-                    onCancelMt5M1Check={handleCancelMt5M1Check}
-                    onCancelPullStore={handleCancelPullStore}
-                    onCheckMt5M1Staged={handleCheckMt5M1Staged}
-                    onCleanLocalM1={handleCleanLocalM1}
-                    onDeleteLocalStore={handleDeleteLocalStore}
-                    onDeleteSelectedAggregates={handleDeleteSelectedAggregates}
-                    onJumpChartToTime={handleJumpChartToTime}
-                    onLoadChartStep={onLoadChartStep}
-                    onOpenStoreTableRow={handleOpenStoreTableRow}
-                    onPullStore={handlePullStore}
-                    onRefreshStoreStatus={handleRefreshStoreStatus}
-                    onResetChartToLatest={handleResetChartToLatest}
-                    onSetChartJumpError={setChartJumpError}
-                    onSetChartJumpInput={setChartJumpInput}
-                    onToggleAggregatePeriod={toggleAggregatePeriod}
-                    onToggleAllAggregatePeriods={toggleAllAggregatePeriods}
-                    onToggleStorePanelPersistence={handleToggleStorePanelPersistence}
-                    pullProgress={pullProgress}
-                    selectedAggregatePeriods={selectedAggregatePeriods}
-                    selectedStoreTableKey={selectedStoreTableKey}
-                    selectedStoreTableKeyIsVisible={selectedStoreTableKeyIsVisible}
-                    storeCheck={storeCheck}
-                    storeCheckError={storeCheckError}
-                    storeCheckLoading={storeCheckLoading}
-                    storeOperationLine={storeOperationLine}
-                    storeOperationProgress={storeOperationProgress}
-                    storePanelPersistenceEnabled={storePanelPersistenceEnabled}
-                    storeTableAggregatePeriods={storeTableAggregatePeriods}
-                    visibleStoreTableRows={visibleStoreTableRows}
-                  />
-                )}
-
-                {selectedPanelTab === 'watchlist' && (
-                  <WatchlistTable
-                    onOpenWatchlistPeriod={handleOpenWatchlistPeriod}
-                    onResizePointerDown={handleWatchlistTableResizePointerDown}
-                    onResetHeight={resetWatchlistTableHeight}
-                    onSelectSymbol={handleSelectSymbol}
-                    onToggleRealtime={() => setWatchlistRealtimeEnabled((current) => !current)}
-                    selectedStoreTableKey={selectedStoreTableKey}
-                    selectedSymbol={selectedSymbol}
-                    watchlistAggregatedPeriods={watchlistAggregatedPeriods}
-                    watchlistDirectPeriods={watchlistDirectPeriods}
-                    watchlistLastTickAt={watchlistLastTickAt}
-                    watchlistRealtimeEnabled={watchlistRealtimeEnabled}
-                    watchlistRealtimeLog={watchlistRealtimeLog}
-                    watchlistRealtimeReady={watchlistRealtimeReady}
-                    watchlistRealtimeStatus={watchlistRealtimeStatus}
-                    watchlistRows={watchlistRows}
-                    watchlistTableHeight={watchlistTableHeight}
-                    watchlistTicks={watchlistTicks}
-                  />
-                )}
-              </section>
-            )}
-          </section>
-        </div>
         )}
-      </aside>
-    </>
+    </RightDrawerFrame>
   )
 }
 

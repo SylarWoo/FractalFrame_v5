@@ -1,33 +1,19 @@
 ﻿import { useEffect, useRef, useState } from 'react'
-import { ActionType, LoadDataType, dispose, init } from 'klinecharts'
-import type { Chart } from 'klinecharts'
+import { ActionType, LoadDataType } from 'klinecharts'
 import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
-import { repairStoreV5M1Gaps } from '../../services/mt5/mt5SymbolsApi'
-import { settingsSymbolChangedEvent } from '../settingsSymbolState'
-import { chartError, chartInfo, chartWarn } from './chartLogger'
-import { formatChartDate, readChartTimezone, resolvePeriodSeconds } from './chartTimeFormatting'
+import { chartError, chartInfo } from './chartLogger'
+import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import {
   historyPageSize,
   jumpWindowBars,
-  mergeKLineData,
-  realtimeTailRepairLookbackMinutes,
-  realtimeTailRepairMaxGapMinutes,
   resolveHasMoreOlder,
   resolveInitialLimit,
 } from './chartCoreDataUtils'
-import {
-  applyAxisLineStyle,
-  applyAxisTextStyle,
-  applyCandleBarStyle,
-  applyCandleTooltipStyle,
-  applyCrosshairLineStyle,
-  applyGridStyle,
-  applyLastPriceLineStyle,
-  applyPriceVolumePrecision,
-  createChartBaseStyles,
-  resetYAxisAutoScale,
-} from './chartStyleAppliers'
+import { resetYAxisAutoScale } from './chartStyleAppliers'
+import { useChartInstance } from './useChartInstance'
+import { useChartRealtimeTicks } from './useChartRealtimeTicks'
+import { useChartStepLoad } from './useChartStepLoad'
 import './ChartCoreHost.css'
 
 type ChartCoreHostProps = {
@@ -53,21 +39,9 @@ export type ChartLoadState = {
   totalRows?: number | null
 }
 
-type Mt5RealtimeTickEventDetail = {
-  ask?: number | null
-  bid?: number | null
-  last?: number | null
-  symbol: string
-  time?: number | null
-  volume?: number | null
-}
-
 export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
-  const chartInstanceRef = useRef<Chart | null>(null)
-  const chartRef = useRef<HTMLDivElement | null>(null)
+  const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
   const requestSeqRef = useRef(0)
-  const realtimeTailRefreshInFlightRef = useRef(false)
-  const realtimeTailRefreshBucketRef = useRef<number | null>(null)
   const [loadState, setLoadState] = useState({
     error: false,
     loadingMore: false,
@@ -85,86 +59,8 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
     })
   }, [loadState, onLoadStateChange, period, symbol, totalRows])
 
-  useEffect(() => {
-    if (!chartRef.current) return
-
-    const container = chartRef.current
-    const chart = init(container, {
-      customApi: {
-        formatDate: formatChartDate,
-      },
-      timezone: readChartTimezone(),
-      styles: createChartBaseStyles(),
-    })
-
-    if (chart) {
-      applyPriceVolumePrecision(chart)
-      applyGridStyle(chart)
-      applyCrosshairLineStyle(chart)
-      applyAxisTextStyle(chart)
-      applyAxisLineStyle(chart)
-      applyCandleBarStyle(chart)
-      applyLastPriceLineStyle(chart)
-      applySessionBreakIndicator(chart, symbol, period)
-    }
-    chartInstanceRef.current = chart ?? null
-
-    const resize = () => {
-      chart?.resize()
-    }
-
-    const resizeObserver = new ResizeObserver(() => {
-      window.requestAnimationFrame(resize)
-    })
-
-    resizeObserver.observe(container)
-    window.addEventListener('resize', resize)
-    window.requestAnimationFrame(() => {
-      resize()
-    })
-
-    return () => {
-      resizeObserver.disconnect()
-      window.removeEventListener('resize', resize)
-      chartInstanceRef.current = null
-
-      if (chart) {
-        dispose(chart)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    const apply = () => {
-      const chart = chartInstanceRef.current
-        if (chart) {
-          chart.setTimezone(readChartTimezone())
-          chart.setCustomApi({ formatDate: formatChartDate })
-          applyPriceVolumePrecision(chart)
-          applyGridStyle(chart)
-          applyCrosshairLineStyle(chart)
-          applyAxisTextStyle(chart)
-          applyAxisLineStyle(chart)
-          applyCandleTooltipStyle(chart, symbol, period, displayName)
-          applyLastPriceLineStyle(chart)
-          applySessionBreakIndicator(chart, symbol, period)
-        }
-      }
-    apply()
-    window.addEventListener(settingsSymbolChangedEvent, apply)
-    window.addEventListener('storage', apply)
-    return () => {
-      window.removeEventListener(settingsSymbolChangedEvent, apply)
-      window.removeEventListener('storage', apply)
-    }
-  }, [displayName, period, symbol])
-
-  useEffect(() => {
-    const chart = chartInstanceRef.current
-    if (!chart) return
-
-    applyCandleTooltipStyle(chart, symbol, period, displayName)
-  }, [displayName, period, symbol])
+  useChartRealtimeTicks({ chartInstanceRef, period, symbol, totalRows })
+  useChartStepLoad({ chartInstanceRef, period, setLoadState, stepLoad: stepLoad ?? null, symbol, totalRows })
 
   useEffect(() => {
     let disposed = false
@@ -400,195 +296,7 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
         window.clearTimeout(fallbackTimer)
       }
     }
-  }, [jump?.id, jump?.timestamp, limit, period, reloadId, symbol, totalRows])
-
-  useEffect(() => {
-    const chart = chartInstanceRef.current
-    if (!chart) return
-
-    realtimeTailRefreshInFlightRef.current = false
-    realtimeTailRefreshBucketRef.current = null
-
-    const refreshRealtimeTail = async (bucketTimestamp: number) => {
-      if (period.trim().toUpperCase() !== '1M' && period.trim().toUpperCase() !== 'M1') return
-      if (realtimeTailRefreshInFlightRef.current) return
-
-      realtimeTailRefreshInFlightRef.current = true
-      try {
-        await repairStoreV5M1Gaps(symbol, {
-          lookbackMinutes: realtimeTailRepairLookbackMinutes,
-          maxGapMinutes: realtimeTailRepairMaxGapMinutes,
-        })
-
-        const timeTo = Math.floor(bucketTimestamp / 1000) + 60
-        const timeFrom = timeTo - realtimeTailRepairLookbackMinutes * 60
-        const tailData = await loadStoreV5KLineData({
-          symbol,
-          period,
-          limit: realtimeTailRepairLookbackMinutes + 5,
-          timeFrom,
-          timeTo,
-        })
-        if (!tailData.length) return
-
-        const currentData = chart.getDataList()
-        const merged = mergeKLineData(currentData, tailData)
-        const hasMoreOlder = typeof totalRows === 'number' && Number.isFinite(totalRows)
-          ? merged.length < totalRows
-          : currentData.length >= historyPageSize
-        chart.applyNewData(merged, hasMoreOlder)
-      } catch (error) {
-        chartWarn('[StoreV5Datafeed] realtime tail refresh failed', error)
-      } finally {
-        realtimeTailRefreshInFlightRef.current = false
-      }
-    }
-
-    const handleRealtimeTick = (event: Event) => {
-      const detail = event instanceof CustomEvent ? event.detail as Partial<Mt5RealtimeTickEventDetail> : null
-      if (!detail || detail.symbol !== symbol) return
-
-      const last = typeof detail.last === 'number' && Number.isFinite(detail.last)
-        ? detail.last
-        : typeof detail.bid === 'number' && typeof detail.ask === 'number'
-          ? (detail.bid + detail.ask) / 2
-          : detail.bid ?? detail.ask
-      if (typeof last !== 'number' || !Number.isFinite(last)) return
-
-      const tickSeconds = typeof detail.time === 'number' && Number.isFinite(detail.time)
-        ? Math.floor(detail.time)
-        : Math.floor(Date.now() / 1000)
-      const periodSeconds = resolvePeriodSeconds(period)
-      const bucketTimestamp = Math.floor(tickSeconds / periodSeconds) * periodSeconds * 1000
-      const currentData = chart.getDataList()
-      const latest = currentData[currentData.length - 1]
-      const volume = typeof detail.volume === 'number' && Number.isFinite(detail.volume) ? detail.volume : 0
-
-      if (!latest || bucketTimestamp > latest.timestamp) {
-        if (realtimeTailRefreshBucketRef.current !== bucketTimestamp) {
-          realtimeTailRefreshBucketRef.current = bucketTimestamp
-          void refreshRealtimeTail(bucketTimestamp)
-        }
-          chart.updateData({
-            timestamp: bucketTimestamp,
-            open: latest?.close ?? last,
-            high: last,
-            low: last,
-            close: last,
-            volume,
-          })
-          return
-        }
-
-        if (bucketTimestamp === latest.timestamp) {
-          chart.updateData({
-          ...latest,
-          high: Math.max(Number(latest.high), last),
-          low: Math.min(Number(latest.low), last),
-            close: last,
-            volume: Math.max(Number(latest.volume ?? 0), volume),
-          })
-        }
-      }
-
-    window.addEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
-    return () => window.removeEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
-  }, [period, symbol, totalRows])
-
-  useEffect(() => {
-    if (!stepLoad) return
-
-    const chart = chartInstanceRef.current
-    if (!chart) return
-
-    let disposed = false
-    const currentData = chart.getDataList()
-    if (!currentData.length) return
-
-    setLoadState((current) => ({
-      ...current,
-      error: false,
-      loadingMore: true,
-    }))
-
-    const oldest = currentData[0]
-    const newest = currentData[currentData.length - 1]
-    const options = stepLoad.direction === 'left'
-      ? {
-          limit: historyPageSize,
-          period,
-          symbol,
-          timeTo: Math.floor(oldest.timestamp / 1000) - 1,
-        }
-      : {
-          limit: historyPageSize,
-          period,
-          symbol,
-          timeFrom: Math.floor(newest.timestamp / 1000) + 1,
-        }
-
-    chartInfo('[StoreV5Datafeed] request manual step start', {
-      direction: stepLoad.direction,
-      ...options,
-    })
-
-    loadStoreV5KLineData(options)
-      .then((data) => {
-        if (disposed) return
-
-        const merged = stepLoad.direction === 'left'
-          ? mergeKLineData(data, chart.getDataList())
-          : mergeKLineData(chart.getDataList(), data)
-        const hasMoreOlder = resolveHasMoreOlder({
-          loadedRows: merged.length,
-          pageSize: historyPageSize,
-          receivedRows: stepLoad.direction === 'left' ? data.length : historyPageSize,
-          totalRows,
-        })
-
-        chartInfo('[StoreV5Datafeed] callback manual step done', {
-          direction: stepLoad.direction,
-          rows: data.length,
-          mergedRows: merged.length,
-        })
-        const targetTimestamp = stepLoad.direction === 'left'
-          ? data[Math.floor(data.length / 2)]?.timestamp
-          : data[Math.max(0, data.length - Math.floor(data.length / 2) - 1)]?.timestamp
-        chart.applyNewData(merged, hasMoreOlder)
-        window.setTimeout(() => {
-          if (disposed) return
-          resetYAxisAutoScale(chart)
-          applySessionBreakIndicator(chart, symbol, period)
-          if (typeof targetTimestamp === 'number') {
-            chart.scrollToTimestamp(targetTimestamp, 0)
-          }
-          setLoadState((current) => ({
-            ...current,
-            error: false,
-            loading: false,
-            loadingMore: false,
-            requestedRows: current.requestedRows,
-            rows: chart.getDataList().length || merged.length,
-          }))
-        }, 0)
-      })
-      .catch((error: unknown) => {
-        if (disposed) return
-
-        chartError('[StoreV5Datafeed] request manual step failed', error)
-        setLoadState((current) => ({
-          ...current,
-          error: true,
-          loading: false,
-          loadingMore: false,
-          rows: chart.getDataList().length,
-        }))
-      })
-
-    return () => {
-      disposed = true
-    }
-  }, [period, stepLoad, symbol, totalRows])
+  }, [chartInstanceRef, jump?.id, jump?.timestamp, limit, period, reloadId, symbol, totalRows])
 
   return (
     <section className="ff-chart-core-host" aria-label={`${symbol} ${period} chart`}>

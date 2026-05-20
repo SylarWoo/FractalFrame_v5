@@ -18,18 +18,27 @@ export function formatSymbolStatus(totalCount: number, visibleCount: number, mer
     + (merge ? ` · 新增 ${merge.added ?? 0}，更新 ${merge.updated ?? 0}` : '')
 }
 
+export function stripNulCharacters(value: string) {
+  return value.split('').filter((char) => char.charCodeAt(0) !== 0).join('')
+}
+
+function isAsciiOrWhitespace(value: string) {
+  return value.split('').every((char) => char.charCodeAt(0) <= 127 || /\s/.test(char))
+}
+
 export function normalizeStoredStatus(status: string, symbolCount: number) {
+  const normalizedStatus = stripNulCharacters(status)
   if (
-    !status
-    || status.includes('symbol(s)')
-    || status.includes('stored locally')
-    || status.includes('viewport renders')
-    || status.includes('added')
-    || /^[\x00-\x7F\s.,;:()/-]+$/.test(status)
+    !normalizedStatus
+    || normalizedStatus.includes('symbol(s)')
+    || normalizedStatus.includes('stored locally')
+    || normalizedStatus.includes('viewport renders')
+    || normalizedStatus.includes('added')
+    || isAsciiOrWhitespace(normalizedStatus)
   ) {
     return symbolCount ? formatSymbolStatus(symbolCount, symbolCount) : '点击 Scan MT5 加载品种列表。'
   }
-  return status
+  return normalizedStatus
 }
 
 export function formatDetailValue(value: string | number | boolean | null | undefined) {
