@@ -190,6 +190,18 @@ def handle_store_v5_get(handler: Any, parsed: ParseResult, services: Any) -> boo
             _send_exception(handler, "store_v5_query_failed", exc)
         return True
 
+    if parsed.path == "/api/market-data/v1/store-v5/audit":
+        query = parse_qs(parsed.query)
+        symbol = (query.get("symbol") or [None])[0]
+        try:
+            from python.data_warehouse.store_v5.audit_store_v5 import audit_store_v5
+
+            payload = audit_store_v5(symbol=symbol, store_root=handler.store_root)
+            handler.send_json(200 if payload.get("ok") is True else 409, payload)
+        except Exception as exc:
+            _send_exception(handler, "store_v5_audit_failed", exc)
+        return True
+
     return False
 
 

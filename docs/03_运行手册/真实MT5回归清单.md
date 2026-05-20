@@ -14,6 +14,8 @@
 ```powershell
 .\scripts\check_all.ps1
 .\scripts\check_live_mt5_store_v5.ps1 -Symbol XAUUSDm
+.\.venv\Scripts\python.exe scripts\audit_store_v5.py --symbol XAUUSDm
+.\.venv\Scripts\python.exe scripts\store_v5_size_report.py --symbol XAUUSDm
 ```
 
 预期：
@@ -21,6 +23,7 @@
 - `check_all.ps1` 全部通过。
 - live 检查能启动或连接 bridge。
 - `/mt5/symbols` 和 `/store-v5/status` 返回成功。
+- StoreV5 audit 无结构性问题，size report 能列出数据体积。
 
 ## 真实小批量拉取
 

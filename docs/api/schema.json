@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FractalFrame Market Data API",
+  "type": "object",
+  "definitions": {
+    "basePayload": {
+      "type": "object",
+      "required": ["ok"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "status": { "type": "string" },
+        "error": { "type": "string" }
+      }
+    },
+    "jobPayload": {
+      "allOf": [
+        { "$ref": "#/definitions/basePayload" },
+        {
+          "type": "object",
+          "required": ["jobId", "symbol", "phase", "status"],
+          "properties": {
+            "jobId": { "type": "string" },
+            "symbol": { "type": "string" },
+            "phase": { "type": "string" },
+            "progressPercent": { "type": ["number", "null"] }
+          }
+        }
+      ]
+    },
+    "ohlcvRow": {
+      "type": "object",
+      "required": ["time", "open", "high", "low", "close"],
+      "properties": {
+        "time": { "type": "integer" },
+        "open": { "type": "number" },
+        "high": { "type": "number" },
+        "low": { "type": "number" },
+        "close": { "type": "number" },
+        "volume": { "type": "number" }
+      }
+    }
+  }
+}

@@ -1,10 +1,12 @@
+import { useEffect, useState } from 'react'
 import type { FormEvent, PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import type { ChartLoadState } from '../chart/ChartCoreHost'
 import type { SymbolTableColumnKey } from '../mt5DataCenter/SymbolTable'
 import { SymbolTable } from '../mt5DataCenter/SymbolTable'
 import { StoreV5Panel } from '../mt5DataCenter/StoreV5Panel'
 import { WatchlistTable } from '../mt5DataCenter/WatchlistTable'
-import type { Mt5RealtimeTick, Mt5SymbolRow, StoreV5CheckPayload, Mt5M1CheckJobPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
+import { fetchMt5Diagnostics, fetchRuntimeObservability } from '../../services/mt5/mt5SymbolsApi'
+import type { Mt5DiagnosticsPayload, Mt5RealtimeTick, Mt5SymbolRow, RuntimeObservabilityPayload, StoreV5CheckPayload, Mt5M1CheckJobPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
 import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
 import { formatDetailValue, selectedDetailRows } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
@@ -110,6 +112,23 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
     watchlistDirectPeriods, watchlistLastTickAt, watchlistRealtimeEnabled, watchlistRealtimeLog,
     watchlistRealtimeReady, watchlistRealtimeStatus, watchlistRows, watchlistTableHeight, watchlistTicks,
   } = props
+  const [diagnostics, setDiagnostics] = useState<Mt5DiagnosticsPayload | null>(null)
+  const [runtime, setRuntime] = useState<RuntimeObservabilityPayload | null>(null)
+
+  useEffect(() => {
+    let disposed = false
+    const refresh = () => Promise.allSettled([fetchMt5Diagnostics(selectedSymbol), fetchRuntimeObservability()]).then(([mt5Result, runtimeResult]) => {
+      if (disposed) return
+      setDiagnostics(mt5Result.status === 'fulfilled' ? mt5Result.value : { ok: false, status: 'diagnostics_fetch_failed', error: String(mt5Result.reason) })
+      setRuntime(runtimeResult.status === 'fulfilled' ? runtimeResult.value : null)
+    })
+    refresh()
+    const intervalId = window.setInterval(refresh, 10_000)
+    return () => {
+      disposed = true
+      window.clearInterval(intervalId)
+    }
+  }, [selectedSymbol])
 
   return (
     <div className="ff-right-drawer__body">
@@ -154,8 +173,10 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
             </div>
             {selectedPanelTab === 'details' && <SelectedDetails selectedRow={selectedRow} />}
             {selectedPanelTab === 'store' && (
-              <StoreV5Panel
-                canAggregateStoreV5={canAggregateStoreV5}
+              <>
+                <DiagnosticsStrip diagnostics={diagnostics} runtime={runtime} />
+                <StoreV5Panel
+                  canAggregateStoreV5={canAggregateStoreV5}
                 chartJumpError={chartJumpError}
                 chartJumpInput={chartJumpInput}
                 chartLoadState={chartLoadState}
@@ -193,7 +214,8 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
                 storePanelPersistenceEnabled={storePanelPersistenceEnabled}
                 storeTableAggregatePeriods={storeTableAggregatePeriods}
                 visibleStoreTableRows={visibleStoreTableRows}
-              />
+                />
+              </>
             )}
             {selectedPanelTab === 'watchlist' && (
               <WatchlistTable
@@ -219,6 +241,18 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
           </section>
         )}
       </section>
+    </div>
+  )
+}
+
+function DiagnosticsStrip({ diagnostics, runtime }: { diagnostics: Mt5DiagnosticsPayload | null; runtime: RuntimeObservabilityPayload | null }) {
+  const active = runtime?.activeOperations?.map((item) => `${item.symbol}:${item.operation}`).join(', ') || 'none'
+  return (
+    <div className="ff-store-status-line" aria-label="Bridge diagnostics">
+      <span>Bridge: {runtime?.ok ? 'online' : 'checking'}</span>
+      <span>MT5: {diagnostics ? diagnostics.status : 'checking'}</span>
+      <span>Active: {active}</span>
+      {diagnostics?.error && <span>{diagnostics.error}</span>}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -73,6 +74,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Benchmark StoreV5 append/query/aggregate on generated data.")
     parser.add_argument("--rows", type=int, default=100_000)
     parser.add_argument("--store-root", type=Path, default=None)
+    parser.add_argument("--history-root", type=Path, default=ROOT / "runtime_data" / "benchmarks")
     args = parser.parse_args()
 
     if args.store_root:
@@ -81,6 +83,11 @@ def main() -> int:
     else:
         with tempfile.TemporaryDirectory() as tmp:
             report = run_benchmark(args.rows, Path(tmp))
+    args.history_root.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    history_path = args.history_root / f"store_v5_benchmark_{args.rows}_{stamp}.json"
+    history_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    report["historyPath"] = str(history_path)
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 

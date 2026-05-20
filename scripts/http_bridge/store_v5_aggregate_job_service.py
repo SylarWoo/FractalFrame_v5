@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .jobs import AGGREGATE_JOBS, AGGREGATE_JOBS_CONDITION, AGGREGATE_JOBS_LOCK, AGGREGATE_JOB_TERMINAL_PHASES, InMemoryJobStore
+from .operation_locks import finish_operation, try_start_operation
 from .store_v5_operations_service import aggregate_store_v5
 from .store_v5_status_service import utc_now_iso
 
@@ -114,9 +115,13 @@ def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str
             results=results,
             finishedAt=utc_now_iso(),
         )
+    finally:
+        finish_operation(symbol, "aggregate")
 
 
 def start_store_v5_aggregate_job(symbol: str, *, timeframes: list[str], rebuild: bool, store_root: Path | None = None) -> dict[str, Any]:
+    if not try_start_operation(symbol, "aggregate"):
+        return {"ok": False, "status": "store_v5_aggregate_already_running", "error": "operation_already_running", "symbol": symbol}
     job_id = uuid.uuid4().hex
     now = utc_now_iso()
     targets = [item.strip().upper() for item in timeframes if item.strip()]

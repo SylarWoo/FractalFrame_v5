@@ -91,6 +91,12 @@ class InMemoryJobStore:
                 self._notify()
             return remove_count
 
+    def recent(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        with self.lock:
+            snapshots = [self.snapshot(job) for job in self.jobs.values()]
+        snapshots.sort(key=lambda job: str(job.get("updatedAt") or job.get("createdAt") or ""), reverse=True)
+        return snapshots[:limit]
+
     def _append_event(self, job: dict[str, Any], snapshot: dict[str, Any]) -> None:
         events = job.setdefault("events", [])
         event_id = int(job.get("lastEventId") or 0) + 1
