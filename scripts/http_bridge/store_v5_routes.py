@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import ParseResult, parse_qs
 
 from .query_params import clamp_m1_check_count, query_bool, safe_query_int
+from .response import error_payload
 from .route_helpers import parse_timeframes, required_job_id, required_symbol
 
 AGGREGATE_TIMEFRAMES_DEFAULT = "M5,M15,M30,H1,H2,H3,H4,D1,W1,MN1"
@@ -197,17 +198,17 @@ def _send_payload_result(handler: Any, payload: dict[str, Any], *, success_statu
 
 
 def _send_exception(handler: Any, status: str, exc: Exception) -> None:
-    handler.send_json(500, {"ok": False, "status": status, "error": str(exc)})
+    handler.send_json(500, error_payload(status, str(exc)))
 
 
 def _send_job(handler: Any, query: dict[str, list[str]], get_job: Any) -> bool:
     job_id = required_job_id(query)
     if not job_id:
-        handler.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
+        handler.send_json(400, error_payload("bad_request", "job_id_required"))
         return True
     job = get_job(job_id)
     if not job:
-        handler.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
+        handler.send_json(404, error_payload("job_not_found", "job_not_found", jobId=job_id))
         return True
     handler.send_json(200, job)
     return True
@@ -216,11 +217,11 @@ def _send_job(handler: Any, query: dict[str, list[str]], get_job: Any) -> bool:
 def _cancel_job(handler: Any, query: dict[str, list[str]], set_job: Any, status: str) -> bool:
     job_id = required_job_id(query)
     if not job_id:
-        handler.send_json(400, {"ok": False, "status": "bad_request", "error": "job_id_required"})
+        handler.send_json(400, error_payload("bad_request", "job_id_required"))
         return True
     job = set_job(job_id, cancelRequested=True, status=status)
     if not job:
-        handler.send_json(404, {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id})
+        handler.send_json(404, error_payload("job_not_found", "job_not_found", jobId=job_id))
         return True
     handler.send_json(200, job)
     return True

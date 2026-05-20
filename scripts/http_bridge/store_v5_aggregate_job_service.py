@@ -29,6 +29,7 @@ AGGREGATE_JOB_STORE = InMemoryJobStore(
     snapshot=_public_aggregate_job_snapshot,
     clock=utc_now_iso,
     evented=True,
+    persist_name="aggregate",
 )
 
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import threading
+import tempfile
 import unittest
+import os
+import json
 
 from scripts.http_bridge.jobs import InMemoryJobStore
 from scripts.http_bridge.store_v5_aggregate_job_service import _get_aggregate_job, start_store_v5_aggregate_job
@@ -63,6 +66,33 @@ class InMemoryJobStoreTests(unittest.TestCase):
         self.assertNotIn("old", jobs)
         self.assertIn("running", jobs)
         self.assertIn("new", jobs)
+
+    def test_persisted_snapshot_is_written_without_events(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            old_root = os.environ.get("FRACTALFRAME_JOB_SNAPSHOT_ROOT")
+            os.environ["FRACTALFRAME_JOB_SNAPSHOT_ROOT"] = tmp
+            try:
+                jobs: dict[str, dict] = {}
+                lock = threading.Lock()
+                store = InMemoryJobStore(
+                    jobs,
+                    lock,
+                    snapshot=lambda job: {key: value for key, value in job.items() if key != "events"},
+                    persist_name="test",
+                )
+                store.create("job-1", {"jobId": "job-1", "phase": "queued", "events": []})
+                store.update("job-1", phase="completed")
+
+                path = os.path.join(tmp, "test", "job-1.json")
+                with open(path, encoding="utf-8") as f:
+                    payload = json.load(f)
+                self.assertEqual(payload["phase"], "completed")
+                self.assertNotIn("events", payload)
+            finally:
+                if old_root is None:
+                    os.environ.pop("FRACTALFRAME_JOB_SNAPSHOT_ROOT", None)
+                else:
+                    os.environ["FRACTALFRAME_JOB_SNAPSHOT_ROOT"] = old_root
 
 
 class HttpBridgeContractTests(unittest.TestCase):

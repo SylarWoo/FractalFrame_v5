@@ -1,7 +1,6 @@
 ﻿from __future__ import annotations
 
 import argparse
-import os
 import sys
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,7 +15,9 @@ from http_bridge.mt5_m1_check_service import (
     mt5_rates_to_rows,
     start_mt5_m1_staged_check,
 )
+from http_bridge.logging_config import configure_logging, get_logger
 from http_bridge.response import send_cors_headers as send_cors_headers_response
+from http_bridge.response import error_payload
 from http_bridge.response import send_json as send_json_response
 from http_bridge.response import write_sse_event
 from http_bridge.mt5_m1_check_routes import handle_mt5_m1_check_get
@@ -56,6 +57,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 DEFAULT_CACHE_ROOT = ROOT / "runtime_data" / "instruments" / "mt5"
+LOGGER = get_logger("mt5_symbols_server")
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -164,7 +168,7 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
         services = sys.modules[__name__]
         if handle_store_v5_post(self, parsed, services):
             return
-        self.send_json(404, {"ok": False, "status": "not_found", "error": parsed.path})
+        self.send_json(404, error_payload("not_found", parsed.path))
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -175,7 +179,7 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
             return
         if handle_store_v5_get(self, parsed, services):
             return
-        self.send_json(404, {"ok": False, "status": "not_found", "error": parsed.path})
+        self.send_json(404, error_payload("not_found", parsed.path))
 
     def send_cors_headers(self) -> None:
         send_cors_headers_response(self)
@@ -202,7 +206,7 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
     def send_aggregate_job_events(self, job_id: str) -> None:
         send_aggregate_job_events_sse(self, job_id, utc_now_iso=utc_now_iso)
     def log_message(self, format: str, *args: Any) -> None:
-        print(f"[mt5_symbols_server] {self.address_string()} - {format % args}")
+        LOGGER.info("%s - %s", self.address_string(), format % args)
 
 
 def parse_args() -> argparse.Namespace:
@@ -215,24 +219,25 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    configure_logging()
     args = parse_args()
     Mt5SymbolsHandler.cache_root = args.cache_root.resolve()
     Mt5SymbolsHandler.store_root = args.store_root.resolve() if args.store_root else None
     server = ThreadingHTTPServer((args.host, args.port), Mt5SymbolsHandler)
-    print(f"[mt5_symbols_server] listening on http://{args.host}:{args.port}")
-    print("[mt5_symbols_server] endpoint /api/market-data/v1/mt5/symbols?refresh=1")
-    print("[mt5_symbols_server] endpoint /api/market-data/v1/mt5/m1/check?symbol=XAUUSDm")
-    print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/status?symbol=XAUUSDm")
-    print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/pull?symbol=XAUUSDm")
-    print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/aggregate?symbol=XAUUSDm")
-    print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/query?symbol=XAUUSDm&timeframe=M1")
-    print(f"[mt5_symbols_server] cache {Mt5SymbolsHandler.cache_root}")
-    print(f"[mt5_symbols_server] store {Mt5SymbolsHandler.store_root or 'default runtime_data/store_v5'}")
-    print(f"[mt5_symbols_server] cors origin {os.environ.get('FRACTALFRAME_CORS_ORIGIN', '*')}")
+    LOGGER.info("listening on http://%s:%s", args.host, args.port)
+    LOGGER.info("endpoint /api/market-data/v1/mt5/symbols?refresh=1")
+    LOGGER.info("endpoint /api/market-data/v1/mt5/m1/check?symbol=XAUUSDm")
+    LOGGER.info("endpoint /api/market-data/v1/store-v5/status?symbol=XAUUSDm")
+    LOGGER.info("endpoint /api/market-data/v1/store-v5/pull?symbol=XAUUSDm")
+    LOGGER.info("endpoint /api/market-data/v1/store-v5/aggregate?symbol=XAUUSDm")
+    LOGGER.info("endpoint /api/market-data/v1/store-v5/query?symbol=XAUUSDm&timeframe=M1")
+    LOGGER.info("cache %s", Mt5SymbolsHandler.cache_root)
+    LOGGER.info("store %s", Mt5SymbolsHandler.store_root or "default runtime_data/store_v5")
+    LOGGER.info("cors origin configured by FRACTALFRAME_CORS_ORIGIN")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n[mt5_symbols_server] stopping")
+        LOGGER.info("stopping")
     finally:
         server.server_close()
     return 0

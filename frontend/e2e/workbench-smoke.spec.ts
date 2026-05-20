@@ -100,6 +100,77 @@ async function mockMt5Api(page: import('@playwright/test').Page) {
   })
 }
 
+async function mockMt5ApiWithPullProgress(page: import('@playwright/test').Page) {
+  await page.route('http://127.0.0.1:8765/**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname.endsWith('/store-v5/pull/start')) {
+      await route.fulfill({
+        contentType: 'application/json',
+        json: { ok: true, jobId: 'pull-job-1', symbol, phase: 'queued', status: 'store_v5_pull_queued', progressPercent: 0 },
+      })
+      return
+    }
+    if (url.pathname.endsWith('/store-v5/pull/events')) {
+      await route.fulfill({
+        contentType: 'text/event-stream',
+        body: [
+          'id: 1',
+          'event: progress',
+          `data: ${JSON.stringify({ ok: true, jobId: 'pull-job-1', symbol, phase: 'fetching', status: 'store_v5_pull_raw_m1_fetching', progressPercent: 35, progressLabel: 'Reading MT5 M1' })}`,
+          '',
+          'id: 2',
+          'event: done',
+          `data: ${JSON.stringify({ ok: true, jobId: 'pull-job-1', symbol, phase: 'completed', status: 'store_v5_pull_completed', progressPercent: 100, rowsFetched: 20, rowsWritten: 20 })}`,
+          '',
+        ].join('\n'),
+      })
+      return
+    }
+    if (url.pathname.endsWith('/store-v5/aggregate/start')) {
+      await route.fulfill({
+        contentType: 'application/json',
+        json: { ok: true, jobId: 'aggregate-job-1', symbol, phase: 'completed', status: 'store_v5_aggregate_completed', periods: ['H1'], completed: 1, total: 1 },
+      })
+      return
+    }
+    if (url.pathname.endsWith('/store-v5/aggregate/events')) {
+      await route.fulfill({
+        contentType: 'text/event-stream',
+        body: `id: 1\nevent: done\ndata: ${JSON.stringify({ ok: true, jobId: 'aggregate-job-1', symbol, phase: 'completed', status: 'store_v5_aggregate_completed', periods: ['H1'], completed: 1, total: 1 })}\n\n`,
+      })
+      return
+    }
+    if (url.pathname.endsWith('/store-v5/m1/repair-gaps')) {
+      await route.fulfill({ contentType: 'application/json', json: { ok: true, status: 'ok', gapsDetected: 0, rowsWritten: 0 } })
+      return
+    }
+    if (url.pathname.endsWith('/store-v5/status')) {
+      await route.fulfill({ contentType: 'application/json', json: storeStatus })
+      return
+    }
+    if (url.pathname.endsWith('/store-v5/query')) {
+      await route.fulfill({ contentType: 'application/json', json: { ok: true, symbol, timeframe: 'M1', rowsCount: 0, rows: [] } })
+      return
+    }
+    await route.fulfill({ contentType: 'application/json', json: { ok: true, status: 'ok', symbol } })
+  })
+}
+
+async function mockMt5ApiWithRefreshError(page: import('@playwright/test').Page) {
+  await page.route('http://127.0.0.1:8765/**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname.endsWith('/store-v5/m1/repair-gaps')) {
+      await route.fulfill({ status: 500, contentType: 'application/json', json: { ok: false, status: 'store_v5_m1_gap_repair_failed', error: 'repair exploded' } })
+      return
+    }
+    if (url.pathname.endsWith('/store-v5/status')) {
+      await route.fulfill({ contentType: 'application/json', json: storeStatus })
+      return
+    }
+    await route.fulfill({ contentType: 'application/json', json: { ok: true, status: 'ok', symbol } })
+  })
+}
+
 async function seedWorkbenchStorage(page: import('@playwright/test').Page) {
   await page.addInitScript(({ keys, row, status, selectedSymbol }) => {
     window.localStorage.setItem(keys.activeDrawer, 'mt5')
@@ -160,4 +231,23 @@ test('workbench renders chart, MT5 drawer, StoreV5 panel, and settings drawer', 
 
   expect(pageErrors).toEqual([])
   expect(consoleErrors).toEqual([])
+})
+
+test('StoreV5 pull shows mocked job progress', async ({ page }) => {
+  await mockMt5ApiWithPullProgress(page)
+  await seedWorkbenchStorage(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: '拉取' }).click()
+  await expect(page.getByText(/Reading MT5 M1|Pulling MT5 M1/)).toBeVisible({ timeout: 5000 })
+  await expect(page.getByRole('button', { name: /拉取中|拉取/ })).toBeDisabled()
+})
+
+test('StoreV5 refresh API errors are visible to the user', async ({ page }) => {
+  await mockMt5ApiWithRefreshError(page)
+  await seedWorkbenchStorage(page)
+  await page.goto('/')
+
+  await page.getByRole('button', { name: '检查本地仓库' }).click()
+  await expect(page.getByText('repair exploded')).toBeVisible({ timeout: 5000 })
 })

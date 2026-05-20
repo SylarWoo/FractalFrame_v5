@@ -10,6 +10,7 @@ M1_CHECK_JOB_STORE = InMemoryJobStore(
     M1_CHECK_JOBS,
     M1_CHECK_JOBS_LOCK,
     clock=utc_now_iso,
+    persist_name="m1_check",
 )
 
 

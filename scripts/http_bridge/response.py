@@ -6,6 +6,17 @@ from http.server import BaseHTTPRequestHandler
 from typing import Any
 
 
+def ok_payload(**fields: Any) -> dict[str, Any]:
+    return {"ok": True, **fields}
+
+
+def error_payload(status: str, error: str | None = None, **fields: Any) -> dict[str, Any]:
+    payload = {"ok": False, "status": status, **fields}
+    if error is not None:
+        payload["error"] = error
+    return payload
+
+
 def send_cors_headers(handler: BaseHTTPRequestHandler) -> None:
     handler.send_header("Access-Control-Allow-Origin", os.environ.get("FRACTALFRAME_CORS_ORIGIN", "*"))
     handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")

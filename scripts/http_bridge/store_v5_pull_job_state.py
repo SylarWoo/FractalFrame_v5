@@ -17,6 +17,7 @@ PULL_JOB_STORE = InMemoryJobStore(
     snapshot=public_pull_job_snapshot,
     clock=utc_now_iso,
     evented=True,
+    persist_name="pull",
 )
 
 

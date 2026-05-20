@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import { bottomPanels } from './bottomDrawer/bottomPanels'
+import { BottomWorkspace } from './bottomDrawer/BottomWorkspace'
 import { ChartCoreHost } from './chart/ChartCoreHost'
 import type { ChartLoadState } from './chart/ChartCoreHost'
 import {
@@ -54,13 +56,6 @@ const leftToolbarItems = [
   { type: 'button', label: 'Zoom in', svg: LEFT_RAIL_ZOOM_IN_SVGREPO_ICON_48 },
   { type: 'button', label: 'Zoom out', svg: LEFT_RAIL_ZOOM_OUT_SVGREPO_ICON_48 },
   { type: 'button', label: 'Remove drawings', svg: LEFT_RAIL_REMOVE_SELECTED_DRAWINGS_SVGREPO_ICON_48 },
-] as const
-
-const bottomPanels = [
-  { id: 'strategyTester', label: 'ST', title: 'Strategy Tester', placeholder: 'Strategy tester workspace' },
-  { id: 'logs', label: 'Logs', title: 'Logs', placeholder: 'Runtime logs workspace' },
-  { id: 'terminal', label: 'Term', title: 'Terminal', placeholder: 'Terminal workspace' },
-  { id: 'notes', label: 'Notes', title: 'Notes', placeholder: 'Notes workspace' },
 ] as const
 
 function getInitialDrawerWidth() {
@@ -169,7 +164,6 @@ export function AppShell() {
   const [clockNow, setClockNow] = useState(() => Date.now())
   const [clockTimezone, setClockTimezone] = useState(resolveWorkspaceTimezone)
 
-  const currentBottomPanel = bottomPanels.find((panel) => panel.id === activeBottomPanel) ?? bottomPanels[0]
   const chartDisplayName = readSymbolDisplayName(chartTarget.symbol)
   void symbolDisplayVersion
 
@@ -312,57 +306,17 @@ export function AppShell() {
             totalRows={chartTarget.totalRows}
           />
 
-          <section className="ff-bottom-shell" aria-label="Bottom workspace drawer">
-            <div className="ff-bottom-toggle-row">
-              <div className="ff-bottom-toggle-row__panel-toggles" role="tablist" aria-label="Bottom drawer tabs">
-                {bottomPanels.map((panel) => (
-                  <button
-                    aria-selected={activeBottomPanel === panel.id && bottomDrawerOpen}
-                    className="ff-bottom-panel-toggle-btn"
-                    data-active={activeBottomPanel === panel.id && bottomDrawerOpen ? 'true' : 'false'}
-                    key={panel.id}
-                    onClick={() => {
-                      setActiveBottomPanel(panel.id)
-                      setBottomDrawerOpen(true)
-                    }}
-                    role="tab"
-                    type="button"
-                  >
-                    {panel.label}
-                  </button>
-                ))}
-              </div>
-              <div className="ff-workspace-bottom-status" aria-label="Workspace clock">
-                {formatWorkspaceClock(clockNow, clockTimezone)}
-              </div>
-            </div>
-
-            <section className="ff-bottom-panel" data-open={bottomDrawerOpen ? 'true' : 'false'}>
-              {bottomDrawerOpen && (
-                <div
-                  aria-label="Resize bottom panel"
-                  className="ff-bottom-panel__resize-handle"
-                  onPointerDown={handleBottomResizePointerDown}
-                  role="separator"
-                  tabIndex={0}
-                />
-              )}
-              <header className="ff-bottom-panel__header">
-                <span className="ff-bottom-panel__title">{currentBottomPanel.title}</span>
-                <button
-                  aria-label="Close bottom panel"
-                  className="ff-bottom-panel__close"
-                  onClick={() => setBottomDrawerOpen(false)}
-                  type="button"
-                >
-                  x
-                </button>
-              </header>
-              <div className="ff-bottom-panel__body">
-                <p className="ff-bottom-panel__placeholder">{currentBottomPanel.placeholder}</p>
-              </div>
-            </section>
-          </section>
+          <BottomWorkspace
+            activeBottomPanel={activeBottomPanel}
+            bottomDrawerOpen={bottomDrawerOpen}
+            clockText={formatWorkspaceClock(clockNow, clockTimezone)}
+            onClose={() => setBottomDrawerOpen(false)}
+            onResizePointerDown={handleBottomResizePointerDown}
+            onSelectPanel={(panel) => {
+              setActiveBottomPanel(panel)
+              setBottomDrawerOpen(true)
+            }}
+          />
         </section>
 
         <RightDrawer
