@@ -187,6 +187,11 @@ class StorePipelineTests(unittest.TestCase):
             self.assertEqual(direct_query["rowsCount"], 10)
             self.assertEqual([row["time"] for row in direct_query["rows"]], sorted(row["time"] for row in direct_query["rows"]))
 
+            clamped_query = query_ohlcv_store_v5(symbol="XAUUSDm", timeframe="M1", store_root=store_root, limit=0)
+            self.assertTrue(clamped_query["ok"])
+            self.assertEqual(clamped_query["rowsCount"], 1)
+            self.assertEqual(clamped_query["warnings"], ["limit_clamped"])
+
             h1_query = query_ohlcv_store_v5(
                 symbol="XAUUSDm",
                 timeframe="H1",

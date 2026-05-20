@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from .jobs import M1_CHECK_JOB_TERMINAL_PHASES
 from .mt5_m1_check_job_state import M1_CHECK_JOB_STORE, _get_m1_check_job, _set_m1_check_job
 from .mt5_m1_check_payloads import _build_incremental_m1_check_payload, _build_m1_check_payload
 from .mt5_m1_rows import mt5_rates_to_rows, mt5_row_to_m1_check_row
@@ -233,6 +234,7 @@ def start_mt5_m1_staged_check(
 ) -> dict[str, Any]:
     job_id = uuid.uuid4().hex
     now = utc_now_iso()
+    M1_CHECK_JOB_STORE.prune_terminal(M1_CHECK_JOB_TERMINAL_PHASES)
     M1_CHECK_JOB_STORE.create(job_id, {
         "ok": True,
         "jobId": job_id,

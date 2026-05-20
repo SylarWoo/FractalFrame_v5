@@ -9,6 +9,8 @@ import pandas as pd
 from ..store_v5.manifest_v5 import load_manifest_v5
 from ..store_v5.store_v5_paths import dataset_key, dataset_root, resolve_store_root
 
+MAX_QUERY_LIMIT = 100_000
+
 
 def _parquet_part_files(ds_root: Path) -> list[str]:
     return sorted(str(path) for path in ds_root.rglob("part-*.parquet"))
@@ -40,6 +42,14 @@ def _ohlcv_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         except (KeyError, TypeError, ValueError):
             continue
     return out
+
+
+def _normalize_limit(limit: int | None) -> tuple[int | None, list[str]]:
+    if limit is None:
+        return None, []
+    normalized = max(1, min(int(limit), MAX_QUERY_LIMIT))
+    warnings = ["limit_clamped"] if normalized != int(limit) else []
+    return normalized, warnings
 
 
 def _query_latest_rows(files: list[str], limit: int) -> list[dict[str, Any]]:
@@ -81,6 +91,7 @@ def query_ohlcv_store_v5(
     store_root: str | Path | None = None,
 ) -> dict[str, Any]:
     root = resolve_store_root(store_root)
+    limit, warnings = _normalize_limit(limit)
     if mode == "aggregated":
         base_timeframe = base_timeframe or "M1"
         anchor = anchor or "UTC2200"
@@ -130,7 +141,7 @@ def query_ohlcv_store_v5(
                 "timeToResult": max(time_values) if time_values else None,
                 "window": "latest",
             },
-            "warnings": [],
+            "warnings": warnings,
         }
 
     if time_from is None and time_to is not None and limit is not None:
@@ -177,7 +188,7 @@ def query_ohlcv_store_v5(
                 "timeToResult": max(time_values) if time_values else None,
                 "window": "backward",
             },
-            "warnings": [],
+            "warnings": warnings,
         }
 
     clauses = []
@@ -234,5 +245,5 @@ def query_ohlcv_store_v5(
             "timeFromResult": min(time_values) if time_values else None,
             "timeToResult": max(time_values) if time_values else None,
         },
-        "warnings": [],
+        "warnings": warnings,
     }

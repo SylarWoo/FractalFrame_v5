@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from .jobs import PULL_JOB_TERMINAL_PHASES
 from .store_v5_pull_context import build_pull_context
 from .store_v5_pull_fetch_service import fetch_store_v5_raw_m1
 from .store_v5_pull_finalize_service import finalize_store_v5_pull_job
@@ -187,6 +188,7 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
 def start_store_v5_pull_job(symbol: str, *, mode: str, count: int | None, store_root: Path | None = None) -> dict[str, Any]:
     job_id = uuid.uuid4().hex
     now = utc_now_iso()
+    PULL_JOB_STORE.prune_terminal(PULL_JOB_TERMINAL_PHASES)
     job = {
         "ok": True,
         "jobId": job_id,

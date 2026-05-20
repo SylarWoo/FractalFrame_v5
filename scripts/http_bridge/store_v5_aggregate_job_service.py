@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .jobs import AGGREGATE_JOBS, AGGREGATE_JOBS_CONDITION, AGGREGATE_JOBS_LOCK, InMemoryJobStore
+from .jobs import AGGREGATE_JOBS, AGGREGATE_JOBS_CONDITION, AGGREGATE_JOBS_LOCK, AGGREGATE_JOB_TERMINAL_PHASES, InMemoryJobStore
 from .store_v5_operations_service import aggregate_store_v5
 from .store_v5_status_service import utc_now_iso
 
@@ -119,6 +119,7 @@ def start_store_v5_aggregate_job(symbol: str, *, timeframes: list[str], rebuild:
     job_id = uuid.uuid4().hex
     now = utc_now_iso()
     targets = [item.strip().upper() for item in timeframes if item.strip()]
+    AGGREGATE_JOB_STORE.prune_terminal(AGGREGATE_JOB_TERMINAL_PHASES)
     job = {
         "ok": True,
         "jobId": job_id,

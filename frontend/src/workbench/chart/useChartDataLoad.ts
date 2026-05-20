@@ -1,0 +1,224 @@
+import { useEffect, useRef, useState } from 'react'
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import { ActionType, LoadDataType } from 'klinecharts'
+import type { Chart } from 'klinecharts'
+import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
+import { chartError, chartInfo } from './chartLogger'
+import { resolvePeriodSeconds } from './chartTimeFormatting'
+import { applySessionBreakIndicator } from './sessionBreakIndicator'
+import {
+  historyPageSize,
+  jumpWindowBars,
+  resolveHasMoreOlder,
+  resolveInitialLimit,
+} from './chartCoreDataUtils'
+import { resetYAxisAutoScale } from './chartStyleAppliers'
+
+export type ChartLoadStateCore = {
+  error: boolean
+  loading: boolean
+  loadingMore: boolean
+  requestedRows: number
+  rows: number
+}
+
+type UseChartDataLoadOptions = {
+  chartInstanceRef: MutableRefObject<Chart | null>
+  jump?: { id: number; timestamp?: number } | null
+  limit?: number
+  period: string
+  reloadId?: number
+  symbol: string
+  totalRows?: number | null
+}
+
+export function useChartDataLoad({
+  chartInstanceRef,
+  jump,
+  limit,
+  period,
+  reloadId,
+  symbol,
+  totalRows,
+}: UseChartDataLoadOptions) {
+  const requestSeqRef = useRef(0)
+  const [loadState, setLoadState] = useState<ChartLoadStateCore>({
+    error: false,
+    loadingMore: false,
+    loading: false,
+    requestedRows: resolveInitialLimit(limit),
+    rows: 0,
+  })
+
+  useEffect(() => {
+    let disposed = false
+    const chart = chartInstanceRef.current
+    const requestSeq = requestSeqRef.current + 1
+    const requestedRows = resolveInitialLimit(limit)
+    let fallbackTimer: number | undefined
+    requestSeqRef.current = requestSeq
+
+    if (!chart) return
+
+    const shouldIgnore = () => disposed || requestSeqRef.current !== requestSeq
+    const finishLoaded = () => {
+      if (shouldIgnore()) return
+      setLoadState({ error: false, loadingMore: false, loading: false, requestedRows, rows: chart.getDataList().length })
+    }
+
+    chart.unsubscribeAction(ActionType.OnDataReady)
+    chart.subscribeAction(ActionType.OnDataReady, finishLoaded)
+    setLoadState({ error: false, loadingMore: false, loading: true, requestedRows, rows: 0 })
+
+    chart.setLoadDataCallback(({ type, data, callback }) => {
+      if (shouldIgnore() || type !== LoadDataType.Forward || !data) {
+        callback([], false)
+        return
+      }
+      setLoadState((current) => ({ ...current, error: false, loadingMore: true }))
+      const timeTo = Math.floor(data.timestamp / 1000) - 1
+      chartInfo('[StoreV5Datafeed] request older start', { symbol, period, limit: historyPageSize, timeTo })
+
+      loadStoreV5KLineData({ symbol, period, limit: historyPageSize, timeTo })
+        .then((olderData) => {
+          if (shouldIgnore()) {
+            callback([], false)
+            return
+          }
+          const loadedRows = chart.getDataList().length + olderData.length
+          const hasMoreOlder = resolveHasMoreOlder({
+            loadedRows,
+            pageSize: historyPageSize,
+            receivedRows: olderData.length,
+            totalRows,
+          })
+          chartInfo('[StoreV5Datafeed] callback older done', { rows: olderData.length, hasMoreOlder })
+          callback(olderData, hasMoreOlder)
+          window.setTimeout(() => {
+            if (shouldIgnore()) return
+            applySessionBreakIndicator(chart, symbol, period)
+            setLoadState({
+              error: false,
+              loading: false,
+              loadingMore: false,
+              requestedRows,
+              rows: chart.getDataList().length,
+            })
+          }, 0)
+        })
+        .catch((error: unknown) => {
+          if (shouldIgnore()) {
+            callback([], false)
+            return
+          }
+          chartError('[StoreV5Datafeed] request older failed', error)
+          callback([], false)
+          setLoadState((current) => ({
+            ...current,
+            error: true,
+            loading: false,
+            loadingMore: false,
+            rows: chart.getDataList().length,
+          }))
+        })
+    })
+
+    const setFallbackTimer = (timer: number) => { fallbackTimer = timer }
+    if (jump?.timestamp != null) {
+      loadJumpWindow(chart, { jumpTimestamp: jump.timestamp, period, setFallbackTimer, setLoadState, shouldIgnore, symbol })
+    } else {
+      loadInitialWindow(chart, { period, requestedRows, setFallbackTimer, setLoadState, shouldIgnore, symbol, totalRows })
+    }
+
+    return () => {
+      disposed = true
+      chart.unsubscribeAction(ActionType.OnDataReady, finishLoaded)
+      chart.setLoadDataCallback(({ callback }) => callback([], false))
+      if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer)
+    }
+  }, [chartInstanceRef, jump?.id, jump?.timestamp, limit, period, reloadId, symbol, totalRows])
+
+  return { loadState, setLoadState }
+}
+
+type LoadOptions = {
+  period: string
+  setFallbackTimer: (timer: number) => void
+  setLoadState: Dispatch<SetStateAction<ChartLoadStateCore>>
+  shouldIgnore: () => boolean
+  symbol: string
+}
+
+function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: number }) {
+  const periodSeconds = resolvePeriodSeconds(options.period)
+  const halfWindowSeconds = Math.floor(jumpWindowBars / 2) * periodSeconds
+  const targetSeconds = Math.floor(options.jumpTimestamp / 1000)
+  const timeFrom = targetSeconds - halfWindowSeconds
+  const timeTo = targetSeconds + halfWindowSeconds
+
+  chartInfo('[StoreV5Datafeed] request jump start', { symbol: options.symbol, period: options.period, limit: jumpWindowBars, timeFrom, timeTo })
+  loadStoreV5KLineData({ symbol: options.symbol, period: options.period, limit: jumpWindowBars, timeFrom, timeTo })
+    .then((data) => {
+      if (options.shouldIgnore()) return
+      const hasMoreOlder = data.length >= jumpWindowBars
+      chartInfo('[StoreV5Datafeed] callback jump done', { rows: data.length, target: options.jumpTimestamp, hasMoreOlder })
+      chart.applyNewData(data, hasMoreOlder)
+      options.setFallbackTimer(window.setTimeout(() => {
+        if (options.shouldIgnore()) return
+        resetYAxisAutoScale(chart)
+        chart.scrollToTimestamp(options.jumpTimestamp, 0)
+        applySessionBreakIndicator(chart, options.symbol, options.period)
+        window.setTimeout(() => {
+          if (options.shouldIgnore()) return
+          resetYAxisAutoScale(chart)
+          applySessionBreakIndicator(chart, options.symbol, options.period)
+        }, 0)
+        options.setLoadState({
+          error: false,
+          loadingMore: false,
+          loading: false,
+          requestedRows: jumpWindowBars,
+          rows: chart.getDataList().length || data.length,
+        })
+      }, 0))
+    })
+    .catch((error: unknown) => {
+      if (options.shouldIgnore()) return
+      chartError('[StoreV5Datafeed] request jump failed', error)
+      chart.applyNewData([], false)
+      options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: jumpWindowBars, rows: 0 })
+    })
+}
+
+function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows: number; totalRows?: number | null }) {
+  chartInfo('[StoreV5Datafeed] request init start', { symbol: options.symbol, period: options.period, limit: options.requestedRows })
+  loadStoreV5KLineData({ symbol: options.symbol, period: options.period, limit: options.requestedRows })
+    .then((data) => {
+      if (options.shouldIgnore()) return
+      const hasMoreOlder = resolveHasMoreOlder({
+        loadedRows: data.length,
+        pageSize: options.requestedRows,
+        receivedRows: data.length,
+        totalRows: options.totalRows,
+      })
+      chartInfo('[StoreV5Datafeed] callback init done', { rows: data.length, hasMoreOlder })
+      chart.applyNewData(data, hasMoreOlder)
+      options.setFallbackTimer(window.setTimeout(() => {
+        if (options.shouldIgnore()) return
+        resetYAxisAutoScale(chart)
+        applySessionBreakIndicator(chart, options.symbol, options.period)
+        options.setLoadState({
+          error: false,
+          loadingMore: false,
+          loading: false,
+          requestedRows: options.requestedRows,
+          rows: chart.getDataList().length || data.length,
+        })
+      }, 0))
+    })
+    .catch(() => {
+      if (options.shouldIgnore()) return
+      chart.applyNewData([], false)
+      options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: options.requestedRows, rows: 0 })
+    })
+}

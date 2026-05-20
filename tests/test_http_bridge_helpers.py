@@ -4,6 +4,9 @@ import threading
 import unittest
 
 from scripts.http_bridge.jobs import InMemoryJobStore
+from scripts.http_bridge.store_v5_aggregate_job_service import _get_aggregate_job, start_store_v5_aggregate_job
+from scripts.http_bridge.store_v5_pull_job_service import start_store_v5_pull_job
+from scripts.http_bridge.store_v5_pull_job_state import get_pull_job
 from scripts.http_bridge.route_helpers import first_query_value, parse_timeframes, required_job_id, required_symbol
 
 
@@ -44,6 +47,48 @@ class InMemoryJobStoreTests(unittest.TestCase):
         self.assertNotIn("events", snapshot)
         self.assertEqual(jobs["job-1"]["events"][0]["event"], "done")
         self.assertNotIn("events", jobs["job-1"]["events"][0]["data"])
+
+    def test_prune_terminal_keeps_running_jobs(self) -> None:
+        jobs = {
+            "old": {"jobId": "old", "phase": "completed", "updatedAt": "2026-05-21T00:00:00Z"},
+            "running": {"jobId": "running", "phase": "running", "updatedAt": "2026-05-21T00:00:01Z"},
+            "new": {"jobId": "new", "phase": "failed", "updatedAt": "2026-05-21T00:00:02Z"},
+        }
+        lock = threading.Lock()
+        store = InMemoryJobStore(jobs, lock)
+
+        removed = store.prune_terminal({"completed", "failed", "cancelled"}, max_jobs=2)
+
+        self.assertEqual(removed, 1)
+        self.assertNotIn("old", jobs)
+        self.assertIn("running", jobs)
+        self.assertIn("new", jobs)
+
+
+class HttpBridgeContractTests(unittest.TestCase):
+    def test_pull_job_start_payload_has_frontend_contract_fields(self) -> None:
+        payload = start_store_v5_pull_job("XAUUSDm", mode="refresh", count=1, store_root=None)
+        job_id = payload["jobId"]
+        try:
+            job = get_pull_job(job_id)
+            self.assertIsNotNone(job)
+            assert job is not None
+            for key in ["ok", "jobId", "symbol", "phase", "status", "progressPercent", "rowsFetched", "rowsWritten"]:
+                self.assertIn(key, job)
+            self.assertNotIn("events", job)
+        finally:
+            # The worker may fail quickly on machines without MT5; the contract check only needs the queued snapshot.
+            pass
+
+    def test_aggregate_job_start_payload_has_frontend_contract_fields(self) -> None:
+        payload = start_store_v5_aggregate_job("XAUUSDm", timeframes=["M5", "H1"], rebuild=False, store_root=None)
+        job = _get_aggregate_job(payload["jobId"])
+        self.assertIsNotNone(job)
+        assert job is not None
+        for key in ["ok", "jobId", "symbol", "phase", "status", "periods", "currentPeriod", "completed", "total"]:
+            self.assertIn(key, job)
+        self.assertEqual(job["periods"], ["M5", "H1"])
+        self.assertNotIn("events", job)
 
 
 if __name__ == "__main__":

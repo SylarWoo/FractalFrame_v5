@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -226,6 +227,8 @@ def main() -> int:
     print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/aggregate?symbol=XAUUSDm")
     print("[mt5_symbols_server] endpoint /api/market-data/v1/store-v5/query?symbol=XAUUSDm&timeframe=M1")
     print(f"[mt5_symbols_server] cache {Mt5SymbolsHandler.cache_root}")
+    print(f"[mt5_symbols_server] store {Mt5SymbolsHandler.store_root or 'default runtime_data/store_v5'}")
+    print(f"[mt5_symbols_server] cors origin {os.environ.get('FRACTALFRAME_CORS_ORIGIN', '*')}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

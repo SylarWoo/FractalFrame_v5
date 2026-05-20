@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 M1_CHECK_JOBS: dict[str, dict[str, Any]] = {}
 M1_CHECK_JOBS_LOCK = threading.Lock()
+M1_CHECK_JOB_TERMINAL_PHASES = {"completed", "failed", "cancelled"}
 
 PULL_JOBS: dict[str, dict[str, Any]] = {}
 PULL_JOBS_LOCK = threading.Lock()
@@ -64,6 +65,23 @@ class InMemoryJobStore:
                 self._append_event(job, snapshot)
             self._notify()
             return snapshot
+
+    def prune_terminal(self, terminal_phases: set[str], *, max_jobs: int = 200) -> int:
+        with self._guard():
+            if len(self.jobs) <= max_jobs:
+                return 0
+            candidates = [
+                (job_id, str(job.get("updatedAt") or job.get("createdAt") or ""))
+                for job_id, job in self.jobs.items()
+                if str(job.get("phase") or "") in terminal_phases
+            ]
+            candidates.sort(key=lambda item: item[1])
+            remove_count = min(len(candidates), len(self.jobs) - max_jobs)
+            for job_id, _ in candidates[:remove_count]:
+                self.jobs.pop(job_id, None)
+            if remove_count:
+                self._notify()
+            return remove_count
 
     def _append_event(self, job: dict[str, Any], snapshot: dict[str, Any]) -> None:
         events = job.setdefault("events", [])
