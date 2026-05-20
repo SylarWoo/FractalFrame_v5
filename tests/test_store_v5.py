@@ -318,6 +318,44 @@ class StorePipelineTests(unittest.TestCase):
             self.assertGreater(aggregate["results"]["W1"]["rowsCount"], 1)
             self.assertGreater(aggregate["results"]["MN1"]["rowsCount"], 1)
 
+    def test_fixed_aggregates_keep_middle_partial_session_buckets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store_root = Path(tmp)
+            rows = (
+                make_rows(ANCHOR, 240)
+                + make_rows(ANCHOR + 240 * 60, 238)
+                + make_rows(ANCHOR + 480 * 60, 240)
+            )
+            append_ohlcv_part_v5(
+                rows,
+                provider="mt5",
+                symbol="XAUUSDm",
+                mode="direct",
+                timeframe="M1",
+                store_root=store_root,
+                manifest_extra={
+                    "mt5RowsCount": len(rows),
+                    "trueM1RowsCount": len(rows),
+                    "firstAnchorTime": rows[0]["time"],
+                    "lastTrueM1Time": rows[-1]["time"],
+                    "firstHourM1CheckOk": True,
+                    "firstHourExpectedRows": 60,
+                    "firstHourTrueRows": 60,
+                    "gapCount": 1,
+                    "m1IntegrityStatus": "true_m1_with_session_gaps",
+                },
+            )
+
+            aggregate = aggregate_from_m1_store_v5(
+                symbol="XAUUSDm",
+                target_timeframes=["H4"],
+                store_root=store_root,
+                rebuild=True,
+            )
+
+            self.assertTrue(aggregate["ok"])
+            self.assertEqual(aggregate["results"]["H4"]["rowsCount"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()

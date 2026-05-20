@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActionType, LineType, LoadDataType, YAxisType, dispose, init } from 'klinecharts'
+import { ActionType, LineType, LoadDataType, YAxisType, dispose, init, registerIndicator } from 'klinecharts'
 import type { CandleTooltipCustomCallbackData, Chart, KLineData } from 'klinecharts'
 import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import { repairStoreV5M1Gaps } from '../rightDrawer/mt5SymbolsApi'
@@ -12,6 +12,11 @@ const historyPageSize = 10_000
 const jumpWindowBars = 50_000
 const realtimeTailRepairLookbackMinutes = 30
 const realtimeTailRepairMaxGapMinutes = 30
+const chartNumberFontFamily = '-apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, Arial, sans-serif'
+const chartNumberFontWeight = 400
+const sessionBreakIndicatorName = 'FF_SESSION_BREAKS'
+const sessionBreakMinVisibleLineDistancePx = 14
+let sessionBreakIndicatorRegistered = false
 type ChartCoreHostProps = {
   displayName?: string
   jump?: { id: number; timestamp?: number } | null
@@ -42,6 +47,94 @@ type Mt5RealtimeTickEventDetail = {
   symbol: string
   time?: number | null
   volume?: number | null
+}
+
+type SessionBreakCoordinate = {
+  index: number
+  x: number
+}
+
+type IndicatorXAxisAdapter = {
+  convertToPixel?: (value: number) => number
+}
+
+function collectSessionBreakCoordinates(
+  kLineDataList: KLineData[],
+  from: number,
+  to: number,
+  xAxis: IndicatorXAxisAdapter,
+  symbol: string,
+) {
+  const out: SessionBreakCoordinate[] = []
+  for (let index = from; index <= to; index += 1) {
+    if (index <= 0 || index >= kLineDataList.length) continue
+    const previous = kLineDataList[index - 1]
+    const current = kLineDataList[index]
+    if (!previous || !current || !isSessionBreakRow(previous, current, symbol)) continue
+    const rawX = typeof xAxis.convertToPixel === 'function' ? xAxis.convertToPixel(index) : Number.NaN
+    if (!Number.isFinite(rawX)) continue
+    out.push({ index, x: Math.round(rawX) + 0.5 })
+  }
+  out.sort((a, b) => a.x - b.x)
+  return out
+}
+
+function filterCloseSessionBreakCoordinates(coords: SessionBreakCoordinate[]) {
+  if (coords.length <= 1) return coords
+  const out: SessionBreakCoordinate[] = []
+  for (const item of coords) {
+    const previous = out[out.length - 1]
+    if (previous && Math.abs(item.x - previous.x) < sessionBreakMinVisibleLineDistancePx) {
+      out[out.length - 1] = item
+    } else {
+      out.push(item)
+    }
+  }
+  return out
+}
+
+function ensureSessionBreakIndicatorRegistered() {
+  if (sessionBreakIndicatorRegistered) return
+  registerIndicator({
+    name: sessionBreakIndicatorName,
+    calc: () => [],
+    draw: ({ ctx, kLineDataList, indicator, visibleRange, bounding, xAxis }) => {
+      if (!readSessionBreakVisible() || kLineDataList.length < 2) return false
+      const symbol = typeof indicator.extendData?.symbol === 'string' ? indicator.extendData.symbol : ''
+      const period = typeof indicator.extendData?.period === 'string' ? indicator.extendData.period : ''
+      if (!shouldShowSessionBreaksForPeriod(period)) return false
+
+      const state = readSettingsSymbolState()
+      const swatch = state['events.sessionBreak.color']
+      const color = resolveSwatchColor(swatch, '#93b7f4')
+      const line = resolveLineStyle(swatch)
+      const size = resolveLineThickness(swatch)
+      const from = Math.max(1, Math.floor(visibleRange.from) - 2)
+      const to = Math.min(kLineDataList.length - 1, Math.ceil(visibleRange.to) + 2)
+      const coords = filterCloseSessionBreakCoordinates(
+        collectSessionBreakCoordinates(kLineDataList, from, to, xAxis, symbol),
+      )
+      if (coords.length === 0) return false
+
+      ctx.save()
+      ctx.strokeStyle = color
+      ctx.lineWidth = size
+      ctx.setLineDash(line.style === LineType.Dashed ? line.dashedValue : [])
+
+      for (const item of coords) {
+        ctx.beginPath()
+        ctx.moveTo(item.x, 0)
+        ctx.lineTo(item.x, bounding.height)
+        ctx.stroke()
+      }
+
+      ctx.restore()
+      return true
+    },
+    shouldOhlc: false,
+    shouldFormatBigNumber: false,
+  })
+  sessionBreakIndicatorRegistered = true
 }
 
 function resolveInitialLimit(limit?: number) {
@@ -81,13 +174,128 @@ function resolvePeriodSeconds(period: string) {
   return 60
 }
 
+function readChartTimezone() {
+  const value = readSettingsStringValue('time.timezone', 'UTC')
+  return value === 'exchange' ? 'UTC' : value
+}
+
+function formatWeekday(timestamp: number, timezone: string) {
+  try {
+    return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone, weekday: 'short' }).format(new Date(timestamp))
+  } catch {
+    return new Intl.DateTimeFormat('zh-CN', { timeZone: 'UTC', weekday: 'short' }).format(new Date(timestamp))
+  }
+}
+
+function formatDateParts(dateTimeFormat: Intl.DateTimeFormat, timestamp: number) {
+  const parts: Record<string, string> = {}
+  dateTimeFormat.formatToParts(new Date(timestamp)).forEach(({ type, value }) => {
+    if (type === 'year') parts.YYYY = value
+    if (type === 'month') parts.MM = value
+    if (type === 'day') parts.DD = value
+    if (type === 'hour') parts.HH = value === '24' ? '00' : value
+    if (type === 'minute') parts.mm = value
+    if (type === 'second') parts.ss = value
+  })
+  const timezone = dateTimeFormat.resolvedOptions().timeZone || readChartTimezone()
+  return {
+    DD: parts.DD ?? '01',
+    HH: parts.HH ?? '00',
+    MM: parts.MM ?? '01',
+    YYYY: parts.YYYY ?? '1970',
+    mm: parts.mm ?? '00',
+    ss: parts.ss ?? '00',
+    weekday: formatWeekday(timestamp, timezone),
+  }
+}
+
+function formatChartDate(dateTimeFormat: Intl.DateTimeFormat, timestamp: number, format: string, type?: number) {
+  const parts = formatDateParts(dateTimeFormat, timestamp)
+  const settings = readSettingsSymbolState()
+  const showWeekday = settings['coordinates.time.showWeekday'] !== false
+  const dateFormat = typeof settings['coordinates.time.dateFormat'] === 'string'
+    ? settings['coordinates.time.dateFormat']
+    : 'ymd'
+  const hourFormat = typeof settings['coordinates.time.hourFormat'] === 'string'
+    ? settings['coordinates.time.hourFormat']
+    : '24h'
+  const hour24 = Number(parts.HH)
+  const hour12 = Number.isFinite(hour24) ? ((hour24 + 11) % 12) + 1 : 12
+  const suffix = Number.isFinite(hour24) && hour24 >= 12 ? 'PM' : 'AM'
+  const timeText = hourFormat === '12h'
+    ? `${String(hour12).padStart(2, '0')}:${parts.mm} ${suffix}`
+    : `${parts.HH}:${parts.mm}`
+  const dateText = dateFormat === 'dmy'
+    ? `${parts.DD}/${parts.MM}/${parts.YYYY}`
+    : dateFormat === 'mdy'
+      ? `${parts.MM}/${parts.DD}/${parts.YYYY}`
+      : `${parts.YYYY}/${parts.MM}/${parts.DD}`
+  const dateWithWeekday = showWeekday ? `${parts.weekday} ${dateText}` : dateText
+  const compactMonth = `${Number(parts.MM)}月`
+  const compactDay = `${Number(parts.MM)}/${Number(parts.DD)}`
+
+  if (type === 2) {
+    if (format === 'HH:mm') return timeText
+    if (format === 'YYYY') return parts.YYYY
+    if (format === 'YYYY-MM') return compactMonth
+    if (format === 'MM-DD') return compactDay
+    if (format.includes('HH')) return `${compactDay} ${timeText}`
+    if (format.includes('YYYY')) return `${parts.YYYY}/${Number(parts.MM)}/${Number(parts.DD)}`
+    return compactDay
+  }
+
+  if (format === 'HH:mm') return timeText
+  if (format === 'YYYY' || format === 'YYYY-MM' || format === 'MM-DD') return dateWithWeekday
+  if (format.includes('YYYY') || format.includes('MM') || format.includes('DD')) {
+    return format.includes('HH') ? `${dateWithWeekday} ${timeText}` : dateWithWeekday
+  }
+  return format
+    .replace(/YYYY/g, parts.YYYY)
+    .replace(/MM/g, parts.MM)
+    .replace(/DD/g, parts.DD)
+    .replace(/HH/g, parts.HH)
+    .replace(/mm/g, parts.mm)
+    .replace(/ss/g, parts.ss)
+}
+
+function readAxisTextSize() {
+  const raw = readSettingsStringValue('layout.axisText.size', '12')
+  const size = Number(raw)
+  return Number.isFinite(size) ? Math.max(8, Math.min(Math.round(size), 24)) : 12
+}
+
+function readAxisTextColor() {
+  return resolveSwatchColor(readSettingsSymbolState()['layout.axisText.color'], '#5f6675')
+}
+
+function readAxisLineColor() {
+  return resolveSwatchColor(readSettingsSymbolState()['layout.axisLine.color'], '#858b98')
+}
+
 function resetYAxisAutoScale(chart: Chart) {
+  const axisLineColor = readAxisLineColor()
+
   chart.setStyles({
     yAxis: {
+      axisLine: {
+        color: axisLineColor,
+        show: true,
+        size: 1,
+      },
       size: 'auto',
+      tickLine: {
+        color: axisLineColor,
+        length: 3,
+        show: true,
+        size: 1,
+      },
       tickText: {
+        color: readAxisTextColor(),
+        family: chartNumberFontFamily,
         marginEnd: 10,
         marginStart: 7,
+        size: readAxisTextSize(),
+        weight: chartNumberFontWeight,
       },
       type: YAxisType.Normal,
     },
@@ -96,7 +304,9 @@ function resetYAxisAutoScale(chart: Chart) {
 
 type SettingsSwatchValue = {
   hex?: string
+  lineStyle?: string
   opacity?: number
+  thickness?: number
 }
 
 function resolveSwatchColor(value: unknown, fallback: string) {
@@ -148,6 +358,12 @@ function readPricePrecision() {
   return Number.isFinite(precision) ? Math.max(0, Math.min(Math.round(precision), 7)) : 6
 }
 
+function readHighLowTextSize() {
+  const raw = readSettingsStringValue('coordinates.highLow.textSize', '12')
+  const size = Number(raw)
+  return Number.isFinite(size) ? Math.max(8, Math.min(Math.round(size), 24)) : 12
+}
+
 function applyCandleBarStyle(chart: Chart) {
   chart.setStyles({
     candle: {
@@ -160,13 +376,218 @@ function applyPriceVolumePrecision(chart: Chart) {
   chart.setPriceVolumePrecision(readPricePrecision(), 0)
 }
 
+function applyGridStyle(chart: Chart) {
+  const state = readSettingsSymbolState()
+  const mode = typeof state['layout.grid.mode'] === 'string' ? state['layout.grid.mode'] : 'both'
+  const verticalColor = resolveSwatchColor(state['layout.grid.vertical.color'], '#eef2f7')
+  const horizontalColor = resolveSwatchColor(state['layout.grid.horizontal.color'], '#eef2f7')
+  const showVertical = mode === 'both' || mode === 'vertical'
+  const showHorizontal = mode === 'both' || mode === 'horizontal'
+
+  chart.setStyles({
+    grid: {
+      show: showVertical || showHorizontal,
+      horizontal: {
+        color: horizontalColor,
+        dashedValue: [2, 2],
+        show: showHorizontal,
+        size: 1,
+        style: LineType.Solid,
+      },
+      vertical: {
+        color: verticalColor,
+        dashedValue: [2, 2],
+        show: showVertical,
+        size: 1,
+        style: LineType.Solid,
+      },
+    },
+  })
+}
+
+function resolveLineStyle(value: unknown) {
+  const swatch = value && typeof value === 'object' ? value as SettingsSwatchValue : null
+  const lineStyle = swatch?.lineStyle
+  if (lineStyle === 'dashed') return { dashedValue: [6, 4], style: LineType.Dashed }
+  if (lineStyle === 'dotted') return { dashedValue: [1, 3], style: LineType.Dashed }
+  return { dashedValue: [2, 2], style: LineType.Solid }
+}
+
+function resolveLineThickness(value: unknown) {
+  const swatch = value && typeof value === 'object' ? value as SettingsSwatchValue : null
+  const thickness = typeof swatch?.thickness === 'number' && Number.isFinite(swatch.thickness) ? swatch.thickness : 1
+  return Math.max(1, Math.min(Math.round(thickness), 4))
+}
+
+function readSessionBreakVisible() {
+  return readSettingsSymbolState()['events.sessionBreak.visible'] === true
+}
+
+function isCryptoSymbol(symbol: string) {
+  const normalized = symbol.toUpperCase()
+  return /^(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|LTC|BCH|DOT|AVAX|TRX|LINK)/.test(normalized)
+    || /(^|[^A-Z])(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|LTC|BCH|DOT|AVAX|TRX|LINK)([^A-Z]|$)/.test(normalized)
+}
+
+function shouldShowSessionBreaksForPeriod(period: string) {
+  const periodSeconds = resolvePeriodSeconds(period)
+  return Number.isFinite(periodSeconds) && periodSeconds > 0 && periodSeconds < 24 * 60 * 60
+}
+
+function resolveSessionAnchorHourUtc(symbol: string) {
+  // Crypto is true 7x24 in most feeds, so its trading day can use UTC 00:00.
+  // FX/metals/CFDs usually roll the trading day at New York close; for the user's MT5 UTC0 data
+  // this is UTC 22:00, which is UTC+8 06:00.
+  return isCryptoSymbol(symbol) ? 0 : 22
+}
+
+function resolveSessionDayKey(timestampMs: number, anchorHourUtc: number) {
+  const timestampSeconds = Math.floor(timestampMs / 1000)
+  const anchorSeconds = Math.max(0, Math.min(23, Math.trunc(anchorHourUtc))) * 60 * 60
+  return Math.floor((timestampSeconds - anchorSeconds) / (24 * 60 * 60))
+}
+
+function resolveRealTimestampMs(data: KLineData) {
+  const row = data as KLineData & {
+    realTime?: number
+    realTimestamp?: number
+    sourceTimestamp?: number
+  }
+  const raw = typeof row.realTime === 'number'
+    ? row.realTime
+    : typeof row.realTimestamp === 'number'
+      ? row.realTimestamp
+      : typeof row.sourceTimestamp === 'number'
+        ? row.sourceTimestamp
+        : data.timestamp
+  return raw < 1_000_000_000_000 ? raw * 1000 : raw
+}
+
+function isSessionBreakRow(previous: KLineData, current: KLineData, symbol: string) {
+  const anchorHourUtc = resolveSessionAnchorHourUtc(symbol)
+  return resolveSessionDayKey(resolveRealTimestampMs(previous), anchorHourUtc)
+    !== resolveSessionDayKey(resolveRealTimestampMs(current), anchorHourUtc)
+}
+
+function applySessionBreakIndicator(chart: Chart, symbol: string, period: string) {
+  ensureSessionBreakIndicatorRegistered()
+  chart.removeIndicator('candle_pane', sessionBreakIndicatorName)
+  if (readSessionBreakVisible()) {
+    chart.createIndicator({ name: sessionBreakIndicatorName, extendData: { period, symbol }, visible: true, zLevel: 0 }, true, { id: 'candle_pane' })
+  }
+}
+
+function applyCrosshairLineStyle(chart: Chart) {
+  const state = readSettingsSymbolState()
+  const swatch = state['layout.crosshair.color']
+  const color = resolveSwatchColor(swatch, '#e91e63')
+  const line = resolveLineStyle(swatch)
+  const size = resolveLineThickness(swatch)
+
+  chart.setStyles({
+    crosshair: {
+      horizontal: {
+        line: {
+          color,
+          dashedValue: line.dashedValue,
+          show: true,
+          size,
+          style: line.style,
+        },
+      },
+      vertical: {
+        line: {
+          color,
+          dashedValue: line.dashedValue,
+          show: true,
+          size,
+          style: line.style,
+        },
+      },
+    },
+  })
+}
+
+function applyAxisTextStyle(chart: Chart) {
+  const color = readAxisTextColor()
+  const size = readAxisTextSize()
+
+  chart.setStyles({
+    xAxis: {
+      tickText: {
+        color,
+        family: chartNumberFontFamily,
+        marginEnd: 4,
+        marginStart: 4,
+        size,
+        weight: chartNumberFontWeight,
+      },
+    },
+    yAxis: {
+      tickText: {
+        color,
+        family: chartNumberFontFamily,
+        marginEnd: 10,
+        marginStart: 7,
+        size,
+        weight: chartNumberFontWeight,
+      },
+    },
+  })
+}
+
+function applyAxisLineStyle(chart: Chart) {
+  const color = readAxisLineColor()
+
+  chart.setStyles({
+    xAxis: {
+      axisLine: {
+        color,
+        show: true,
+        size: 1,
+      },
+      tickLine: {
+        color,
+        length: 3,
+        show: true,
+        size: 1,
+      },
+    },
+    yAxis: {
+      axisLine: {
+        color,
+        show: true,
+        size: 1,
+      },
+      tickLine: {
+        color,
+        length: 3,
+        show: true,
+        size: 1,
+      },
+    },
+  })
+}
+
 function applyLastPriceLineStyle(chart: Chart) {
   const selectedParts = readSymbolLabelVisibleParts()
   const barStyle = readCandleBarStyle()
+  const highLowParts = readSettingsSymbolState()['coordinates.highLow.visibleParts']
+  const selectedHighLowParts = Array.isArray(highLowParts)
+    ? highLowParts.filter((value): value is string => typeof value === 'string')
+    : []
+  const highLowTextSize = readHighLowTextSize()
 
   chart.setStyles({
     candle: {
       priceMark: {
+        high: {
+          color: '#131722',
+          show: selectedHighLowParts.includes('high'),
+          textFamily: chartNumberFontFamily,
+          textSize: highLowTextSize,
+          textWeight: String(chartNumberFontWeight),
+        },
         last: {
           downColor: barStyle.downColor,
           line: {
@@ -177,13 +598,23 @@ function applyLastPriceLineStyle(chart: Chart) {
           },
           noChangeColor: barStyle.noChangeColor,
           text: {
+            borderRadius: 0,
+            family: chartNumberFontFamily,
             show: selectedParts.includes('value'),
-            paddingBottom: 3,
+            paddingBottom: 2,
             paddingLeft: 6,
             paddingRight: 7,
-            paddingTop: 5,
+            paddingTop: 4,
+            weight: chartNumberFontWeight,
           },
           upColor: barStyle.upColor,
+        },
+        low: {
+          color: '#131722',
+          show: selectedHighLowParts.includes('low'),
+          textFamily: chartNumberFontFamily,
+          textSize: highLowTextSize,
+          textWeight: String(chartNumberFontWeight),
         },
       },
     },
@@ -214,6 +645,7 @@ function applyCandleTooltipStyle(chart: Chart, symbol: string, period: string, d
   const settings = readSettingsSymbolState()
   const chartValuesVisible = settings['status.chartValues.visible'] !== false
   const candleChangeVisible = settings['status.candleChange.visible'] !== false
+  const candleTimeVisible = settings['status.candleTime.visible'] !== false
   const barStyle = readCandleBarStyle()
 
   chart.setStyles({
@@ -236,7 +668,7 @@ function applyCandleTooltipStyle(chart: Chart, symbol: string, period: string, d
               : []),
             ...(candleChangeVisible ? [{ title: 'Chg: ', value: '{change}' }] : []),
             { title: 'Volume: ', value: '{volume}' },
-            { title: 'Time: ', value: '{time}' },
+            ...(candleTimeVisible ? [{ title: 'Time: ', value: '{time}' }] : []),
           ]
         },
       },
@@ -272,7 +704,10 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
 
     const container = chartRef.current
     const chart = init(container, {
-      timezone: 'Asia/Shanghai',
+      customApi: {
+        formatDate: formatChartDate,
+      },
+      timezone: readChartTimezone(),
       styles: {
         grid: {
           horizontal: {
@@ -280,19 +715,88 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
             dashedValue: [2, 2],
             show: true,
             size: 1,
+            style: LineType.Solid,
           },
           vertical: {
             color: '#eef2f7',
             dashedValue: [2, 2],
             show: true,
             size: 1,
+            style: LineType.Solid,
+          },
+        },
+        crosshair: {
+          horizontal: {
+            text: {
+              backgroundColor: '#131722',
+              borderColor: '#131722',
+              borderRadius: 0,
+              color: '#ffffff',
+              family: chartNumberFontFamily,
+              paddingBottom: 2,
+              paddingLeft: 6,
+              paddingRight: 7,
+              paddingTop: 4,
+              weight: chartNumberFontWeight,
+            },
+          },
+          vertical: {
+            text: {
+              backgroundColor: '#131722',
+              borderColor: '#131722',
+              borderRadius: 0,
+              color: '#ffffff',
+              family: chartNumberFontFamily,
+              paddingBottom: 3,
+              paddingLeft: 9,
+              paddingRight: 9,
+              paddingTop: 8,
+              weight: chartNumberFontWeight,
+            },
+          },
+        },
+        xAxis: {
+          axisLine: {
+            color: readAxisLineColor(),
+            show: true,
+            size: 1,
+          },
+          size: 27,
+          tickLine: {
+            color: readAxisLineColor(),
+            length: 3,
+            show: true,
+            size: 1,
+          },
+          tickText: {
+            color: readAxisTextColor(),
+            family: chartNumberFontFamily,
+            marginEnd: 4,
+            marginStart: 4,
+            size: readAxisTextSize(),
+            weight: chartNumberFontWeight,
           },
         },
         yAxis: {
+          axisLine: {
+            color: readAxisLineColor(),
+            show: true,
+            size: 1,
+          },
           size: 'auto',
+          tickLine: {
+            color: readAxisLineColor(),
+            length: 3,
+            show: true,
+            size: 1,
+          },
           tickText: {
+            color: readAxisTextColor(),
+            family: chartNumberFontFamily,
             marginEnd: 10,
             marginStart: 7,
+            size: readAxisTextSize(),
+            weight: chartNumberFontWeight,
           },
         },
       },
@@ -300,8 +804,13 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
 
     if (chart) {
       applyPriceVolumePrecision(chart)
+      applyGridStyle(chart)
+      applyCrosshairLineStyle(chart)
+      applyAxisTextStyle(chart)
+      applyAxisLineStyle(chart)
       applyCandleBarStyle(chart)
       applyLastPriceLineStyle(chart)
+      applySessionBreakIndicator(chart, symbol, period)
     }
     chartInstanceRef.current = chart ?? null
 
@@ -334,9 +843,16 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
     const apply = () => {
       const chart = chartInstanceRef.current
         if (chart) {
+          chart.setTimezone(readChartTimezone())
+          chart.setCustomApi({ formatDate: formatChartDate })
           applyPriceVolumePrecision(chart)
+          applyGridStyle(chart)
+          applyCrosshairLineStyle(chart)
+          applyAxisTextStyle(chart)
+          applyAxisLineStyle(chart)
           applyCandleTooltipStyle(chart, symbol, period, displayName)
           applyLastPriceLineStyle(chart)
+          applySessionBreakIndicator(chart, symbol, period)
         }
       }
     apply()
@@ -436,6 +952,7 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
 
           window.setTimeout(() => {
             if (disposed || requestSeqRef.current !== requestSeq) return
+            applySessionBreakIndicator(chart, symbol, period)
             setLoadState({
               error: false,
               loading: false,
@@ -493,9 +1010,11 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
             if (disposed || requestSeqRef.current !== requestSeq) return
             resetYAxisAutoScale(chart)
             chart.scrollToTimestamp(jump.timestamp as number, 0)
+            applySessionBreakIndicator(chart, symbol, period)
             window.setTimeout(() => {
               if (disposed || requestSeqRef.current !== requestSeq) return
               resetYAxisAutoScale(chart)
+              applySessionBreakIndicator(chart, symbol, period)
             }, 0)
             setLoadState({
               error: false,
@@ -554,6 +1073,7 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
         fallbackTimer = window.setTimeout(() => {
           if (disposed || requestSeqRef.current !== requestSeq) return
           resetYAxisAutoScale(chart)
+          applySessionBreakIndicator(chart, symbol, period)
 
           setLoadState({
             error: false,
@@ -743,6 +1263,7 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
         window.setTimeout(() => {
           if (disposed) return
           resetYAxisAutoScale(chart)
+          applySessionBreakIndicator(chart, symbol, period)
           if (typeof targetTimestamp === 'number') {
             chart.scrollToTimestamp(targetTimestamp, 0)
           }
@@ -780,3 +1301,4 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
     </section>
   )
 }
+

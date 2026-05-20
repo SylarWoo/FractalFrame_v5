@@ -115,7 +115,7 @@
   justify-content: space-between;
   gap: 8px 6px;
   padding: 6px 10px 8px;
-  border-top: 2px solid #e5e7eb;
+  border-top: 1px solid #e5e7eb;
   background: #ffffff;
   overflow: hidden;
 }
@@ -168,7 +168,7 @@
   color: #374151;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.25;
   text-overflow: ellipsis;
   user-select: none;
@@ -196,7 +196,7 @@
   height: calc(var(--ff-bottom-drawer-height, 300px) - 40px);
   max-height: calc(var(--ff-bottom-drawer-height, 300px) - 40px);
   min-height: calc(var(--ff-bottom-drawer-height, 300px) - 40px);
-  border-top: 2px solid #e5e7eb;
+  border-top: 0;
 }
 
 .ff-bottom-panel__resize-handle {

@@ -66,7 +66,7 @@
 }
 
 .ff-right-drawer[data-open='true'] {
-  border-left-width: 2px;
+  border-left-width: 1px;
   border-left-color: #e5e7eb;
   opacity: 1;
   pointer-events: auto;
@@ -161,6 +161,77 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
   min-height: 180px;
 }
 
+.ff-settings-events-panel {
+  display: grid;
+  box-sizing: border-box;
+  width: 384px;
+  min-height: 414px;
+  align-content: start;
+  gap: 18px;
+  color: #131722;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ff-settings-events-kicker {
+  color: #787b86;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.ff-settings-events-row {
+  display: grid;
+  grid-template-columns: 18px 88px 100px auto;
+  min-height: 24px;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-settings-events-row--nested {
+  grid-template-columns: 44px 62px 74px auto;
+  padding-left: 0;
+}
+
+.ff-settings-events-row input[type='checkbox'] {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #2f2f33;
+  cursor: pointer;
+}
+
+.ff-settings-events-row span {
+  min-width: 0;
+  color: #131722;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ff-settings-events-row--nested span {
+  color: #787b86;
+}
+
+.ff-settings-events-row .ff-openable-select {
+  width: 100px;
+}
+
+.ff-settings-events-row .ff-settings-line-swatch {
+  justify-self: start;
+}
+
+.ff-settings-events-help {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: #b7bbc4;
+  color: #ffffff;
+  cursor: default;
+  font: 700 11px/16px Arial, Tahoma, 'Segoe UI', sans-serif;
+  padding: 0;
+}
+
 .ff-settings-symbol-panel {
   display: grid;
   width: 100%;
@@ -251,6 +322,94 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
   line-height: 1.35;
 }
 
+.ff-settings-layout-panel {
+  display: grid;
+  box-sizing: border-box;
+  width: 384px;
+  min-height: 824px;
+  align-content: start;
+  gap: 28px;
+  color: #131722;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ff-settings-layout-group {
+  display: grid;
+  gap: 14px;
+}
+
+.ff-settings-layout-title {
+  margin-bottom: 4px;
+  color: #787b86;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.ff-settings-layout-kicker {
+  color: #787b86;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.ff-settings-layout-row {
+  display: grid;
+  grid-template-columns: 82px 150px auto;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-settings-layout-row > span {
+  min-width: 0;
+  color: #131722;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.ff-settings-layout-row .ff-openable-select {
+  width: 150px;
+  justify-self: start;
+}
+
+.ff-settings-layout-row > .ff-settings-color-swatch,
+.ff-settings-layout-row > .ff-settings-line-swatch {
+  justify-self: start;
+}
+
+.ff-settings-layout-row > input {
+  box-sizing: border-box;
+  width: 100px;
+  height: 34px;
+  border: 1px solid #d1d4dc;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #131722;
+  font: 12px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
+  padding: 0 9px;
+}
+
+.ff-settings-layout-row > em {
+  color: #131722;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.ff-settings-layout-row--text {
+  grid-template-columns: 82px 34px 100px;
+}
+
+.ff-settings-layout-row--text .ff-openable-select {
+  width: 100px;
+}
+
+.ff-settings-layout-swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+}
+
 .ff-settings-coordinates-group {
   display: grid;
   gap: 14px;
@@ -326,7 +485,15 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
 }
 
 .ff-settings-coordinate-row--sample {
-  grid-template-columns: 154px 180px 76px;
+  grid-template-columns: 154px 180px 74px;
+}
+
+.ff-settings-coordinate-row--high-low {
+  grid-template-columns: 154px 180px 74px;
+}
+
+.ff-settings-coordinate-row--high-low > .ff-openable-select {
+  width: 74px;
 }
 
 .ff-settings-coordinate-row--nested {
@@ -335,16 +502,16 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
 
 .ff-settings-line-swatch {
   display: inline-flex;
-  width: 76px;
+  width: 74px;
   height: 34px;
   box-sizing: border-box;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 6px;
   border: 1px solid #d1d4dc;
   border-radius: 5px;
   background: #ffffff;
-  padding: 0 8px;
+  padding: 0 4px;
   cursor: pointer;
 }
 
@@ -357,10 +524,15 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
 
 .ff-settings-line-swatch__line {
   width: 30px;
-  height: 1px;
+  height: 0;
   flex: 0 0 30px;
-  border-radius: 999px;
-  background: #2f2f33;
+  border-top: 1px solid #2f2f33;
+  background: transparent;
+}
+
+.ff-settings-line-swatch__line[data-style='dotted'] {
+  width: 28px;
+  flex-basis: 28px;
 }
 
 .ff-settings-color-pair {
@@ -528,6 +700,10 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
   border-radius: 3px;
   background: var(--ff-settings-swatch-color, #26a69a);
   content: '';
+}
+
+.ff-settings-color-swatch[data-light='true'] .ff-settings-color-swatch__inner {
+  box-shadow: inset 0 0 0 1px #c9ccd3;
 }
 
 .ff-settings-color-swatch[data-transparent='true'] .ff-settings-color-swatch__inner {

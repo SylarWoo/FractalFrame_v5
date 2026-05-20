@@ -25,6 +25,7 @@ import {
 import { RightDrawer } from './rightDrawer/RightDrawer'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
 import type { Mt5SymbolRow } from './rightDrawer/mt5SymbolsApi'
+import { readSettingsStringValue, settingsSymbolChangedEvent } from './settingsSymbolState'
 import { TopBar } from './topbar/TopBar'
 import './openableControl.css'
 import './AppShell.css'
@@ -135,6 +136,40 @@ function readSymbolDisplayName(symbol: string) {
   }
 }
 
+function resolveWorkspaceTimezone() {
+  const value = readSettingsStringValue('time.timezone', 'UTC')
+  return value === 'exchange' ? 'UTC' : value
+}
+
+function createDateFormatter(timezone: string, options: Intl.DateTimeFormatOptions) {
+  try {
+    return new Intl.DateTimeFormat('zh-CN', { timeZone: timezone, ...options })
+  } catch {
+    return new Intl.DateTimeFormat('zh-CN', { timeZone: 'UTC', ...options })
+  }
+}
+
+function getDatePart(parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes, fallback: string) {
+  return parts.find((part) => part.type === type)?.value ?? fallback
+}
+
+function formatWorkspaceClock(timestamp: number, timezone: string) {
+  const date = new Date(timestamp)
+  const weekday = createDateFormatter(timezone, { weekday: 'short' }).format(date)
+  const parts = createDateFormatter(timezone, {
+    day: 'numeric',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: 'numeric',
+    second: '2-digit',
+    year: 'numeric',
+  }).formatToParts(date)
+  const hour = getDatePart(parts, 'hour', '00')
+
+  return `${weekday} ${getDatePart(parts, 'year', '1970')}/${getDatePart(parts, 'month', '1')}/${getDatePart(parts, 'day', '1')} ${hour === '24' ? '00' : hour}:${getDatePart(parts, 'minute', '00')}:${getDatePart(parts, 'second', '00')}`
+}
+
 export function AppShell() {
   const [activeRightDrawer, setActiveRightDrawer] = useState<'mt5' | 'settings' | null>(getInitialRightDrawerActive)
   const [rightDrawerWidth, setRightDrawerWidth] = useState(getInitialDrawerWidth)
@@ -153,10 +188,27 @@ export function AppShell() {
   const [chartStepLoad, setChartStepLoad] = useState<{ direction: 'left' | 'right'; id: number } | null>(null)
   const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
   const [symbolDisplayVersion, setSymbolDisplayVersion] = useState(0)
+  const [clockNow, setClockNow] = useState(() => Date.now())
+  const [clockTimezone, setClockTimezone] = useState(resolveWorkspaceTimezone)
 
   const currentBottomPanel = bottomPanels.find((panel) => panel.id === activeBottomPanel) ?? bottomPanels[0]
   const chartDisplayName = readSymbolDisplayName(chartTarget.symbol)
   void symbolDisplayVersion
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setClockNow(Date.now()), 1000)
+    return () => window.clearInterval(intervalId)
+  }, [])
+
+  useEffect(() => {
+    const syncTimezone = () => setClockTimezone(resolveWorkspaceTimezone())
+    window.addEventListener(settingsSymbolChangedEvent, syncTimezone)
+    window.addEventListener('storage', syncTimezone)
+    return () => {
+      window.removeEventListener(settingsSymbolChangedEvent, syncTimezone)
+      window.removeEventListener('storage', syncTimezone)
+    }
+  }, [])
 
   useEffect(() => {
     const resize = () => window.dispatchEvent(new Event('resize'))
@@ -318,8 +370,8 @@ export function AppShell() {
                   </button>
                 ))}
               </div>
-              <div className="ff-workspace-bottom-status">
-                {chartTarget.symbol} {chartTarget.period}
+              <div className="ff-workspace-bottom-status" aria-label="Workspace clock">
+                {formatWorkspaceClock(clockNow, clockTimezone)}
               </div>
             </div>
 

@@ -116,6 +116,7 @@ def _aggregate(df: pd.DataFrame, timeframe: str, anchor: str) -> pd.DataFrame:
         times = work["time"].astype("int64")
         work["bucket"] = (((times - offset) // seconds) * seconds + offset).astype("int64")
     grouped = work.groupby("bucket", sort=True, observed=True)
+    first_bucket = int(work["bucket"].min()) if not work.empty else None
     last_bucket = int(work["bucket"].max()) if not work.empty else None
     if last_bucket is None:
         return pd.DataFrame(columns=["time", "open", "high", "low", "close", "volume"])
@@ -139,7 +140,8 @@ def _aggregate(df: pd.DataFrame, timeframe: str, anchor: str) -> pd.DataFrame:
         expected = out["time"].map(lambda v: expected_minutes_for_bucket(int(v), timeframe, anchor)).astype("int64")
     else:
         expected = int(FIXED_SECONDS[timeframe] // 60)
-    keep = (out["rowsInBucket"] == expected) | (out["time"].astype("int64") == last_bucket)
+    bucket_times = out["time"].astype("int64")
+    keep = (out["rowsInBucket"] == expected) | (bucket_times == last_bucket) | (bucket_times != first_bucket)
     out = out.loc[keep, ["time", "open", "high", "low", "close", "volume"]].copy()
     out["time"] = out["time"].astype("int64")
     out["volume"] = out["volume"].astype("int64")

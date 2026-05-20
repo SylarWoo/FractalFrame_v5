@@ -20,7 +20,7 @@ export function ensureChartColorPaletteStyles(doc) {
   border: 1px solid #d1d4dc;
   border-radius: 6px;
   background: #ffffff;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
   font: 12px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #131722;
 }

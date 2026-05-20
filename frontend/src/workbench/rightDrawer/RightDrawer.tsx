@@ -163,7 +163,12 @@ type SettingsSwatchValue = {
 }
 
 type SettingsLineSwatchValue = SettingsSwatchValue & {
+  lineStyle: 'solid' | 'dashed' | 'dotted'
   thickness: number
+}
+
+function normalizeSettingsLineStyle(value: unknown): SettingsLineSwatchValue['lineStyle'] {
+  return value === 'dashed' || value === 'dotted' ? value : 'solid'
 }
 
 let activeSettingsColorPopoverClose: (() => void) | null = null
@@ -186,9 +191,12 @@ function readSettingsLineSwatchValue(storageKey: string | undefined, fallbackHex
   const thickness = saved && typeof saved === 'object' && 'thickness' in saved
     ? Number((saved as Partial<SettingsLineSwatchValue>).thickness)
     : 1
+  const lineStyle = saved && typeof saved === 'object' && 'lineStyle' in saved
+    ? (saved as Partial<SettingsLineSwatchValue>).lineStyle
+    : 'solid'
   return {
     ...base,
-    opacity: 1,
+    lineStyle: normalizeSettingsLineStyle(lineStyle),
     thickness: Number.isFinite(thickness) ? Math.max(1, Math.min(Math.round(thickness), 4)) : 1,
   }
 }
@@ -219,12 +227,14 @@ function SettingsColorSwatch({
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const [value, setValue] = useState(() => readSettingsSwatchValue(storageKey, color ?? '#26a69a'))
   const isTransparent = !checkerboard && value.opacity < 0.999
+  const isWhite = /^#(?:fff|ffffff)$/i.test(value.hex.trim())
 
   return (
     <button
       aria-label="Color"
       className="ff-settings-color-swatch ff-openable-control"
       data-checkerboard={checkerboard}
+      data-light={isWhite}
       data-transparent={isTransparent}
       onClick={(event) => {
         event.stopPropagation()
@@ -275,6 +285,7 @@ function SettingsColorSwatch({
 
 function SettingsSymbolPanel() {
   const [pricePrecision, setPricePrecision] = useState(() => readSettingsStringValue('price.precision', '6'))
+  const [timezone, setTimezone] = useState(() => readSettingsStringValue('time.timezone', 'UTC'))
   const colorRows = [
     { label: '主体', rowKey: 'candle.body', up: '#26a69a', down: '#ef5350' },
     { label: '边框', rowKey: 'candle.border', up: '#26a69a', down: '#ef5350' },
@@ -348,11 +359,20 @@ function SettingsSymbolPanel() {
           <span>时区</span>
           <OpenableSelect
             ariaLabel="时区"
-            defaultValue="shanghai"
+            defaultValue="UTC"
+            onChange={(value) => {
+              setTimezone(value)
+              writeSettingsSymbolStateValue('time.timezone', value)
+            }}
             options={[
-              { label: '(UTC+8) 上海', value: 'shanghai' },
+              { label: '(UTC+0) UTC', value: 'UTC' },
+              { label: '(UTC+8) 上海', value: 'Asia/Shanghai' },
+              { label: '(UTC-5) 纽约', value: 'America/New_York' },
+              { label: '(UTC+0) 伦敦', value: 'Europe/London' },
+              { label: '(UTC+9) 东京', value: 'Asia/Tokyo' },
               { label: 'Exchange', value: 'exchange' },
             ]}
+            value={timezone}
           />
         </div>
       </section>
@@ -364,11 +384,13 @@ function SettingsCheckRow({
   checked = false,
   children,
   inset = false,
+  onCheckedChange,
   storageKey,
 }: {
   checked?: boolean
   children: React.ReactNode
   inset?: boolean
+  onCheckedChange?: (checked: boolean) => void
   storageKey?: string
 }) {
   const [isChecked, setIsChecked] = useState(() => {
@@ -385,6 +407,7 @@ function SettingsCheckRow({
           const next = event.currentTarget.checked
           setIsChecked(next)
           if (storageKey) writeSettingsSymbolStateValue(storageKey, next)
+          onCheckedChange?.(next)
         }}
         type="checkbox"
       />
@@ -423,7 +446,7 @@ function SettingsStatusPanel() {
         <SettingsCheckRow checked storageKey="status.chartValues.visible">图表值</SettingsCheckRow>
         <SettingsCheckRow checked storageKey="status.candleChange.visible">K线变化值</SettingsCheckRow>
         <SettingsCheckRow checked>成交量</SettingsCheckRow>
-        <SettingsCheckRow>最后一天变化值</SettingsCheckRow>
+        <SettingsCheckRow checked storageKey="status.candleTime.visible">K线时间</SettingsCheckRow>
       </section>
 
       <section className="ff-settings-status-group">
@@ -490,18 +513,21 @@ function SettingsLineSwatch({
             doc: document,
             anchorEl,
             initialHex: swatchColor,
-            initialOpacity: 1,
+            initialOpacity: value.opacity,
+            initialLineStyle: value.lineStyle,
             initialThickness: value.thickness,
             showCustomColorsRow: true,
             showCustomPicker: true,
-            showOpacity: false,
+            showLineStyle: true,
+            showOpacity: true,
             showThickness: true,
             thicknessSteps: 4,
             onPick: (payload) => {
               if (typeof payload?.hex !== 'string') return
               const nextValue = {
                 hex: payload.hex,
-                opacity: 1,
+                lineStyle: normalizeSettingsLineStyle(payload.lineStyle),
+                opacity: typeof payload.opacity === 'number' && Number.isFinite(payload.opacity) ? payload.opacity : value.opacity,
                 thickness: typeof payload.thickness === 'number' && Number.isFinite(payload.thickness)
                   ? Math.max(1, Math.min(Math.round(payload.thickness), 4))
                   : value.thickness,
@@ -520,10 +546,19 @@ function SettingsLineSwatch({
         style={
           isAuto
             ? { background: `linear-gradient(45deg, ${autoUpColor} 0 50%, ${autoDownColor ?? autoUpColor} 50% 100%)` }
-            : { background: swatchColor }
+            : { background: swatchColor, opacity: value.opacity }
         }
       />
-      <span className="ff-settings-line-swatch__line" style={{ height: `${value.thickness}px` }} />
+      <span
+        className="ff-settings-line-swatch__line"
+        data-style={value.lineStyle}
+        style={{
+          borderTopColor: swatchColor,
+          opacity: value.opacity,
+          borderTopStyle: value.lineStyle === 'dotted' ? 'dotted' : value.lineStyle === 'dashed' ? 'dashed' : 'solid',
+          borderTopWidth: `${value.thickness}px`,
+        }}
+      />
     </button>
   )
 }
@@ -624,6 +659,12 @@ function SettingsMultiCheckSelect({
 }
 
 function SettingsCoordinatesPanel() {
+  const [showWeekday, setShowWeekday] = useState(() => readSettingsSymbolState()['coordinates.time.showWeekday'] !== false)
+  const [dateFormat, setDateFormat] = useState(() => readSettingsStringValue('coordinates.time.dateFormat', 'ymd'))
+  const [hourFormat, setHourFormat] = useState(() => readSettingsStringValue('coordinates.time.hourFormat', '24h'))
+  const [highLowTextSize, setHighLowTextSize] = useState(() => readSettingsStringValue('coordinates.highLow.textSize', '12'))
+  const weekdayPrefix = showWeekday ? '周一 ' : ''
+
   return (
     <div className="ff-settings-coordinates-panel">
       <section className="ff-settings-coordinates-group">
@@ -735,17 +776,35 @@ function SettingsCoordinatesPanel() {
           />
         </div>
 
-        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
+        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--high-low">
           <span>高点和低点</span>
-          <OpenableSelect
+          <SettingsMultiCheckSelect
             ariaLabel="高点和低点"
-            defaultValue="hidden"
+            defaultValue={[]}
+            storageKey="coordinates.highLow.visibleParts"
             options={[
-              { label: '隐藏', value: 'hidden' },
-              { label: '显示', value: 'visible' },
+              { label: '高点', value: 'high' },
+              { label: '低点', value: 'low' },
             ]}
           />
-          <SettingsLineSwatch color="#7fd3c7" storageKey="coordinates.highLow.color" />
+          <OpenableSelect
+            ariaLabel="高点和低点字号"
+            defaultValue="12"
+            onChange={(value) => {
+              setHighLowTextSize(value)
+              writeSettingsSymbolStateValue('coordinates.highLow.textSize', value)
+            }}
+            options={[
+              { label: '10', value: '10' },
+              { label: '11', value: '11' },
+              { label: '12', value: '12' },
+              { label: '13', value: '13' },
+              { label: '14', value: '14' },
+              { label: '15', value: '15' },
+              { label: '16', value: '16' },
+            ]}
+            value={highLowTextSize}
+          />
         </div>
 
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
@@ -764,35 +823,264 @@ function SettingsCoordinatesPanel() {
 
       <section className="ff-settings-coordinates-group">
         <div className="ff-settings-symbol-kicker">时间坐标</div>
-        <SettingsCheckRow checked>标签上的星期几</SettingsCheckRow>
+        <SettingsCheckRow
+          checked
+          onCheckedChange={setShowWeekday}
+          storageKey="coordinates.time.showWeekday"
+        >
+          标签上的星期几
+        </SettingsCheckRow>
 
         <div className="ff-settings-coordinate-row">
           <span>日期格式</span>
           <OpenableSelect
             ariaLabel="日期格式"
-            defaultValue="weekday-date"
+            defaultValue="ymd"
+            onChange={(value) => {
+              setDateFormat(value)
+              writeSettingsSymbolStateValue('coordinates.time.dateFormat', value)
+            }}
             options={[
-              { label: '周一 1997/09/29', value: 'weekday-date' },
-              { label: '1997/09/29', value: 'date' },
-              { label: '29/09/1997', value: 'day-date' },
+              { label: `${weekdayPrefix}1997/09/29`, value: 'ymd' },
+              { label: `${weekdayPrefix}29/09/1997`, value: 'dmy' },
+              { label: `${weekdayPrefix}09/29/1997`, value: 'mdy' },
             ]}
+            value={dateFormat}
           />
         </div>
 
-        <div className="ff-settings-coordinate-row">
-          <span>时间小时格式</span>
-          <OpenableSelect
-            ariaLabel="时间小时格式"
-            defaultValue="24h"
-            options={[
-              { label: '24小时', value: '24h' },
-              { label: '12小时', value: '12h' },
-            ]}
-          />
-        </div>
+          <div className="ff-settings-coordinate-row">
+            <span>时间小时格式</span>
+            <OpenableSelect
+              ariaLabel="时间小时格式"
+              defaultValue="24h"
+              onChange={(value) => {
+                setHourFormat(value)
+                writeSettingsSymbolStateValue('coordinates.time.hourFormat', value)
+              }}
+              options={[
+                { label: '24小时', value: '24h' },
+                { label: '12小时', value: '12h' },
+              ]}
+              value={hourFormat}
+            />
+          </div>
 
         <SettingsCheckRow>改变周期时保存图表左边缘位置</SettingsCheckRow>
       </section>
+    </div>
+  )
+}
+
+function SettingsLayoutPanel() {
+  const [gridMode, setGridMode] = useState(() => readSettingsStringValue('layout.grid.mode', 'both'))
+  const [axisTextSize, setAxisTextSize] = useState(() => readSettingsStringValue('layout.axisText.size', '12'))
+
+  return (
+    <div className="ff-settings-layout-panel">
+      <section className="ff-settings-layout-group">
+        <div className="ff-settings-layout-title">图表基本样式</div>
+
+        <div className="ff-settings-layout-row">
+          <span>背景</span>
+          <OpenableSelect
+            ariaLabel="背景"
+            defaultValue="solid"
+            options={[
+              { label: 'Solid', value: 'solid' },
+              { label: '渐变', value: 'gradient' },
+            ]}
+          />
+          <SettingsColorSwatch color="#ffffff" storageKey="layout.background.color" />
+        </div>
+
+        <div className="ff-settings-layout-row">
+          <span>网格线</span>
+          <OpenableSelect
+            ariaLabel="网格线"
+            defaultValue="both"
+            onChange={(value) => {
+              setGridMode(value)
+              writeSettingsSymbolStateValue('layout.grid.mode', value)
+            }}
+            options={[
+              { label: '垂直和...', value: 'both' },
+              { label: '垂直', value: 'vertical' },
+              { label: '水平', value: 'horizontal' },
+              { label: '隐藏', value: 'hidden' },
+            ]}
+            value={gridMode}
+          />
+          <div className="ff-settings-layout-swatches">
+            <SettingsColorSwatch color="#eef2f8" storageKey="layout.grid.vertical.color" />
+            <SettingsColorSwatch color="#eef2f8" storageKey="layout.grid.horizontal.color" />
+          </div>
+        </div>
+
+        <div className="ff-settings-layout-row">
+          <span>窗格分隔符</span>
+          <SettingsColorSwatch color="#b8b8b8" storageKey="layout.paneSeparator.color" />
+        </div>
+
+        <div className="ff-settings-layout-row">
+          <span>十字线</span>
+          <SettingsLineSwatch color="#e91e63" storageKey="layout.crosshair.color" />
+        </div>
+
+        <div className="ff-settings-layout-row">
+          <span>水印</span>
+          <OpenableSelect
+            ariaLabel="水印"
+            defaultValue="replay"
+            options={[
+              { label: '回放模式', value: 'replay' },
+              { label: '商品代码', value: 'symbol' },
+              { label: '隐藏', value: 'hidden' },
+            ]}
+          />
+          <SettingsColorSwatch checkerboard storageKey="layout.watermark.color" />
+        </div>
+      </section>
+
+      <section className="ff-settings-layout-group">
+        <div className="ff-settings-layout-kicker">坐标</div>
+        <div className="ff-settings-layout-row ff-settings-layout-row--text">
+          <span>文本</span>
+          <SettingsColorSwatch color="#5f6675" storageKey="layout.axisText.color" />
+          <OpenableSelect
+            ariaLabel="坐标文本大小"
+            defaultValue="12"
+            onChange={(value) => {
+              setAxisTextSize(value)
+              writeSettingsSymbolStateValue('layout.axisText.size', value)
+            }}
+            options={[
+              { label: '10', value: '10' },
+              { label: '11', value: '11' },
+              { label: '12', value: '12' },
+              { label: '13', value: '13' },
+              { label: '14', value: '14' },
+            ]}
+            value={axisTextSize}
+          />
+        </div>
+        <div className="ff-settings-layout-row">
+          <span>线条</span>
+          <SettingsColorSwatch color="#858b98" storageKey="layout.axisLine.color" />
+        </div>
+      </section>
+
+      <section className="ff-settings-layout-group">
+        <div className="ff-settings-layout-kicker">按钮</div>
+        <div className="ff-settings-layout-row">
+          <span>导航</span>
+          <OpenableSelect
+            ariaLabel="导航"
+            defaultValue="on-move"
+            options={[
+              { label: '鼠标移动时可见', value: 'on-move' },
+              { label: '总是可见', value: 'always' },
+              { label: '隐藏', value: 'hidden' },
+            ]}
+          />
+        </div>
+        <div className="ff-settings-layout-row">
+          <span>窗格</span>
+          <OpenableSelect
+            ariaLabel="窗格"
+            defaultValue="on-move"
+            options={[
+              { label: '鼠标移动时可见', value: 'on-move' },
+              { label: '总是可见', value: 'always' },
+              { label: '隐藏', value: 'hidden' },
+            ]}
+          />
+        </div>
+      </section>
+
+      <section className="ff-settings-layout-group">
+        <div className="ff-settings-layout-kicker">利润率</div>
+        <div className="ff-settings-layout-row">
+          <span>顶部</span>
+          <input aria-label="顶部利润率" defaultValue="10" />
+          <em>%</em>
+        </div>
+        <div className="ff-settings-layout-row">
+          <span>底部</span>
+          <input aria-label="底部利润率" defaultValue="8" />
+          <em>%</em>
+        </div>
+        <div className="ff-settings-layout-row">
+          <span>右</span>
+          <input aria-label="右侧利润率" defaultValue="10" />
+          <em>根K线</em>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function SettingsEventsPanel() {
+  const [sessionBreakVisible, setSessionBreakVisible] = useState(() => readSettingsSymbolState()['events.sessionBreak.visible'] === true)
+
+  return (
+    <div className="ff-settings-events-panel">
+      <div className="ff-settings-events-kicker">事件</div>
+
+      <div className="ff-settings-events-row">
+        <input type="checkbox" />
+        <span>观点</span>
+        <OpenableSelect
+          ariaLabel="观点"
+          defaultValue="all"
+          options={[
+            { label: '所有观点', value: 'all' },
+            { label: '只显示我的观点', value: 'mine' },
+            { label: '隐藏', value: 'hidden' },
+          ]}
+        />
+        <button aria-label="观点说明" className="ff-settings-events-help" type="button">?</button>
+      </div>
+
+      <div className="ff-settings-events-row">
+        <input
+          checked={sessionBreakVisible}
+          onChange={(event) => {
+            const next = event.currentTarget.checked
+            setSessionBreakVisible(next)
+            writeSettingsSymbolStateValue('events.sessionBreak.visible', next)
+          }}
+          type="checkbox"
+        />
+        <span>交易日间隔</span>
+        <SettingsLineSwatch color="#93b7f4" storageKey="events.sessionBreak.color" />
+      </div>
+
+      <div className="ff-settings-events-row">
+        <input type="checkbox" />
+        <span>经济事件</span>
+      </div>
+
+      <div className="ff-settings-events-row ff-settings-events-row--nested">
+        <input type="checkbox" />
+        <span>只显示未来事件</span>
+      </div>
+
+      <div className="ff-settings-events-row ff-settings-events-row--nested">
+        <input defaultChecked type="checkbox" />
+        <span>事件线</span>
+        <SettingsLineSwatch color="#9b9b9b" storageKey="events.eventLine.color" />
+      </div>
+
+      <div className="ff-settings-events-row">
+        <input type="checkbox" />
+        <span>最新消息</span>
+      </div>
+
+      <div className="ff-settings-events-row">
+        <input type="checkbox" />
+        <span>新闻通知</span>
+      </div>
     </div>
   )
 }
@@ -1961,7 +2249,7 @@ export function RightDrawer({
   async function loadSymbols(refresh: boolean) {
     setLoading(true)
     setError('')
-    setStatus(refresh ? '姝ｅ湪鎵弿 MT5 鍝佺...' : '姝ｅ湪璇诲彇 MT5 鍝佺缂撳瓨...')
+    setStatus(refresh ? '正在扫描 MT5 品种...' : '正在读取 MT5 品种缓存...')
 
     try {
       const payload = await fetchMt5Symbols({ limit: 50000, refresh })
@@ -1996,7 +2284,7 @@ export function RightDrawer({
       setSymbols([])
       setSelectedSymbol('')
       setError(message)
-      setStatus(`鎵弿澶辫触锛?{message}`)
+      setStatus(`扫描失败：${message}`)
     } finally {
       setLoading(false)
     }
@@ -2822,15 +3110,15 @@ export function RightDrawer({
       completed: 0,
       total: periods.length,
     })
-    setStoreActionStatus('姝ｅ湪浠?M1 閲嶅缓鑱氬悎鍛ㄦ湡...')
+    setStoreActionStatus('正在从 M1 重建聚合周期...')
     try {
       if (!canAggregateStoreV5) {
-        setStoreActionStatus('姝ｅ湪鍏堟竻鐞嗘棤鏁?M1锛岀敓鎴?direct M1...')
+        setStoreActionStatus('正在先清理无效 M1，生成 direct M1...')
         await cleanStoreV5DirectM1(symbol)
         const cleanedStatus = await fetchStoreV5Status(symbol)
         setLocalStoreStatus(cleanedStatus)
         savePersistedStoreV5Status(symbol, cleanedStatus, new Date().toISOString(), storePanelPersistenceEnabled)
-        setStoreActionStatus('direct M1 宸茬敓鎴愶紝寮€濮嬭仛鍚?..')
+        setStoreActionStatus('direct M1 已生成，开始聚合...')
       }
       const started = await startStoreV5AggregateJob(symbol, periods)
       activeAggregateJobRef.current = started.jobId
@@ -2949,7 +3237,9 @@ export function RightDrawer({
                 {selectedSettingsPanelTab === 'symbol' && <SettingsSymbolPanel />}
                 {selectedSettingsPanelTab === 'status' && <SettingsStatusPanel />}
                 {selectedSettingsPanelTab === 'coordinates' && <SettingsCoordinatesPanel />}
-                {selectedSettingsPanelTab !== 'symbol' && selectedSettingsPanelTab !== 'status' && selectedSettingsPanelTab !== 'coordinates' && (
+                {selectedSettingsPanelTab === 'layout' && <SettingsLayoutPanel />}
+                {selectedSettingsPanelTab === 'events' && <SettingsEventsPanel />}
+                {selectedSettingsPanelTab !== 'symbol' && selectedSettingsPanelTab !== 'status' && selectedSettingsPanelTab !== 'coordinates' && selectedSettingsPanelTab !== 'layout' && selectedSettingsPanelTab !== 'events' && (
                   <div className="ff-settings-empty-panel" />
                 )}
               </section>
@@ -2984,7 +3274,7 @@ export function RightDrawer({
                 <thead>
                   <tr>
                     <th>
-                      浜ゆ槗鍝佺
+                      交易品种
                       <span
                         className="ff-symbol-table__column-resizer"
                         onDoubleClick={() => resetColumnWidth('symbol')}
@@ -2992,7 +3282,7 @@ export function RightDrawer({
                       />
                     </th>
                     <th>
-                      涓枃鍚嶇О
+                      中文名称
                       <span
                         className="ff-symbol-table__column-resizer"
                         onDoubleClick={() => resetColumnWidth('name')}
@@ -3000,7 +3290,7 @@ export function RightDrawer({
                       />
                     </th>
                     <th>
-                      绫诲瀷
+                      类型
                       <span
                         className="ff-symbol-table__column-resizer"
                         onDoubleClick={() => resetColumnWidth('type')}
@@ -3262,7 +3552,8 @@ export function RightDrawer({
                         {!visibleStoreTableRows.length && (
                           <tr>
                             <td className="ff-symbol-table__empty" colSpan={3}>
-                              鏆傛棤 StoreV5 鑱氬悎鍛ㄦ湡銆傝鍏堟媺鍙?M1锛屽啀鎵ц鑱氬悎銆?                            </td>
+                              暂无 StoreV5 聚合周期。请先拉取 M1，再执行聚合。
+                            </td>
                           </tr>
                         )}
                       </tbody>
@@ -3290,16 +3581,16 @@ export function RightDrawer({
                       <button
                         disabled={storeCheckLoading || selectedAggregatePeriods.length === 0}
                         onClick={handleAggregateStore}
-                        title={!canAggregateStoreV5 ? '浼氬厛鑷姩娓呯悊鏃犳晥 M1锛屽啀鑱氬悎' : undefined}
+                        title={!canAggregateStoreV5 ? '会先自动清理无效 M1，再聚合' : undefined}
                         type="button"
                       >
-                        鑱氬悎
+                        聚合
                       </button>
                     </div>
 
                     <div className="ff-chart-jump-controls">
                       <input
-                        aria-label="璺宠浆鏃ユ湡鏃堕棿"
+                        aria-label="跳转日期时间"
                         onChange={(event) => {
                           setChartJumpInput(event.target.value)
                           setChartJumpError('')
@@ -3313,10 +3604,10 @@ export function RightDrawer({
                         type="text"
                         value={chartJumpInput}
                       />
-                      <button onClick={handleJumpChartToTime} type="button">璺宠浆</button>
-                      <button onClick={handleResetChartToLatest} type="button">鍥炲埌褰撳墠</button>
-                      <button onClick={() => onLoadChartStep?.('left')} type="button">鍚戝乏10000</button>
-                      <button onClick={() => onLoadChartStep?.('right')} type="button">鍚戝彸10000</button>
+                      <button onClick={handleJumpChartToTime} type="button">跳转</button>
+                      <button onClick={handleResetChartToLatest} type="button">回到当前</button>
+                      <button onClick={() => onLoadChartStep?.('left')} type="button">向左10000</button>
+                      <button onClick={() => onLoadChartStep?.('right')} type="button">向右10000</button>
                       {chartJumpError && <span>{chartJumpError}</span>}
                     </div>
 
@@ -3337,8 +3628,8 @@ export function RightDrawer({
                         <thead>
                           <tr>
                             <th>SYMBOL</th>
-                            <th>涓枃鍚嶇О</th>
-                            <th>璧勪骇绫诲瀷</th>
+                            <th>中文名称</th>
+                            <th>资产类型</th>
                             <th>LAST</th>
                             <th>CHG</th>
                             <th>CHG%</th>
@@ -3399,7 +3690,7 @@ export function RightDrawer({
                                   data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
                                   key={`${row.kind}-${row.period}`}
                                   onClick={() => handleOpenWatchlistPeriod(row)}
-                                  title={`${row.period} 路 ${row.count} 鏉?路 ${row.updated}`}
+                                  title={`${row.period} · ${row.count} 条 · ${row.updated}`}
                                   type="button"
                                 >
                                   {row.period}
@@ -3417,7 +3708,7 @@ export function RightDrawer({
                                   data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
                                   key={`${row.kind}-${row.period}`}
                                   onClick={() => handleOpenWatchlistPeriod(row)}
-                                  title={`${row.period} 路 ${row.count} 鏉?路 ${row.updated}`}
+                                  title={`${row.period} · ${row.count} 条 · ${row.updated}`}
                                   type="button"
                                 >
                                   {row.period}
@@ -3443,7 +3734,7 @@ export function RightDrawer({
                       {watchlistRealtimeStatus && (
                         <span className="ff-watchlist-realtime-status">
                           {watchlistRealtimeStatus || 'Live'}
-                          {watchlistLastTickAt ? ` 路 ${watchlistLastTickAt}` : ''}
+                          {watchlistLastTickAt ? ` · ${watchlistLastTickAt}` : ''}
                         </span>
                       )}
                     </div>
