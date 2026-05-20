@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActionType, LoadDataType, YAxisType, dispose, init } from 'klinecharts'
+import { ActionType, LineType, LoadDataType, YAxisType, dispose, init } from 'klinecharts'
 import type { CandleTooltipCustomCallbackData, Chart, KLineData } from 'klinecharts'
 import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import { repairStoreV5M1Gaps } from '../rightDrawer/mt5SymbolsApi'
@@ -51,6 +51,13 @@ function resolveInitialLimit(limit?: number) {
   return Math.max(1, Math.min(Math.round(limit), maxInitialLoadLimit))
 }
 
+function readSymbolLabelVisibleParts() {
+  const visibleParts = readSettingsSymbolState()['coordinates.symbolLabel.visibleParts']
+  return Array.isArray(visibleParts)
+    ? visibleParts.filter((value): value is string => typeof value === 'string')
+    : ['value', 'line']
+}
+
 function resolveHasMoreOlder(options: {
   loadedRows: number
   pageSize: number
@@ -77,6 +84,11 @@ function resolvePeriodSeconds(period: string) {
 function resetYAxisAutoScale(chart: Chart) {
   chart.setStyles({
     yAxis: {
+      size: 'auto',
+      tickText: {
+        marginEnd: 10,
+        marginStart: 7,
+      },
       type: YAxisType.Normal,
     },
   })
@@ -146,6 +158,36 @@ function applyCandleBarStyle(chart: Chart) {
 
 function applyPriceVolumePrecision(chart: Chart) {
   chart.setPriceVolumePrecision(readPricePrecision(), 0)
+}
+
+function applyLastPriceLineStyle(chart: Chart) {
+  const selectedParts = readSymbolLabelVisibleParts()
+  const barStyle = readCandleBarStyle()
+
+  chart.setStyles({
+    candle: {
+      priceMark: {
+        last: {
+          downColor: barStyle.downColor,
+          line: {
+            dashedValue: [2, 2],
+            show: selectedParts.includes('line'),
+            size: 1,
+            style: LineType.Dashed,
+          },
+          noChangeColor: barStyle.noChangeColor,
+          text: {
+            show: selectedParts.includes('value'),
+            paddingBottom: 3,
+            paddingLeft: 6,
+            paddingRight: 7,
+            paddingTop: 5,
+          },
+          upColor: barStyle.upColor,
+        },
+      },
+    },
+  })
 }
 
 function mergeKLineData(...sets: KLineData[][]): KLineData[] {
@@ -246,12 +288,20 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
             size: 1,
           },
         },
+        yAxis: {
+          size: 'auto',
+          tickText: {
+            marginEnd: 10,
+            marginStart: 7,
+          },
+        },
       },
     })
 
     if (chart) {
       applyPriceVolumePrecision(chart)
       applyCandleBarStyle(chart)
+      applyLastPriceLineStyle(chart)
     }
     chartInstanceRef.current = chart ?? null
 
@@ -265,7 +315,9 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
 
     resizeObserver.observe(container)
     window.addEventListener('resize', resize)
-    window.requestAnimationFrame(resize)
+    window.requestAnimationFrame(() => {
+      resize()
+    })
 
     return () => {
       resizeObserver.disconnect()
@@ -281,11 +333,12 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
   useEffect(() => {
     const apply = () => {
       const chart = chartInstanceRef.current
-      if (chart) {
-        applyPriceVolumePrecision(chart)
-        applyCandleTooltipStyle(chart, symbol, period, displayName)
+        if (chart) {
+          applyPriceVolumePrecision(chart)
+          applyCandleTooltipStyle(chart, symbol, period, displayName)
+          applyLastPriceLineStyle(chart)
+        }
       }
-    }
     apply()
     window.addEventListener(settingsSymbolChangedEvent, apply)
     window.addEventListener('storage', apply)
@@ -315,14 +368,14 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
     const finishLoaded = () => {
       if (disposed || requestSeqRef.current !== requestSeq) return
 
-      setLoadState({
-        error: false,
-        loadingMore: false,
-        loading: false,
-        requestedRows,
-        rows: chart.getDataList().length,
-      })
-    }
+        setLoadState({
+          error: false,
+          loadingMore: false,
+          loading: false,
+          requestedRows,
+          rows: chart.getDataList().length,
+        })
+      }
 
     chart.unsubscribeAction(ActionType.OnDataReady)
     chart.subscribeAction(ActionType.OnDataReady, finishLoaded)
@@ -601,27 +654,27 @@ export function ChartCoreHost({ displayName, jump, limit, onLoadStateChange, per
           realtimeTailRefreshBucketRef.current = bucketTimestamp
           void refreshRealtimeTail(bucketTimestamp)
         }
-        chart.updateData({
-          timestamp: bucketTimestamp,
-          open: latest?.close ?? last,
-          high: last,
-          low: last,
-          close: last,
-          volume,
-        })
-        return
-      }
+          chart.updateData({
+            timestamp: bucketTimestamp,
+            open: latest?.close ?? last,
+            high: last,
+            low: last,
+            close: last,
+            volume,
+          })
+          return
+        }
 
-      if (bucketTimestamp === latest.timestamp) {
-        chart.updateData({
+        if (bucketTimestamp === latest.timestamp) {
+          chart.updateData({
           ...latest,
           high: Math.max(Number(latest.high), last),
           low: Math.min(Number(latest.low), last),
-          close: last,
-          volume: Math.max(Number(latest.volume ?? 0), volume),
-        })
+            close: last,
+            volume: Math.max(Number(latest.volume ?? 0), volume),
+          })
+        }
       }
-    }
 
     window.addEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
     return () => window.removeEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)

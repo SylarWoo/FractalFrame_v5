@@ -3,7 +3,7 @@ import type { CSSProperties, FormEvent, PointerEvent as ReactPointerEvent } from
 import './RightDrawer.css'
 import type { ChartLoadState } from '../chart/ChartCoreHost'
 import { OpenableSelect } from '../controls/OpenableSelect'
-import { readSettingsStringValue, readSettingsSymbolState, writeSettingsSymbolStateValue } from '../settingsSymbolState'
+import { readSettingsStringValue, readSettingsSymbolState, settingsSymbolChangedEvent, writeSettingsSymbolStateValue } from '../settingsSymbolState'
 import { resolveMt5SymbolDisplay } from './mt5SymbolDisplay'
 import { openChartColorPalettePopoverV1 } from './color_palette/chartColorPalettePopoverV1.js'
 import {
@@ -162,6 +162,10 @@ type SettingsSwatchValue = {
   opacity: number
 }
 
+type SettingsLineSwatchValue = SettingsSwatchValue & {
+  thickness: number
+}
+
 let activeSettingsColorPopoverClose: (() => void) | null = null
 
 function readSettingsSwatchValue(storageKey: string | undefined, fallbackHex: string): SettingsSwatchValue {
@@ -174,6 +178,33 @@ function readSettingsSwatchValue(storageKey: string | undefined, fallbackHex: st
     return { hex, opacity }
   }
   return { hex: fallbackHex, opacity: 1 }
+}
+
+function readSettingsLineSwatchValue(storageKey: string | undefined, fallbackHex: string): SettingsLineSwatchValue {
+  const saved = storageKey ? readSettingsSymbolState()[storageKey] : null
+  const base = readSettingsSwatchValue(storageKey, fallbackHex)
+  const thickness = saved && typeof saved === 'object' && 'thickness' in saved
+    ? Number((saved as Partial<SettingsLineSwatchValue>).thickness)
+    : 1
+  return {
+    ...base,
+    opacity: 1,
+    thickness: Number.isFinite(thickness) ? Math.max(1, Math.min(Math.round(thickness), 4)) : 1,
+  }
+}
+
+function readCandleBodyPreviewColors() {
+  const state = readSettingsSymbolState()
+  return {
+    up: resolveSwatchColorForSettings(state['candle.body.up'], '#26a69a'),
+    down: resolveSwatchColorForSettings(state['candle.body.down'], '#ef5350'),
+  }
+}
+
+function resolveSwatchColorForSettings(value: unknown, fallback: string) {
+  if (!value || typeof value !== 'object' || !('hex' in value)) return fallback
+  const swatch = value as Partial<SettingsSwatchValue>
+  return typeof swatch.hex === 'string' ? swatch.hex : fallback
 }
 
 function SettingsColorSwatch({
@@ -412,24 +443,87 @@ function SettingsStatusPanel() {
   )
 }
 
-function SettingsLineSample({
+function SettingsLineSwatch({
   color = '#9ca3af',
+  inheritCandleColors = false,
   secondary,
+  storageKey,
 }: {
   color?: string
+  inheritCandleColors?: boolean
   secondary?: string
+  storageKey?: string
 }) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const [value, setValue] = useState(() => readSettingsLineSwatchValue(storageKey, color))
+  const [inheritedColors, setInheritedColors] = useState(readCandleBodyPreviewColors)
+  const swatchColor = value.hex
+  const autoUpColor = inheritCandleColors ? inheritedColors.up : color
+  const autoDownColor = inheritCandleColors ? inheritedColors.down : secondary
+  const isAuto = (inheritCandleColors || secondary) && !storageKey
+
+  useEffect(() => {
+    if (!inheritCandleColors) return
+    const sync = () => setInheritedColors(readCandleBodyPreviewColors())
+    window.addEventListener(settingsSymbolChangedEvent, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(settingsSymbolChangedEvent, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [inheritCandleColors])
+
   return (
-    <button className="ff-settings-line-sample" type="button">
+    <button
+      aria-label="Line color"
+      className="ff-settings-line-swatch ff-openable-control"
+      onClick={(event) => {
+        event.stopPropagation()
+        const anchorEl = buttonRef.current
+        if (!anchorEl) return
+        if (anchorEl.getAttribute('data-open') === 'true') {
+          activeSettingsColorPopoverClose?.()
+          activeSettingsColorPopoverClose = null
+          return
+        }
+        const popover = openChartColorPalettePopoverV1({
+            doc: document,
+            anchorEl,
+            initialHex: swatchColor,
+            initialOpacity: 1,
+            initialThickness: value.thickness,
+            showCustomColorsRow: true,
+            showCustomPicker: true,
+            showOpacity: false,
+            showThickness: true,
+            thicknessSteps: 4,
+            onPick: (payload) => {
+              if (typeof payload?.hex !== 'string') return
+              const nextValue = {
+                hex: payload.hex,
+                opacity: 1,
+                thickness: typeof payload.thickness === 'number' && Number.isFinite(payload.thickness)
+                  ? Math.max(1, Math.min(Math.round(payload.thickness), 4))
+                  : value.thickness,
+              }
+              setValue(nextValue)
+              if (storageKey) writeSettingsSymbolStateValue(storageKey, nextValue)
+          },
+        })
+        activeSettingsColorPopoverClose = popover.close
+      }}
+      ref={buttonRef}
+      type="button"
+    >
       <span
-        className="ff-settings-line-sample__chip"
+        className="ff-settings-line-swatch__chip"
         style={
-          secondary
-            ? { background: `linear-gradient(45deg, ${color} 0 50%, ${secondary} 50% 100%)` }
-            : { background: color }
+          isAuto
+            ? { background: `linear-gradient(45deg, ${autoUpColor} 0 50%, ${autoDownColor ?? autoUpColor} 50% 100%)` }
+            : { background: swatchColor }
         }
       />
-      <span className="ff-settings-line-sample__line" />
+      <span className="ff-settings-line-swatch__line" style={{ height: `${value.thickness}px` }} />
     </button>
   )
 }
@@ -437,8 +531,94 @@ function SettingsLineSample({
 function SettingsColorPair({ left, right }: { left: string; right: string }) {
   return (
     <div className="ff-settings-color-pair">
-      <button style={{ background: left }} type="button" />
-      <button style={{ background: right }} type="button" />
+      <SettingsColorSwatch color={left} storageKey="coordinates.bid.color" />
+      <SettingsColorSwatch color={right} storageKey="coordinates.ask.color" />
+    </div>
+  )
+}
+
+function SettingsMultiCheckSelect({
+  ariaLabel,
+  defaultValue,
+  storageKey,
+  options,
+}: {
+  ariaLabel: string
+  defaultValue: string[]
+  storageKey?: string
+  options: Array<{ label: string; value: string }>
+}) {
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState(() => {
+    const saved = storageKey ? readSettingsSymbolState()[storageKey] : null
+    return new Set(Array.isArray(saved) ? saved.filter((value): value is string => typeof value === 'string') : defaultValue)
+  })
+
+  useEffect(() => {
+    if (!open) return
+    const close = (event: MouseEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', close, true)
+    document.addEventListener('keydown', closeOnEscape, true)
+    return () => {
+      document.removeEventListener('mousedown', close, true)
+      document.removeEventListener('keydown', closeOnEscape, true)
+    }
+  }, [open])
+
+  const label = options
+    .filter((option) => selected.has(option.value))
+    .map((option) => option.label)
+    .join('，') || '隐藏'
+
+  return (
+    <div className="ff-settings-multicheck-select" data-open={open} ref={rootRef}>
+      <button
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        className="ff-openable-select__button ff-openable-control"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span>{label}</span>
+        <span aria-hidden="true" className="ff-openable-select__chevron">{open ? '⌃' : '⌄'}</span>
+      </button>
+      {open && (
+        <div className="ff-settings-multicheck-select__menu" role="menu">
+          {options.map((option) => {
+            const active = selected.has(option.value)
+            return (
+              <button
+                className="ff-settings-multicheck-select__option"
+                key={option.value}
+                onClick={() => {
+                  setSelected((current) => {
+                    const next = new Set(current)
+                    if (next.has(option.value)) next.delete(option.value)
+                    else next.add(option.value)
+                    if (storageKey) writeSettingsSymbolStateValue(storageKey, [...next])
+                    return next
+                  })
+                }}
+                role="menuitemcheckbox"
+                aria-checked={active}
+                type="button"
+              >
+                <span className="ff-settings-multicheck-select__box" data-active={active}>
+                  {active ? '✓' : ''}
+                </span>
+                <span>{option.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -505,18 +685,18 @@ function SettingsCoordinatesPanel() {
         </div>
         <SettingsCheckRow checked>当前K线结束倒计时</SettingsCheckRow>
 
-        <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
-          <span>商品代码</span>
-          <OpenableSelect
+          <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
+            <span>商品代码</span>
+          <SettingsMultiCheckSelect
             ariaLabel="商品代码标签"
-            defaultValue="value-line"
+            defaultValue={['value', 'line']}
+            storageKey="coordinates.symbolLabel.visibleParts"
             options={[
-              { label: '值，线形图', value: 'value-line' },
               { label: '值', value: 'value' },
-              { label: '隐藏', value: 'hidden' },
+              { label: '线形图', value: 'line' },
             ]}
           />
-          <SettingsLineSample color="#26a69a" secondary="#ef5350" />
+          <SettingsLineSwatch inheritCandleColors />
         </div>
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--nested">
           <span />
@@ -540,7 +720,7 @@ function SettingsCoordinatesPanel() {
               { label: '显示', value: 'visible' },
             ]}
           />
-          <SettingsLineSample color="#9b9b9b" />
+          <SettingsLineSwatch color="#9b9b9b" storageKey="coordinates.prevClose.color" />
         </div>
 
         <div className="ff-settings-coordinate-row">
@@ -565,7 +745,7 @@ function SettingsCoordinatesPanel() {
               { label: '显示', value: 'visible' },
             ]}
           />
-          <SettingsLineSample color="#7fd3c7" secondary="#f08ca2" />
+          <SettingsLineSwatch color="#7fd3c7" storageKey="coordinates.highLow.color" />
         </div>
 
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
