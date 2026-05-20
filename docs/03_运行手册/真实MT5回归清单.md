@@ -1,77 +1,69 @@
-# 真实 MT5 / StoreV5 回归清单
+# Live MT5 / StoreV5 Regression Checklist
 
-适用场景：改动 MT5 bridge、StoreV5、图表加载、右侧数据中心抽屉后，在真实终端上做最终确认。
+Use this after changes to the MT5 bridge, StoreV5, chart loading, or MT5 import center.
 
-## 环境前置
+## Prerequisites
 
-1. MT5 终端已启动并登录。
-2. 目标品种在 Market Watch 中可见，默认使用 `XAUUSDm`。
-3. Python 虚拟环境可用：`.venv\Scripts\python.exe`。
-4. 前端依赖已安装：`frontend\node_modules` 存在。
+1. MT5 terminal is running and logged in.
+2. The target symbol is visible in Market Watch. Default: `XAUUSDm`.
+3. Python virtualenv exists: `.venv\Scripts\python.exe`.
+4. Frontend dependencies are installed: `frontend\node_modules`.
 
-## 基础检查
+## Baseline Checks
 
 ```powershell
 .\scripts\check_all.ps1
 .\scripts\check_live_mt5_store_v5.ps1 -Symbol XAUUSDm
 .\.venv\Scripts\python.exe scripts\audit_store_v5.py --symbol XAUUSDm
+.\.venv\Scripts\python.exe scripts\verify_store_v5_aggregates.py --symbol XAUUSDm --timeframes M5,H1,H4
 .\.venv\Scripts\python.exe scripts\store_v5_size_report.py --symbol XAUUSDm
 ```
 
-预期：
+Expected:
 
-- `check_all.ps1` 全部通过。
-- live 检查能启动或连接 bridge。
-- `/mt5/symbols` 和 `/store-v5/status` 返回成功。
-- StoreV5 audit 无结构性问题，size report 能列出数据体积。
+- `check_all.ps1` passes.
+- Live check can start or connect to the bridge.
+- `/mt5/symbols` and `/store-v5/status` return successfully.
+- StoreV5 audit reports no structural issues.
+- Aggregate verification reports matching OHLCV rows for sampled windows.
 
-## 真实小批量拉取
+## Small Live Pull
 
 ```powershell
 .\scripts\check_live_mt5_store_v5.ps1 -Symbol XAUUSDm -RunPull -PullCount 2000
 ```
 
-预期：
+Expected:
 
-- MT5 初始化成功。
-- 小批量 M1 拉取成功。
-- StoreV5 M1 查询返回最近 10 根。
-- M5/H1 聚合成功。
+- MT5 initializes successfully.
+- Small M1 pull succeeds.
+- StoreV5 M1 query returns recent rows.
+- M5/H1 aggregation succeeds.
 
-## 前端人工确认
+## Manual Frontend Check
 
-1. 启动后端：
+1. Start backend:
 
    ```powershell
    .\.venv\Scripts\python.exe scripts\mt5_symbols_server.py --host 127.0.0.1 --port 8765
    ```
 
-2. 启动前端：
+2. Start frontend:
 
    ```powershell
    cd frontend
    npm run dev -- --host 127.0.0.1 --port 5185
    ```
 
-3. 打开 `http://127.0.0.1:5185/`。
-4. 进入 MT5 Import Center。
-5. 选择 `XAUUSDm`。
-6. 点击刷新状态、检查 M1、拉取 StoreV5、聚合周期。
+3. Open `http://127.0.0.1:5185/`.
+4. Open MT5 Import Center.
+5. Select `XAUUSDm`.
+6. Run status refresh, M1 check, StoreV5 pull, and aggregation.
 
-预期：
+Expected:
 
-- 进度文案持续更新，无控制台 error。
-- 拉取/聚合完成后 StoreV5 状态刷新。
-- 图表能打开 M1 和 H1 数据。
-- 断开/关闭后端时，前端显示可理解的错误，不出现白屏。
-
-## 回归记录
-
-建议记录：
-
-- 日期和提交点。
-- MT5 账号环境。
-- 品种。
-- 拉取数量。
-- StoreV5 根目录。
-- 是否通过。
+- Progress text updates continuously.
+- Browser console has no errors.
+- StoreV5 status refreshes after pull/aggregate.
+- M1 and H1 charts can open.
+- If backend is stopped, the frontend shows a recoverable error rather than a blank page.

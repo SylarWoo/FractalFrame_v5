@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import os
 import json
+from pathlib import Path
 
 from scripts.http_bridge.jobs import InMemoryJobStore
 from scripts.http_bridge.store_v5_aggregate_job_service import _get_aggregate_job, start_store_v5_aggregate_job
@@ -119,6 +120,11 @@ class HttpBridgeContractTests(unittest.TestCase):
             self.assertIn(key, job)
         self.assertEqual(job["periods"], ["M5", "H1"])
         self.assertNotIn("events", job)
+
+    def test_api_schema_file_is_valid_json(self) -> None:
+        payload = json.loads(Path("docs/api/schema.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["title"], "FractalFrame Market Data API")
+        self.assertIn("basePayload", payload["definitions"])
 
 
 if __name__ == "__main__":

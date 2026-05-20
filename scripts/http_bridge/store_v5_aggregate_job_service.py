@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .jobs import AGGREGATE_JOBS, AGGREGATE_JOBS_CONDITION, AGGREGATE_JOBS_LOCK, AGGREGATE_JOB_TERMINAL_PHASES, InMemoryJobStore
-from .operation_locks import finish_operation, try_start_operation
+from .operation_locks import finish_operation, wait_start_operation
 from .store_v5_operations_service import aggregate_store_v5
 from .store_v5_status_service import utc_now_iso
 
@@ -44,7 +44,17 @@ def _get_aggregate_job(job_id: str) -> dict[str, Any] | None:
 
 def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str], rebuild: bool, store_root: Path | None = None) -> None:
     results: dict[str, Any] = {}
+    operation_started = False
     try:
+        _set_aggregate_job(job_id, phase="queued", status="store_v5_aggregate_waiting_for_symbol_slot", progressLabel="Waiting for previous aggregate job to finish")
+        operation_started = wait_start_operation(
+            symbol,
+            "aggregate",
+            is_cancelled=lambda: bool((_get_aggregate_job(job_id) or {}).get("cancelRequested")),
+        )
+        if not operation_started:
+            _set_aggregate_job(job_id, ok=False, phase="cancelled", status="store_v5_aggregate_cancelled", progressLabel="Cancelled", finishedAt=utc_now_iso())
+            return
         _set_aggregate_job(
             job_id,
             phase="running",
@@ -116,12 +126,11 @@ def run_store_v5_aggregate_job(job_id: str, symbol: str, *, timeframes: list[str
             finishedAt=utc_now_iso(),
         )
     finally:
-        finish_operation(symbol, "aggregate")
+        if operation_started:
+            finish_operation(symbol, "aggregate")
 
 
 def start_store_v5_aggregate_job(symbol: str, *, timeframes: list[str], rebuild: bool, store_root: Path | None = None) -> dict[str, Any]:
-    if not try_start_operation(symbol, "aggregate"):
-        return {"ok": False, "status": "store_v5_aggregate_already_running", "error": "operation_already_running", "symbol": symbol}
     job_id = uuid.uuid4().hex
     now = utc_now_iso()
     targets = [item.strip().upper() for item in timeframes if item.strip()]

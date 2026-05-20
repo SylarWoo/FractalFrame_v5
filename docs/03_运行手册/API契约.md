@@ -1,15 +1,15 @@
-# API 契约摘要
+# API Contract Summary
 
-所有 JSON 响应都应包含：
+All JSON payloads should include:
 
 - `ok`: boolean
-- `status` 或 `error`: 描述当前状态或错误
+- `status` or `error`: current state or error code
 
 ## Diagnostics
 
 `GET /api/market-data/v1/diagnostics/mt5?symbol=XAUUSDm`
 
-关键字段：
+Key fields:
 
 - `ok`
 - `status`
@@ -21,7 +21,7 @@
 
 `GET /api/market-data/v1/diagnostics/runtime`
 
-关键字段：
+Key fields:
 
 - `ok`
 - `startedAt`
@@ -31,17 +31,24 @@
 
 `GET /api/market-data/v1/diagnostics/jobs`
 
-关键字段：
+Key fields:
 
 - `jobs.m1Check`
 - `jobs.pull`
 - `jobs.aggregate`
 
+`GET /api/market-data/v1/diagnostics/logs?tail=200`
+
+Key fields:
+
+- `path`
+- `lines`
+
 ## StoreV5
 
 `GET /api/market-data/v1/store-v5/status?symbol=XAUUSDm`
 
-关键字段：
+Key fields:
 
 - `symbol`
 - `directM1`
@@ -50,7 +57,7 @@
 
 `GET /api/market-data/v1/store-v5/query?symbol=XAUUSDm&timeframe=M1`
 
-关键字段：
+Key fields:
 
 - `symbol`
 - `timeframe`
@@ -61,18 +68,18 @@
 
 `GET /api/market-data/v1/store-v5/audit?symbol=XAUUSDm`
 
-关键字段：
+Key fields:
 
 - `datasetsCount`
 - `issuesCount`
 - `datasets[].datasetKey`
 - `datasets[].issues`
 
-本仓库同时维护机器可读草案：`docs/api/schema.json`。
+Machine-readable draft schema: `docs/api/schema.json`.
 
 ## Jobs
 
-Pull 和 aggregate job progress 均应包含：
+Pull and aggregate job progress payloads should include:
 
 - `jobId`
 - `symbol`
@@ -80,7 +87,7 @@ Pull 和 aggregate job progress 均应包含：
 - `status`
 - `progressPercent`
 
-终态：
+Terminal phases:
 
 - `completed`
 - `failed`

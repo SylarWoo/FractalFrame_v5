@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import os
 
 from .jobs import AGGREGATE_JOBS, M1_CHECK_JOBS, PULL_JOBS
 from .operation_locks import active_operations
@@ -86,3 +87,12 @@ def job_history(limit: int = 20) -> dict[str, Any]:
             "aggregate": AGGREGATE_JOB_STORE.recent(limit=limit),
         },
     }
+
+
+def tail_bridge_logs(tail: int = 200) -> dict[str, Any]:
+    log_root = Path(os.environ.get("FRACTALFRAME_LOG_ROOT", "runtime_data/logs"))
+    path = log_root / "bridge.log"
+    if not path.exists():
+        return {"ok": True, "status": "logs_empty", "path": str(path), "lines": []}
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    return {"ok": True, "status": "logs_ready", "path": str(path), "lines": lines[-max(1, min(int(tail), 1000)):]}

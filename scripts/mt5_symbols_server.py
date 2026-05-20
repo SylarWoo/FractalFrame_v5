@@ -15,7 +15,7 @@ from http_bridge.mt5_m1_check_service import (
     mt5_rates_to_rows,
     start_mt5_m1_staged_check,
 )
-from http_bridge.diagnostics_service import check_mt5_diagnostics, job_history, runtime_observability
+from http_bridge.diagnostics_service import check_mt5_diagnostics, job_history, runtime_observability, tail_bridge_logs
 from http_bridge.logging_config import configure_logging, get_logger
 from http_bridge.response import send_cors_headers as send_cors_headers_response
 from http_bridge.response import error_payload
@@ -185,6 +185,13 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/market-data/v1/diagnostics/jobs":
             self.send_json(200, job_history())
+            return
+        if parsed.path == "/api/market-data/v1/diagnostics/logs":
+            from urllib.parse import parse_qs
+
+            query = parse_qs(parsed.query)
+            tail = safe_int((query.get("tail") or [200])[0]) or 200
+            self.send_json(200, tail_bridge_logs(tail))
             return
         if handle_mt5_symbols_get(self, parsed, services):
             return

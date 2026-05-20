@@ -1,5 +1,5 @@
 import { getMt5Json } from './mt5ApiClient'
-import type { Mt5DiagnosticsPayload, RuntimeObservabilityPayload } from './types'
+import type { BridgeLogsPayload, Mt5DiagnosticsPayload, RuntimeObservabilityPayload } from './types'
 
 export async function fetchMt5Diagnostics(symbol?: string): Promise<Mt5DiagnosticsPayload> {
   const params = new URLSearchParams()
@@ -9,4 +9,10 @@ export async function fetchMt5Diagnostics(symbol?: string): Promise<Mt5Diagnosti
 
 export async function fetchRuntimeObservability(): Promise<RuntimeObservabilityPayload> {
   return getMt5Json<RuntimeObservabilityPayload>('/api/market-data/v1/diagnostics/runtime')
+}
+
+export async function fetchBridgeLogs(tail = 200): Promise<BridgeLogsPayload> {
+  const params = new URLSearchParams()
+  params.set('tail', String(tail))
+  return getMt5Json<BridgeLogsPayload>('/api/market-data/v1/diagnostics/logs', params)
 }

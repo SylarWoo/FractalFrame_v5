@@ -1,4 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useState } from 'react'
+import { fetchBridgeLogs } from '../../services/mt5/mt5SymbolsApi'
 import { bottomPanels } from './bottomPanels'
 import type { BottomPanelId } from './bottomPanels'
 
@@ -20,6 +22,25 @@ export function BottomWorkspace({
   onSelectPanel,
 }: BottomWorkspaceProps) {
   const currentBottomPanel = bottomPanels.find((panel) => panel.id === activeBottomPanel) ?? bottomPanels[0]
+  const [logLines, setLogLines] = useState<string[]>([])
+
+  useEffect(() => {
+    if (activeBottomPanel !== 'logs' || !bottomDrawerOpen) return
+    let disposed = false
+    const refresh = () => fetchBridgeLogs(200)
+      .then((payload) => {
+        if (!disposed) setLogLines(payload.lines)
+      })
+      .catch((error: unknown) => {
+        if (!disposed) setLogLines([error instanceof Error ? error.message : String(error)])
+      })
+    refresh()
+    const intervalId = window.setInterval(refresh, 5000)
+    return () => {
+      disposed = true
+      window.clearInterval(intervalId)
+    }
+  }, [activeBottomPanel, bottomDrawerOpen])
 
   return (
     <section className="ff-bottom-shell" aria-label="Bottom workspace drawer">
@@ -61,7 +82,11 @@ export function BottomWorkspace({
           </button>
         </header>
         <div className="ff-bottom-panel__body">
-          <p className="ff-bottom-panel__placeholder">{currentBottomPanel.placeholder}</p>
+          {activeBottomPanel === 'logs' ? (
+            <pre className="ff-bottom-panel__placeholder">{logLines.join('\n') || 'No bridge logs yet.'}</pre>
+          ) : (
+            <p className="ff-bottom-panel__placeholder">{currentBottomPanel.placeholder}</p>
+          )}
         </div>
       </section>
     </section>

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .jobs import PULL_JOB_TERMINAL_PHASES
-from .operation_locks import finish_operation, try_start_operation
+from .operation_locks import finish_operation, wait_start_operation
 from .store_v5_pull_context import build_pull_context
 from .store_v5_pull_fetch_service import fetch_store_v5_raw_m1
 from .store_v5_pull_finalize_service import finalize_store_v5_pull_job
@@ -22,7 +22,17 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
     from python.data_warehouse.store_v5.store_v5_paths import STORE_VERSION, dataset_key, dataset_root, manifest_path, resolve_store_root
 
     initialized = False
+    operation_started = False
     try:
+        set_pull_job(job_id, phase="queued", status="store_v5_pull_waiting_for_symbol_slot", progressLabel="Waiting for previous pull job to finish")
+        operation_started = wait_start_operation(
+            symbol,
+            "pull",
+            is_cancelled=lambda: bool((get_pull_job(job_id) or {}).get("cancelRequested")),
+        )
+        if not operation_started:
+            set_pull_job(job_id, ok=False, phase="cancelled", status="store_v5_pull_cancelled", finishedAt=utc_now_iso())
+            return
         import MetaTrader5 as mt5
 
         if not mt5.initialize():
@@ -176,10 +186,17 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             duplicateRows=duplicate_rows,
             progressLabel=f"Failed: {exc}",
             detailMessage="Error during pull or write",
+            resumeHint={
+                "mode": "incremental",
+                "lastTimeText": format_utc_text(getattr(ctx, "last_time", None)) if ctx else None,
+                "rowsFetched": rows_fetched,
+                "rowsWritten": rows_written,
+            },
             finishedAt=utc_now_iso(),
         )
     finally:
-        finish_operation(symbol, "pull")
+        if operation_started:
+            finish_operation(symbol, "pull")
         if initialized:
             try:
                 mt5.shutdown()
@@ -188,8 +205,6 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
 
 
 def start_store_v5_pull_job(symbol: str, *, mode: str, count: int | None, store_root: Path | None = None) -> dict[str, Any]:
-    if not try_start_operation(symbol, "pull"):
-        return {"ok": False, "status": "store_v5_pull_already_running", "error": "operation_already_running", "symbol": symbol}
     job_id = uuid.uuid4().hex
     now = utc_now_iso()
     PULL_JOB_STORE.prune_terminal(PULL_JOB_TERMINAL_PHASES)

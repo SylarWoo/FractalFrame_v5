@@ -27,4 +27,4 @@ export {
   startStoreV5PullJob,
 } from './storeV5JobsApi'
 export { createMt5TicksEventSource } from './mt5RealtimeApi'
-export { fetchMt5Diagnostics, fetchRuntimeObservability } from './diagnosticsApi'
+export { fetchBridgeLogs, fetchMt5Diagnostics, fetchRuntimeObservability } from './diagnosticsApi'

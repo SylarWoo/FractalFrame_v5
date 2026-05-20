@@ -312,3 +312,10 @@ export type RuntimeObservabilityPayload = {
   jobs: Record<string, { count: number; failed: number }>
   activeOperations?: Array<{ symbol: string; operation: string }>
 }
+
+export type BridgeLogsPayload = {
+  ok: boolean
+  status: string
+  path: string
+  lines: string[]
+}
