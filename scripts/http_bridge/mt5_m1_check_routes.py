@@ -20,6 +20,7 @@ def handle_mt5_m1_check_get(handler: Any, parsed: ParseResult, services: Any) ->
         base_last_time = safe_query_int((query.get("baseLastTime") or query.get("base_last_time") or [None])[0], None)
         base_true_m1_rows_count = safe_query_int((query.get("baseTrueM1RowsCount") or query.get("base_true_m1_rows_count") or [None])[0], 0) or 0
         base_mt5_rows_count = safe_query_int((query.get("baseMt5RowsCount") or query.get("base_mt5_rows_count") or [None])[0], 0) or 0
+        base_gap_count = safe_query_int((query.get("baseGapCount") or query.get("base_gap_count") or [None])[0], None)
         overlap_bars = safe_query_int((query.get("overlapBars") or query.get("overlap_bars") or [None])[0], 1000) or 1000
         if not symbol:
             handler.send_json(400, {"ok": False, "status": "bad_request", "error": "symbol_required"})
@@ -43,6 +44,7 @@ def handle_mt5_m1_check_get(handler: Any, parsed: ParseResult, services: Any) ->
                 base_last_time=base_last_time,
                 base_true_m1_rows_count=base_true_m1_rows_count,
                 base_mt5_rows_count=base_mt5_rows_count,
+                base_gap_count=base_gap_count,
                 overlap_bars=overlap_bars,
             ),
         )

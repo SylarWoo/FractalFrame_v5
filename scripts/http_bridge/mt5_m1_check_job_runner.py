@@ -23,6 +23,7 @@ def run_mt5_m1_staged_check_job(
     base_last_time: int | None = None,
     base_true_m1_rows_count: int = 0,
     base_mt5_rows_count: int = 0,
+    base_gap_count: int | None = None,
     overlap_bars: int = 1000,
 ) -> None:
     from python.data_warehouse.mt5.mt5_m1_integrity_validator_v1 import validate_incremental_true_m1_rows_v1, validate_true_m1_rows_v1
@@ -94,6 +95,7 @@ def run_mt5_m1_staged_check_job(
                     "lastTime": base_last_time or since_time,
                     "trueM1RowsCount": base_true_m1_rows_count,
                     "mt5RowsCount": base_mt5_rows_count,
+                    "gapCount": base_gap_count,
                 },
                 staged={
                     "jobId": job_id,

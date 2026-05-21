@@ -26,6 +26,7 @@ export async function startMt5M1CheckJob(
     baseLastTime?: number | null
     baseTrueM1RowsCount?: number | null
     baseMt5RowsCount?: number | null
+    baseGapCount?: number | null
     overlapBars?: number
   } = {},
 ): Promise<Mt5M1CheckJobPayload> {
@@ -39,6 +40,7 @@ export async function startMt5M1CheckJob(
   if (typeof options.baseLastTime === 'number') params.set('baseLastTime', String(options.baseLastTime))
   if (typeof options.baseTrueM1RowsCount === 'number') params.set('baseTrueM1RowsCount', String(options.baseTrueM1RowsCount))
   if (typeof options.baseMt5RowsCount === 'number') params.set('baseMt5RowsCount', String(options.baseMt5RowsCount))
+  if (typeof options.baseGapCount === 'number') params.set('baseGapCount', String(options.baseGapCount))
   if (typeof options.overlapBars === 'number') params.set('overlapBars', String(options.overlapBars))
 
   return getMt5Json<Mt5M1CheckJobPayload>(

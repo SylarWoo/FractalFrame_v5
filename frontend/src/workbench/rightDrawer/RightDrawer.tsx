@@ -12,6 +12,7 @@ import { useRightDrawerResize } from './useRightDrawerResize'
 import { useRightDrawerSelection } from './useRightDrawerSelection'
 import { useStoreV5Jobs } from './useStoreV5Jobs'
 import { useWatchlistRealtime } from './useWatchlistRealtime'
+import { IndicatorsDrawer } from './IndicatorsDrawer'
 import { RightDrawerFrame } from './RightDrawerFrame'
 import { RightDrawerMt5Body } from './RightDrawerMt5Body'
 import { RightDrawerSettingsHost } from './RightDrawerSettingsHost'
@@ -26,8 +27,10 @@ export function RightDrawer({
   activeDrawer,
   drawerWidth,
   onClose,
+  onLoadIndicator,
   onResize,
   onToggleDrawer,
+  onUnloadIndicator,
   onOpenChart,
 }: RightDrawerProps) {
   const initialSnapshot = useMemo(() => getInitialSymbolSnapshot(), [])
@@ -310,6 +313,8 @@ export function RightDrawer({
             selectedTab={selectedSettingsPanelTab}
             onSelectedTabChange={setSelectedSettingsPanelTab}
           />
+        ) : activeDrawer === 'indicators' ? (
+          <IndicatorsDrawer onLoadIndicator={onLoadIndicator} onUnloadIndicator={onUnloadIndicator} />
         ) : (
           <RightDrawerMt5Body
             canAggregateStoreV5={canAggregateStoreV5}

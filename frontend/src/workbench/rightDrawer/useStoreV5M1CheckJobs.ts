@@ -73,6 +73,7 @@ export function useStoreV5M1CheckJobs({
         baseLastTime: previous.lastTime,
         baseTrueM1RowsCount: previous.trueM1RowsCount ?? previous.rowsCount,
         baseMt5RowsCount: previous.mt5RowsCount ?? previous.trueM1RowsCount ?? previous.rowsCount,
+        baseGapCount: previous.gapCount,
         overlapBars: 1000,
       } : { chunk: 200000, maxCount: 10000000, mode: 'refresh' })
       activeM1CheckJobRef.current = started.jobId

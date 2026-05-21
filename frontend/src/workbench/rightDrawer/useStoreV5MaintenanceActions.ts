@@ -5,10 +5,12 @@ import {
   deleteStoreV5Symbol,
   fetchStoreV5Status,
   repairStoreV5M1Gaps,
+  startStoreV5AggregateJob,
 } from '../../services/mt5/mt5SymbolsApi'
 import type { Mt5M1CheckJobPayload, StoreV5AggregateJobPayload, StoreV5CheckPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
 import { savePersistedStoreV5Status } from '../mt5DataCenter/storeV5Persistence'
-import { storeV5M1RepairOptions, clearAggregateJobRefs } from './storeV5JobUtils'
+import { resolveStoreV5AggregateTargets } from './rightDrawerStoreTables'
+import { storeV5M1RepairOptions, clearAggregateJobRefs, waitStoreV5AggregateJobWithFallback } from './storeV5JobUtils'
 
 type MaintenanceActionsOptions = {
   activeAggregateJobRef: MutableRefObject<string>
@@ -61,7 +63,16 @@ export function useStoreV5MaintenanceActions({
       setStoreActionStatus((gapRepair.gapsDetected ?? 0) > 0
         ? `M1 gap repair complete: found ${gapRepair.gapsDetected ?? 0} gaps, wrote ${gapRepair.rowsWritten ?? 0} rows.`
         : 'M1 gap check complete: no recent middle gaps.')
-      const payload = await fetchStoreV5Status(symbol)
+      let payload = await fetchStoreV5Status(symbol)
+      const aggregateTargets = resolveStoreV5AggregateTargets(payload)
+      if ((gapRepair.rowsWritten ?? 0) > 0 && aggregateTargets.length) {
+        setStoreActionStatus(`Rebuilding periods after M1 repair: ${aggregateTargets.join(', ')}...`)
+        const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets, { rebuild: true })
+        activeAggregateJobRef.current = aggregateJob.jobId
+        setAggregateProgress(aggregateJob)
+        await waitStoreV5AggregateJobWithFallback(aggregateJob.jobId, { activeAggregateJobRef, aggregateEventSourceRef, setAggregateProgress })
+        payload = await fetchStoreV5Status(symbol)
+      }
       setLocalStoreStatus(payload)
       savePersistedStoreV5Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
       openChartForStatus(symbol, payload)

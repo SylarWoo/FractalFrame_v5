@@ -135,6 +135,7 @@ function ensureSessionBreakIndicatorRegistered() {
   if (sessionBreakIndicatorRegistered) return
   registerIndicator({
     name: sessionBreakIndicatorName,
+    shortName: 'Day-Line',
     calc: () => [],
     draw: ({ ctx, kLineDataList, indicator, visibleRange, bounding, xAxis }) => {
       if (!readSessionBreakVisible() || kLineDataList.length < 2) return false

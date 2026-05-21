@@ -164,12 +164,13 @@ export function useStoreV5Jobs({
       setPullProgress(started)
       await waitStoreV5PullJobWithFallback(started.jobId, { activePullJobRef, pullEventSourceRef, setPullProgress })
       setStoreActionStatus('Scanning and repairing recent M1 window...')
-      await repairStoreV5M1Gaps(symbol, storeV5M1RepairOptions)
+      const gapRepair = await repairStoreV5M1Gaps(symbol, storeV5M1RepairOptions)
       const repairedStatus = await fetchStoreV5Status(symbol)
       const aggregateTargets = resolveStoreV5AggregateTargets(repairedStatus)
       if (aggregateTargets.length) {
-        setStoreActionStatus(`Aggregating periods: ${aggregateTargets.join(', ')}...`)
-        const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets)
+        const rebuildAggregates = (gapRepair.rowsWritten ?? 0) > 0
+        setStoreActionStatus(`${rebuildAggregates ? 'Rebuilding' : 'Aggregating'} periods: ${aggregateTargets.join(', ')}...`)
+        const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets, { rebuild: rebuildAggregates })
         activeAggregateJobRef.current = aggregateJob.jobId
         setAggregateProgress(aggregateJob)
         await waitStoreV5AggregateJobWithFallback(aggregateJob.jobId, { activeAggregateJobRef, aggregateEventSourceRef, setAggregateProgress })

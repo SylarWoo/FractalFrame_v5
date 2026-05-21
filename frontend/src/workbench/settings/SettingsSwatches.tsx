@@ -4,12 +4,12 @@ import { openChartColorPalettePopoverV1 } from '../rightDrawer/color_palette/cha
 import { readSettingsSymbolState, settingsSymbolChangedEvent, writeSettingsSymbolStateValue } from '../settingsSymbolState'
 import './SettingsSharedControls.css'
 
-type SettingsSwatchValue = {
+export type SettingsSwatchValue = {
   hex: string
   opacity: number
 }
 
-type SettingsLineSwatchValue = SettingsSwatchValue & {
+export type SettingsLineSwatchValue = SettingsSwatchValue & {
   lineStyle: 'solid' | 'dashed' | 'dotted'
   thickness: number
 }
@@ -23,6 +23,18 @@ function resolveHexRgbString(hex: string) {
 
 function normalizeSettingsLineStyle(value: unknown): SettingsLineSwatchValue['lineStyle'] {
   return value === 'dashed' || value === 'dotted' ? value : 'solid'
+}
+
+function normalizeSwatchHex(hex: string) {
+  return hex.trim().toLowerCase()
+}
+
+function sameSettingsSwatchValue(a: SettingsSwatchValue, b: SettingsSwatchValue) {
+  return normalizeSwatchHex(a.hex) === normalizeSwatchHex(b.hex) && Math.abs(a.opacity - b.opacity) < 0.001
+}
+
+function sameSettingsLineSwatchValue(a: SettingsLineSwatchValue, b: SettingsLineSwatchValue) {
+  return sameSettingsSwatchValue(a, b) && a.lineStyle === b.lineStyle && a.thickness === b.thickness
 }
 
 let activeSettingsColorPopoverClose: (() => void) | null = null
@@ -72,16 +84,26 @@ function readCandleBodyPreviewColors() {
 export function SettingsColorSwatch({
   color,
   checkerboard = false,
+  onChange,
   storageKey,
+  value: controlledValue,
 }: {
   color?: string
   checkerboard?: boolean
+  onChange?: (value: SettingsSwatchValue) => void
   storageKey?: string
+  value?: SettingsSwatchValue
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const [value, setValue] = useState(() => readSettingsSwatchValue(storageKey, color ?? '#26a69a'))
-  const isTransparent = !checkerboard && value.opacity < 0.999
-  const isWhite = /^#(?:fff|ffffff)$/i.test(value.hex.trim())
+  const displayValue = controlledValue ?? value
+  const latestValueRef = useRef(displayValue)
+  const isTransparent = displayValue.opacity < 0.999
+  const isWhite = /^#(?:fff|ffffff)$/i.test(displayValue.hex.trim())
+
+  useEffect(() => {
+    latestValueRef.current = displayValue
+  }, [displayValue])
 
   return (
     <button
@@ -102,8 +124,8 @@ export function SettingsColorSwatch({
         const popover = openChartColorPalettePopoverV1({
           doc: document,
           anchorEl,
-          initialHex: value.hex,
-          initialOpacity: value.opacity,
+          initialHex: displayValue.hex,
+          initialOpacity: displayValue.opacity,
           showCustomColorsRow: true,
           showCustomPicker: true,
           showOpacity: true,
@@ -113,23 +135,22 @@ export function SettingsColorSwatch({
                 hex: payload.hex,
                 opacity: typeof payload.opacity === 'number' && Number.isFinite(payload.opacity) ? payload.opacity : 1,
               }
+              if (sameSettingsSwatchValue(nextValue, latestValueRef.current)) return
+              latestValueRef.current = nextValue
               setValue(nextValue)
               if (storageKey) writeSettingsSymbolStateValue(storageKey, nextValue)
+              onChange?.(nextValue)
             }
           },
         })
         activeSettingsColorPopoverClose = popover.close
       }}
       ref={buttonRef}
-      style={
-        checkerboard
-          ? undefined
-          : ({
-              '--ff-settings-swatch-color': value.hex,
-              '--ff-settings-swatch-rgb': resolveHexRgbString(value.hex),
-              '--ff-settings-swatch-opacity': String(value.opacity),
-            } as CSSProperties)
-      }
+      style={{
+        '--ff-settings-swatch-color': displayValue.hex,
+        '--ff-settings-swatch-rgb': resolveHexRgbString(displayValue.hex),
+        '--ff-settings-swatch-opacity': String(displayValue.opacity),
+      } as CSSProperties}
       type="button"
     >
       <span className="ff-settings-color-swatch__inner" />
@@ -140,21 +161,38 @@ export function SettingsColorSwatch({
 export function SettingsLineSwatch({
   color = '#9ca3af',
   inheritCandleColors = false,
+  lineStyle = 'solid',
+  onChange,
   secondary,
   storageKey,
+  thickness = 1,
+  value: controlledValue,
 }: {
   color?: string
   inheritCandleColors?: boolean
+  lineStyle?: SettingsLineSwatchValue['lineStyle']
+  onChange?: (value: SettingsLineSwatchValue) => void
   secondary?: string
   storageKey?: string
+  thickness?: number
+  value?: SettingsLineSwatchValue
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null)
-  const [value, setValue] = useState(() => readSettingsLineSwatchValue(storageKey, color))
+  const [value, setValue] = useState(() => {
+    const stored = readSettingsLineSwatchValue(storageKey, color)
+    return storageKey ? stored : { ...stored, lineStyle, thickness }
+  })
   const [inheritedColors, setInheritedColors] = useState(readCandleBodyPreviewColors)
-  const swatchColor = value.hex
+  const displayValue = controlledValue ?? value
+  const latestValueRef = useRef(displayValue)
+  const swatchColor = displayValue.hex
   const autoUpColor = inheritCandleColors ? inheritedColors.up : color
   const autoDownColor = inheritCandleColors ? inheritedColors.down : secondary
   const isAuto = (inheritCandleColors || secondary) && !storageKey
+
+  useEffect(() => {
+    latestValueRef.current = displayValue
+  }, [displayValue])
 
   useEffect(() => {
     if (!inheritCandleColors) return
@@ -184,9 +222,9 @@ export function SettingsLineSwatch({
             doc: document,
             anchorEl,
             initialHex: swatchColor,
-            initialOpacity: value.opacity,
-            initialLineStyle: value.lineStyle,
-            initialThickness: value.thickness,
+            initialOpacity: displayValue.opacity,
+            initialLineStyle: displayValue.lineStyle,
+            initialThickness: displayValue.thickness,
             showCustomColorsRow: true,
             showCustomPicker: true,
             showLineStyle: true,
@@ -195,16 +233,20 @@ export function SettingsLineSwatch({
             thicknessSteps: 4,
             onPick: (payload) => {
               if (typeof payload?.hex !== 'string') return
+              const currentValue = latestValueRef.current
               const nextValue = {
                 hex: payload.hex,
                 lineStyle: normalizeSettingsLineStyle(payload.lineStyle),
-                opacity: typeof payload.opacity === 'number' && Number.isFinite(payload.opacity) ? payload.opacity : value.opacity,
+                opacity: typeof payload.opacity === 'number' && Number.isFinite(payload.opacity) ? payload.opacity : currentValue.opacity,
                 thickness: typeof payload.thickness === 'number' && Number.isFinite(payload.thickness)
                   ? Math.max(1, Math.min(Math.round(payload.thickness), 4))
-                  : value.thickness,
+                  : currentValue.thickness,
               }
+              if (sameSettingsLineSwatchValue(nextValue, currentValue)) return
+              latestValueRef.current = nextValue
               setValue(nextValue)
               if (storageKey) writeSettingsSymbolStateValue(storageKey, nextValue)
+              onChange?.(nextValue)
           },
         })
         activeSettingsColorPopoverClose = popover.close
@@ -217,17 +259,17 @@ export function SettingsLineSwatch({
         style={
           isAuto
             ? { background: `linear-gradient(45deg, ${autoUpColor} 0 50%, ${autoDownColor ?? autoUpColor} 50% 100%)` }
-            : { background: swatchColor, opacity: value.opacity }
+            : { background: swatchColor, opacity: displayValue.opacity }
         }
       />
       <span
         className="ff-settings-line-swatch__line"
-        data-style={value.lineStyle}
+        data-style={displayValue.lineStyle}
         style={{
           borderTopColor: swatchColor,
-          opacity: value.opacity,
-          borderTopStyle: value.lineStyle === 'dotted' ? 'dotted' : value.lineStyle === 'dashed' ? 'dashed' : 'solid',
-          borderTopWidth: `${value.thickness}px`,
+          opacity: displayValue.opacity,
+          borderTopStyle: displayValue.lineStyle === 'dotted' ? 'dotted' : displayValue.lineStyle === 'dashed' ? 'dashed' : 'solid',
+          borderTopWidth: `${displayValue.thickness}px`,
         }}
       />
     </button>

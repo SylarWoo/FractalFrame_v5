@@ -180,50 +180,53 @@ def validate_incremental_true_m1_rows_v1(
         return {
             "ok": True,
             "status": "no_new_true_m1_rows",
+            "m1IntegrityStatus": "no_new_true_m1_rows",
             "mt5RowsCount": mt5_count,
             "trueM1RowsCount": 0,
             "lastTrueM1Time": last_true_m1_time,
+            "gapCount": 0,
+            "firstGap": None,
             "trueRows": [],
         }
 
     first_new_time = _row_time(true_rows[0])
-    if first_new_time != last_true_m1_time + SECONDS_PER_MINUTE:
-        return {
-            "ok": False,
-            "error": "incremental_gap_after_last_true_m1",
-            "mt5RowsCount": mt5_count,
-            "lastTrueM1Time": last_true_m1_time,
-            "firstNewTime": first_new_time,
-            "deltaSeconds": first_new_time - last_true_m1_time,
-            "missingBarsEstimate": max(0, (first_new_time - last_true_m1_time) // SECONDS_PER_MINUTE - 1),
-            "trueM1RowsCount": 0,
-            "trueRows": [],
-        }
-
-    accepted = [true_rows[0]]
-    for row in true_rows[1:]:
-        previous_time = _row_time(accepted[-1])
+    accepted: list[dict[str, Any]] = []
+    previous_time = last_true_m1_time
+    first_gap = None
+    gap_count = 0
+    for row in true_rows:
         current_time = _row_time(row)
-        if current_time - previous_time != SECONDS_PER_MINUTE:
-            first_gap = _gap(previous_time, current_time)
-            return {
-                "ok": False,
-                "error": "incremental_m1_gap_detected",
-                "mt5RowsCount": mt5_count,
-                "lastTrueM1Time": last_true_m1_time,
-                "firstGap": first_gap,
-                "trueM1RowsCount": 0,
-                "trueRows": [],
-            }
+        delta = current_time - previous_time
+        if delta == SECONDS_PER_MINUTE:
+            accepted.append(row)
+            previous_time = current_time
+            continue
+        if delta > SECONDS_PER_MINUTE:
+            gap_count += 1
+            if first_gap is None:
+                first_gap = _gap(previous_time, current_time)
+            accepted.append(row)
+            previous_time = current_time
+            continue
         accepted.append(row)
+        previous_time = current_time
 
-    return {
+    status = "incremental_true_m1_ok" if first_gap is None else "incremental_true_m1_with_session_gaps"
+    result = {
         "ok": True,
-        "status": "incremental_true_m1_ok",
+        "status": status,
+        "m1IntegrityStatus": status,
         "mt5RowsCount": mt5_count,
         "trueM1RowsCount": len(accepted),
         "lastTrueM1Time": last_true_m1_time,
         "firstNewTime": first_new_time,
         "lastNewTime": _row_time(accepted[-1]),
+        "gapCount": gap_count,
+        "firstGap": first_gap,
         "trueRows": accepted,
+    }
+    if first_gap is not None:
+        result["warning"] = "incremental_m1_session_gaps_detected"
+    return {
+        **result,
     }

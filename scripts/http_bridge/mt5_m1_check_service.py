@@ -24,6 +24,7 @@ def start_mt5_m1_staged_check(
     base_last_time: int | None = None,
     base_true_m1_rows_count: int = 0,
     base_mt5_rows_count: int = 0,
+    base_gap_count: int | None = None,
     overlap_bars: int = 1000,
 ) -> dict[str, Any]:
     job_id = uuid.uuid4().hex
@@ -57,6 +58,7 @@ def start_mt5_m1_staged_check(
             "base_last_time": base_last_time,
             "base_true_m1_rows_count": base_true_m1_rows_count,
             "base_mt5_rows_count": base_mt5_rows_count,
+            "base_gap_count": base_gap_count,
             "overlap_bars": overlap_bars,
         },
         daemon=True,

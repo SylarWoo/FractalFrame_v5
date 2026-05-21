@@ -69,6 +69,10 @@ def _build_incremental_m1_check_payload(
     last_time = int(validation.get("lastNewTime") or base_last_time)
     true_count = base_true_count + added_true_count
     mt5_count = base_mt5_count + added_true_count
+    base_gap_count = base.get("gapCount")
+    incremental_gap_count = int(validation.get("gapCount") or 0) if validation.get("ok") else 0
+    gap_count = (int(base_gap_count) if base_gap_count is not None else 0) + incremental_gap_count
+    first_gap = base.get("firstGap") or validation.get("firstGap")
     return {
         "ok": validation.get("ok") is True,
         "status": "mt5_m1_incremental_check_completed" if validation.get("ok") else "mt5_m1_incremental_check_failed_validation",
@@ -87,12 +91,12 @@ def _build_incremental_m1_check_payload(
             "firstAnchorTime": base.get("firstAnchorTime") or base_first_time,
             "firstHourM1CheckOk": base.get("firstHourM1CheckOk"),
             "firstHourTrueRows": base.get("firstHourTrueRows"),
-            "gapCount": base.get("gapCount"),
-            "m1IntegrityStatus": validation.get("status") or "incremental_true_m1_ok",
+            "gapCount": gap_count,
+            "m1IntegrityStatus": validation.get("m1IntegrityStatus") or validation.get("status") or "incremental_true_m1_ok",
             "status": "mt5_live_incremental_check",
             "validationOk": validation.get("ok"),
             "validationError": validation.get("error"),
-            "firstGap": validation.get("firstGap"),
+            "firstGap": first_gap,
         },
         "validation": {key: value for key, value in validation.items() if key != "trueRows"},
         "aggregated": [],

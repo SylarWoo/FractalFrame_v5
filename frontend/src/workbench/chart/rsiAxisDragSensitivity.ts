@@ -1,0 +1,157 @@
+import { DomPosition } from 'klinecharts'
+import type { Chart } from 'klinecharts'
+
+const rsiAxisDragSensitivity = 1.15
+
+type InternalChart = Chart & {
+  adjustPaneViewport?: (shouldMeasureHeight?: boolean, shouldMeasureWidth?: boolean, shouldUpdate?: boolean, shouldAdjustYAxis?: boolean) => void
+  getDrawPaneById?: (paneId: string) => {
+    getAxisComponent?: () => {
+      convertToRealValue?: (value: number) => number
+      getRange?: () => { from: number; to: number; range: number } | null
+      setAutoCalcTickFlag?: (flag: boolean) => void
+      setRange?: (range: {
+        from: number
+        realFrom: number
+        realRange: number
+        realTo: number
+        range: number
+        to: number
+      }) => void
+    }
+  } | null
+}
+
+let cleanupRsiAxisDrag: (() => void) | null = null
+
+export function uninstallRsiAxisDragSensitivity() {
+  cleanupRsiAxisDrag?.()
+  cleanupRsiAxisDrag = null
+}
+
+export function installRsiAxisDragSensitivity(chart: Chart, paneId = 'rsi_pane') {
+  uninstallRsiAxisDragSensitivity()
+
+  const internalChart = chart as InternalChart
+  const axisDom = chart.getDom(paneId, DomPosition.YAxis)
+  const pane = internalChart.getDrawPaneById?.(paneId)
+  const yAxis = pane?.getAxisComponent?.()
+  if (!axisDom || !yAxis) return
+  const axisElement = axisDom
+  const yAxisComponent = yAxis
+  const axisCursorElements = [axisElement, ...Array.from(axisElement.querySelectorAll<HTMLElement>('*'))]
+  const previousCursors = new Map<HTMLElement, string>()
+
+  const applyAxisCursor = () => {
+    axisCursorElements.forEach((element) => {
+      if (!previousCursors.has(element)) previousCursors.set(element, element.style.cursor)
+      element.style.cursor = 'ns-resize'
+    })
+  }
+
+  const restoreAxisCursor = () => {
+    axisCursorElements.forEach((element) => {
+      element.style.cursor = previousCursors.get(element) ?? ''
+    })
+    previousCursors.clear()
+  }
+
+  applyAxisCursor()
+
+  let drag:
+    | {
+        from: number
+        height: number
+        range: number
+        startY: number
+        to: number
+      }
+    | null = null
+
+  const finishDrag = () => {
+    drag = null
+    applyAxisCursor()
+    window.removeEventListener('mousemove', handleMouseMove, true)
+    window.removeEventListener('mouseup', handleMouseUp, true)
+  }
+
+  const applyRange = (from: number, to: number) => {
+    const range = to - from
+    const realFrom = yAxisComponent.convertToRealValue?.(from) ?? from
+    const realTo = yAxisComponent.convertToRealValue?.(to) ?? to
+    yAxisComponent.setRange?.({
+      from,
+      to,
+      range,
+      realFrom,
+      realTo,
+      realRange: realTo - realFrom,
+    })
+    internalChart.adjustPaneViewport?.(false, true, true, true)
+  }
+
+  function handleMouseDown(event: MouseEvent) {
+    if (event.button !== 0) return
+
+    const currentRange = yAxisComponent.getRange?.()
+    const height = axisElement.getBoundingClientRect().height
+    if (!currentRange || height <= 0) return
+
+    event.preventDefault()
+    event.stopImmediatePropagation()
+
+    yAxisComponent.setAutoCalcTickFlag?.(false)
+    drag = {
+      from: currentRange.from,
+      height,
+      range: currentRange.range,
+      startY: event.pageY,
+      to: currentRange.to,
+    }
+    applyAxisCursor()
+    window.addEventListener('mousemove', handleMouseMove, true)
+    window.addEventListener('mouseup', handleMouseUp, true)
+  }
+
+  function handleMouseMove(event: MouseEvent) {
+    if (!drag) return
+
+    event.preventDefault()
+    event.stopImmediatePropagation()
+
+    const delta = event.pageY - drag.startY
+    const scale = Math.max(0.08, 1 + (delta / drag.height) * rsiAxisDragSensitivity)
+    const newRange = drag.range * scale
+    const difRange = (newRange - drag.range) / 2
+    applyRange(drag.from - difRange, drag.to + difRange)
+  }
+
+  function handleMouseUp(event: MouseEvent) {
+    if (!drag) return
+
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    finishDrag()
+  }
+
+  function handleDoubleClick(event: MouseEvent) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    yAxisComponent.setAutoCalcTickFlag?.(true)
+    internalChart.adjustPaneViewport?.(false, true, true, true)
+  }
+
+  axisElement.addEventListener('mousedown', handleMouseDown, true)
+  axisElement.addEventListener('dblclick', handleDoubleClick, true)
+  axisElement.addEventListener('mouseenter', applyAxisCursor, true)
+  axisElement.addEventListener('mousemove', applyAxisCursor, true)
+
+  cleanupRsiAxisDrag = () => {
+    finishDrag()
+    axisElement.removeEventListener('mousedown', handleMouseDown, true)
+    axisElement.removeEventListener('dblclick', handleDoubleClick, true)
+    axisElement.removeEventListener('mouseenter', applyAxisCursor, true)
+    axisElement.removeEventListener('mousemove', applyAxisCursor, true)
+    restoreAxisCursor()
+  }
+}

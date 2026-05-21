@@ -3,6 +3,7 @@ import { dispose, init } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
 import { formatChartDate, readChartTimezone } from './chartTimeFormatting'
+import { installChartDragCursor, uninstallChartDragCursor } from './chartDragCursor'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import {
   applyAxisLineStyle,
@@ -60,8 +61,14 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     resizeObserver.observe(container)
     window.addEventListener('resize', resize)
     window.requestAnimationFrame(resize)
+    let cleanupDragCursor: (() => void) | null = null
+    window.requestAnimationFrame(() => {
+      if (chart) cleanupDragCursor = installChartDragCursor(chart)
+    })
 
     return () => {
+      cleanupDragCursor?.()
+      if (chart) uninstallChartDragCursor(chart)
       resizeObserver.disconnect()
       window.removeEventListener('resize', resize)
       chartInstanceRef.current = null

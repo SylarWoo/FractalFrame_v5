@@ -93,4 +93,22 @@ describe('mt5SymbolsApi', () => {
 
     await expect(startStoreV5AggregateJob('XAUUSDm', ['H4'])).resolves.toEqual(aggregatePayload)
   })
+
+  it('passes rebuild flag when starting aggregate jobs', async () => {
+    const fetchMock = mockFetch({
+      ok: true,
+      jobId: 'aggregate-1',
+      symbol: 'XAUUSDm',
+      phase: 'queued',
+      status: 'queued',
+      periods: ['H4'],
+      completed: 0,
+      total: 1,
+    }, true)
+
+    await startStoreV5AggregateJob('XAUUSDm', ['H4'], { rebuild: true })
+
+    const [url] = fetchMock.mock.calls[0]
+    expect(String(url)).toBe('http://127.0.0.1:8765/api/market-data/v1/store-v5/aggregate/start?symbol=XAUUSDm&rebuild=1&timeframes=H4')
+  })
 })

@@ -23,7 +23,7 @@ import {
   waitForWatchlistPullJob,
 } from './watchlistRealtimeJobWaiters'
 
-const storeV5M1RepairLookbackMinutes = 720
+const storeV5M1RepairLookbackMinutes = 2880
 const storeV5M1RepairMaxGapMinutes = 720
 
 type UseWatchlistRealtimeOptions = {
@@ -136,7 +136,9 @@ export function useWatchlistRealtime({
           if (aggregateTargets.length) {
             setWatchlistRealtimeStatus(`${symbol} aggregating periods`)
             pushWatchlistRealtimeLog(`${symbol} aggregating ${aggregateTargets.join(', ')}`)
-            const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets)
+            const aggregateJob = await startStoreV5AggregateJob(symbol, aggregateTargets, {
+              rebuild: (gapRepair.rowsWritten ?? 0) > 0,
+            })
             await waitForWatchlistAggregateJob(aggregateJob.jobId, symbol, {
               isActive: () => watchlistRealtimeRunRef.current === runId,
               pushLog: pushWatchlistRealtimeLog,

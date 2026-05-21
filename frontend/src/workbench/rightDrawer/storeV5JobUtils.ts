@@ -13,7 +13,7 @@ import {
 } from './storeV5JobWaiters'
 
 export const storeV5M1RepairOptions = {
-  lookbackMinutes: 720,
+  lookbackMinutes: 2880,
   maxGapMinutes: 720,
 }
 

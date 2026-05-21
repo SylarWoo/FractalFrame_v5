@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { bottomPanels } from './bottomDrawer/bottomPanels'
 import { BottomWorkspace } from './bottomDrawer/BottomWorkspace'
 import { ChartCoreHost } from './chart/ChartCoreHost'
 import type { ChartLoadState } from './chart/ChartCoreHost'
+import type { ChartIndicatorCommand } from './chart/ChartCoreHost'
 import {
   LEFT_RAIL_BRUSH_SVGREPO_ICON_48,
   LEFT_RAIL_CURSOR_ARROW_SVGREPO_ICON_48,
@@ -25,7 +26,10 @@ import {
   LEFT_RAIL_ZOOM_OUT_SVGREPO_ICON_48,
 } from './leftRailV4Icons'
 import { RightDrawer } from './rightDrawer/RightDrawer'
+import { readIndicatorPersistenceEnabled, readPersistedIndicatorsState } from './rightDrawer/indicatorPersistence'
+import type { MaIndicatorSettings, RsiIndicatorSettings } from './rightDrawer/indicatorPersistence'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
+import type { RightDrawerId } from './rightDrawer/RightDrawerTypes'
 import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
 import { formatChartLoadStatus } from './mt5DataCenter/storeV5StatusFormat'
 import { readBooleanFlag, readJson, readString, removeStorageItem, writeBooleanFlag, writeString } from './persistence/jsonStorage'
@@ -87,9 +91,9 @@ function getInitialBottomDrawerHeight() {
   }
 }
 
-function getInitialRightDrawerActive(): 'mt5' | 'settings' | null {
+function getInitialRightDrawerActive(): RightDrawerId | null {
   const value = readString(storageKeys.rightWidgetActiveDrawer)
-  return value === 'mt5' || value === 'settings' ? value : null
+  return value === 'indicators' || value === 'mt5' || value === 'settings' ? value : null
 }
 
 function readSharedSelection() {
@@ -157,7 +161,7 @@ function renderChartLoadStatus(state: ChartLoadState | null) {
 }
 
 export function AppShell() {
-  const [activeRightDrawer, setActiveRightDrawer] = useState<'mt5' | 'settings' | null>(getInitialRightDrawerActive)
+  const [activeRightDrawer, setActiveRightDrawer] = useState<RightDrawerId | null>(getInitialRightDrawerActive)
   const [rightDrawerWidth, setRightDrawerWidth] = useState(getInitialDrawerWidth)
   const [bottomDrawerOpen, setBottomDrawerOpen] = useState(getInitialBottomDrawerOpen)
   const [bottomDrawerHeight, setBottomDrawerHeight] = useState(getInitialBottomDrawerHeight)
@@ -172,6 +176,14 @@ export function AppShell() {
   })
   const [chartJump, setChartJump] = useState<{ id: number; timestamp?: number } | null>(null)
   const [chartStepLoad, setChartStepLoad] = useState<{ direction: 'left' | 'right'; id: number } | null>(null)
+  const [chartIndicatorCommand, setChartIndicatorCommand] = useState<ChartIndicatorCommand | null>(() => {
+    if (!readIndicatorPersistenceEnabled()) return null
+    const persisted = readPersistedIndicatorsState()
+    if (persisted.loaded.RSI) return { action: 'load', id: Date.now(), name: 'RSI', settings: persisted.rsi }
+    if (persisted.loaded.MA) return { action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma }
+    return null
+  })
+  const restoredPersistedIndicatorsRef = useRef(false)
   const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
   const [symbolDisplayVersion, setSymbolDisplayVersion] = useState(0)
   const [clockNow, setClockNow] = useState(() => Date.now())
@@ -196,6 +208,17 @@ export function AppShell() {
     return () => {
       window.removeEventListener(settingsSymbolChangedEvent, syncTimezone)
       window.removeEventListener('storage', syncTimezone)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (restoredPersistedIndicatorsRef.current || !readIndicatorPersistenceEnabled()) return
+    restoredPersistedIndicatorsRef.current = true
+    const persisted = readPersistedIndicatorsState()
+    if (persisted.loaded.RSI && persisted.loaded.MA) {
+      window.setTimeout(() => {
+        setChartIndicatorCommand({ action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma })
+      }, 0)
     }
   }, [])
 
@@ -271,6 +294,22 @@ export function AppShell() {
     window.addEventListener('pointerup', handlePointerUp, { once: true })
   }
 
+  function handleLoadIndicator(name: ChartIndicatorCommand['name'], settings: MaIndicatorSettings | RsiIndicatorSettings) {
+    if (name === 'MA') {
+      setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as MaIndicatorSettings })
+    } else {
+      setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as RsiIndicatorSettings })
+    }
+  }
+
+  function handleUnloadIndicator(name: ChartIndicatorCommand['name']) {
+    if (name === 'MA') {
+      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
+    } else {
+      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
+    }
+  }
+
   return (
     <div className="ff-app-shell">
       <TopBar
@@ -323,6 +362,7 @@ export function AppShell() {
         >
           <ChartCoreHost
             displayName={chartDisplayName}
+            indicatorCommand={chartIndicatorCommand}
             jump={chartJump}
             onLoadStateChange={setChartLoadState}
             period={chartTarget.period}
@@ -353,9 +393,11 @@ export function AppShell() {
           activeDrawer={activeRightDrawer}
           drawerWidth={rightDrawerWidth}
           onClose={() => setActiveRightDrawer(null)}
+          onLoadIndicator={handleLoadIndicator}
           onOpenChart={setChartTarget}
           onResize={setRightDrawerWidth}
           onToggleDrawer={(drawer) => setActiveRightDrawer((current) => (current === drawer ? null : drawer))}
+          onUnloadIndicator={handleUnloadIndicator}
         />
       </main>
     </div>

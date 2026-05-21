@@ -40,10 +40,14 @@ export async function cancelStoreV5PullJob(jobId: string): Promise<StoreV5PullJo
   )
 }
 
-export async function startStoreV5AggregateJob(symbol: string, timeframes?: string[]): Promise<StoreV5AggregateJobPayload> {
+export async function startStoreV5AggregateJob(
+  symbol: string,
+  timeframes?: string[],
+  options: { rebuild?: boolean } = {},
+): Promise<StoreV5AggregateJobPayload> {
   const params = new URLSearchParams()
   params.set('symbol', symbol)
-  params.set('rebuild', '0')
+  params.set('rebuild', options.rebuild ? '1' : '0')
   if (timeframes?.length) params.set('timeframes', timeframes.join(','))
 
   return getMt5Json<StoreV5AggregateJobPayload>(
