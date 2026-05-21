@@ -30,11 +30,10 @@ export function buildVisibleStoreAggregateRows(localStoreStatus: StoreV5CheckPay
 export function buildVisibleStoreTableRows(options: {
   localStoreStatus: StoreV5CheckPayload | null
   selectedRow: Mt5SymbolRow | null
-  storeV5ListSymbols: string[]
 }): StoreTableRow[] {
   const rows: StoreTableRow[] = []
-  if (options.selectedRow?.symbol && options.storeV5ListSymbols.includes(options.selectedRow.symbol)) {
-    const rowsCount = resolveLocalM1Rows(options.localStoreStatus)
+  const rowsCount = resolveLocalM1Rows(options.localStoreStatus)
+  if (options.selectedRow?.symbol && typeof rowsCount === 'number' && Number.isFinite(rowsCount) && rowsCount > 0) {
     rows.push({
       period: 'M1',
       count: formatCount(rowsCount),

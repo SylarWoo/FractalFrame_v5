@@ -15,6 +15,7 @@ export function openChartColorPalettePopoverV1(options: {
   }) => void
   showCustomColorsRow?: boolean
   showCustomPicker?: boolean
+  showPresetGrid?: boolean
   showLineStyle?: boolean
   showOpacity?: boolean
   showThickness?: boolean

@@ -81,6 +81,27 @@
   flex-basis: 28px;
 }
 
+.ff-settings-line-weight-swatch {
+  display: inline-flex;
+  width: 76px;
+  height: 34px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #d1d4dc;
+  border-radius: 5px;
+  background: #ffffff;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ff-settings-line-weight-swatch__line {
+  width: 48px;
+  height: 0;
+  border-top: 1px solid #131722;
+  background: transparent;
+}
+
 .ff-settings-color-pair {
   display: inline-flex;
   gap: 6px;

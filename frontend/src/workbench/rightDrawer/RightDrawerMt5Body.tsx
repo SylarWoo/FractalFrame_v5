@@ -27,7 +27,6 @@ type RightDrawerMt5BodyProps = {
   localStoreStatus: StoreV5CheckPayload | null
   m1CheckJob: Mt5M1CheckJobPayload | null
   mt5M1LastCheckedAt: string
-  onAddM1ToStoreList: () => void
   onAggregateStore: () => void
   onCancelMt5M1Check: () => void
   onCancelPullStore: () => void
@@ -41,6 +40,7 @@ type RightDrawerMt5BodyProps = {
   onOpenWatchlistPeriod: (row: StoreTableRow) => void
   onPullStore: () => void
   onRefreshStoreStatus: () => void
+  onRepairM1Gaps: () => void
   onResetColumnWidth: (column: SymbolTableColumnKey) => void
   onResetTopPaneHeight: () => void
   onResetWatchlistHeight: () => void
@@ -150,7 +150,6 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
                 localStoreStatus={localStoreStatus}
                 m1CheckJob={m1CheckJob}
                 mt5M1LastCheckedAt={mt5M1LastCheckedAt}
-                onAddM1ToStoreList={props.onAddM1ToStoreList}
                 onAggregateStore={props.onAggregateStore}
                 onCancelMt5M1Check={props.onCancelMt5M1Check}
                 onCancelPullStore={props.onCancelPullStore}
@@ -161,6 +160,7 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
                 onOpenStoreTableRow={props.onOpenStoreTableRow}
                 onPullStore={props.onPullStore}
                 onRefreshStoreStatus={props.onRefreshStoreStatus}
+                onRepairM1Gaps={props.onRepairM1Gaps}
                 onToggleAggregatePeriod={props.onToggleAggregatePeriod}
                 onToggleAllAggregatePeriods={props.onToggleAllAggregatePeriods}
                 onToggleStorePanelPersistence={props.onToggleStorePanelPersistence}

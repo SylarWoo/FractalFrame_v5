@@ -21,7 +21,6 @@ type StoreV5PanelProps = {
   localStoreStatus: StoreV5CheckPayload | null
   m1CheckJob: Mt5M1CheckJobPayload | null
   mt5M1LastCheckedAt: string
-  onAddM1ToStoreList: () => void
   onAggregateStore: () => void
   onCancelMt5M1Check: () => void
   onCancelPullStore: () => void
@@ -32,6 +31,7 @@ type StoreV5PanelProps = {
   onOpenStoreTableRow: (row: StoreTableRow) => void
   onPullStore: () => void
   onRefreshStoreStatus: () => void
+  onRepairM1Gaps: () => void
   onToggleAggregatePeriod: (period: string) => void
   onToggleAllAggregatePeriods: () => void
   onToggleStorePanelPersistence: (enabled: boolean) => void
@@ -54,7 +54,6 @@ export function StoreV5Panel({
   localStoreStatus,
   m1CheckJob,
   mt5M1LastCheckedAt,
-  onAddM1ToStoreList,
   onAggregateStore,
   onCancelMt5M1Check,
   onCancelPullStore,
@@ -65,6 +64,7 @@ export function StoreV5Panel({
   onOpenStoreTableRow,
   onPullStore,
   onRefreshStoreStatus,
+  onRepairM1Gaps,
   onToggleAggregatePeriod,
   onToggleAllAggregatePeriods,
   onToggleStorePanelPersistence,
@@ -161,7 +161,7 @@ export function StoreV5Panel({
         </button>
         <button disabled={storeCheckLoading} onClick={onDeleteLocalStore} type="button">删除本地数据</button>
         <button disabled={storeCheckLoading} onClick={onCleanLocalM1} type="button">清理无效 M1</button>
-        <button disabled={storeCheckLoading} onClick={onAddM1ToStoreList} type="button">加入列表</button>
+        <button disabled={storeCheckLoading} onClick={onRepairM1Gaps} type="button">修复</button>
       </div>
       <table className="ff-store-detail-table ff-store-aggregate-table">
         <thead>

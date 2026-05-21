@@ -66,6 +66,7 @@ export { applySwatchLineBarPreviewV1, ensureChartColorPaletteStyles, lineStyleLw
  * @param {number} [opts.initialThickness]
  * @param {boolean} [opts.showLineStyle]
  * @param {'solid'|'dashed'|'dotted'} [opts.initialLineStyle]
+ * @param {boolean} [opts.showPresetGrid]
  * @param {boolean} [opts.showCustomColorsRow]
  * @param {boolean} [opts.showCustomPicker] 鑹叉澘 | 鑷€夛紙hex + SV + 鑹茬浉锛?
  * @param {(p: { hex: string, opacity: number, hexOpaque: string, thickness?: number, lineStyle?: string, lineStyleLw?: number }) => void} opts.onPick
@@ -86,6 +87,7 @@ export function openChartColorPalettePopoverV1(opts = {}) {
   const showOpacity = opts.showOpacity !== false
   const showThickness = opts.showThickness === true
   const showLineStyle = opts.showLineStyle === true
+  const showPresetGrid = opts.showPresetGrid !== false
   const showCustomColorsRow = opts.showCustomColorsRow === true
   const showCustomPicker = opts.showCustomPicker === true
 
@@ -231,7 +233,7 @@ export function openChartColorPalettePopoverV1(opts = {}) {
     lineRow.append(lineLabel, seg)
   }
 
-  presetsStack.appendChild(grid)
+  if (showPresetGrid) presetsStack.appendChild(grid)
   if (showCustomColorsRow) presetsStack.appendChild(customRow)
   if (showOpacity) presetsStack.appendChild(opacityRow)
   if (showThickness) presetsStack.appendChild(thickRow)

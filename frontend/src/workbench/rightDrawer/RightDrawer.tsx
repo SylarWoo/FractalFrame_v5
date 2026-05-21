@@ -5,7 +5,7 @@ import '../mt5DataCenter/Mt5DataCenterPanel.css'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
 import { formatSymbolStatus, normalizeStoredStatus, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
-import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readStoreV5ListSymbols, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
+import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
 import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
 import { storeTableAggregatePeriods } from './rightDrawerStoreTables'
 import { useRightDrawerResize } from './useRightDrawerResize'
@@ -46,7 +46,6 @@ export function RightDrawer({
   const [selectedPanelTab, setSelectedPanelTab] = useState<SelectedPanelTab>(readImportCenterSelectedTab)
   const [selectedSettingsPanelTab, setSelectedSettingsPanelTab] = useState<SettingsPanelTab>('symbol')
   const [storePanelPersistenceEnabled, setStorePanelPersistenceEnabled] = useState(readStorePanelPersistenceEnabled)
-  const [storeV5ListSymbols, setStoreV5ListSymbols] = useState<string[]>(() => readStoreV5ListSymbols(storePanelPersistenceEnabled))
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(readWatchlistSymbols)
   const [shortcutMenuEnabled, setShortcutMenuEnabled] = useState(readShortcutMenuEnabled)
   const [selectedStoreTableKey, setSelectedStoreTableKey] = useState(() =>
@@ -125,7 +124,6 @@ export function RightDrawer({
     setMt5M1LastCheckedAt,
     localStoreStatus,
     setLocalStoreStatus,
-    storeV5ListSymbols,
     watchlistSymbols,
     shortcutMenuEnabled,
     selectedStoreTableKey,
@@ -168,7 +166,6 @@ export function RightDrawer({
       clearStorePanelPersistence()
       setSelectedStoreTableKey('')
     } else {
-      setStoreV5ListSymbols(readStoreV5ListSymbols(true))
       setSelectedStoreTableKey(readPersistedStoreTableSelection(selectedRow?.symbol ?? '', true))
     }
   }
@@ -247,16 +244,6 @@ export function RightDrawer({
     }
   }
 
-  function handleAddM1ToStoreList() {
-    const symbol = selectedRow?.symbol
-    if (!symbol) return
-    setStoreV5ListSymbols((current) => {
-      const next = current.includes(symbol) ? current : [...current, symbol]
-      saveStoreV5ListSymbols(next, storePanelPersistenceEnabled)
-      return next
-    })
-  }
-
   function handleSetSelectedWatchlistLoaded(loaded: boolean) {
     const symbol = selectedRow?.symbol
     if (!symbol) return
@@ -320,7 +307,7 @@ export function RightDrawer({
             canAggregateStoreV5={canAggregateStoreV5}
             columnWidths={columnWidths} error={error} loading={loading}
             localStoreStatus={localStoreStatus} m1CheckJob={m1CheckJob} mt5M1LastCheckedAt={mt5M1LastCheckedAt}
-            onAddM1ToStoreList={handleAddM1ToStoreList} onAggregateStore={handleAggregateStore}
+            onAggregateStore={handleAggregateStore}
             onCancelMt5M1Check={handleCancelMt5M1Check} onCancelPullStore={handleCancelPullStore}
             onCheckMt5M1Staged={handleCheckMt5M1Staged} onCleanLocalM1={handleCleanLocalM1}
             onColumnResizePointerDown={handleColumnResizePointerDown}
@@ -328,6 +315,7 @@ export function RightDrawer({
             onLoadSymbols={loadSymbols}
             onOpenStoreTableRow={handleOpenStoreTableRow} onOpenWatchlistPeriod={handleOpenWatchlistPeriod}
             onPullStore={handlePullStore} onRefreshStoreStatus={handleRefreshStoreStatus}
+            onRepairM1Gaps={handleRefreshStoreStatus}
             onResetColumnWidth={resetColumnWidth}
             onResetTopPaneHeight={resetTopPaneHeight} onResetWatchlistHeight={resetWatchlistTableHeight}
             onResizeWatchlistPointerDown={handleWatchlistTableResizePointerDown}

@@ -6,9 +6,10 @@ import { useChartInstance } from './useChartInstance'
 import { useChartRealtimeTicks } from './useChartRealtimeTicks'
 import { useChartStepLoad } from './useChartStepLoad'
 import { installRsiAxisDragSensitivity, uninstallRsiAxisDragSensitivity } from './rsiAxisDragSensitivity'
+import { installMainVolumeOverlay } from './mainVolumeIndicator'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
-import type { MaIndicatorSettings, RsiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { MaIndicatorSettings, RsiIndicatorSettings, VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import './ChartCoreHost.css'
 
 const rsiPaneId = 'rsi_pane'
@@ -36,6 +37,7 @@ export type ChartIndicatorCommand = {
 } & (
   | { name: 'MA'; settings?: MaIndicatorSettings }
   | { name: 'RSI'; settings?: RsiIndicatorSettings }
+  | { name: 'Vol'; settings?: VolIndicatorSettings }
 )
 
 export type ChartLoadState = {
@@ -68,6 +70,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
   const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, period, reloadId, symbol, totalRows })
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const mainVolumeOverlayRef = useRef<ReturnType<typeof installMainVolumeOverlay> | null>(null)
 
   useEffect(() => {
     onLoadStateChange?.({ ...loadState, period, symbol, totalRows })
@@ -143,7 +146,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         rsiPaneHeightObserverRef.current?.disconnect()
         rsiPaneHeightObserverRef.current = null
         chart.removeIndicator(rsiPaneId, 'RSI')
-        uninstallRsiAxisDragSensitivity()
+        window.requestAnimationFrame(() => installRsiAxisDragSensitivity(chart))
       }
     }
 
@@ -160,9 +163,24 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         chart.removeIndicator('candle_pane', 'MA')
       }
     }
+
+    if (indicatorCommand.name === 'Vol') {
+      if (indicatorCommand.action === 'load') {
+        if (mainVolumeOverlayRef.current) {
+          mainVolumeOverlayRef.current.updateSettings(indicatorCommand.settings)
+        } else {
+          mainVolumeOverlayRef.current = installMainVolumeOverlay(chart, indicatorCommand.settings)
+        }
+      } else {
+        mainVolumeOverlayRef.current?.destroy()
+        mainVolumeOverlayRef.current = null
+      }
+    }
   }, [chartInstanceRef, indicatorCommand])
 
   useEffect(() => () => {
+    mainVolumeOverlayRef.current?.destroy()
+    mainVolumeOverlayRef.current = null
     rsiPaneHeightObserverRef.current?.disconnect()
     uninstallRsiAxisDragSensitivity()
   }, [])

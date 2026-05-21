@@ -1,10 +1,20 @@
-import { IndicatorSeries, LineType, registerIndicator } from 'klinecharts'
-import type { KLineData } from 'klinecharts'
+import { IndicatorSeries, registerIndicator } from 'klinecharts'
+import type { IndicatorDrawParams, KLineData } from 'klinecharts'
 import { defaultMaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 
 type MaShiftRow = {
   ma?: number
+  maFadedColor1?: number
+  maFadedColor2?: number
+  maFadedColor3?: number
+  maFadedColor4?: number
+  maColor1?: number
+  maColor2?: number
+  maColor3?: number
+  maColor4?: number
+  maColorIndex?: number
+  oscillator?: number
 }
 
 let registered = false
@@ -143,7 +153,7 @@ function clampOpacity(value: unknown, fallback = 1) {
 
 function clampLineWidth(value: unknown, fallback = 1) {
   const next = Math.round(Number(value))
-  return Number.isFinite(next) ? Math.max(1, Math.min(next, 4)) : fallback
+  return Number.isFinite(next) ? Math.max(1, Math.min(next, 6)) : fallback
 }
 
 function colorWithAlpha(hex: string, alpha: number) {
@@ -155,19 +165,199 @@ function colorWithAlpha(hex: string, alpha: number) {
   return `rgba(${red}, ${green}, ${blue}, ${clampOpacity(alpha)})`
 }
 
-function lineDashForStyle(style: MaIndicatorSettings['maLineStyle']) {
-  if (style === 'dotted') return [1, 3]
-  if (style === 'dashed') return [4, 3]
-  return []
+function valueOrFallback(values: string[], index: number, fallback: string) {
+  const value = values[index]
+  return typeof value === 'string' && value.trim() ? value : fallback
 }
 
-function klineLineTypeForStyle(style: MaIndicatorSettings['maLineStyle']) {
-  return style === 'solid' ? LineType.Solid : LineType.Dashed
+function getMaSegmentColor(settings: MaIndicatorSettings, colorIndex: number, opacity: number) {
+  return colorWithAlpha(valueOrFallback(settings.colors, colorIndex, settings.maLineColor), opacity)
+}
+
+function calculateStandardDeviation(values: Array<number | undefined>, period: number) {
+  const out: Array<number | undefined> = values.map(() => undefined)
+  for (let index = period - 1; index < values.length; index += 1) {
+    let sum = 0
+    let count = 0
+    for (let cursor = index - period + 1; cursor <= index; cursor += 1) {
+      const value = values[cursor]
+      if (!Number.isFinite(value)) continue
+      sum += value as number
+      count += 1
+    }
+    if (count !== period) continue
+    const mean = sum / period
+    let variance = 0
+    for (let cursor = index - period + 1; cursor <= index; cursor += 1) {
+      const value = values[cursor] as number
+      variance += (value - mean) ** 2
+    }
+    out[index] = Math.sqrt(variance / period)
+  }
+  return out
+}
+
+function getOscillatorColorIndex(current: number | undefined, previous: number | undefined) {
+  if (!Number.isFinite(current)) return null
+  const value = current as number
+  const prior = Number.isFinite(previous) ? previous as number : value
+  if (value >= 0) return value >= prior ? 0 : 1
+  return value >= prior ? 2 : 3
+}
+
+function assignColoredMaSegments(rows: MaShiftRow[], maValues: Array<number | undefined>, oscillatorValues: Array<number | undefined>) {
+  for (let index = 0; index < rows.length; index += 1) {
+    const ma = maValues[index]
+    if (!Number.isFinite(ma)) continue
+    const colorIndex = getOscillatorColorIndex(oscillatorValues[index], oscillatorValues[index - 1])
+    if (colorIndex == null) continue
+    const key = `maColor${colorIndex + 1}` as 'maColor1' | 'maColor2' | 'maColor3' | 'maColor4'
+    const fadedKey = `maFadedColor${colorIndex + 1}` as 'maFadedColor1' | 'maFadedColor2' | 'maFadedColor3' | 'maFadedColor4'
+    rows[index][key] = ma
+    rows[index][fadedKey] = ma
+    rows[index].maColorIndex = colorIndex
+    const previousMa = maValues[index - 1]
+    if (Number.isFinite(previousMa)) {
+      rows[index - 1][key] = previousMa
+      rows[index - 1][fadedKey] = previousMa
+      if (rows[index - 1].maColorIndex == null) rows[index - 1].maColorIndex = colorIndex
+    }
+  }
+}
+
+function createMaStrokeStyle(
+  ctx: CanvasRenderingContext2D,
+  settings: MaIndicatorSettings,
+  fromColorIndex: number,
+  toColorIndex: number,
+  opacity: number,
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+) {
+  const fromColor = getMaSegmentColor(settings, fromColorIndex, opacity)
+  const toColor = getMaSegmentColor(settings, toColorIndex, opacity)
+  if (fromColor === toColor) return fromColor
+  const gradient = ctx.createLinearGradient(fromX, fromY, toX, toY)
+  gradient.addColorStop(0, fromColor)
+  gradient.addColorStop(1, toColor)
+  return gradient
+}
+
+function extendSegmentEndpoints(fromX: number, fromY: number, toX: number, toY: number, overlap: number) {
+  const dx = toX - fromX
+  const dy = toY - fromY
+  const length = Math.hypot(dx, dy)
+  if (!Number.isFinite(length) || length <= 0) return { fromX, fromY, toX, toY }
+  const unitX = dx / length
+  const unitY = dy / length
+  return {
+    fromX: fromX - unitX * overlap,
+    fromY: fromY - unitY * overlap,
+    toX: toX + unitX * overlap,
+    toY: toY + unitY * overlap,
+  }
+}
+
+function drawMaLayer(
+  params: IndicatorDrawParams<MaShiftRow>,
+  settings: MaIndicatorSettings,
+  layer: 'faded' | 'main',
+) {
+  const visible = layer === 'faded' ? settings.maFadedVisible : settings.maLineVisible
+  if (!visible) return
+
+  const lineWidth = clampLineWidth(layer === 'faded' ? settings.maFadedLineWidth : settings.maLineWidth)
+  const opacity = clampOpacity(layer === 'faded' ? settings.maFadedOpacity : settings.maLineOpacity, layer === 'faded' ? 0.1 : 1)
+  if (lineWidth <= 0 || opacity <= 0) return
+
+  const { ctx, indicator, visibleRange, xAxis, yAxis } = params
+  const rows = indicator.result ?? []
+  const from = Math.max(1, Math.floor(visibleRange.realFrom) - 1)
+  const to = Math.min(rows.length - 1, Math.ceil(visibleRange.realTo) + 1)
+
+  ctx.save()
+  ctx.lineCap = 'square'
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = lineWidth
+
+  let activeColorIndex: number | null = null
+  let activePathStarted = false
+
+  const flushActivePath = () => {
+    if (!activePathStarted || activeColorIndex == null) return
+    ctx.strokeStyle = getMaSegmentColor(settings, activeColorIndex, opacity)
+    ctx.stroke()
+    activePathStarted = false
+    activeColorIndex = null
+  }
+
+  for (let index = from; index <= to; index += 1) {
+    const prev = rows[index - 1]
+    const current = rows[index]
+    if (!Number.isFinite(prev?.ma) || !Number.isFinite(current?.ma)) {
+      flushActivePath()
+      continue
+    }
+    const fromColorIndex = typeof prev.maColorIndex === 'number' ? prev.maColorIndex : current.maColorIndex
+    const toColorIndex = typeof current.maColorIndex === 'number' ? current.maColorIndex : fromColorIndex
+    if (typeof fromColorIndex !== 'number' || typeof toColorIndex !== 'number') {
+      flushActivePath()
+      continue
+    }
+
+    const fromX = xAxis.convertToPixel(index - 1)
+    const toX = xAxis.convertToPixel(index)
+    const fromY = yAxis.convertToPixel(prev.ma as number)
+    const toY = yAxis.convertToPixel(current.ma as number)
+
+    if (fromColorIndex === toColorIndex) {
+      if (!activePathStarted || activeColorIndex !== toColorIndex) {
+        flushActivePath()
+        activeColorIndex = toColorIndex
+        activePathStarted = true
+        ctx.beginPath()
+        ctx.moveTo(fromX, fromY)
+      }
+      ctx.lineTo(toX, toY)
+      continue
+    }
+
+    flushActivePath()
+    const extended = extendSegmentEndpoints(fromX, fromY, toX, toY, Math.max(1, lineWidth * 0.75))
+    ctx.strokeStyle = createMaStrokeStyle(
+      ctx,
+      settings,
+      fromColorIndex,
+      toColorIndex,
+      opacity,
+      extended.fromX,
+      extended.fromY,
+      extended.toX,
+      extended.toY,
+    )
+    ctx.beginPath()
+    ctx.moveTo(extended.fromX, extended.fromY)
+    ctx.lineTo(extended.toX, extended.toY)
+    ctx.stroke()
+  }
+
+  flushActivePath()
+  ctx.restore()
+}
+
+function drawMaShiftIndicator(params: IndicatorDrawParams<MaShiftRow>) {
+  const settings = normalizeMaSettings(params.indicator.calcParams[0])
+  drawMaLayer(params, settings, 'faded')
+  drawMaLayer(params, settings, 'main')
+  return true
 }
 
 export function calculateTradingViewMaShiftRows(dataList: KLineData[], inputSettings: Partial<MaIndicatorSettings> | number = defaultMaIndicatorSettings): MaShiftRow[] {
   const settings = normalizeMaSettings(inputSettings)
   const period = clampPeriod(settings.length, defaultMaIndicatorSettings.length)
+  const shiftPeriod = clampPeriod(settings.shiftLength, defaultMaIndicatorSettings.shiftLength)
   const values = dataList.map((row) => calculateSourceValue(row, settings.source))
   const maValues = settings.type === 'ema'
     ? calculateEma(values, period)
@@ -179,7 +369,17 @@ export function calculateTradingViewMaShiftRows(dataList: KLineData[], inputSett
           ? calculateVwma(dataList, values, period)
           : calculateSma(values, period)
 
-  return maValues.map((ma) => Number.isFinite(ma) ? { ma } : {})
+  const deviations = maValues.map((ma, index) => Number.isFinite(ma) && Number.isFinite(values[index]) ? values[index] - (ma as number) : undefined)
+  const deviationScale = calculateStandardDeviation(deviations, shiftPeriod)
+  const multiplier = Math.max(0.000001, Number(settings.shiftMultiplier) || defaultMaIndicatorSettings.shiftMultiplier)
+  const oscillatorValues = deviations.map((deviation, index) => {
+    const scale = deviationScale[index]
+    if (!Number.isFinite(deviation) || !Number.isFinite(scale) || Math.abs(scale as number) < 0.000001) return undefined
+    return (deviation as number) / ((scale as number) * multiplier)
+  })
+  const rows = maValues.map((ma, index) => Number.isFinite(ma) ? { ma, oscillator: oscillatorValues[index] } : {})
+  assignColoredMaSegments(rows, maValues, oscillatorValues)
+  return rows
 }
 
 export function ensureTradingViewMaShiftIndicator() {
@@ -191,40 +391,8 @@ export function ensureTradingViewMaShiftIndicator() {
     shortName: 'MA',
     calcParams: [defaultMaIndicatorSettings],
     series: IndicatorSeries.Price,
-    figures: [
-      {
-        key: 'ma',
-        title: 'MA: ',
-        type: 'line',
-        styles: (_data, indicator) => {
-          const settings = normalizeMaSettings(indicator.calcParams[0])
-          return {
-            color: settings.maLineVisible ? colorWithAlpha(settings.maLineColor, settings.maLineOpacity) : 'rgba(0,0,0,0)',
-            dashedValue: lineDashForStyle(settings.maLineStyle),
-            size: clampLineWidth(settings.maLineWidth),
-            smooth: false,
-            style: klineLineTypeForStyle(settings.maLineStyle),
-          } as any
-        },
-      },
-    ],
-    regenerateFigures: () => [
-      {
-        key: 'ma',
-        title: 'MA: ',
-        type: 'line',
-        styles: (_data, indicator) => {
-          const settings = normalizeMaSettings(indicator.calcParams[0])
-          return {
-            color: settings.maLineVisible ? colorWithAlpha(settings.maLineColor, settings.maLineOpacity) : 'rgba(0,0,0,0)',
-            dashedValue: lineDashForStyle(settings.maLineStyle),
-            size: clampLineWidth(settings.maLineWidth),
-            smooth: false,
-            style: klineLineTypeForStyle(settings.maLineStyle),
-          } as any
-        },
-      },
-    ],
+    figures: [],
+    regenerateFigures: () => [],
     createTooltipDataSource: ({ indicator }) => {
       const settings = normalizeMaSettings(indicator.calcParams[0])
       return {
@@ -234,6 +402,7 @@ export function ensureTradingViewMaShiftIndicator() {
         values: [],
       }
     },
+    draw: drawMaShiftIndicator,
     calc: (dataList, indicator) => calculateTradingViewMaShiftRows(dataList, indicator.calcParams[0]),
   })
 }

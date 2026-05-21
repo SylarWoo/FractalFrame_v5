@@ -30,7 +30,6 @@ type UseRightDrawerSelectionOptions = {
   setMt5M1LastCheckedAt: Dispatch<SetStateAction<string>>
   localStoreStatus: StoreV5CheckPayload | null
   setLocalStoreStatus: Dispatch<SetStateAction<StoreV5CheckPayload | null>>
-  storeV5ListSymbols: string[]
   watchlistSymbols: string[]
   shortcutMenuEnabled: boolean
   selectedStoreTableKey: string
@@ -52,7 +51,6 @@ export function useRightDrawerSelection({
   setMt5M1LastCheckedAt,
   localStoreStatus,
   setLocalStoreStatus,
-  storeV5ListSymbols,
   watchlistSymbols,
   shortcutMenuEnabled,
   selectedStoreTableKey,
@@ -97,8 +95,8 @@ export function useRightDrawerSelection({
   const foregroundRealtimeSymbol = selectedRow?.symbol ?? ''
 
   const visibleStoreTableRows = useMemo<StoreTableRow[]>(() => {
-    return buildVisibleStoreTableRows({ localStoreStatus, selectedRow, storeV5ListSymbols })
-  }, [localStoreStatus, selectedRow, storeV5ListSymbols])
+    return buildVisibleStoreTableRows({ localStoreStatus, selectedRow })
+  }, [localStoreStatus, selectedRow])
   const watchlistDirectPeriods = useMemo<StoreTableRow[]>(() => buildWatchlistDirectPeriods(localStoreStatus), [localStoreStatus])
   const watchlistAggregatedPeriods = useMemo<StoreTableRow[]>(
     () => buildWatchlistAggregatedPeriods(localStoreStatus),

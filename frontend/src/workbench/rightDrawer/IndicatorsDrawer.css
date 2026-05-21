@@ -603,6 +603,15 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
   gap: 10px;
 }
 
+.ff-indicators-input-panel-v1__tv-style-row-label {
+  color: #131722;
+  font: 14px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
+}
+
+.ff-indicators-vol-style-panel-v1 .ff-indicators-style-row-v1 {
+  grid-template-columns: 176px max-content;
+}
+
 .ff-indicators-style-row-v1__controls input[type='number'] {
   width: 48px;
   height: 30px;

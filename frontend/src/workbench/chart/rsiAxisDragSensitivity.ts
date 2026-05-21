@@ -1,7 +1,8 @@
 import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 
-const rsiAxisDragSensitivity = 1.15
+const indicatorAxisDragSensitivity = 3.2
+const indicatorAxisPaneIds = ['rsi_pane']
 
 type InternalChart = Chart & {
   adjustPaneViewport?: (shouldMeasureHeight?: boolean, shouldMeasureWidth?: boolean, shouldUpdate?: boolean, shouldAdjustYAxis?: boolean) => void
@@ -22,21 +23,21 @@ type InternalChart = Chart & {
   } | null
 }
 
-let cleanupRsiAxisDrag: (() => void) | null = null
+let cleanupIndicatorAxisDrag: (() => void) | null = null
 
 export function uninstallRsiAxisDragSensitivity() {
-  cleanupRsiAxisDrag?.()
-  cleanupRsiAxisDrag = null
+  cleanupIndicatorAxisDrag?.()
+  cleanupIndicatorAxisDrag = null
 }
 
-export function installRsiAxisDragSensitivity(chart: Chart, paneId = 'rsi_pane') {
-  uninstallRsiAxisDragSensitivity()
+function installAxisDragForPane(chart: Chart, paneId: string) {
+  const cleanupFns: Array<() => void> = []
 
   const internalChart = chart as InternalChart
   const axisDom = chart.getDom(paneId, DomPosition.YAxis)
   const pane = internalChart.getDrawPaneById?.(paneId)
   const yAxis = pane?.getAxisComponent?.()
-  if (!axisDom || !yAxis) return
+  if (!axisDom || !yAxis) return null
   const axisElement = axisDom
   const yAxisComponent = yAxis
   const axisCursorElements = [axisElement, ...Array.from(axisElement.querySelectorAll<HTMLElement>('*'))]
@@ -120,7 +121,7 @@ export function installRsiAxisDragSensitivity(chart: Chart, paneId = 'rsi_pane')
     event.stopImmediatePropagation()
 
     const delta = event.pageY - drag.startY
-    const scale = Math.max(0.08, 1 + (delta / drag.height) * rsiAxisDragSensitivity)
+    const scale = Math.max(0.08, 1 + (delta / drag.height) * indicatorAxisDragSensitivity)
     const newRange = drag.range * scale
     const difRange = (newRange - drag.range) / 2
     applyRange(drag.from - difRange, drag.to + difRange)
@@ -146,12 +147,25 @@ export function installRsiAxisDragSensitivity(chart: Chart, paneId = 'rsi_pane')
   axisElement.addEventListener('mouseenter', applyAxisCursor, true)
   axisElement.addEventListener('mousemove', applyAxisCursor, true)
 
-  cleanupRsiAxisDrag = () => {
+  cleanupFns.push(() => {
     finishDrag()
     axisElement.removeEventListener('mousedown', handleMouseDown, true)
     axisElement.removeEventListener('dblclick', handleDoubleClick, true)
     axisElement.removeEventListener('mouseenter', applyAxisCursor, true)
     axisElement.removeEventListener('mousemove', applyAxisCursor, true)
     restoreAxisCursor()
+  })
+
+  return () => cleanupFns.forEach((cleanup) => cleanup())
+}
+
+export function installRsiAxisDragSensitivity(chart: Chart, paneIds: string[] = indicatorAxisPaneIds) {
+  uninstallRsiAxisDragSensitivity()
+  const cleanups = paneIds
+    .map((paneId) => installAxisDragForPane(chart, paneId))
+    .filter((cleanup): cleanup is () => void => typeof cleanup === 'function')
+
+  cleanupIndicatorAxisDrag = () => {
+    cleanups.forEach((cleanup) => cleanup())
   }
 }

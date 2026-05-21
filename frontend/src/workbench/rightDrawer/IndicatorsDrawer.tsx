@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
-import { SettingsColorSwatch, SettingsLineSwatch } from '../settings/SettingsSwatches'
+import { SettingsColorSwatch, SettingsLineSwatch, SettingsLineWeightSwatch } from '../settings/SettingsSwatches'
 import {
   clearPersistedIndicatorsState,
   readIndicatorPersistenceEnabled,
@@ -9,10 +9,10 @@ import {
   writeIndicatorPersistenceEnabled,
   writePersistedIndicatorsState,
 } from './indicatorPersistence'
-import type { MaIndicatorSettings, MaMarkerMode, MaSource, MaType, RsiIndicatorSettings, RsiPrecision, RsiSmoothingType, RsiSource } from './indicatorPersistence'
+import type { IndicatorSettingsTab, MaIndicatorSettings, MaMarkerMode, MaSource, MaType, RsiIndicatorSettings, RsiPrecision, RsiSmoothingType, RsiSource, VolIndicatorSettings } from './indicatorPersistence'
 import './IndicatorsDrawer.css'
 
-type SupportedChartIndicator = 'MA' | 'RSI'
+type SupportedChartIndicator = 'MA' | 'RSI' | 'Vol'
 
 type IndicatorRow = {
   key: string
@@ -22,14 +22,12 @@ type IndicatorRow = {
 }
 
 type IndicatorsDrawerProps = {
-  onLoadIndicator?: (name: SupportedChartIndicator, settings: MaIndicatorSettings | RsiIndicatorSettings) => void
+  onLoadIndicator?: (name: SupportedChartIndicator, settings: MaIndicatorSettings | RsiIndicatorSettings | VolIndicatorSettings) => void
   onUnloadIndicator?: (name: SupportedChartIndicator) => void
 }
 
 type IndicatorColumnKey = 'indicator' | 'name' | 'type' | 'description' | 'status'
 type IndicatorColumnWidths = Record<IndicatorColumnKey, number>
-type IndicatorSettingsTab = 'input' | 'style' | 'visibility'
-
 const defaultColumnWidths: IndicatorColumnWidths = {
   indicator: 58,
   name: 116,
@@ -112,7 +110,11 @@ const maMarkerModeOptions: Array<{ label: string; value: MaMarkerMode }> = [
 ]
 
 function isSupportedChartIndicator(key: string): key is SupportedChartIndicator {
-  return key === 'MA' || key === 'RSI'
+  return key === 'MA' || key === 'RSI' || key === 'Vol'
+}
+
+function resolveInitialSelectedKey(value: string) {
+  return indicatorRows.some((row) => row.key === value) ? value : 'RSI'
 }
 
 function InfoBadge({ title }: { title: string }) {
@@ -442,28 +444,6 @@ function MaInputPanel({
         </label>
       </section>
       <section className="ff-indicators-input-panel-v1__section">
-        <h3 className="ff-indicators-input-panel-v1__section-title">MA Shift Oscillator</h3>
-        <label className="ff-indicators-input-panel-v1__row ff-indicators-ma-panel-v1__row ff-indicators-ma-panel-v1__row--double">
-          <span className="ff-indicators-input-panel-v1__label">长度</span>
-          <span className="ff-indicators-ma-panel-v1__inline-controls">
-            <span className="ff-indicators-input-panel-v1__control">
-              <NumberBox min={1} onChange={(shiftLength) => patch({ shiftLength })} value={settings.shiftLength} />
-            </span>
-            <span className="ff-indicators-input-panel-v1__control">
-              <NumberBox min={0} onChange={(shiftMultiplier) => patch({ shiftMultiplier })} step={0.1} value={settings.shiftMultiplier} />
-            </span>
-            <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--check ff-indicators-ma-panel-v1__shift-check">
-              <input
-                checked={settings.shiftOscillatorVisible}
-                onChange={(event) => patch({ shiftOscillatorVisible: event.target.checked })}
-                type="checkbox"
-              />
-              <span aria-hidden="true" className="ff-indicators-ma-panel-v1__caret">⌃</span>
-            </span>
-          </span>
-        </label>
-      </section>
-      <section className="ff-indicators-input-panel-v1__section">
         <h3 className="ff-indicators-input-panel-v1__section-title">Color</h3>
         <div className="ff-indicators-ma-panel-v1__colors">
           {settings.colors.map((color, index) => (
@@ -497,39 +477,29 @@ function MaStylePanel({
     <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-style-panel-v1 ff-indicators-ma-style-panel-v1" role="tabpanel">
       <div className="ff-indicators-style-row-v1">
         <CheckControl checked={settings.maLineVisible} label="SMA-based MA" onChange={(maLineVisible) => patch({ maLineVisible })} />
-        <SettingsLineSwatch
-          color={settings.maLineColor}
-          lineStyle={settings.maLineStyle}
+        <SettingsLineWeightSwatch
+          color={settings.colors[0] ?? settings.maLineColor}
           onChange={(value) => patch({
-            maLineColor: value.hex,
             maLineOpacity: value.opacity,
-            maLineStyle: value.lineStyle,
             maLineWidth: value.thickness,
           })}
           thickness={settings.maLineWidth}
           value={{
-            hex: settings.maLineColor,
-            lineStyle: settings.maLineStyle,
             opacity: settings.maLineOpacity,
             thickness: settings.maLineWidth,
           }}
         />
       </div>
       <div className="ff-indicators-style-row-v1">
-        <CheckControl checked={settings.maFadedVisible} label="SMA-based MA · 10% opacity" onChange={(maFadedVisible) => patch({ maFadedVisible })} />
-        <SettingsLineSwatch
-          color={settings.maFadedColor}
-          lineStyle={settings.maFadedLineStyle}
+        <CheckControl checked={settings.maFadedVisible} label="SMA-based MA" onChange={(maFadedVisible) => patch({ maFadedVisible })} />
+        <SettingsLineWeightSwatch
+          color={settings.colors[0] ?? settings.maFadedColor}
           onChange={(value) => patch({
-            maFadedColor: value.hex,
             maFadedOpacity: value.opacity,
-            maFadedLineStyle: value.lineStyle,
             maFadedLineWidth: value.thickness,
           })}
           thickness={settings.maFadedLineWidth}
           value={{
-            hex: settings.maFadedColor,
-            lineStyle: settings.maFadedLineStyle,
             opacity: settings.maFadedOpacity,
             thickness: settings.maFadedLineWidth,
           }}
@@ -592,24 +562,136 @@ function MaStylePanel({
   )
 }
 
+function VolInputPanel({
+  onSettingsChange,
+  settings,
+}: {
+  onSettingsChange: (settings: VolIndicatorSettings) => void
+  settings: VolIndicatorSettings
+}) {
+  const patch = (next: Partial<VolIndicatorSettings>) => onSettingsChange({ ...settings, ...next })
+
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-vol-panel-v1" role="tabpanel">
+      <section className="ff-indicators-input-panel-v1__section">
+        <label className="ff-indicators-input-panel-v1__row">
+          <span className="ff-indicators-input-panel-v1__label">
+            MA 长度 <InfoBadge title="成交量均线长度，TradingView 默认 20。" />
+          </span>
+          <span className="ff-indicators-input-panel-v1__control">
+            <NumberBox min={1} onChange={(maLength) => patch({ maLength })} value={settings.maLength} />
+          </span>
+        </label>
+        <label className="ff-indicators-input-panel-v1__row">
+          <span className="ff-indicators-input-panel-v1__label">
+            K线颜色基于前一收盘价 <InfoBadge title="成交量柱颜色是否基于当前收盘价与前一根收盘价比较。" />
+          </span>
+          <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--check">
+            <input checked={settings.colorBasedOnPreviousClose} onChange={(event) => patch({ colorBasedOnPreviousClose: event.target.checked })} type="checkbox" />
+          </span>
+        </label>
+      </section>
+    </div>
+  )
+}
+
+function VolStylePanel({
+  onSettingsChange,
+  settings,
+}: {
+  onSettingsChange: (settings: VolIndicatorSettings) => void
+  settings: VolIndicatorSettings
+}) {
+  const patch = (next: Partial<VolIndicatorSettings>) => onSettingsChange({ ...settings, ...next })
+
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-style-panel-v1 ff-indicators-vol-style-panel-v1" role="tabpanel">
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.volumeChecked} label="成交量" onChange={(volumeChecked) => patch({ volumeChecked })} />
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <span className="ff-indicators-input-panel-v1__tv-style-row-label">增长</span>
+        <SettingsColorSwatch
+          checkerboard
+          color={settings.volumeUpColor}
+          onChange={(value) => patch({ volumeUpColor: value.hex, volumeUpOpacity: value.opacity })}
+          value={{ hex: settings.volumeUpColor, opacity: settings.volumeUpOpacity }}
+        />
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <span className="ff-indicators-input-panel-v1__tv-style-row-label">下降</span>
+        <SettingsColorSwatch
+          checkerboard
+          color={settings.volumeDownColor}
+          onChange={(value) => patch({ volumeDownColor: value.hex, volumeDownOpacity: value.opacity })}
+          value={{ hex: settings.volumeDownColor, opacity: settings.volumeDownOpacity }}
+        />
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.maChecked} label="Volume MA" onChange={(maChecked) => patch({ maChecked })} />
+        <SettingsLineSwatch
+          color={settings.maColor}
+          lineStyle={settings.maLineStyle}
+          onChange={(value) => patch({
+            maColor: value.hex,
+            maLineStyle: value.lineStyle,
+            maLineWidth: value.thickness,
+            maOpacity: value.opacity,
+          })}
+          thickness={settings.maLineWidth}
+          value={{
+            hex: settings.maColor,
+            lineStyle: settings.maLineStyle,
+            opacity: settings.maOpacity,
+            thickness: settings.maLineWidth,
+          }}
+        />
+      </div>
+      <h3 className="ff-indicators-style-panel-v1__subhead">输出值</h3>
+      <label className="ff-indicators-input-panel-v1__row">
+        <span className="ff-indicators-input-panel-v1__label">精确度</span>
+        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
+          <OpenableSelect
+            ariaLabel="Vol precision"
+            onChange={(value) => patch({ precision: value as RsiPrecision })}
+            options={precisionOptions}
+            value={settings.precision}
+          />
+        </span>
+      </label>
+      <CheckControl checked={settings.labelsOnPriceScale} label="价格坐标上的标签" onChange={(labelsOnPriceScale) => patch({ labelsOnPriceScale })} />
+      <CheckControl checked={settings.valuesInStatusLine} label="状态行中的值" onChange={(valuesInStatusLine) => patch({ valuesInStatusLine })} />
+      <h3 className="ff-indicators-style-panel-v1__subhead">输入值</h3>
+      <CheckControl checked={settings.inputsInStatusLine} label="状态行中的输入" onChange={(inputsInStatusLine) => patch({ inputsInStatusLine })} />
+    </div>
+  )
+}
+
 function LoadedIndicatorSettingsPanel({
   maSettings,
   onMaSettingsChange,
   onPersistenceChange,
+  onSettingsTabChange,
   onSettingsChange,
+  onVolSettingsChange,
   persistenceEnabled,
+  settingsTab,
   selectedKey,
   settings,
+  volSettings,
 }: {
   maSettings: MaIndicatorSettings
   onMaSettingsChange: (settings: MaIndicatorSettings) => void
   onPersistenceChange: (enabled: boolean) => void
+  onSettingsTabChange: (tab: IndicatorSettingsTab) => void
   onSettingsChange: (settings: RsiIndicatorSettings) => void
+  onVolSettingsChange: (settings: VolIndicatorSettings) => void
   persistenceEnabled: boolean
+  settingsTab: IndicatorSettingsTab
   selectedKey: string
   settings: RsiIndicatorSettings
+  volSettings: VolIndicatorSettings
 }) {
-  const [activeTab, setActiveTab] = useState<IndicatorSettingsTab>('input')
   const tabs: Array<{ id: IndicatorSettingsTab; label: string }> = [
     { id: 'input', label: '输入' },
     { id: 'style', label: '样式' },
@@ -621,11 +703,11 @@ function LoadedIndicatorSettingsPanel({
       <div className="ff-indicators-input-panel-v1__tabs" role="tablist">
         {tabs.map((tab) => (
           <button
-            aria-selected={activeTab === tab.id}
+            aria-selected={settingsTab === tab.id}
             className="ff-indicators-input-panel-v1__tab"
-            data-active={activeTab === tab.id ? 'true' : undefined}
+            data-active={settingsTab === tab.id ? 'true' : undefined}
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => onSettingsTabChange(tab.id)}
             role="tab"
             type="button"
           >
@@ -637,11 +719,13 @@ function LoadedIndicatorSettingsPanel({
           <button className="ff-indicators-style-persistence-v1__button" data-active={persistenceEnabled ? undefined : 'true'} onClick={() => onPersistenceChange(false)} type="button">Unsave</button>
         </span>
       </div>
-      {selectedKey === 'RSI' && activeTab === 'input' ? <RsiInputPanel onSettingsChange={onSettingsChange} settings={settings} /> : null}
-      {selectedKey === 'RSI' && activeTab === 'style' ? <RsiStylePanel onSettingsChange={onSettingsChange} settings={settings} /> : null}
-      {selectedKey === 'MA' && activeTab === 'input' ? <MaInputPanel onSettingsChange={onMaSettingsChange} settings={maSettings} /> : null}
-      {selectedKey === 'MA' && activeTab === 'style' ? <MaStylePanel onSettingsChange={onMaSettingsChange} settings={maSettings} /> : null}
-      {activeTab === 'visibility' ? (
+      {selectedKey === 'RSI' && settingsTab === 'input' ? <RsiInputPanel onSettingsChange={onSettingsChange} settings={settings} /> : null}
+      {selectedKey === 'RSI' && settingsTab === 'style' ? <RsiStylePanel onSettingsChange={onSettingsChange} settings={settings} /> : null}
+      {selectedKey === 'MA' && settingsTab === 'input' ? <MaInputPanel onSettingsChange={onMaSettingsChange} settings={maSettings} /> : null}
+      {selectedKey === 'MA' && settingsTab === 'style' ? <MaStylePanel onSettingsChange={onMaSettingsChange} settings={maSettings} /> : null}
+      {selectedKey === 'Vol' && settingsTab === 'input' ? <VolInputPanel onSettingsChange={onVolSettingsChange} settings={volSettings} /> : null}
+      {selectedKey === 'Vol' && settingsTab === 'style' ? <VolStylePanel onSettingsChange={onVolSettingsChange} settings={volSettings} /> : null}
+      {settingsTab === 'visibility' ? (
         <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">
           <p className="ff-indicators-input-panel-v1__placeholder">可见范围面板按当前指标框架预留。</p>
         </div>
@@ -652,14 +736,17 @@ function LoadedIndicatorSettingsPanel({
 
 export function IndicatorsDrawer({ onLoadIndicator, onUnloadIndicator }: IndicatorsDrawerProps) {
   const initialPersisted = readPersistedIndicatorsState()
-  const [selectedKey, setSelectedKey] = useState('RSI')
+  const [selectedKey, setSelectedKey] = useState(() => resolveInitialSelectedKey(initialPersisted.ui.selectedKey))
+  const [settingsTab, setSettingsTab] = useState<IndicatorSettingsTab>(() => initialPersisted.ui.activeTab)
   const [persistenceEnabled, setPersistenceEnabled] = useState(readIndicatorPersistenceEnabled)
   const [maSettings, setMaSettings] = useState<MaIndicatorSettings>(() => initialPersisted.ma)
   const [rsiSettings, setRsiSettings] = useState<RsiIndicatorSettings>(() => initialPersisted.rsi)
+  const [volSettings, setVolSettings] = useState<VolIndicatorSettings>(() => initialPersisted.vol)
   const [loadedKeys, setLoadedKeys] = useState<Set<string>>(() => {
     const next = new Set<string>()
     if (initialPersisted.loaded.MA) next.add('MA')
     if (initialPersisted.loaded.RSI) next.add('RSI')
+    if (initialPersisted.loaded.Vol) next.add('Vol')
     return next
   })
   const [topHeight, setTopHeight] = useState(254)
@@ -670,11 +757,13 @@ export function IndicatorsDrawer({ onLoadIndicator, onUnloadIndicator }: Indicat
   useEffect(() => {
     if (!persistenceEnabled) return
     writePersistedIndicatorsState({
-      loaded: { MA: loadedKeys.has('MA'), RSI: loadedKeys.has('RSI') },
+      loaded: { MA: loadedKeys.has('MA'), RSI: loadedKeys.has('RSI'), Vol: loadedKeys.has('Vol') },
       ma: maSettings,
       rsi: rsiSettings,
+      vol: volSettings,
+      ui: { activeTab: settingsTab, selectedKey },
     })
-  }, [loadedKeys, maSettings, persistenceEnabled, rsiSettings])
+  }, [loadedKeys, maSettings, persistenceEnabled, rsiSettings, selectedKey, settingsTab, volSettings])
 
   function handleSettingsChange(next: RsiIndicatorSettings) {
     setRsiSettings(next)
@@ -686,6 +775,11 @@ export function IndicatorsDrawer({ onLoadIndicator, onUnloadIndicator }: Indicat
     if (loadedKeys.has('MA')) onLoadIndicator?.('MA', next)
   }
 
+  function handleVolSettingsChange(next: VolIndicatorSettings) {
+    setVolSettings(next)
+    if (loadedKeys.has('Vol')) onLoadIndicator?.('Vol', next)
+  }
+
   function handlePersistenceChange(enabled: boolean) {
     setPersistenceEnabled(enabled)
     writeIndicatorPersistenceEnabled(enabled)
@@ -694,9 +788,11 @@ export function IndicatorsDrawer({ onLoadIndicator, onUnloadIndicator }: Indicat
       return
     }
     writePersistedIndicatorsState({
-      loaded: { MA: loadedKeys.has('MA'), RSI: loadedKeys.has('RSI') },
+      loaded: { MA: loadedKeys.has('MA'), RSI: loadedKeys.has('RSI'), Vol: loadedKeys.has('Vol') },
       ma: maSettings,
       rsi: rsiSettings,
+      vol: volSettings,
+      ui: { activeTab: settingsTab, selectedKey },
     })
   }
 
@@ -711,6 +807,8 @@ export function IndicatorsDrawer({ onLoadIndicator, onUnloadIndicator }: Indicat
       onLoadIndicator?.(selected.key, rsiSettings)
     } else if (selected.key === 'MA') {
       onLoadIndicator?.(selected.key, maSettings)
+    } else if (selected.key === 'Vol') {
+      onLoadIndicator?.(selected.key, volSettings)
     }
   }
 
@@ -887,10 +985,14 @@ export function IndicatorsDrawer({ onLoadIndicator, onUnloadIndicator }: Indicat
               maSettings={maSettings}
               onMaSettingsChange={handleMaSettingsChange}
               onPersistenceChange={handlePersistenceChange}
+              onSettingsTabChange={setSettingsTab}
               onSettingsChange={handleSettingsChange}
+              onVolSettingsChange={handleVolSettingsChange}
               persistenceEnabled={persistenceEnabled}
+              settingsTab={settingsTab}
               selectedKey={selected.key}
               settings={rsiSettings}
+              volSettings={volSettings}
             />
           ) : (
             <div className="ff-indicators-input-panel-v1" data-ff-indicators-input-panel-root="true">

@@ -7,6 +7,26 @@ export type RsiLineStyle = 'solid' | 'dashed' | 'dotted'
 export type MaType = 'sma' | 'ema' | 'smma' | 'wma' | 'vwma'
 export type MaSource = 'close' | 'open' | 'high' | 'low' | 'hl2' | 'hlc3' | 'ohlc4'
 export type MaMarkerMode = 'bar_down' | 'bar_up' | 'triangle_down' | 'triangle_up'
+export type IndicatorSettingsTab = 'input' | 'style' | 'visibility'
+
+export type VolIndicatorSettings = {
+  colorBasedOnPreviousClose: boolean
+  inputsInStatusLine: boolean
+  labelsOnPriceScale: boolean
+  maChecked: boolean
+  maColor: string
+  maLineStyle: RsiLineStyle
+  maLineWidth: number
+  maOpacity: number
+  maLength: number
+  precision: RsiPrecision
+  valuesInStatusLine: boolean
+  volumeChecked: boolean
+  volumeDownColor: string
+  volumeDownOpacity: number
+  volumeUpColor: string
+  volumeUpOpacity: number
+}
 
 export type MaIndicatorSettings = {
   colors: string[]
@@ -85,13 +105,24 @@ export type PersistedIndicatorsState = {
   loaded: {
     MA?: boolean
     RSI?: boolean
+    Vol?: boolean
   }
   ma: MaIndicatorSettings
   rsi: RsiIndicatorSettings
+  vol: VolIndicatorSettings
+  ui: {
+    activeTab: IndicatorSettingsTab
+    selectedKey: string
+  }
 }
 
 const persistEnabledKey = 'fractalframe:v5:indicators:persistEnabled:v1'
 const persistedStateKey = 'fractalframe:v5:indicators:state:v1'
+const indicatorSettingsTabs = new Set<IndicatorSettingsTab>(['input', 'style', 'visibility'])
+
+function normalizeIndicatorSettingsTab(value: unknown): IndicatorSettingsTab {
+  return indicatorSettingsTabs.has(value as IndicatorSettingsTab) ? value as IndicatorSettingsTab : 'input'
+}
 
 export const defaultRsiIndicatorSettings: RsiIndicatorSettings = {
   backgroundFillColor: '#d1d4dc',
@@ -166,6 +197,50 @@ export const defaultMaIndicatorSettings: MaIndicatorSettings = {
   upVisible: true,
 }
 
+export const defaultVolIndicatorSettings: VolIndicatorSettings = {
+  colorBasedOnPreviousClose: false,
+  inputsInStatusLine: true,
+  labelsOnPriceScale: true,
+  maChecked: false,
+  maColor: '#91a7ff',
+  maLineStyle: 'solid',
+  maLineWidth: 2,
+  maOpacity: 1,
+  maLength: 20,
+  precision: 'system',
+  valuesInStatusLine: true,
+  volumeChecked: true,
+  volumeDownColor: '#ef5350',
+  volumeDownOpacity: 0.55,
+  volumeUpColor: '#26a69a',
+  volumeUpOpacity: 0.55,
+}
+
+function normalizeVolSettings(input?: Partial<VolIndicatorSettings>): VolIndicatorSettings {
+  const merged = { ...defaultVolIndicatorSettings, ...(input ?? {}) }
+  const maLength = Math.round(Number(merged.maLength))
+  const maLineWidth = Math.round(Number(merged.maLineWidth))
+  const volumeUpOpacity = Number(merged.volumeUpOpacity)
+  const volumeDownOpacity = Number(merged.volumeDownOpacity)
+  const maOpacity = Number(merged.maOpacity)
+  return {
+    ...merged,
+    colorBasedOnPreviousClose: merged.colorBasedOnPreviousClose === true,
+    inputsInStatusLine: merged.inputsInStatusLine !== false,
+    labelsOnPriceScale: merged.labelsOnPriceScale !== false,
+    maChecked: merged.maChecked === true,
+    maLineStyle: merged.maLineStyle === 'dashed' || merged.maLineStyle === 'dotted' ? merged.maLineStyle : 'solid',
+    maLineWidth: Number.isFinite(maLineWidth) ? Math.max(1, Math.min(maLineWidth, 4)) : defaultVolIndicatorSettings.maLineWidth,
+    maLength: Number.isFinite(maLength) ? Math.max(1, Math.min(maLength, 500)) : defaultVolIndicatorSettings.maLength,
+    maOpacity: Number.isFinite(maOpacity) ? Math.max(0, Math.min(maOpacity, 1)) : defaultVolIndicatorSettings.maOpacity,
+    precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
+    valuesInStatusLine: merged.valuesInStatusLine !== false,
+    volumeChecked: merged.volumeChecked !== false,
+    volumeDownOpacity: Number.isFinite(volumeDownOpacity) ? Math.max(0, Math.min(volumeDownOpacity, 1)) : defaultVolIndicatorSettings.volumeDownOpacity,
+    volumeUpOpacity: Number.isFinite(volumeUpOpacity) ? Math.max(0, Math.min(volumeUpOpacity, 1)) : defaultVolIndicatorSettings.volumeUpOpacity,
+  }
+}
+
 export function readIndicatorPersistenceEnabled() {
   return readBooleanFlag(persistEnabledKey, true)
 }
@@ -180,6 +255,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
     loaded: {
       MA: parsed?.loaded?.MA === true,
       RSI: parsed?.loaded?.RSI === true,
+      Vol: parsed?.loaded?.Vol === true,
     },
     ma: {
       ...defaultMaIndicatorSettings,
@@ -191,6 +267,11 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
     rsi: {
       ...defaultRsiIndicatorSettings,
       ...(parsed?.rsi ?? {}),
+    },
+    vol: normalizeVolSettings(parsed?.vol),
+    ui: {
+      activeTab: normalizeIndicatorSettingsTab(parsed?.ui?.activeTab),
+      selectedKey: typeof parsed?.ui?.selectedKey === 'string' && parsed.ui.selectedKey ? parsed.ui.selectedKey : 'RSI',
     },
   }
 }

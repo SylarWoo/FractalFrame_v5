@@ -27,7 +27,7 @@ import {
 } from './leftRailV4Icons'
 import { RightDrawer } from './rightDrawer/RightDrawer'
 import { readIndicatorPersistenceEnabled, readPersistedIndicatorsState } from './rightDrawer/indicatorPersistence'
-import type { MaIndicatorSettings, RsiIndicatorSettings } from './rightDrawer/indicatorPersistence'
+import type { MaIndicatorSettings, RsiIndicatorSettings, VolIndicatorSettings } from './rightDrawer/indicatorPersistence'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
 import type { RightDrawerId } from './rightDrawer/RightDrawerTypes'
 import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
@@ -181,6 +181,7 @@ export function AppShell() {
     const persisted = readPersistedIndicatorsState()
     if (persisted.loaded.RSI) return { action: 'load', id: Date.now(), name: 'RSI', settings: persisted.rsi }
     if (persisted.loaded.MA) return { action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma }
+    if (persisted.loaded.Vol) return { action: 'load', id: Date.now(), name: 'Vol', settings: persisted.vol }
     return null
   })
   const restoredPersistedIndicatorsRef = useRef(false)
@@ -215,11 +216,13 @@ export function AppShell() {
     if (restoredPersistedIndicatorsRef.current || !readIndicatorPersistenceEnabled()) return
     restoredPersistedIndicatorsRef.current = true
     const persisted = readPersistedIndicatorsState()
-    if (persisted.loaded.RSI && persisted.loaded.MA) {
-      window.setTimeout(() => {
-        setChartIndicatorCommand({ action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma })
-      }, 0)
-    }
+    const scheduled: ChartIndicatorCommand[] = []
+    if (persisted.loaded.RSI && chartIndicatorCommand?.name !== 'RSI') scheduled.push({ action: 'load', id: Date.now(), name: 'RSI', settings: persisted.rsi })
+    if (persisted.loaded.MA && chartIndicatorCommand?.name !== 'MA') scheduled.push({ action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma })
+    if (persisted.loaded.Vol && chartIndicatorCommand?.name !== 'Vol') scheduled.push({ action: 'load', id: Date.now(), name: 'Vol', settings: persisted.vol })
+    scheduled.forEach((command, index) => {
+      window.setTimeout(() => setChartIndicatorCommand({ ...command, id: Date.now() }), index * 30)
+    })
   }, [])
 
   useEffect(() => {
@@ -294,9 +297,11 @@ export function AppShell() {
     window.addEventListener('pointerup', handlePointerUp, { once: true })
   }
 
-  function handleLoadIndicator(name: ChartIndicatorCommand['name'], settings: MaIndicatorSettings | RsiIndicatorSettings) {
+  function handleLoadIndicator(name: ChartIndicatorCommand['name'], settings: MaIndicatorSettings | RsiIndicatorSettings | VolIndicatorSettings) {
     if (name === 'MA') {
       setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as MaIndicatorSettings })
+    } else if (name === 'Vol') {
+      setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as VolIndicatorSettings })
     } else {
       setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as RsiIndicatorSettings })
     }
@@ -304,6 +309,8 @@ export function AppShell() {
 
   function handleUnloadIndicator(name: ChartIndicatorCommand['name']) {
     if (name === 'MA') {
+      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
+    } else if (name === 'Vol') {
       setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
     } else {
       setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })

@@ -14,6 +14,11 @@ export type SettingsLineSwatchValue = SettingsSwatchValue & {
   thickness: number
 }
 
+export type SettingsLineWeightValue = {
+  opacity: number
+  thickness: number
+}
+
 function resolveHexRgbString(hex: string) {
   const normalized = hex.trim().replace(/^#/, '')
   if (!/^[\da-f]{6}$/i.test(normalized)) return '38, 166, 154'
@@ -35,6 +40,10 @@ function sameSettingsSwatchValue(a: SettingsSwatchValue, b: SettingsSwatchValue)
 
 function sameSettingsLineSwatchValue(a: SettingsLineSwatchValue, b: SettingsLineSwatchValue) {
   return sameSettingsSwatchValue(a, b) && a.lineStyle === b.lineStyle && a.thickness === b.thickness
+}
+
+function sameSettingsLineWeightValue(a: SettingsLineWeightValue, b: SettingsLineWeightValue) {
+  return Math.abs(a.opacity - b.opacity) < 0.001 && a.thickness === b.thickness
 }
 
 let activeSettingsColorPopoverClose: (() => void) | null = null
@@ -270,6 +279,90 @@ export function SettingsLineSwatch({
           opacity: displayValue.opacity,
           borderTopStyle: displayValue.lineStyle === 'dotted' ? 'dotted' : displayValue.lineStyle === 'dashed' ? 'dashed' : 'solid',
           borderTopWidth: `${displayValue.thickness}px`,
+        }}
+      />
+    </button>
+  )
+}
+
+export function SettingsLineWeightSwatch({
+  color = '#131722',
+  onChange,
+  opacity = 1,
+  thickness = 1,
+  value: controlledValue,
+}: {
+  color?: string
+  onChange?: (value: SettingsLineWeightValue) => void
+  opacity?: number
+  thickness?: number
+  value?: SettingsLineWeightValue
+}) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const fallbackValue = {
+    opacity: Math.max(0, Math.min(opacity, 1)),
+    thickness: Math.max(1, Math.min(Math.round(thickness), 6)),
+  }
+  const [value, setValue] = useState<SettingsLineWeightValue>(fallbackValue)
+  const displayValue = controlledValue ?? value
+  const latestValueRef = useRef(displayValue)
+
+  useEffect(() => {
+    latestValueRef.current = displayValue
+  }, [displayValue])
+
+  return (
+    <button
+      aria-label="Line opacity and thickness"
+      className="ff-settings-line-weight-swatch ff-openable-control"
+      onClick={(event) => {
+        event.stopPropagation()
+        const anchorEl = buttonRef.current
+        if (!anchorEl) return
+        if (anchorEl.getAttribute('data-open') === 'true') {
+          activeSettingsColorPopoverClose?.()
+          activeSettingsColorPopoverClose = null
+          return
+        }
+        const popover = openChartColorPalettePopoverV1({
+          doc: document,
+          anchorEl,
+          initialHex: color,
+          initialOpacity: displayValue.opacity,
+          initialLineStyle: 'solid',
+          initialThickness: displayValue.thickness,
+          showCustomColorsRow: false,
+          showCustomPicker: false,
+          showLineStyle: false,
+          showOpacity: true,
+          showPresetGrid: false,
+          showThickness: true,
+          thicknessSteps: 6,
+          onPick: (payload) => {
+            const currentValue = latestValueRef.current
+            const nextValue = {
+              opacity: typeof payload?.opacity === 'number' && Number.isFinite(payload.opacity) ? payload.opacity : currentValue.opacity,
+              thickness: typeof payload?.thickness === 'number' && Number.isFinite(payload.thickness)
+                ? Math.max(1, Math.min(Math.round(payload.thickness), 6))
+                : currentValue.thickness,
+            }
+            if (sameSettingsLineWeightValue(nextValue, currentValue)) return
+            latestValueRef.current = nextValue
+            setValue(nextValue)
+            onChange?.(nextValue)
+          },
+        })
+        activeSettingsColorPopoverClose = popover.close
+      }}
+      ref={buttonRef}
+      type="button"
+    >
+      <span
+        className="ff-settings-line-weight-swatch__line"
+        style={{
+          borderTopColor: color,
+          borderTopWidth: `${displayValue.thickness}px`,
+          opacity: displayValue.opacity,
         }}
       />
     </button>
