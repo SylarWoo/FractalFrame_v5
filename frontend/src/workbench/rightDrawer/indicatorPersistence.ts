@@ -106,6 +106,7 @@ export type PersistedIndicatorsState = {
   loaded: {
     MA?: boolean
     RSI?: boolean
+    VWAP?: boolean
     Vol?: boolean
   }
   ma: MaIndicatorSettings
@@ -257,6 +258,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
     loaded: {
       MA: parsed?.loaded?.MA === true,
       RSI: parsed?.loaded?.RSI === true,
+      VWAP: parsed?.loaded?.VWAP === true,
       Vol: parsed?.loaded?.Vol === true,
     },
     ma: {

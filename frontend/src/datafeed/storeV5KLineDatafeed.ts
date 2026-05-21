@@ -10,6 +10,13 @@ function normalizeTimeframe(period: string) {
   return value
 }
 
+function estimateTurnover(high: number, low: number, close: number, volume: number) {
+  const typicalPrice = Number.isFinite(high) && Number.isFinite(low) && Number.isFinite(close)
+    ? (high + low + close) / 3
+    : close
+  return Number.isFinite(typicalPrice) && Number.isFinite(volume) ? typicalPrice * volume : 0
+}
+
 export async function loadStoreV5KLineData(options: {
   symbol: string
   period: string
@@ -49,13 +56,18 @@ export async function loadStoreV5KLineData(options: {
   payload.rows.forEach((row) => {
     const timestamp = Number(row.time) * 1000
     if (!Number.isFinite(timestamp)) return
+    const high = Number(row.high)
+    const low = Number(row.low)
+    const close = Number(row.close)
+    const volume = Number(row.volume ?? 0)
     rowsByTimestamp.set(timestamp, {
       timestamp,
       open: Number(row.open),
-      high: Number(row.high),
-      low: Number(row.low),
-      close: Number(row.close),
-      volume: Number(row.volume ?? 0),
+      high,
+      low,
+      close,
+      volume,
+      turnover: estimateTurnover(high, low, close, volume),
     })
   })
 

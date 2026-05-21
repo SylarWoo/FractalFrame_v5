@@ -181,6 +181,7 @@ export function AppShell() {
     const persisted = readPersistedIndicatorsState()
     if (persisted.loaded.RSI) return { action: 'load', id: Date.now(), name: 'RSI', settings: persisted.rsi }
     if (persisted.loaded.MA) return { action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma }
+    if (persisted.loaded.VWAP) return { action: 'load', id: Date.now(), name: 'VWAP' }
     if (persisted.loaded.Vol) return { action: 'load', id: Date.now(), name: 'Vol', settings: persisted.vol }
     return null
   })
@@ -219,6 +220,7 @@ export function AppShell() {
     const scheduled: ChartIndicatorCommand[] = []
     if (persisted.loaded.RSI && chartIndicatorCommand?.name !== 'RSI') scheduled.push({ action: 'load', id: Date.now(), name: 'RSI', settings: persisted.rsi })
     if (persisted.loaded.MA && chartIndicatorCommand?.name !== 'MA') scheduled.push({ action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma })
+    if (persisted.loaded.VWAP && chartIndicatorCommand?.name !== 'VWAP') scheduled.push({ action: 'load', id: Date.now(), name: 'VWAP' })
     if (persisted.loaded.Vol && chartIndicatorCommand?.name !== 'Vol') scheduled.push({ action: 'load', id: Date.now(), name: 'Vol', settings: persisted.vol })
     scheduled.forEach((command, index) => {
       window.setTimeout(() => setChartIndicatorCommand({ ...command, id: Date.now() }), index * 30)
@@ -297,9 +299,11 @@ export function AppShell() {
     window.addEventListener('pointerup', handlePointerUp, { once: true })
   }
 
-  function handleLoadIndicator(name: ChartIndicatorCommand['name'], settings: MaIndicatorSettings | RsiIndicatorSettings | VolIndicatorSettings) {
+  function handleLoadIndicator(name: ChartIndicatorCommand['name'], settings?: MaIndicatorSettings | RsiIndicatorSettings | VolIndicatorSettings) {
     if (name === 'MA') {
       setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as MaIndicatorSettings })
+    } else if (name === 'VWAP') {
+      setChartIndicatorCommand({ action: 'load', id: Date.now(), name })
     } else if (name === 'Vol') {
       setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as VolIndicatorSettings })
     } else {
@@ -310,10 +314,12 @@ export function AppShell() {
   function handleUnloadIndicator(name: ChartIndicatorCommand['name']) {
     if (name === 'MA') {
       setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
+    } else if (name === 'VWAP') {
+      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
     } else if (name === 'Vol') {
       setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
     } else {
-      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
+      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name: 'RSI' })
     }
   }
 

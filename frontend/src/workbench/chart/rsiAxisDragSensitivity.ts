@@ -1,8 +1,8 @@
 import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 
-const indicatorAxisDragSensitivity = 3.2
 const indicatorAxisPaneIds = ['rsi_pane']
+const indicatorAxisDragBoost = 1.8
 
 type InternalChart = Chart & {
   adjustPaneViewport?: (shouldMeasureHeight?: boolean, shouldMeasureWidth?: boolean, shouldUpdate?: boolean, shouldAdjustYAxis?: boolean) => void
@@ -25,7 +25,7 @@ type InternalChart = Chart & {
 
 let cleanupIndicatorAxisDrag: (() => void) | null = null
 
-export function uninstallRsiAxisDragSensitivity() {
+export function uninstallIndicatorAxisDragSensitivity() {
   cleanupIndicatorAxisDrag?.()
   cleanupIndicatorAxisDrag = null
 }
@@ -62,9 +62,8 @@ function installAxisDragForPane(chart: Chart, paneId: string) {
   let drag:
     | {
         from: number
-        height: number
         range: number
-        startY: number
+        startScaleDistance: number
         to: number
       }
     | null = null
@@ -104,9 +103,8 @@ function installAxisDragForPane(chart: Chart, paneId: string) {
     yAxisComponent.setAutoCalcTickFlag?.(false)
     drag = {
       from: currentRange.from,
-      height,
       range: currentRange.range,
-      startY: event.pageY,
+      startScaleDistance: event.pageY,
       to: currentRange.to,
     }
     applyAxisCursor()
@@ -120,8 +118,11 @@ function installAxisDragForPane(chart: Chart, paneId: string) {
     event.preventDefault()
     event.stopImmediatePropagation()
 
-    const delta = event.pageY - drag.startY
-    const scale = Math.max(0.08, 1 + (delta / drag.height) * indicatorAxisDragSensitivity)
+    const nativeScale = event.pageY / drag.startScaleDistance
+    if (!Number.isFinite(nativeScale)) return
+
+    const scale = Math.max(0.08, 1 + (nativeScale - 1) * indicatorAxisDragBoost)
+
     const newRange = drag.range * scale
     const difRange = (newRange - drag.range) / 2
     applyRange(drag.from - difRange, drag.to + difRange)
@@ -159,8 +160,8 @@ function installAxisDragForPane(chart: Chart, paneId: string) {
   return () => cleanupFns.forEach((cleanup) => cleanup())
 }
 
-export function installRsiAxisDragSensitivity(chart: Chart, paneIds: string[] = indicatorAxisPaneIds) {
-  uninstallRsiAxisDragSensitivity()
+export function installIndicatorAxisDragSensitivity(chart: Chart, paneIds: string[] = indicatorAxisPaneIds) {
+  uninstallIndicatorAxisDragSensitivity()
   const cleanups = paneIds
     .map((paneId) => installAxisDragForPane(chart, paneId))
     .filter((cleanup): cleanup is () => void => typeof cleanup === 'function')
@@ -169,3 +170,6 @@ export function installRsiAxisDragSensitivity(chart: Chart, paneIds: string[] = 
     cleanups.forEach((cleanup) => cleanup())
   }
 }
+
+export const installRsiAxisDragSensitivity = installIndicatorAxisDragSensitivity
+export const uninstallRsiAxisDragSensitivity = uninstallIndicatorAxisDragSensitivity

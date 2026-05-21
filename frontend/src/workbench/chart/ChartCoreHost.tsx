@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react'
 import { ActionType } from 'klinecharts'
 import { installChartDragCursor } from './chartDragCursor'
+import { scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
 import { useChartRealtimeTicks } from './useChartRealtimeTicks'
 import { useChartStepLoad } from './useChartStepLoad'
-import { installRsiAxisDragSensitivity, uninstallRsiAxisDragSensitivity } from './rsiAxisDragSensitivity'
+import { installIndicatorAxisDragSensitivity, uninstallIndicatorAxisDragSensitivity } from './rsiAxisDragSensitivity'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
+import { ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
 import type { MaIndicatorSettings, RsiIndicatorSettings, VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import './ChartCoreHost.css'
 
@@ -38,6 +40,7 @@ export type ChartIndicatorCommand = {
 } & (
   | { name: 'MA'; settings?: MaIndicatorSettings }
   | { name: 'RSI'; settings?: RsiIndicatorSettings }
+  | { name: 'VWAP' }
   | { name: 'Vol'; settings?: VolIndicatorSettings }
 )
 
@@ -136,7 +139,8 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       if (indicatorCommand.action === 'load') {
         if (chart.getIndicatorByPaneId(rsiPaneId, 'RSI')) {
           chart.overrideIndicator({ name: 'RSI', calcParams: [indicatorCommand.settings] }, rsiPaneId, observeRsiPaneHeight)
-          window.requestAnimationFrame(() => installRsiAxisDragSensitivity(chart))
+          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+          scheduleUnlockYAxisManualDrag(chart)
           return
         }
         chart.createIndicator(
@@ -146,16 +150,19 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeRsiPaneHeight()
             installChartDragCursor(chart)
+            scheduleUnlockYAxisManualDrag(chart)
           },
         )
-        window.requestAnimationFrame(() => installRsiAxisDragSensitivity(chart))
+        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+        scheduleUnlockYAxisManualDrag(chart)
       } else {
         const size = chart.getSize(rsiPaneId)
         if (size?.height) writeStoredRsiPaneHeight(size.height)
         rsiPaneHeightObserverRef.current?.disconnect()
         rsiPaneHeightObserverRef.current = null
         chart.removeIndicator(rsiPaneId, 'RSI')
-        window.requestAnimationFrame(() => installRsiAxisDragSensitivity(chart))
+        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+        scheduleUnlockYAxisManualDrag(chart)
       }
     }
 
@@ -170,6 +177,20 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         chart.createIndicator({ name: 'MA', calcParams: [indicatorCommand.settings] }, true, { id: 'candle_pane' })
       } else {
         chart.removeIndicator('candle_pane', 'MA')
+      }
+    }
+
+    if (indicatorCommand.name === 'VWAP') {
+      ensureTradingViewVwapIndicator()
+
+      if (indicatorCommand.action === 'load') {
+        if (chart.getIndicatorByPaneId('candle_pane', 'VWAP')) {
+          chart.overrideIndicator({ name: 'VWAP' }, 'candle_pane')
+          return
+        }
+        chart.createIndicator({ name: 'VWAP' }, true, { id: 'candle_pane' })
+      } else {
+        chart.removeIndicator('candle_pane', 'VWAP')
       }
     }
 
@@ -201,7 +222,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     mainVolumeOverlayRef.current?.destroy()
     mainVolumeOverlayRef.current = null
     rsiPaneHeightObserverRef.current?.disconnect()
-    uninstallRsiAxisDragSensitivity()
+    uninstallIndicatorAxisDragSensitivity()
   }, [])
 
   return (

@@ -28,6 +28,11 @@ type UseChartRealtimeTicksOptions = {
   totalRows?: number | null
 }
 
+function estimateTurnover(high: number, low: number, close: number, volume: number) {
+  const typicalPrice = (high + low + close) / 3
+  return Number.isFinite(typicalPrice) && Number.isFinite(volume) ? typicalPrice * volume : 0
+}
+
 export function useChartRealtimeTicks({ chartInstanceRef, period, symbol, totalRows }: UseChartRealtimeTicksOptions) {
   const realtimeTailRefreshInFlightRef = useRef(false)
   const realtimeTailRefreshBucketRef = useRef<number | null>(null)
@@ -99,24 +104,30 @@ export function useChartRealtimeTicks({ chartInstanceRef, period, symbol, totalR
           realtimeTailRefreshBucketRef.current = bucketTimestamp
           void refreshRealtimeTail(bucketTimestamp)
         }
+        const open = latest?.close ?? last
         chart.updateData({
           timestamp: bucketTimestamp,
-          open: latest?.close ?? last,
+          open,
           high: last,
           low: last,
           close: last,
           volume,
+          turnover: estimateTurnover(last, last, last, volume),
         })
         return
       }
 
       if (bucketTimestamp === latest.timestamp) {
+        const nextHigh = Math.max(Number(latest.high), last)
+        const nextLow = Math.min(Number(latest.low), last)
+        const nextVolume = Math.max(Number(latest.volume ?? 0), volume)
         chart.updateData({
           ...latest,
-          high: Math.max(Number(latest.high), last),
-          low: Math.min(Number(latest.low), last),
+          high: nextHigh,
+          low: nextLow,
           close: last,
-          volume: Math.max(Number(latest.volume ?? 0), volume),
+          volume: nextVolume,
+          turnover: estimateTurnover(nextHigh, nextLow, last, nextVolume),
         })
       }
     }

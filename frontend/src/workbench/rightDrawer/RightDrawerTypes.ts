@@ -2,13 +2,15 @@ import type { MaIndicatorSettings, RsiIndicatorSettings, VolIndicatorSettings } 
 
 export type RightDrawerId = 'indicators' | 'mt5' | 'settings'
 
+export type SupportedChartIndicatorName = 'MA' | 'RSI' | 'VWAP' | 'Vol'
+
 export type RightDrawerProps = {
   activeDrawer: RightDrawerId | null
   drawerWidth: number
   onClose: () => void
-  onLoadIndicator?: (name: 'MA' | 'RSI' | 'Vol', settings: MaIndicatorSettings | RsiIndicatorSettings | VolIndicatorSettings) => void
+  onLoadIndicator?: (name: SupportedChartIndicatorName, settings?: MaIndicatorSettings | RsiIndicatorSettings | VolIndicatorSettings) => void
   onResize: (width: number) => void
   onToggleDrawer: (drawer: RightDrawerId) => void
-  onUnloadIndicator?: (name: 'MA' | 'RSI' | 'Vol') => void
+  onUnloadIndicator?: (name: SupportedChartIndicatorName) => void
   onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number }) => void
 }

@@ -15,6 +15,7 @@ import {
   resolveInitialLimit,
 } from './chartCoreDataUtils'
 import { resetYAxisAutoScale } from './chartStyleAppliers'
+import { scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 
 export type ChartLoadStateCore = {
   error: boolean
@@ -216,11 +217,13 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
         resetYAxisAutoScale(chart)
         scrollJumpTargetIntoView(chart, options.jumpTimestamp)
         applySessionBreakIndicator(chart, options.symbol, options.period)
+        scheduleUnlockYAxisManualDrag(chart)
         window.setTimeout(() => {
           if (options.shouldIgnore()) return
           resetYAxisAutoScale(chart)
           scrollJumpTargetIntoView(chart, options.jumpTimestamp)
           applySessionBreakIndicator(chart, options.symbol, options.period)
+          scheduleUnlockYAxisManualDrag(chart)
         }, 0)
         options.setLoadState({
           error: false,
@@ -256,6 +259,7 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
         if (options.shouldIgnore()) return
         resetYAxisAutoScale(chart)
         applySessionBreakIndicator(chart, options.symbol, options.period)
+        scheduleUnlockYAxisManualDrag(chart)
         options.setLoadState({
           error: false,
           loadingMore: false,
