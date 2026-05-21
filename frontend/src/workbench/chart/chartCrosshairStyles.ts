@@ -20,6 +20,22 @@ export function applyGridStyle(chart: Chart) {
   })
 }
 
+export function applyPaneSeparatorStyle(chart: Chart) {
+  const state = readSettingsSymbolState()
+  const swatch = state['layout.paneSeparator.color']
+  const color = resolveSwatchColor(swatch, '#858b98')
+  const size = resolveLineThickness(swatch)
+
+  chart.setStyles({
+    separator: {
+      activeBackgroundColor: 'rgba(33, 150, 243, 0.08)',
+      color,
+      fill: true,
+      size,
+    },
+  })
+}
+
 export function applyCrosshairLineStyle(chart: Chart) {
   const state = readSettingsSymbolState()
   const swatch = state['layout.crosshair.color']

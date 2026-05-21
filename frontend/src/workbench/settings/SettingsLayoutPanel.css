@@ -1,7 +1,8 @@
 ﻿.ff-settings-layout-panel {
   display: grid;
   box-sizing: border-box;
-  width: 384px;
+  width: 100%;
+  max-width: 384px;
   min-height: 824px;
   align-content: start;
   gap: 28px;

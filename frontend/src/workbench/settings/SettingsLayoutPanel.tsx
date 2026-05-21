@@ -44,7 +44,7 @@ export function SettingsLayoutPanel() {
         </div>
         <div className="ff-settings-layout-row">
           <span>窗格分隔符</span>
-          <SettingsColorSwatch color="#b8b8b8" storageKey="layout.paneSeparator.color" />
+          <SettingsLineSwatch color="#858b98" storageKey="layout.paneSeparator.color" />
         </div>
         <div className="ff-settings-layout-row">
           <span>十字线</span>

@@ -6,4 +6,4 @@ export {
   applyLastPriceLineStyle,
   applyPriceVolumePrecision,
 } from './chartCandleStyles'
-export { applyCrosshairLineStyle, applyGridStyle } from './chartCrosshairStyles'
+export { applyCrosshairLineStyle, applyGridStyle, applyPaneSeparatorStyle } from './chartCrosshairStyles'

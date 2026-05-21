@@ -37,6 +37,12 @@ export function createChartBaseStyles() {
       horizontal: { color: '#eef2f7', dashedValue: [2, 2], show: true, size: 1, style: LineType.Solid },
       vertical: { color: '#eef2f7', dashedValue: [2, 2], show: true, size: 1, style: LineType.Solid },
     },
+    separator: {
+      activeBackgroundColor: 'rgba(33, 150, 243, 0.08)',
+      color: '#858b98',
+      fill: true,
+      size: 1,
+    },
     crosshair: {
       horizontal: {
         text: {
