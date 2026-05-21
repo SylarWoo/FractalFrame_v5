@@ -120,6 +120,7 @@
   margin-bottom: 12px;
   color: #131722;
   font-size: 12px;
+  pointer-events: none;
 }
 
 .ff-indicators-vwap-panel-v1__band-row {
@@ -143,6 +144,7 @@
   height: 18px;
   margin: 0;
   accent-color: #2f2f33;
+  pointer-events: auto;
 }
 
 .ff-indicators-vwap-panel-v1__band-check {
@@ -151,6 +153,10 @@
   gap: 8px;
   min-width: 0;
   white-space: nowrap;
+}
+
+.ff-indicators-vwap-panel-v1__band-row .ff-indicators-input-panel-v1__control {
+  pointer-events: auto;
 }
 
 .ff-indicators-vwap-panel-v1 input:disabled {

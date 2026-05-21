@@ -102,7 +102,7 @@
 
 .ff-import-selected-head__actions {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   justify-items: end;
 }
 

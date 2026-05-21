@@ -158,6 +158,7 @@
   gap: 8px 12px;
   margin-bottom: 8px;
   box-sizing: border-box;
+  pointer-events: none;
 }
 
 .ff-indicators-input-panel-v1__row:last-child {
@@ -174,6 +175,7 @@
   width: 120px;
   max-width: 120px;
   justify-self: start;
+  pointer-events: auto;
 }
 
 .ff-indicators-input-panel-v1__control .ff-openable-select {
@@ -234,6 +236,7 @@
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
+  pointer-events: auto;
   vertical-align: middle;
 }
 

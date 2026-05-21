@@ -61,17 +61,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 16px;
-  min-height: 31px;
+  margin-top: 8px;
+  min-height: 28px;
 }
 
 .ff-watchlist-realtime-toggle {
   display: inline-flex;
   height: 28px;
-  min-width: 136px;
+  min-width: 124px;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 7px;
   border: 1px solid #d1d4dc;
   border-radius: 999px;
   background: #f8fafc;
@@ -80,13 +80,13 @@
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
-  padding: 0 7px 0 12px;
+  padding: 0 6px 0 11px;
 }
 
 .ff-watchlist-realtime-toggle i {
   position: relative;
-  width: 38px;
-  height: 20px;
+  width: 34px;
+  height: 18px;
   flex: 0 0 auto;
   border-radius: 999px;
   background: #d1d5db;
@@ -96,8 +96,8 @@
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 999px;
   background: #ffffff;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.22);
@@ -116,7 +116,7 @@
 }
 
 .ff-watchlist-realtime-toggle[data-active='true'] i::after {
-  transform: translateX(18px);
+  transform: translateX(16px);
 }
 
 .ff-watchlist-realtime-toggle[data-active='true'][data-ready='true'] {
