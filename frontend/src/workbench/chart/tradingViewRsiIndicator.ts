@@ -1,7 +1,9 @@
 import { LineType, registerIndicator } from 'klinecharts'
-import type { KLineData } from 'klinecharts'
+import type { IndicatorCreateTooltipDataSourceParams, KLineData } from 'klinecharts'
 import { defaultRsiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { RsiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { readSettingsBooleanValue } from '../settingsSymbolState'
+import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 
 type RsiIndicatorRow = {
   rsi?: number
@@ -133,6 +135,28 @@ function calculateRsiMa(dataList: KLineData[], rsiValues: Array<number | undefin
 function normalizeRsiSettings(input?: Partial<RsiIndicatorSettings> | number): RsiIndicatorSettings {
   if (typeof input === 'number') return { ...defaultRsiIndicatorSettings, length: input }
   return { ...defaultRsiIndicatorSettings, ...(input ?? {}) }
+}
+
+function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<RsiIndicatorRow>) {
+  const crosshairIndex = Number(params.crosshair.dataIndex)
+  if (Number.isFinite(crosshairIndex) && crosshairIndex >= 0) {
+    return Math.min(Math.round(crosshairIndex), Math.max(0, params.indicator.result.length - 1))
+  }
+  return Math.max(0, Math.min(Math.floor(params.visibleRange.realTo), params.indicator.result.length - 1))
+}
+
+function formatRsiValue(value: number | undefined, precision: RsiIndicatorSettings['precision']) {
+  if (!Number.isFinite(value)) return '--'
+  const digits = precision === 'system' ? 2 : Number(precision)
+  return (value as number).toFixed(Number.isFinite(digits) ? digits : 2).replace(/\.?0+$/, '')
+}
+
+function readIndicatorInputsVisible() {
+  return readSettingsBooleanValue(chartSettingKeys.statusIndicatorInputsVisible, chartSettingDefaults.statusIndicatorInputsVisible)
+}
+
+function readIndicatorValuesVisible() {
+  return readSettingsBooleanValue(chartSettingKeys.statusIndicatorValuesVisible, chartSettingDefaults.statusIndicatorValuesVisible)
 }
 
 function clampOpacity(value: unknown, fallback = 1) {
@@ -312,13 +336,30 @@ export function ensureTradingViewRsiIndicator() {
     maxValue: 100,
     figures: createRsiLineFigures(),
     regenerateFigures: createRsiLineFigures,
-    createTooltipDataSource: ({ indicator }) => {
+    createTooltipDataSource: (params) => {
+      const { indicator } = params
       const settings = normalizeRsiSettings(indicator.calcParams[0])
+      const row = indicator.result[resolveTooltipIndex(params)]
+      const indicatorValuesVisible = readIndicatorValuesVisible()
+      const inputsText = readIndicatorInputsVisible() ? ` ${settings.length} ${settings.smoothingLength}` : ''
+      const values = []
+      if (indicatorValuesVisible && settings.rsiVisible) {
+        values.push({
+          title: { text: 'RSI ', color: params.defaultStyles.tooltip.text.color },
+          value: { text: formatRsiValue(row?.rsi, settings.precision), color: colorWithAlpha(settings.rsiColor, settings.rsiOpacity) },
+        })
+      }
+      if (indicatorValuesVisible && settings.rsiMaVisible) {
+        values.push({
+          title: { text: 'MA ', color: params.defaultStyles.tooltip.text.color },
+          value: { text: formatRsiValue(row?.rsiMa, settings.precision), color: colorWithAlpha(settings.rsiMaColor, settings.rsiMaOpacity) },
+        })
+      }
       return {
         name: 'RSI',
-        calcParamsText: `(${settings.length},${settings.smoothingLength})`,
+        calcParamsText: inputsText,
         icons: [],
-        values: [],
+        values,
       }
     },
     draw: ({ ctx, bounding, indicator, visibleRange, xAxis, yAxis }) => {

@@ -1,7 +1,9 @@
 import { IndicatorSeries, registerIndicator } from 'klinecharts'
-import type { IndicatorDrawParams, KLineData } from 'klinecharts'
+import type { IndicatorCreateTooltipDataSourceParams, IndicatorDrawParams, KLineData } from 'klinecharts'
 import { defaultMaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { readSettingsBooleanValue } from '../settingsSymbolState'
+import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 
 type MaShiftRow = {
   ma?: number
@@ -354,6 +356,28 @@ function drawMaShiftIndicator(params: IndicatorDrawParams<MaShiftRow>) {
   return true
 }
 
+function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<MaShiftRow>) {
+  const crosshairIndex = Number(params.crosshair.dataIndex)
+  if (Number.isFinite(crosshairIndex) && crosshairIndex >= 0) {
+    return Math.min(Math.round(crosshairIndex), Math.max(0, params.indicator.result.length - 1))
+  }
+  return Math.max(0, Math.min(Math.floor(params.visibleRange.realTo), params.indicator.result.length - 1))
+}
+
+function formatMaValue(value: number | undefined, precision: MaIndicatorSettings['precision']) {
+  if (!Number.isFinite(value)) return '--'
+  const digits = precision === 'system' ? 5 : Number(precision)
+  return (value as number).toFixed(Number.isFinite(digits) ? digits : 5).replace(/\.?0+$/, '')
+}
+
+function readIndicatorInputsVisible() {
+  return readSettingsBooleanValue(chartSettingKeys.statusIndicatorInputsVisible, chartSettingDefaults.statusIndicatorInputsVisible)
+}
+
+function readIndicatorValuesVisible() {
+  return readSettingsBooleanValue(chartSettingKeys.statusIndicatorValuesVisible, chartSettingDefaults.statusIndicatorValuesVisible)
+}
+
 export function calculateTradingViewMaShiftRows(dataList: KLineData[], inputSettings: Partial<MaIndicatorSettings> | number = defaultMaIndicatorSettings): MaShiftRow[] {
   const settings = normalizeMaSettings(inputSettings)
   const period = clampPeriod(settings.length, defaultMaIndicatorSettings.length)
@@ -393,13 +417,25 @@ export function ensureTradingViewMaShiftIndicator() {
     series: IndicatorSeries.Price,
     figures: [],
     regenerateFigures: () => [],
-    createTooltipDataSource: ({ indicator }) => {
+    createTooltipDataSource: (params) => {
+      const { indicator } = params
       const settings = normalizeMaSettings(indicator.calcParams[0])
+      const row = indicator.result[resolveTooltipIndex(params)]
+      const inputsText = readIndicatorInputsVisible() ? ` ${settings.length}` : ''
+      const colorIndex = typeof row?.maColorIndex === 'number' ? row.maColorIndex : 0
       return {
         name: 'MA',
-        calcParamsText: `(${settings.length})`,
+        calcParamsText: inputsText,
         icons: [],
-        values: [],
+        values: readIndicatorValuesVisible()
+          ? [{
+              title: { text: '', color: params.defaultStyles.tooltip.text.color },
+              value: {
+                text: formatMaValue(row?.ma, settings.precision),
+                color: getMaSegmentColor(settings, colorIndex, settings.maLineOpacity),
+              },
+            }]
+          : [],
       }
     },
     draw: drawMaShiftIndicator,

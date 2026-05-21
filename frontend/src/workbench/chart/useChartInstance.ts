@@ -12,6 +12,7 @@ import {
   applyCandleTooltipStyle,
   applyCrosshairLineStyle,
   applyGridStyle,
+  applyIndicatorTooltipStyle,
   applyLastPriceLineStyle,
   applyPriceVolumePrecision,
   createChartBaseStyles,
@@ -28,6 +29,7 @@ function applyChartStyles(chart: Chart, symbol: string, period: string, displayN
   chart.setCustomApi({ formatDate: formatChartDate })
   applyPriceVolumePrecision(chart)
   applyGridStyle(chart)
+  applyIndicatorTooltipStyle(chart)
   applyCrosshairLineStyle(chart)
   applyAxisTextStyle(chart)
   applyAxisLineStyle(chart)

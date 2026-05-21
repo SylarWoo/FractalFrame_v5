@@ -2,6 +2,8 @@ import { ActionType, DomPosition, registerIndicator } from 'klinecharts'
 import type { Chart, IndicatorCreateTooltipDataSourceParams, KLineData } from 'klinecharts'
 import { defaultVolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { readSettingsBooleanValue } from '../settingsSymbolState'
+import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 
 const candlePaneId = 'candle_pane'
 const overlayClassName = 'ff-main-volume-overlay-canvas'
@@ -116,6 +118,14 @@ function formatVolume(value: number | undefined) {
   return String(Math.round(next * 100) / 100)
 }
 
+function readIndicatorInputsVisible() {
+  return readSettingsBooleanValue(chartSettingKeys.statusIndicatorInputsVisible, chartSettingDefaults.statusIndicatorInputsVisible)
+}
+
+function readIndicatorValuesVisible() {
+  return readSettingsBooleanValue(chartSettingKeys.statusIndicatorValuesVisible, chartSettingDefaults.statusIndicatorValuesVisible)
+}
+
 function calculateLegendRows(dataList: KLineData[], inputSettings?: Partial<VolIndicatorSettings>): MainVolumeLegendRow[] {
   const settings = normalizeSettings(inputSettings)
   const maLength = Math.max(1, Math.min(Math.round(Number(settings.maLength)), 500))
@@ -142,6 +152,7 @@ export function ensureMainVolumeLegendIndicator() {
   registerIndicator<MainVolumeLegendRow>({
     name: mainVolumeIndicatorName,
     shortName: 'Vol',
+    zLevel: -20,
     calcParams: [defaultVolIndicatorSettings],
     figures: [],
     regenerateFigures: () => [],
@@ -153,19 +164,23 @@ export function ensureMainVolumeLegendIndicator() {
       const valueColor = row?.volumeColorIndex === 0
         ? colorWithAlpha(settings.volumeUpColor, 1)
         : colorWithAlpha(settings.volumeDownColor, 1)
-      const values = [{
-        title: { text: ': ', color: params.defaultStyles.tooltip.text.color },
-        value: { text: formatVolume(row?.volume), color: valueColor },
-      }]
-      if (settings.maChecked) {
+      const inputsText = readIndicatorInputsVisible() ? ` ${Math.max(1, Math.min(Math.round(Number(settings.maLength)), 500))}` : ''
+      const values = []
+      if (readIndicatorValuesVisible()) {
         values.push({
-          title: { text: `  MA(${Math.max(1, Math.min(Math.round(Number(settings.maLength)), 500))}): `, color: params.defaultStyles.tooltip.text.color },
-          value: { text: formatVolume(row?.volumeMa), color: colorWithAlpha(settings.maColor, settings.maOpacity) },
+          title: { text: '', color: params.defaultStyles.tooltip.text.color },
+          value: { text: formatVolume(row?.volume), color: valueColor },
         })
+        if (settings.maChecked) {
+          values.push({
+            title: { text: 'MA ', color: params.defaultStyles.tooltip.text.color },
+            value: { text: formatVolume(row?.volumeMa), color: colorWithAlpha(settings.maColor, settings.maOpacity) },
+          })
+        }
       }
       return {
         name: 'Vol',
-        calcParamsText: '',
+        calcParamsText: inputsText,
         icons: [],
         values,
       }
@@ -236,10 +251,13 @@ function drawMainVolumeOverlay(chart: Chart, canvas: HTMLCanvasElement, settings
   const { maValues, volumes } = nextCache
   const maxVolume = resolveVolumeMax(volumes, maValues, from, to)
   const bandHeight = Math.max(42, Math.min(112, Math.round(mainSize.height * 0.24)))
-  const bottomPadding = 4
+  const bottomPadding = 0
   const top = mainSize.height - bandHeight - bottomPadding
   const bottom = mainSize.height - bottomPadding
-  const barWidth = Math.max(1, Math.floor(chart.getBarSpace() * 0.82))
+  const barSpace = chart.getBarSpace()
+  const barWidth = Math.max(1, Math.floor(barSpace * 0.82))
+  const fromX = convertDataIndexToX(chart, dataList, from)
+  if (!Number.isFinite(fromX)) return nextCache
 
   ctx.save()
   ctx.beginPath()
@@ -249,8 +267,7 @@ function drawMainVolumeOverlay(chart: Chart, canvas: HTMLCanvasElement, settings
   for (let index = from; index <= to; index += 1) {
     const volume = volumes[index]
     if (!Number.isFinite(volume)) continue
-    const xCenter = convertDataIndexToX(chart, dataList, index)
-    if (!Number.isFinite(xCenter)) continue
+    const xCenter = fromX + (index - from) * barSpace
 
     const height = Math.max(1, (volume / maxVolume) * (bandHeight - 8))
     const x = Math.round(xCenter - barWidth / 2)
@@ -279,8 +296,7 @@ function drawMainVolumeOverlay(chart: Chart, canvas: HTMLCanvasElement, settings
         }
         continue
       }
-      const x = convertDataIndexToX(chart, dataList, index)
-      if (!Number.isFinite(x)) continue
+      const x = fromX + (index - from) * barSpace
       const y = bottom - ((ma as number) / maxVolume) * (bandHeight - 8)
       if (!started) {
         ctx.moveTo(x, y)

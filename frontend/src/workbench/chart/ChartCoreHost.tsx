@@ -178,9 +178,9 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
 
       if (indicatorCommand.action === 'load') {
         if (chart.getIndicatorByPaneId('candle_pane', mainVolumeIndicatorName)) {
-          chart.overrideIndicator({ name: mainVolumeIndicatorName, calcParams: [indicatorCommand.settings] }, 'candle_pane')
+          chart.overrideIndicator({ name: mainVolumeIndicatorName, calcParams: [indicatorCommand.settings], zLevel: -20 }, 'candle_pane')
         } else {
-          chart.createIndicator({ name: mainVolumeIndicatorName, calcParams: [indicatorCommand.settings] }, true, { id: 'candle_pane' })
+          chart.createIndicator({ name: mainVolumeIndicatorName, calcParams: [indicatorCommand.settings], zLevel: -20 }, true, { id: 'candle_pane' })
         }
         if (mainVolumeOverlayRef.current) {
           mainVolumeOverlayRef.current.updateSettings(indicatorCommand.settings)

@@ -76,6 +76,7 @@ export type RsiIndicatorSettings = {
   middleBandLineWidth: number
   middleBandOpacity: number
   middleBandVisible: boolean
+  inputStatusLineVisible: boolean
   precision: RsiPrecision
   priceScaleLabelsVisible: boolean
   rsiColor: string
@@ -142,6 +143,7 @@ export const defaultRsiIndicatorSettings: RsiIndicatorSettings = {
   middleBandLineWidth: 1,
   middleBandOpacity: 1,
   middleBandVisible: true,
+  inputStatusLineVisible: true,
   precision: 'system',
   priceScaleLabelsVisible: true,
   rsiColor: '#2962ff',

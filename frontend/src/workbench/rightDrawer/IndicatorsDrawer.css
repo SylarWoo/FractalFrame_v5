@@ -528,7 +528,7 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
 }
 
 .ff-indicators-ma-style-panel-v1 .ff-indicators-style-row-v1 {
-  grid-template-columns: 224px max-content;
+  grid-template-columns: 176px max-content;
 }
 
 .ff-indicators-ma-style-panel-v1__divider {
@@ -547,7 +547,7 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
 }
 
 .ff-indicators-ma-style-panel-v1__precision-row {
-  grid-template-columns: 224px max-content;
+  grid-template-columns: 176px max-content;
 }
 
 .ff-indicators-style-panel-v1 {

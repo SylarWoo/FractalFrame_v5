@@ -40,9 +40,9 @@ export function SettingsStatusPanel() {
 
       <section className="ff-settings-status-group">
         <div className="ff-settings-symbol-kicker">指标</div>
-        <SettingsCheckRow checked>标题</SettingsCheckRow>
-        <SettingsCheckRow checked inset>输入</SettingsCheckRow>
-        <SettingsCheckRow checked>数值</SettingsCheckRow>
+        <SettingsCheckRow checked storageKey={chartSettingKeys.statusIndicatorTooltipVisible}>标题</SettingsCheckRow>
+        <SettingsCheckRow checked inset storageKey={chartSettingKeys.statusIndicatorInputsVisible}>输入</SettingsCheckRow>
+        <SettingsCheckRow checked storageKey={chartSettingKeys.statusIndicatorValuesVisible}>数值</SettingsCheckRow>
         <div className="ff-settings-status-row">
           <input defaultChecked type="checkbox" />
           <span>背景</span>

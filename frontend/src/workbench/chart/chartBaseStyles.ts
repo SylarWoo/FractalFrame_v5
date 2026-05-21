@@ -1,4 +1,5 @@
-import { LineType } from 'klinecharts'
+import { LineType, TooltipShowRule } from 'klinecharts'
+import type { Chart } from 'klinecharts'
 import {
   chartNumberFontFamily,
   chartNumberFontWeight,
@@ -6,6 +7,29 @@ import {
   readAxisTextColor,
   readAxisTextSize,
 } from './chartStyleReaders'
+import { readSettingsBooleanValue } from '../settingsSymbolState'
+import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+
+function readIndicatorTooltipShowRule() {
+  return readSettingsBooleanValue(
+    chartSettingKeys.statusIndicatorTooltipVisible,
+    chartSettingDefaults.statusIndicatorTooltipVisible,
+  ) ? TooltipShowRule.Always : TooltipShowRule.None
+}
+
+export function applyIndicatorTooltipStyle(chart: Chart) {
+  chart.setStyles({
+    indicator: {
+      tooltip: {
+        showRule: readIndicatorTooltipShowRule(),
+        text: {
+          marginLeft: 8,
+          marginRight: 0,
+        },
+      },
+    },
+  })
+}
 
 export function createChartBaseStyles() {
   return {
@@ -67,6 +91,15 @@ export function createChartBaseStyles() {
         marginStart: 7,
         size: readAxisTextSize(),
         weight: chartNumberFontWeight,
+      },
+    },
+    indicator: {
+      tooltip: {
+        showRule: readIndicatorTooltipShowRule(),
+        text: {
+          marginLeft: 8,
+          marginRight: 0,
+        },
       },
     },
   }

@@ -1,4 +1,4 @@
-export { createChartBaseStyles } from './chartBaseStyles'
+export { applyIndicatorTooltipStyle, createChartBaseStyles } from './chartBaseStyles'
 export { applyAxisLineStyle, applyAxisTextStyle, resetYAxisAutoScale } from './chartAxisStyles'
 export {
   applyCandleBarStyle,
