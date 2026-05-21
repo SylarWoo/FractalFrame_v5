@@ -26,7 +26,10 @@ import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 export function RightDrawer({
   activeDrawer,
   drawerWidth,
+  indicatorShortcutKeys,
+  loadedIndicatorKeys,
   onClose,
+  onIndicatorShortcutKeysChange,
   onLoadIndicator,
   onResize,
   onToggleDrawer,
@@ -301,7 +304,13 @@ export function RightDrawer({
             onSelectedTabChange={setSelectedSettingsPanelTab}
           />
         ) : activeDrawer === 'indicators' ? (
-          <IndicatorsDrawer onLoadIndicator={onLoadIndicator} onUnloadIndicator={onUnloadIndicator} />
+          <IndicatorsDrawer
+            indicatorShortcutKeys={indicatorShortcutKeys}
+            loadedIndicatorKeys={loadedIndicatorKeys}
+            onIndicatorShortcutKeysChange={onIndicatorShortcutKeysChange}
+            onLoadIndicator={onLoadIndicator}
+            onUnloadIndicator={onUnloadIndicator}
+          />
         ) : (
           <RightDrawerMt5Body
             canAggregateStoreV5={canAggregateStoreV5}

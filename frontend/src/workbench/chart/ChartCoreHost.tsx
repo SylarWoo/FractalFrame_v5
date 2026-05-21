@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import { installChartDragCursor } from './chartDragCursor'
 import { scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
@@ -9,13 +10,25 @@ import { useChartStepLoad } from './useChartStepLoad'
 import { installIndicatorAxisDragSensitivity, uninstallIndicatorAxisDragSensitivity } from './rsiAxisDragSensitivity'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
+import { ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
 import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
+import { ensureTradingViewStochIndicator } from './tradingViewStochIndicator'
+import { ensureTradingViewTsiIndicator } from './tradingViewTsiIndicator'
+import { ensureTradingViewViIndicator } from './tradingViewViIndicator'
 import { ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
-import type { MaIndicatorSettings, RsiIndicatorSettings, VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { MacdIndicatorSettings, MaIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import './ChartCoreHost.css'
 
 const rsiPaneId = 'rsi_pane'
+const stochPaneId = 'stoch_pane'
+const macdPaneId = 'macd_pane'
+const tsiPaneId = 'tsi_pane'
+const viPaneId = 'vi_pane'
 const rsiPaneHeightStorageKey = 'fractalframe.chart.rsiPaneHeight'
+const stochPaneHeightStorageKey = 'fractalframe.chart.stochPaneHeight'
+const macdPaneHeightStorageKey = 'fractalframe.chart.macdPaneHeight'
+const tsiPaneHeightStorageKey = 'fractalframe.chart.tsiPaneHeight'
+const viPaneHeightStorageKey = 'fractalframe.chart.viPaneHeight'
 const defaultRsiPaneHeight = 128
 const minRsiPaneHeight = 80
 const maxStoredRsiPaneHeight = 720
@@ -39,8 +52,12 @@ export type ChartIndicatorCommand = {
   id: number
 } & (
   | { name: 'MA'; settings?: MaIndicatorSettings }
+  | { name: 'MACD'; settings?: MacdIndicatorSettings }
   | { name: 'RSI'; settings?: RsiIndicatorSettings }
-  | { name: 'VWAP' }
+  | { name: 'Stoch'; settings?: StochIndicatorSettings }
+  | { name: 'TSI'; settings?: TsiIndicatorSettings }
+  | { name: 'VI'; settings?: ViIndicatorSettings }
+  | { name: 'VWAP'; settings?: VwapIndicatorSettings }
   | { name: 'Vol'; settings?: VolIndicatorSettings }
 )
 
@@ -59,15 +76,15 @@ function normalizeRsiPaneHeight(value: number) {
   return Math.max(minRsiPaneHeight, Math.min(Math.round(value), maxStoredRsiPaneHeight))
 }
 
-function readStoredRsiPaneHeight() {
+function readStoredPaneHeight(storageKey: string) {
   if (typeof window === 'undefined') return defaultRsiPaneHeight
-  const stored = Number(window.localStorage.getItem(rsiPaneHeightStorageKey))
+  const stored = Number(window.localStorage.getItem(storageKey))
   return Number.isFinite(stored) ? normalizeRsiPaneHeight(stored) : defaultRsiPaneHeight
 }
 
-function writeStoredRsiPaneHeight(height: number) {
+function writeStoredPaneHeight(storageKey: string, height: number) {
   if (typeof window === 'undefined' || !Number.isFinite(height)) return
-  window.localStorage.setItem(rsiPaneHeightStorageKey, String(normalizeRsiPaneHeight(height)))
+  window.localStorage.setItem(storageKey, String(normalizeRsiPaneHeight(height)))
 }
 
 function refreshPane(chart: unknown, paneId: string) {
@@ -82,6 +99,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
   const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, period, reloadId, symbol, totalRows })
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const stochPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const macdPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const tsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const viPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const mainVolumeOverlayRef = useRef<ReturnType<typeof installMainVolumeOverlay> | null>(null)
 
   useEffect(() => {
@@ -98,36 +119,77 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     const persistRsiPaneHeight = () => {
       window.requestAnimationFrame(() => {
         const size = chart.getSize(rsiPaneId)
-        if (size?.height) writeStoredRsiPaneHeight(size.height)
+        if (size?.height) writeStoredPaneHeight(rsiPaneHeightStorageKey, size.height)
+      })
+    }
+
+    const persistStochPaneHeight = () => {
+      window.requestAnimationFrame(() => {
+        const size = chart.getSize(stochPaneId)
+        if (size?.height) writeStoredPaneHeight(stochPaneHeightStorageKey, size.height)
+      })
+    }
+    const persistMacdPaneHeight = () => {
+      window.requestAnimationFrame(() => {
+        const size = chart.getSize(macdPaneId)
+        if (size?.height) writeStoredPaneHeight(macdPaneHeightStorageKey, size.height)
+      })
+    }
+    const persistTsiPaneHeight = () => {
+      window.requestAnimationFrame(() => {
+        const size = chart.getSize(tsiPaneId)
+        if (size?.height) writeStoredPaneHeight(tsiPaneHeightStorageKey, size.height)
+      })
+    }
+    const persistViPaneHeight = () => {
+      window.requestAnimationFrame(() => {
+        const size = chart.getSize(viPaneId)
+        if (size?.height) writeStoredPaneHeight(viPaneHeightStorageKey, size.height)
       })
     }
 
     chart.subscribeAction(ActionType.OnPaneDrag, persistRsiPaneHeight)
-    return () => chart.unsubscribeAction(ActionType.OnPaneDrag, persistRsiPaneHeight)
+    chart.subscribeAction(ActionType.OnPaneDrag, persistStochPaneHeight)
+    chart.subscribeAction(ActionType.OnPaneDrag, persistMacdPaneHeight)
+    chart.subscribeAction(ActionType.OnPaneDrag, persistTsiPaneHeight)
+    chart.subscribeAction(ActionType.OnPaneDrag, persistViPaneHeight)
+    return () => {
+      chart.unsubscribeAction(ActionType.OnPaneDrag, persistRsiPaneHeight)
+      chart.unsubscribeAction(ActionType.OnPaneDrag, persistStochPaneHeight)
+      chart.unsubscribeAction(ActionType.OnPaneDrag, persistMacdPaneHeight)
+      chart.unsubscribeAction(ActionType.OnPaneDrag, persistTsiPaneHeight)
+      chart.unsubscribeAction(ActionType.OnPaneDrag, persistViPaneHeight)
+    }
   }, [chartInstanceRef])
 
-  const observeRsiPaneHeight = () => {
-    rsiPaneHeightObserverRef.current?.disconnect()
-    rsiPaneHeightObserverRef.current = null
+  const observeIndicatorPaneHeight = (paneId: string, storageKey: string, observerRef: MutableRefObject<ResizeObserver | null>) => {
+    observerRef.current?.disconnect()
+    observerRef.current = null
 
     const chart = chartInstanceRef.current
     if (!chart) return
 
     window.requestAnimationFrame(() => {
-      const paneDom = chart.getDom(rsiPaneId)
+      const paneDom = chart.getDom(paneId)
       if (!paneDom) return
 
       const observer = new ResizeObserver(() => {
-        const size = chart.getSize(rsiPaneId)
-        if (size?.height) writeStoredRsiPaneHeight(size.height)
+        const size = chart.getSize(paneId)
+        if (size?.height) writeStoredPaneHeight(storageKey, size.height)
       })
       observer.observe(paneDom)
-      rsiPaneHeightObserverRef.current = observer
+      observerRef.current = observer
 
-      const size = chart.getSize(rsiPaneId)
-      if (size?.height) writeStoredRsiPaneHeight(size.height)
+      const size = chart.getSize(paneId)
+      if (size?.height) writeStoredPaneHeight(storageKey, size.height)
     })
   }
+
+  const observeRsiPaneHeight = () => observeIndicatorPaneHeight(rsiPaneId, rsiPaneHeightStorageKey, rsiPaneHeightObserverRef)
+  const observeStochPaneHeight = () => observeIndicatorPaneHeight(stochPaneId, stochPaneHeightStorageKey, stochPaneHeightObserverRef)
+  const observeMacdPaneHeight = () => observeIndicatorPaneHeight(macdPaneId, macdPaneHeightStorageKey, macdPaneHeightObserverRef)
+  const observeTsiPaneHeight = () => observeIndicatorPaneHeight(tsiPaneId, tsiPaneHeightStorageKey, tsiPaneHeightObserverRef)
+  const observeViPaneHeight = () => observeIndicatorPaneHeight(viPaneId, viPaneHeightStorageKey, viPaneHeightObserverRef)
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -146,7 +208,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         chart.createIndicator(
           { name: 'RSI', calcParams: [indicatorCommand.settings] },
           false,
-          { id: rsiPaneId, height: readStoredRsiPaneHeight(), minHeight: minRsiPaneHeight },
+          { id: rsiPaneId, height: readStoredPaneHeight(rsiPaneHeightStorageKey), minHeight: minRsiPaneHeight },
           () => {
             observeRsiPaneHeight()
             installChartDragCursor(chart)
@@ -157,10 +219,142 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         scheduleUnlockYAxisManualDrag(chart)
       } else {
         const size = chart.getSize(rsiPaneId)
-        if (size?.height) writeStoredRsiPaneHeight(size.height)
+        if (size?.height) writeStoredPaneHeight(rsiPaneHeightStorageKey, size.height)
         rsiPaneHeightObserverRef.current?.disconnect()
         rsiPaneHeightObserverRef.current = null
         chart.removeIndicator(rsiPaneId, 'RSI')
+        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+        scheduleUnlockYAxisManualDrag(chart)
+      }
+    }
+
+    if (indicatorCommand.name === 'Stoch') {
+      ensureTradingViewStochIndicator()
+
+      if (indicatorCommand.action === 'load') {
+        if (chart.getIndicatorByPaneId(stochPaneId, 'Stoch')) {
+          chart.overrideIndicator({ name: 'Stoch', calcParams: [indicatorCommand.settings] }, stochPaneId, observeStochPaneHeight)
+          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+          scheduleUnlockYAxisManualDrag(chart)
+          return
+        }
+        chart.createIndicator(
+          { name: 'Stoch', calcParams: [indicatorCommand.settings] },
+          false,
+          { id: stochPaneId, height: readStoredPaneHeight(stochPaneHeightStorageKey), minHeight: minRsiPaneHeight },
+          () => {
+            observeStochPaneHeight()
+            installChartDragCursor(chart)
+            scheduleUnlockYAxisManualDrag(chart)
+          },
+        )
+        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+        scheduleUnlockYAxisManualDrag(chart)
+      } else {
+        const size = chart.getSize(stochPaneId)
+        if (size?.height) writeStoredPaneHeight(stochPaneHeightStorageKey, size.height)
+        stochPaneHeightObserverRef.current?.disconnect()
+        stochPaneHeightObserverRef.current = null
+        chart.removeIndicator(stochPaneId, 'Stoch')
+        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+        scheduleUnlockYAxisManualDrag(chart)
+      }
+    }
+
+    if (indicatorCommand.name === 'MACD') {
+      ensureTradingViewMacdIndicator()
+
+      if (indicatorCommand.action === 'load') {
+        if (chart.getIndicatorByPaneId(macdPaneId, 'MACD')) {
+          chart.overrideIndicator({ name: 'MACD', calcParams: [indicatorCommand.settings] }, macdPaneId, observeMacdPaneHeight)
+          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+          scheduleUnlockYAxisManualDrag(chart)
+          return
+        }
+        chart.createIndicator(
+          { name: 'MACD', calcParams: [indicatorCommand.settings] },
+          false,
+          { id: macdPaneId, height: readStoredPaneHeight(macdPaneHeightStorageKey), minHeight: minRsiPaneHeight },
+          () => {
+            observeMacdPaneHeight()
+            installChartDragCursor(chart)
+            scheduleUnlockYAxisManualDrag(chart)
+          },
+        )
+        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+        scheduleUnlockYAxisManualDrag(chart)
+      } else {
+        const size = chart.getSize(macdPaneId)
+        if (size?.height) writeStoredPaneHeight(macdPaneHeightStorageKey, size.height)
+        macdPaneHeightObserverRef.current?.disconnect()
+        macdPaneHeightObserverRef.current = null
+        chart.removeIndicator(macdPaneId, 'MACD')
+        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+        scheduleUnlockYAxisManualDrag(chart)
+      }
+    }
+
+    if (indicatorCommand.name === 'TSI') {
+      ensureTradingViewTsiIndicator()
+
+      if (indicatorCommand.action === 'load') {
+        if (chart.getIndicatorByPaneId(tsiPaneId, 'TSI')) {
+          chart.overrideIndicator({ name: 'TSI', calcParams: [indicatorCommand.settings] }, tsiPaneId, observeTsiPaneHeight)
+          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+          scheduleUnlockYAxisManualDrag(chart)
+          return
+        }
+        chart.createIndicator(
+          { name: 'TSI', calcParams: [indicatorCommand.settings] },
+          false,
+          { id: tsiPaneId, height: readStoredPaneHeight(tsiPaneHeightStorageKey), minHeight: minRsiPaneHeight },
+          () => {
+            observeTsiPaneHeight()
+            installChartDragCursor(chart)
+            scheduleUnlockYAxisManualDrag(chart)
+          },
+        )
+        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+        scheduleUnlockYAxisManualDrag(chart)
+      } else {
+        const size = chart.getSize(tsiPaneId)
+        if (size?.height) writeStoredPaneHeight(tsiPaneHeightStorageKey, size.height)
+        tsiPaneHeightObserverRef.current?.disconnect()
+        tsiPaneHeightObserverRef.current = null
+        chart.removeIndicator(tsiPaneId, 'TSI')
+        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+        scheduleUnlockYAxisManualDrag(chart)
+      }
+    }
+
+    if (indicatorCommand.name === 'VI') {
+      ensureTradingViewViIndicator()
+
+      if (indicatorCommand.action === 'load') {
+        if (chart.getIndicatorByPaneId(viPaneId, 'VI')) {
+          chart.overrideIndicator({ name: 'VI', calcParams: [indicatorCommand.settings] }, viPaneId, observeViPaneHeight)
+          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+          scheduleUnlockYAxisManualDrag(chart)
+          return
+        }
+        chart.createIndicator(
+          { name: 'VI', calcParams: [indicatorCommand.settings] },
+          false,
+          { id: viPaneId, height: readStoredPaneHeight(viPaneHeightStorageKey), minHeight: minRsiPaneHeight },
+          () => {
+            observeViPaneHeight()
+            installChartDragCursor(chart)
+            scheduleUnlockYAxisManualDrag(chart)
+          },
+        )
+        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+        scheduleUnlockYAxisManualDrag(chart)
+      } else {
+        const size = chart.getSize(viPaneId)
+        if (size?.height) writeStoredPaneHeight(viPaneHeightStorageKey, size.height)
+        viPaneHeightObserverRef.current?.disconnect()
+        viPaneHeightObserverRef.current = null
+        chart.removeIndicator(viPaneId, 'VI')
         window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       }
@@ -182,13 +376,14 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
 
     if (indicatorCommand.name === 'VWAP') {
       ensureTradingViewVwapIndicator()
+      const vwapSettings = { ...indicatorCommand.settings, symbol }
 
       if (indicatorCommand.action === 'load') {
         if (chart.getIndicatorByPaneId('candle_pane', 'VWAP')) {
-          chart.overrideIndicator({ name: 'VWAP' }, 'candle_pane')
+          chart.overrideIndicator({ name: 'VWAP', calcParams: [vwapSettings] }, 'candle_pane')
           return
         }
-        chart.createIndicator({ name: 'VWAP' }, true, { id: 'candle_pane' })
+        chart.createIndicator({ name: 'VWAP', calcParams: [vwapSettings] }, true, { id: 'candle_pane' })
       } else {
         chart.removeIndicator('candle_pane', 'VWAP')
       }
@@ -216,12 +411,16 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         refreshPane(chart, 'candle_pane')
       }
     }
-  }, [chartInstanceRef, indicatorCommand])
+  }, [chartInstanceRef, indicatorCommand, symbol])
 
   useEffect(() => () => {
     mainVolumeOverlayRef.current?.destroy()
     mainVolumeOverlayRef.current = null
     rsiPaneHeightObserverRef.current?.disconnect()
+    stochPaneHeightObserverRef.current?.disconnect()
+    macdPaneHeightObserverRef.current?.disconnect()
+    tsiPaneHeightObserverRef.current?.disconnect()
+    viPaneHeightObserverRef.current?.disconnect()
     uninstallIndicatorAxisDragSensitivity()
   }, [])
 

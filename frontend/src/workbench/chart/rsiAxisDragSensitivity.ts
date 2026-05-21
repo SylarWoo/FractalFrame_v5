@@ -1,7 +1,7 @@
 import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 
-const indicatorAxisPaneIds = ['rsi_pane']
+const indicatorAxisPaneIds = ['rsi_pane', 'stoch_pane', 'macd_pane', 'tsi_pane', 'vi_pane']
 const indicatorAxisDragBoost = 1.8
 
 type InternalChart = Chart & {

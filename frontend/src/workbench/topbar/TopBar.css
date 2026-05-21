@@ -211,9 +211,93 @@ body[data-fractalframe-topbar-resizing='true'] {
   stroke-width: 1.8;
 }
 
+.ff-topbar-wallet {
+  position: relative;
+  flex: 0 0 auto;
+  margin-left: -5px;
+}
+
+.ff-topbar-wallet__menu {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  z-index: 160;
+  display: grid;
+  width: 178px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  color: #111827;
+  padding: 4px;
+}
+
+.ff-topbar-wallet__menu button {
+  display: grid;
+  grid-template-columns: 14px 42px minmax(0, 1fr);
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #111827;
+  cursor: pointer;
+  font-family: Arial, Tahoma, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 7px;
+  text-align: left;
+}
+
+.ff-topbar-wallet__menu button:hover {
+  background: #f3f4f6;
+}
+
+.ff-topbar-wallet__menu button[data-loaded='true'] {
+  color: #0f172a;
+}
+
+.ff-topbar-wallet__check {
+  width: 14px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
+.ff-topbar-wallet__menu strong {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ff-topbar-wallet__menu span:not(.ff-topbar-wallet__check) {
+  overflow: hidden;
+  color: #475569;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ff-topbar-calendar {
   position: relative;
   flex: 0 0 auto;
+  margin-left: -8px;
+  padding-right: 4px;
+}
+
+.ff-topbar-calendar::after {
+  position: absolute;
+  top: 6px;
+  right: 0;
+  width: 1px;
+  height: 22px;
+  background: #d1d5db;
+  content: '';
 }
 
 .ff-topbar-calendar__popover {

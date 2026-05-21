@@ -1,7 +1,7 @@
 import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 
-const dragCursorPaneIds = ['candle_pane', 'rsi_pane']
+const dragCursorPaneIds = ['candle_pane', 'rsi_pane', 'stoch_pane', 'macd_pane', 'tsi_pane', 'vi_pane']
 const dragCursorCleanupKey = '__fractalframeChartDragCursorCleanup'
 
 type CursorRestore = {

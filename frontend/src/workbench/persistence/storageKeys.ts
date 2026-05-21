@@ -18,6 +18,7 @@ export const storageKeys = {
   importCenterWatchlistRealtimeSnapshot: 'fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1',
   importCenterWatchlistSymbols: 'fractalframe:mt5ImportCenterWatchlistSymbols:v1',
   importCenterWatchlistTableHeightPx: 'fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1',
+  indicatorShortcutKeys: 'fractalframe:indicatorShortcutKeys:v1',
   rightWidgetActiveDrawer: 'fractalframe:rightWidgetActiveDrawer:v1',
   rightWidgetDrawerWidthPx: 'fractalframe:rightWidgetDrawerWidthPx:v1',
   settingsSymbolPanel: 'fractalframe:settingsSymbolPanel:v1',

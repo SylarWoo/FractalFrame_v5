@@ -203,6 +203,35 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
   content: '';
 }
 
+.ff-indicators-table-v1__check {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.ff-indicators-table-v1__check input {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.ff-indicators-table-v1__check input:disabled {
+  cursor: default;
+}
+
+.ff-indicators-table-v1__check span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ff-indicators-table-v1 tbody tr:focus-visible td {
   outline: 1px solid #60a5fa;
   outline-offset: -1px;
@@ -523,6 +552,93 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
   gap: 14px;
 }
 
+.ff-indicators-vwap-panel-v1 .ff-indicators-input-panel-v1__section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+}
+
+.ff-indicators-vwap-panel-v1 .ff-indicators-input-panel-v1__section-title {
+  margin-bottom: 16px;
+  font-weight: 400;
+}
+
+.ff-indicators-vi-panel-v1 .ff-indicators-input-panel-v1__row {
+  grid-template-columns: 128px auto;
+}
+
+.ff-indicators-vwap-panel-v1__row {
+  grid-template-columns: 82px 120px;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ff-indicators-vwap-panel-v1__row .ff-indicators-input-panel-v1__control,
+.ff-indicators-vwap-panel-v1__row .ff-indicators-input-panel-v1__control .ff-openable-select {
+  width: 120px;
+  max-width: 120px;
+}
+
+.ff-indicators-vwap-panel-v1__row .ff-openable-select__button {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.ff-indicators-vwap-panel-v1__row .ff-openable-select__button span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ff-indicators-vwap-panel-v1__check-row,
+.ff-indicators-vwap-panel-v1__band-row {
+  display: grid;
+  grid-template-columns: 82px 120px;
+  align-items: center;
+  justify-content: start;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #131722;
+  font-size: 12px;
+}
+
+.ff-indicators-vwap-panel-v1__band-row {
+  grid-template-columns: 96px 120px;
+}
+
+.ff-indicators-vwap-panel-v1__band-row .ff-indicators-input-panel-v1__control {
+  width: 120px;
+  max-width: 120px;
+}
+
+.ff-indicators-vwap-panel-v1__check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-indicators-vwap-panel-v1__check-row input,
+.ff-indicators-vwap-panel-v1__band-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #2f2f33;
+}
+
+.ff-indicators-vwap-panel-v1__band-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.ff-indicators-vwap-panel-v1 input:disabled {
+  background: #f1f1f1;
+  color: #787b86;
+  cursor: default;
+}
+
 .ff-indicators-ma-style-panel-v1 {
   gap: 16px;
 }
@@ -608,8 +724,38 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
   font: 14px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
 }
 
-.ff-indicators-vol-style-panel-v1 .ff-indicators-style-row-v1 {
+.ff-indicators-vol-style-panel-v1 .ff-indicators-style-row-v1,
+.ff-indicators-vol-style-panel-v1__precision-row {
+  grid-template-columns: 128px max-content;
+}
+
+.ff-indicators-vwap-style-panel-v1 .ff-indicators-style-row-v1,
+.ff-indicators-vwap-style-panel-v1__precision-row {
+  grid-template-columns: 150px max-content;
+}
+
+.ff-indicators-stoch-style-panel-v1 .ff-indicators-style-row-v1,
+.ff-indicators-stoch-style-panel-v1__precision-row {
   grid-template-columns: 176px max-content;
+}
+
+.ff-indicators-macd-style-panel-v1 .ff-indicators-style-row-v1,
+.ff-indicators-macd-style-panel-v1__precision-row {
+  grid-template-columns: 176px max-content;
+}
+
+.ff-indicators-tsi-style-panel-v1 .ff-indicators-style-row-v1,
+.ff-indicators-tsi-style-panel-v1__precision-row {
+  grid-template-columns: 176px max-content;
+}
+
+.ff-indicators-vi-style-panel-v1 .ff-indicators-style-row-v1,
+.ff-indicators-vi-style-panel-v1__precision-row {
+  grid-template-columns: 128px max-content;
+}
+
+.ff-indicators-vwap-style-panel-v1 .ff-indicators-style-row-v1__check {
+  white-space: nowrap;
 }
 
 .ff-indicators-style-row-v1__controls input[type='number'] {

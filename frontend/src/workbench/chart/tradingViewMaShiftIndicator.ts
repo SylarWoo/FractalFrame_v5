@@ -2,6 +2,7 @@ import { IndicatorSeries, registerIndicator } from 'klinecharts'
 import type { IndicatorCreateTooltipDataSourceParams, IndicatorDrawParams, KLineData } from 'klinecharts'
 import { defaultMaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { readPricePrecision } from './chartStyleReaders'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 
@@ -364,10 +365,9 @@ function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<MaSh
   return Math.max(0, Math.min(Math.floor(params.visibleRange.realTo), params.indicator.result.length - 1))
 }
 
-function formatMaValue(value: number | undefined, precision: MaIndicatorSettings['precision']) {
+function formatMaValue(value: number | undefined) {
   if (!Number.isFinite(value)) return '--'
-  const digits = precision === 'system' ? 5 : Number(precision)
-  return (value as number).toFixed(Number.isFinite(digits) ? digits : 5).replace(/\.?0+$/, '')
+  return (value as number).toFixed(readPricePrecision())
 }
 
 function readIndicatorInputsVisible() {
@@ -431,7 +431,7 @@ export function ensureTradingViewMaShiftIndicator() {
           ? [{
               title: { text: '', color: params.defaultStyles.tooltip.text.color },
               value: {
-                text: formatMaValue(row?.ma, settings.precision),
+                text: formatMaValue(row?.ma),
                 color: getMaSegmentColor(settings, colorIndex, settings.maLineOpacity),
               },
             }]

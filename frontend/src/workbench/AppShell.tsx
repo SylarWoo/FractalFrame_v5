@@ -27,12 +27,12 @@ import {
 } from './leftRailV4Icons'
 import { RightDrawer } from './rightDrawer/RightDrawer'
 import { readIndicatorPersistenceEnabled, readPersistedIndicatorsState } from './rightDrawer/indicatorPersistence'
-import type { MaIndicatorSettings, RsiIndicatorSettings, VolIndicatorSettings } from './rightDrawer/indicatorPersistence'
+import type { MacdIndicatorSettings, MaIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from './rightDrawer/indicatorPersistence'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
-import type { RightDrawerId } from './rightDrawer/RightDrawerTypes'
+import type { IndicatorShortcutItem, RightDrawerId } from './rightDrawer/RightDrawerTypes'
 import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
 import { formatChartLoadStatus } from './mt5DataCenter/storeV5StatusFormat'
-import { readBooleanFlag, readJson, readString, removeStorageItem, writeBooleanFlag, writeString } from './persistence/jsonStorage'
+import { readBooleanFlag, readJson, readString, removeStorageItem, writeBooleanFlag, writeJson, writeString } from './persistence/jsonStorage'
 import { storageKeys } from './persistence/storageKeys'
 import { readSettingsBooleanValue, readSettingsStringValue, settingsSymbolChangedEvent } from './settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from './settings/chartSettingsSchema'
@@ -62,6 +62,50 @@ const leftToolbarItems = [
   { type: 'button', label: 'Zoom out', svg: LEFT_RAIL_ZOOM_OUT_SVGREPO_ICON_48 },
   { type: 'button', label: 'Remove drawings', svg: LEFT_RAIL_REMOVE_SELECTED_DRAWINGS_SVGREPO_ICON_48 },
 ] as const
+
+const indicatorShortcutLabels: Record<string, string> = {
+  RSI: '相对强弱指数',
+  Stoch: '随机指标',
+  MACD: '平滑异同移动线',
+  TSI: '真实强弱指数',
+  VI: '漩涡指标',
+  MA: '移动均线',
+  VWAP: '成交量加权平均价',
+  Vol: '成交量',
+}
+
+function readInitialLoadedIndicatorKeys() {
+  if (!readIndicatorPersistenceEnabled()) return []
+  const persisted = readPersistedIndicatorsState()
+  const keys: string[] = []
+  if (persisted.loaded.RSI) keys.push('RSI')
+  if (persisted.loaded.Stoch) keys.push('Stoch')
+  if (persisted.loaded.MACD) keys.push('MACD')
+  if (persisted.loaded.TSI) keys.push('TSI')
+  if (persisted.loaded.VI) keys.push('VI')
+  if (persisted.loaded.MA) keys.push('MA')
+  if (persisted.loaded.VWAP) keys.push('VWAP')
+  if (persisted.loaded.Vol) keys.push('Vol')
+  return keys
+}
+
+function readInitialIndicatorShortcutKeys() {
+  const parsed = readJson<unknown[]>(storageKeys.indicatorShortcutKeys, [])
+  const keys = parsed.filter((key): key is string => typeof key === 'string' && key in indicatorShortcutLabels)
+  return [...new Set(keys)]
+}
+
+function getPersistedIndicatorSettings(name: ChartIndicatorCommand['name']) {
+  const persisted = readPersistedIndicatorsState()
+  if (name === 'MA') return persisted.ma
+  if (name === 'MACD') return persisted.macd
+  if (name === 'VWAP') return persisted.vwap
+  if (name === 'Vol') return persisted.vol
+  if (name === 'Stoch') return persisted.stoch
+  if (name === 'TSI') return persisted.tsi
+  if (name === 'VI') return persisted.vi
+  return persisted.rsi
+}
 
 function getInitialDrawerWidth() {
   const fallbackWidth = 280
@@ -167,6 +211,13 @@ export function AppShell() {
   const [bottomDrawerHeight, setBottomDrawerHeight] = useState(getInitialBottomDrawerHeight)
   const [activeBottomPanel, setActiveBottomPanel] = useState<(typeof bottomPanels)[number]['id']>('strategyTester')
   const [activeLeftTool, setActiveLeftTool] = useState('Cursor')
+  const [indicatorShortcutKeys, setIndicatorShortcutKeys] = useState<string[]>(readInitialIndicatorShortcutKeys)
+  const [loadedIndicatorKeys, setLoadedIndicatorKeys] = useState<string[]>(readInitialLoadedIndicatorKeys)
+  const indicatorShortcuts: IndicatorShortcutItem[] = indicatorShortcutKeys.map((key) => ({
+    key,
+    loaded: loadedIndicatorKeys.includes(key),
+    name: indicatorShortcutLabels[key] ?? key,
+  }))
   const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null; reloadId?: number }>(() => {
     const shared = readSharedSelection()
     return {
@@ -180,8 +231,12 @@ export function AppShell() {
     if (!readIndicatorPersistenceEnabled()) return null
     const persisted = readPersistedIndicatorsState()
     if (persisted.loaded.RSI) return { action: 'load', id: Date.now(), name: 'RSI', settings: persisted.rsi }
+    if (persisted.loaded.Stoch) return { action: 'load', id: Date.now(), name: 'Stoch', settings: persisted.stoch }
+    if (persisted.loaded.MACD) return { action: 'load', id: Date.now(), name: 'MACD', settings: persisted.macd }
+    if (persisted.loaded.TSI) return { action: 'load', id: Date.now(), name: 'TSI', settings: persisted.tsi }
+    if (persisted.loaded.VI) return { action: 'load', id: Date.now(), name: 'VI', settings: persisted.vi }
     if (persisted.loaded.MA) return { action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma }
-    if (persisted.loaded.VWAP) return { action: 'load', id: Date.now(), name: 'VWAP' }
+    if (persisted.loaded.VWAP) return { action: 'load', id: Date.now(), name: 'VWAP', settings: persisted.vwap }
     if (persisted.loaded.Vol) return { action: 'load', id: Date.now(), name: 'Vol', settings: persisted.vol }
     return null
   })
@@ -219,8 +274,12 @@ export function AppShell() {
     const persisted = readPersistedIndicatorsState()
     const scheduled: ChartIndicatorCommand[] = []
     if (persisted.loaded.RSI && chartIndicatorCommand?.name !== 'RSI') scheduled.push({ action: 'load', id: Date.now(), name: 'RSI', settings: persisted.rsi })
+    if (persisted.loaded.Stoch && chartIndicatorCommand?.name !== 'Stoch') scheduled.push({ action: 'load', id: Date.now(), name: 'Stoch', settings: persisted.stoch })
+    if (persisted.loaded.MACD && chartIndicatorCommand?.name !== 'MACD') scheduled.push({ action: 'load', id: Date.now(), name: 'MACD', settings: persisted.macd })
+    if (persisted.loaded.TSI && chartIndicatorCommand?.name !== 'TSI') scheduled.push({ action: 'load', id: Date.now(), name: 'TSI', settings: persisted.tsi })
+    if (persisted.loaded.VI && chartIndicatorCommand?.name !== 'VI') scheduled.push({ action: 'load', id: Date.now(), name: 'VI', settings: persisted.vi })
     if (persisted.loaded.MA && chartIndicatorCommand?.name !== 'MA') scheduled.push({ action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma })
-    if (persisted.loaded.VWAP && chartIndicatorCommand?.name !== 'VWAP') scheduled.push({ action: 'load', id: Date.now(), name: 'VWAP' })
+    if (persisted.loaded.VWAP && chartIndicatorCommand?.name !== 'VWAP') scheduled.push({ action: 'load', id: Date.now(), name: 'VWAP', settings: persisted.vwap })
     if (persisted.loaded.Vol && chartIndicatorCommand?.name !== 'Vol') scheduled.push({ action: 'load', id: Date.now(), name: 'Vol', settings: persisted.vol })
     scheduled.forEach((command, index) => {
       window.setTimeout(() => setChartIndicatorCommand({ ...command, id: Date.now() }), index * 30)
@@ -250,6 +309,10 @@ export function AppShell() {
   useEffect(() => {
     writeString(storageKeys.rightWidgetDrawerWidthPx, String(rightDrawerWidth))
   }, [rightDrawerWidth])
+
+  useEffect(() => {
+    writeJson(storageKeys.indicatorShortcutKeys, indicatorShortcutKeys)
+  }, [indicatorShortcutKeys])
 
   useEffect(() => {
     if (activeRightDrawer) {
@@ -299,33 +362,62 @@ export function AppShell() {
     window.addEventListener('pointerup', handlePointerUp, { once: true })
   }
 
-  function handleLoadIndicator(name: ChartIndicatorCommand['name'], settings?: MaIndicatorSettings | RsiIndicatorSettings | VolIndicatorSettings) {
+  function handleLoadIndicator(name: ChartIndicatorCommand['name'], settings?: MacdIndicatorSettings | MaIndicatorSettings | RsiIndicatorSettings | StochIndicatorSettings | TsiIndicatorSettings | ViIndicatorSettings | VolIndicatorSettings | VwapIndicatorSettings) {
+    setLoadedIndicatorKeys((current) => current.includes(name) ? current : [...current, name])
     if (name === 'MA') {
       setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as MaIndicatorSettings })
+    } else if (name === 'MACD') {
+      setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as MacdIndicatorSettings })
     } else if (name === 'VWAP') {
-      setChartIndicatorCommand({ action: 'load', id: Date.now(), name })
+      setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as VwapIndicatorSettings })
     } else if (name === 'Vol') {
       setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as VolIndicatorSettings })
+    } else if (name === 'Stoch') {
+      setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as StochIndicatorSettings })
+    } else if (name === 'TSI') {
+      setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as TsiIndicatorSettings })
+    } else if (name === 'VI') {
+      setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as ViIndicatorSettings })
     } else {
       setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as RsiIndicatorSettings })
     }
   }
 
   function handleUnloadIndicator(name: ChartIndicatorCommand['name']) {
+    setLoadedIndicatorKeys((current) => current.filter((key) => key !== name))
     if (name === 'MA') {
+      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
+    } else if (name === 'MACD') {
       setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
     } else if (name === 'VWAP') {
       setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
     } else if (name === 'Vol') {
+      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
+    } else if (name === 'Stoch') {
+      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
+    } else if (name === 'TSI') {
+      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
+    } else if (name === 'VI') {
       setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
     } else {
       setChartIndicatorCommand({ action: 'unload', id: Date.now(), name: 'RSI' })
     }
   }
 
+  function handleToggleIndicatorShortcutLoad(name: string) {
+    if (name !== 'MA' && name !== 'MACD' && name !== 'RSI' && name !== 'Stoch' && name !== 'TSI' && name !== 'VI' && name !== 'VWAP' && name !== 'Vol') return
+    if (loadedIndicatorKeys.includes(name)) {
+      handleUnloadIndicator(name)
+      return
+    }
+    handleLoadIndicator(name, getPersistedIndicatorSettings(name))
+  }
+
   return (
     <div className="ff-app-shell">
       <TopBar
+        indicatorShortcuts={indicatorShortcuts}
+        onIndicatorShortcutToggle={handleToggleIndicatorShortcutLoad}
         onJumpChartToTime={(timestamp) => setChartJump({ id: Date.now(), timestamp })}
         onLoadChartStep={(direction) => setChartStepLoad({ direction, id: Date.now() })}
         onOpenChart={setChartTarget}
@@ -405,7 +497,10 @@ export function AppShell() {
         <RightDrawer
           activeDrawer={activeRightDrawer}
           drawerWidth={rightDrawerWidth}
+          indicatorShortcutKeys={indicatorShortcutKeys}
+          loadedIndicatorKeys={loadedIndicatorKeys}
           onClose={() => setActiveRightDrawer(null)}
+          onIndicatorShortcutKeysChange={setIndicatorShortcutKeys}
           onLoadIndicator={handleLoadIndicator}
           onOpenChart={setChartTarget}
           onResize={setRightDrawerWidth}

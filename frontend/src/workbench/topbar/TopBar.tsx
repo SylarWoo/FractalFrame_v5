@@ -5,6 +5,8 @@ import type { OpenChartOptions } from './useShortcutMenuState'
 import './TopBar.css'
 
 type TopBarProps = {
+  indicatorShortcuts?: Array<{ key: string; loaded: boolean; name: string }>
+  onIndicatorShortcutToggle?: (key: string) => void
   onJumpChartToTime?: (timestamp: number) => void
   onLoadChartStep?: (direction: 'left' | 'right') => void
   onOpenChart?: (options: OpenChartOptions) => void
@@ -52,12 +54,14 @@ function buildCalendarDays(month: Date) {
   })
 }
 
-export function TopBar({ onJumpChartToTime, onLoadChartStep, onOpenChart, onResetChartToLatest }: TopBarProps) {
+export function TopBar({ indicatorShortcuts = [], onIndicatorShortcutToggle, onJumpChartToTime, onLoadChartStep, onOpenChart, onResetChartToLatest }: TopBarProps) {
   const symbolRootRef = useRef<HTMLDivElement | null>(null)
   const shortcutMenuRef = useRef<HTMLDivElement | null>(null)
   const calendarRootRef = useRef<HTMLDivElement | null>(null)
+  const walletRootRef = useRef<HTMLDivElement | null>(null)
   const [shortcutMenuWidth, setShortcutMenuWidth] = useState(readShortcutMenuWidth)
   const [calendarOpen, setCalendarOpen] = useState(false)
+  const [walletOpen, setWalletOpen] = useState(false)
   const [calendarMonth, setCalendarMonth] = useState(() => startOfCalendarMonth(new Date()))
   const {
     activePeriod,
@@ -104,6 +108,27 @@ export function TopBar({ onJumpChartToTime, onLoadChartStep, onOpenChart, onRese
       document.removeEventListener('keydown', closeOnEscape, true)
     }
   }, [calendarOpen])
+
+  useEffect(() => {
+    if (!walletOpen) return
+    const close = (event: MouseEvent) => {
+      if (walletRootRef.current?.contains(event.target as Node)) return
+      setWalletOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setWalletOpen(false)
+    }
+    document.addEventListener('mousedown', close, true)
+    document.addEventListener('keydown', closeOnEscape, true)
+    return () => {
+      document.removeEventListener('mousedown', close, true)
+      document.removeEventListener('keydown', closeOnEscape, true)
+    }
+  }, [walletOpen])
+
+  useEffect(() => {
+    if (indicatorShortcuts.length === 0) setWalletOpen(false)
+  }, [indicatorShortcuts.length])
 
   function handleShortcutMenuResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const root = shortcutMenuRef.current
@@ -241,6 +266,34 @@ export function TopBar({ onJumpChartToTime, onLoadChartStep, onOpenChart, onRese
               <button aria-label="向右加载10000根K线" onClick={() => onLoadChartStep?.('right')} type="button">&gt;&gt;</button>
               <button aria-label="回到最后一根K线" onClick={onResetChartToLatest} type="button">回到现在</button>
             </div>
+          </div>
+        )}
+      </div>
+
+      <div className="ff-topbar-wallet" data-open={walletOpen} ref={walletRootRef}>
+        <button
+          aria-expanded={walletOpen}
+          aria-label="Indicator shortcuts"
+          className="ff-topbar-icon-btn ff-topbar-wallet-btn"
+          onClick={() => setWalletOpen((current) => indicatorShortcuts.length > 0 ? !current : false)}
+          type="button"
+        >
+          <svg aria-hidden="true" viewBox="0 0 48 48">
+            <path d="M6.7,23.25V16.13a2,2,0,0,1,2-2H41.5a2,2,0,0,1,2,2v23a2,2,0,0,1-2,2H8.7a2,2,0,0,1-2-2V32" />
+            <path d="M5.5,23.25H17a2,2,0,0,1,2,2V30a2,2,0,0,1-2,2H5.5a1,1,0,0,1-1-1V24.25A1,1,0,0,1,5.5,23.25Z" />
+            <circle cx="14.49" cy="27.63" r="2" />
+            <polyline points="38.12 14.13 13.19 6.87 11.08 14.13" />
+          </svg>
+        </button>
+        {walletOpen && indicatorShortcuts.length > 0 && (
+          <div className="ff-topbar-wallet__menu">
+            {indicatorShortcuts.map((item) => (
+              <button data-loaded={item.loaded} key={item.key} onClick={() => onIndicatorShortcutToggle?.(item.key)} type="button">
+                <span className="ff-topbar-wallet__check">{item.loaded ? '✓' : ''}</span>
+                <strong>{item.key}</strong>
+                <span>{item.name}</span>
+              </button>
+            ))}
           </div>
         )}
       </div>
