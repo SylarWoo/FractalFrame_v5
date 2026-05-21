@@ -9,8 +9,10 @@ import {
 } from './chartStyleReaders'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
 
 function readIndicatorTooltipShowRule() {
+  if (domPaneTitleOverlayEnabled) return TooltipShowRule.None
   return readSettingsBooleanValue(
     chartSettingKeys.statusIndicatorTooltipVisible,
     chartSettingDefaults.statusIndicatorTooltipVisible,

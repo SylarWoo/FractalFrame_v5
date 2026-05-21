@@ -4,6 +4,8 @@ import type { Chart } from 'klinecharts'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
 import { formatChartDate, readChartTimezone } from './chartTimeFormatting'
 import { installChartDragCursor, uninstallChartDragCursor } from './chartDragCursor'
+import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
+import { installPaneTitleOverlay } from './paneTitleOverlayManager'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import {
   applyAxisLineStyle,
@@ -44,6 +46,7 @@ function applyChartStyles(chart: Chart, symbol: string, period: string, displayN
 export function useChartInstance({ displayName, period, symbol }: UseChartInstanceOptions) {
   const chartInstanceRef = useRef<Chart | null>(null)
   const chartRef = useRef<HTMLDivElement | null>(null)
+  const paneTitleOverlayRef = useRef<ReturnType<typeof installPaneTitleOverlay> | null>(null)
 
   useEffect(() => {
     if (!chartRef.current) return
@@ -77,8 +80,13 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     window.requestAnimationFrame(() => {
       if (chart) cleanupDragCursor = installChartDragCursor(chart)
     })
+    if (chart && domPaneTitleOverlayEnabled) {
+      paneTitleOverlayRef.current = installPaneTitleOverlay(chart, container, { period: '', symbol: '' })
+    }
 
     return () => {
+      paneTitleOverlayRef.current?.destroy()
+      paneTitleOverlayRef.current = null
       cleanupDragCursor?.()
       if (chart) uninstallChartDragCursor(chart)
       if (resizeFrameId !== 0) window.cancelAnimationFrame(resizeFrameId)
@@ -90,9 +98,13 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
   }, [])
 
   useEffect(() => {
+    paneTitleOverlayRef.current?.updateContext({ displayName, period, symbol })
     const apply = () => {
       const chart = chartInstanceRef.current
-      if (chart) applyChartStyles(chart, symbol, period, displayName)
+      if (chart) {
+        applyChartStyles(chart, symbol, period, displayName)
+        paneTitleOverlayRef.current?.update()
+      }
     }
     apply()
     window.addEventListener(settingsSymbolChangedEvent, apply)

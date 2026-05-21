@@ -1,4 +1,4 @@
-import { LineType } from 'klinecharts'
+import { LineType, TooltipShowRule } from 'klinecharts'
 import type { CandleTooltipCustomCallbackData, Chart } from 'klinecharts'
 import { readSettingsSymbolState } from '../settingsSymbolState'
 import { chartSettingKeys } from '../settings/chartSettingsSchema'
@@ -12,6 +12,7 @@ import {
   resolveCandleValueColor,
   resolveStatusTitle,
 } from './chartStyleReaders'
+import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
 
 export function applyCandleBarStyle(chart: Chart) {
   chart.setStyles({ candle: { bar: readCandleBarStyle() } })
@@ -72,18 +73,21 @@ export function applyCandleTooltipStyle(chart: Chart, symbol: string, period: st
   const settings = readSettingsSymbolState()
   const chartValuesVisible = settings[chartSettingKeys.statusChartValuesVisible] !== false
   const candleChangeVisible = settings[chartSettingKeys.statusCandleChangeVisible] !== false
+  const candleVolumeVisible = settings[chartSettingKeys.statusCandleVolumeVisible] !== false
   const candleTimeVisible = settings[chartSettingKeys.statusCandleTimeVisible] !== false
   const barStyle = readCandleBarStyle()
+  const statusTitle = resolveStatusTitle(symbol, displayName)
 
   chart.setStyles({
     candle: {
       bar: barStyle,
       tooltip: {
+        showRule: domPaneTitleOverlayEnabled ? TooltipShowRule.None : undefined,
         custom: ({ current }: CandleTooltipCustomCallbackData) => {
           const priceColor = resolveCandleValueColor(current, barStyle)
           return [
             {
-              title: `${resolveStatusTitle(symbol, displayName)} ${period}${chartValuesVisible ? '  O: ' : ''}`,
+              title: statusTitle ? `${statusTitle} ${period}${chartValuesVisible ? '  O: ' : ''}` : '',
               value: chartValuesVisible ? { text: '{open}', color: priceColor } : '',
             },
             ...(chartValuesVisible
@@ -94,7 +98,7 @@ export function applyCandleTooltipStyle(chart: Chart, symbol: string, period: st
                 ]
               : []),
             ...(candleChangeVisible ? [{ title: 'Chg: ', value: '{change}' }] : []),
-            { title: 'Volume: ', value: '{volume}' },
+            ...(candleVolumeVisible ? [{ title: 'Volume: ', value: '{volume}' }] : []),
             ...(candleTimeVisible ? [{ title: 'Time: ', value: '{time}' }] : []),
           ]
         },

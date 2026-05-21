@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
-import { readSettingsStringValue, writeSettingsSymbolStateValue } from '../settingsSymbolState'
+import { readSettingsBooleanValue, readSettingsStringValue, writeSettingsSymbolStateValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from './chartSettingsSchema'
 import { SettingsCheckRow } from './SettingsSharedControls'
 import './SettingsStatusPanel.css'
 
 export function SettingsStatusPanel() {
+  const [titleVisible, setTitleVisible] = useState(() => readSettingsBooleanValue(chartSettingKeys.statusTitleVisible, chartSettingDefaults.statusTitleVisible))
   const [titleMode, setTitleMode] = useState(() => readSettingsStringValue(chartSettingKeys.statusTitleMode, chartSettingDefaults.statusTitleMode))
 
   return (
@@ -14,7 +15,15 @@ export function SettingsStatusPanel() {
         <div className="ff-settings-symbol-kicker">商品</div>
         <SettingsCheckRow>Logo</SettingsCheckRow>
         <div className="ff-settings-status-row">
-          <input defaultChecked type="checkbox" />
+          <input
+            checked={titleVisible}
+            onChange={(event) => {
+              const next = event.currentTarget.checked
+              setTitleVisible(next)
+              writeSettingsSymbolStateValue(chartSettingKeys.statusTitleVisible, next)
+            }}
+            type="checkbox"
+          />
           <span>标题</span>
           <OpenableSelect
             ariaLabel="标题"
@@ -34,7 +43,7 @@ export function SettingsStatusPanel() {
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusLocalDataLoadVisible}>本地数据加载</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusChartValuesVisible}>图表值</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleChangeVisible}>K线变化值</SettingsCheckRow>
-        <SettingsCheckRow checked>成交量</SettingsCheckRow>
+        <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleVolumeVisible}>成交量</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleTimeVisible}>K线时间</SettingsCheckRow>
       </section>
 

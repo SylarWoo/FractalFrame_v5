@@ -1,6 +1,6 @@
 import { LineType } from 'klinecharts'
 import type { KLineData } from 'klinecharts'
-import { readSettingsNumberStringValue, readSettingsStringValue, readSettingsSymbolState } from '../settingsSymbolState'
+import { readSettingsBooleanValue, readSettingsNumberStringValue, readSettingsStringValue, readSettingsSymbolState } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 
 export const chartNumberFontFamily = '-apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, Arial, sans-serif'
@@ -102,9 +102,12 @@ export function resolveLineThickness(value: unknown) {
 }
 
 export function resolveStatusTitle(symbol: string, displayName?: string) {
+  const visible = readSettingsBooleanValue(chartSettingKeys.statusTitleVisible, chartSettingDefaults.statusTitleVisible)
+  if (!visible) return ''
   const mode = readSettingsStringValue(chartSettingKeys.statusTitleMode, chartSettingDefaults.statusTitleMode)
   const name = displayName?.trim() || symbol
   if (mode === 'symbol') return symbol
   if (mode === 'name') return name
-  return `${symbol} · ${name}`
+  if (name === symbol) return symbol
+  return `${symbol} ${name}`
 }
