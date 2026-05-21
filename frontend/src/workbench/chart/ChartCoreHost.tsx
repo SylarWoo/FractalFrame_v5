@@ -6,6 +6,7 @@ import { scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
 import { useChartRealtimeTicks } from './useChartRealtimeTicks'
+import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
 import { useChartStepLoad } from './useChartStepLoad'
 import { installIndicatorAxisDragSensitivity, uninstallIndicatorAxisDragSensitivity } from './rsiAxisDragSensitivity'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
@@ -63,6 +64,8 @@ export type ChartIndicatorCommand = {
 
 export type ChartLoadState = {
   error: boolean
+  loadedPeriod?: string
+  loadedSymbol?: string
   loading: boolean
   loadingMore: boolean
   period: string
@@ -98,6 +101,11 @@ function refreshPane(chart: unknown, paneId: string) {
 export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLoadStateChange, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
   const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, period, reloadId, symbol, totalRows })
+  const realtimeDataReady = !loadState.loading &&
+    loadState.rows > 0 &&
+    loadState.loadedSymbol === symbol &&
+    loadState.loadedPeriod === period
+  const candleCountdown = useCurrentCandleCountdown({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol })
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const stochPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const macdPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
@@ -109,7 +117,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     onLoadStateChange?.({ ...loadState, period, symbol, totalRows })
   }, [loadState, onLoadStateChange, period, symbol, totalRows])
 
-  useChartRealtimeTicks({ chartInstanceRef, period, symbol, totalRows })
+  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol, totalRows })
   useChartStepLoad({ chartInstanceRef, period, setLoadState, stepLoad: stepLoad ?? null, symbol, totalRows })
 
   useEffect(() => {
@@ -427,6 +435,19 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   return (
     <section className="ff-chart-core-host" aria-label={`${symbol} ${period} chart`}>
       <div ref={chartRef} className="ff-chart-core-host__canvas" />
+      {candleCountdown.visible && (
+        <div
+          className="ff-chart-current-candle-countdown"
+          style={{
+            backgroundColor: candleCountdown.color,
+            left: `${candleCountdown.left}px`,
+            top: `${candleCountdown.top}px`,
+          }}
+        >
+          <span>{candleCountdown.price}</span>
+          <span>{candleCountdown.text}</span>
+        </div>
+      )}
     </section>
   )
 }

@@ -2,6 +2,8 @@ import { LineType } from 'klinecharts'
 import type { KLineData } from 'klinecharts'
 import { readSettingsBooleanValue, readSettingsNumberStringValue, readSettingsStringValue, readSettingsSymbolState } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { resolveGlobalPricePrecision } from './globalPricePrecision'
+import type { GlobalPricePrecisionContext } from './globalPricePrecision'
 
 export const chartNumberFontFamily = '-apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, Arial, sans-serif'
 export const chartNumberFontWeight = 400
@@ -74,9 +76,9 @@ export function resolveCandleValueColor(data: KLineData, barStyle: ReturnType<ty
   return close > open ? barStyle.upColor : barStyle.downColor
 }
 
-export function readPricePrecision() {
+export function readPricePrecision(value?: number | null, context?: GlobalPricePrecisionContext) {
   const raw = readSettingsNumberStringValue(chartSettingKeys.pricePrecision, chartSettingDefaults.pricePrecision)
-  if (raw === 'system') return 3
+  if (raw === 'system') return resolveGlobalPricePrecision(value, 3, context)
   const precision = typeof raw === 'string' ? Number(raw) : 6
   return Number.isFinite(precision) ? Math.max(0, Math.min(Math.round(precision), 7)) : 6
 }

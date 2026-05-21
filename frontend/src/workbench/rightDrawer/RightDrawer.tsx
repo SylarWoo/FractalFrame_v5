@@ -152,6 +152,7 @@ export function RightDrawer({
     selectedRowSymbol: selectedRow?.symbol ?? '',
     selectedStoreTableKey,
     storePanelPersistenceEnabled,
+    watchlistSymbols: watchlistRows.map((row) => row.symbol),
     setLocalStoreStatus,
     onOpenChart,
   })

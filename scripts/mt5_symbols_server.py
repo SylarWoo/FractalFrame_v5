@@ -61,6 +61,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 DEFAULT_CACHE_ROOT = ROOT / "runtime_data" / "instruments" / "mt5"
 LOGGER = get_logger("mt5_symbols_server")
+QUIET_ACCESS_LOG_PATHS = {
+    "/api/market-data/v1/mt5/tick",
+    "/api/market-data/v1/mt5/ticks/events",
+}
 
 
 def utc_now_iso() -> str:
@@ -106,6 +110,10 @@ def parse_symbols_query(value: str, max_symbols: int = 80) -> list[str]:
         if len(symbols) >= max_symbols:
             break
     return symbols
+
+
+def should_log_access(path: str) -> bool:
+    return urlparse(path).path not in QUIET_ACCESS_LOG_PATHS
 
 
 def mt5_tick_to_payload(mt5: Any, symbol: str, day_open: float | None) -> dict[str, Any] | None:
@@ -235,7 +243,10 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
 
     def send_aggregate_job_events(self, job_id: str) -> None:
         send_aggregate_job_events_sse(self, job_id, utc_now_iso=utc_now_iso)
+
     def log_message(self, format: str, *args: Any) -> None:
+        if not should_log_access(self.path):
+            return
         LOGGER.info("%s - %s", self.address_string(), format % args)
 
 

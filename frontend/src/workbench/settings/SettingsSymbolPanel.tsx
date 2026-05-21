@@ -53,7 +53,7 @@ export function SettingsSymbolPanel() {
           <span>精确度</span>
           <OpenableSelect
             ariaLabel="精确度"
-            defaultValue="6"
+            defaultValue={chartSettingDefaults.pricePrecision}
             onChange={(value) => {
               setPricePrecision(value)
               writeSettingsSymbolStateValue(chartSettingKeys.pricePrecision, value)

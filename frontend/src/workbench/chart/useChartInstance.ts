@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { dispose, init } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
+import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
 import { formatChartDate, readChartTimezone } from './chartTimeFormatting'
 import { installChartDragCursor, uninstallChartDragCursor } from './chartDragCursor'
 import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
@@ -30,7 +31,7 @@ type UseChartInstanceOptions = {
 function applyChartStyles(chart: Chart, symbol: string, period: string, displayName?: string) {
   chart.setTimezone(readChartTimezone())
   chart.setCustomApi({ formatDate: formatChartDate })
-  applyPriceVolumePrecision(chart)
+  applyPriceVolumePrecision(chart, symbol)
   applyGridStyle(chart)
   applyPaneSeparatorStyle(chart)
   applyIndicatorTooltipStyle(chart)
@@ -108,9 +109,11 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     }
     apply()
     window.addEventListener(settingsSymbolChangedEvent, apply)
+    window.addEventListener(realtimeEnabledChangedEvent, apply)
     window.addEventListener('storage', apply)
     return () => {
       window.removeEventListener(settingsSymbolChangedEvent, apply)
+      window.removeEventListener(realtimeEnabledChangedEvent, apply)
       window.removeEventListener('storage', apply)
     }
   }, [displayName, period, symbol])

@@ -12,6 +12,7 @@ import {
 import { readSettingsBooleanValue, readSettingsSymbolState } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { readCandleBarStyle, resolveCandleValueColor, resolveStatusTitle } from './chartStyleReaders'
+import { formatGlobalPrice } from './globalPricePrecision'
 import { mainVolumeIndicatorName } from './mainVolumeIndicator'
 
 export type PaneTitleContext = {
@@ -104,10 +105,10 @@ function formatNumber(value: unknown, precision: unknown, fallbackDigits: number
   return number.toFixed(precisionDigits(precision, fallbackDigits)).replace(/\.?0+$/, '')
 }
 
-function formatPrice(value: unknown) {
+function formatPrice(value: unknown, symbol: string) {
   const number = numberValue(value)
   if (number == null) return '--'
-  return number.toFixed(3)
+  return formatGlobalPrice(number, '--', { symbol })
 }
 
 function readTooltipIndex(chart: Chart, crosshairIndex: number | null, resultLength: number) {
@@ -160,13 +161,13 @@ function createCandleParts(chart: Chart, context: PaneTitleContext, crosshairInd
   if (valuesVisible && current) {
     parts.push(titleGroup([
       { text: 'O:' },
-      { color: valueColor, text: formatPrice(current.open) },
+      { color: valueColor, text: formatPrice(current.open, context.symbol) },
       { gapBefore: 10, text: 'H:' },
-      { color: valueColor, text: formatPrice(current.high) },
+      { color: valueColor, text: formatPrice(current.high, context.symbol) },
       { gapBefore: 10, text: 'L:' },
-      { color: valueColor, text: formatPrice(current.low) },
+      { color: valueColor, text: formatPrice(current.low, context.symbol) },
       { gapBefore: 10, text: 'C:' },
-      { color: valueColor, text: formatPrice(current.close) },
+      { color: valueColor, text: formatPrice(current.close, context.symbol) },
     ]))
   }
 

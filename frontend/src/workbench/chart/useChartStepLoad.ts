@@ -5,7 +5,7 @@ import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import { chartError, chartInfo } from './chartLogger'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import { historyPageSize, mergeKLineData, resolveHasMoreOlder } from './chartCoreDataUtils'
-import { resetYAxisAutoScale } from './chartStyleAppliers'
+import { applyPriceVolumePrecision, resetYAxisAutoScale } from './chartStyleAppliers'
 
 type StepLoad = { direction: 'left' | 'right'; id: number } | null
 type LoadState = {
@@ -86,6 +86,7 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
           ? data[Math.floor(data.length / 2)]?.timestamp
           : data[Math.max(0, data.length - Math.floor(data.length / 2) - 1)]?.timestamp
         chart.applyNewData(merged, hasMoreOlder)
+        applyPriceVolumePrecision(chart, symbol)
         window.setTimeout(() => {
           if (disposed) return
           resetYAxisAutoScale(chart)

@@ -1,10 +1,10 @@
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import type { Mt5RealtimeTick, Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
+import { formatGlobalPrice, formatGlobalPriceDelta } from '../chart/globalPricePrecision'
 import { resolveMt5SymbolDisplay } from '../rightDrawer/mt5SymbolDisplay'
 import {
   formatMarketChange,
   formatMarketPercent,
-  formatMarketPrice,
 } from './storeV5StatusFormat'
 import type { StoreTableRow } from './storeV5StatusFormat'
 import './WatchlistTable.css'
@@ -99,6 +99,7 @@ export function WatchlistTable({
             {watchlistRows.map((row) => {
               const display = resolveMt5SymbolDisplay(row)
               const tick = watchlistTicks[row.symbol]
+              const priceContext = { assetType: display.assetType, market: row.market, symbol: row.symbol }
               return (
                 <tr
                   data-selected={selectedSymbol === row.symbol}
@@ -110,9 +111,9 @@ export function WatchlistTable({
                   <td title={row.symbol}>{row.symbol}</td>
                   <td title={display.chineseName}>{display.chineseName}</td>
                   <td title={display.assetType}>{display.assetType}</td>
-                  <td title={tick?.publishedAt ?? ''}>{formatMarketPrice(tick?.last)}</td>
+                  <td title={tick?.publishedAt ?? ''}>{formatGlobalPrice(tick?.last, '-', priceContext)}</td>
                   <td data-direction={(tick?.change ?? 0) > 0 ? 'up' : (tick?.change ?? 0) < 0 ? 'down' : 'flat'}>
-                    {formatMarketChange(tick?.change)}
+                    {typeof tick?.change === 'number' && Number.isFinite(tick.change) ? `${tick.change > 0 ? '+' : ''}${formatGlobalPriceDelta(Math.abs(tick.change), tick.last, '-', priceContext)}` : formatMarketChange(tick?.change)}
                   </td>
                   <td data-direction={(tick?.changePercent ?? 0) > 0 ? 'up' : (tick?.changePercent ?? 0) < 0 ? 'down' : 'flat'}>
                     {formatMarketPercent(tick?.changePercent)}

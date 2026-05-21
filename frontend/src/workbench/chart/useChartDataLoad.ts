@@ -14,11 +14,13 @@ import {
   resolveHasMoreOlder,
   resolveInitialLimit,
 } from './chartCoreDataUtils'
-import { resetYAxisAutoScale } from './chartStyleAppliers'
+import { applyPriceVolumePrecision, resetYAxisAutoScale } from './chartStyleAppliers'
 import { scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 
 export type ChartLoadStateCore = {
   error: boolean
+  loadedPeriod?: string
+  loadedSymbol?: string
   loading: boolean
   loadingMore: boolean
   requestedRows: number
@@ -47,6 +49,8 @@ export function useChartDataLoad({
   const requestSeqRef = useRef(0)
   const [loadState, setLoadState] = useState<ChartLoadStateCore>({
     error: false,
+    loadedPeriod: '',
+    loadedSymbol: '',
     loadingMore: false,
     loading: false,
     requestedRows: resolveInitialLimit(limit),
@@ -66,12 +70,28 @@ export function useChartDataLoad({
     const shouldIgnore = () => disposed || requestSeqRef.current !== requestSeq
     const finishLoaded = () => {
       if (shouldIgnore()) return
-      setLoadState({ error: false, loadingMore: false, loading: false, requestedRows, rows: chart.getDataList().length })
+      setLoadState({
+        error: false,
+        loadedPeriod: period,
+        loadedSymbol: symbol,
+        loadingMore: false,
+        loading: false,
+        requestedRows,
+        rows: chart.getDataList().length,
+      })
     }
 
     chart.unsubscribeAction(ActionType.OnDataReady)
     chart.subscribeAction(ActionType.OnDataReady, finishLoaded)
-    setLoadState({ error: false, loadingMore: false, loading: true, requestedRows, rows: 0 })
+    setLoadState({
+      error: false,
+      loadedPeriod: '',
+      loadedSymbol: '',
+      loadingMore: false,
+      loading: true,
+      requestedRows,
+      rows: 0,
+    })
 
     chart.setLoadDataCallback(({ type, data, callback }) => {
       if (shouldIgnore() || type !== LoadDataType.Forward || !data) {
@@ -102,6 +122,8 @@ export function useChartDataLoad({
             applySessionBreakIndicator(chart, symbol, period)
             setLoadState({
               error: false,
+              loadedPeriod: period,
+              loadedSymbol: symbol,
               loading: false,
               loadingMore: false,
               requestedRows,
@@ -212,6 +234,7 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
         hasMoreOlder,
       })
       chart.applyNewData(data, hasMoreOlder)
+      applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
         resetYAxisAutoScale(chart)
@@ -225,10 +248,12 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
           applySessionBreakIndicator(chart, options.symbol, options.period)
           scheduleUnlockYAxisManualDrag(chart)
         }, 0)
-        options.setLoadState({
-          error: false,
-          loadingMore: false,
-          loading: false,
+          options.setLoadState({
+            error: false,
+            loadedPeriod: options.period,
+            loadedSymbol: options.symbol,
+            loadingMore: false,
+            loading: false,
           requestedRows: jumpDisplayWindowBars,
           rows: chart.getDataList().length || data.length,
         })
@@ -255,6 +280,7 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
       })
       chartInfo('[StoreV5Datafeed] callback init done', { rows: data.length, hasMoreOlder })
       chart.applyNewData(data, hasMoreOlder)
+      applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
         resetYAxisAutoScale(chart)
@@ -262,6 +288,8 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
         scheduleUnlockYAxisManualDrag(chart)
         options.setLoadState({
           error: false,
+          loadedPeriod: options.period,
+          loadedSymbol: options.symbol,
           loadingMore: false,
           loading: false,
           requestedRows: options.requestedRows,

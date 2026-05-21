@@ -2,9 +2,9 @@ import { IndicatorSeries, registerIndicator } from 'klinecharts'
 import type { IndicatorCreateTooltipDataSourceParams, IndicatorDrawParams, KLineData } from 'klinecharts'
 import { defaultMaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
-import { readPricePrecision } from './chartStyleReaders'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { formatGlobalPrice } from './globalPricePrecision'
 
 type MaShiftRow = {
   ma?: number
@@ -367,7 +367,7 @@ function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<MaSh
 
 function formatMaValue(value: number | undefined) {
   if (!Number.isFinite(value)) return '--'
-  return (value as number).toFixed(readPricePrecision())
+  return formatGlobalPrice(value, '--')
 }
 
 function readIndicatorInputsVisible() {

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { readSettingsStringValue, readSettingsSymbolState, writeSettingsSymbolStateValue } from '../settingsSymbolState'
+import { chartSettingKeys } from './chartSettingsSchema'
 import { SettingsColorPair, SettingsLineSwatch } from './SettingsSwatches'
 import { SettingsCheckRow, SettingsMultiCheckSelect } from './SettingsSharedControls'
 import './SettingsCoordinatesPanel.css'
@@ -54,7 +55,7 @@ export function SettingsCoordinatesPanel() {
           <span>加号按钮</span>
           <button type="button">?</button>
         </div>
-        <SettingsCheckRow checked>当前K线结束倒计时</SettingsCheckRow>
+        <SettingsCheckRow checked storageKey={chartSettingKeys.currentCandleCountdownVisible}>当前K线结束倒计时</SettingsCheckRow>
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
           <span>商品代码</span>
           <SettingsMultiCheckSelect

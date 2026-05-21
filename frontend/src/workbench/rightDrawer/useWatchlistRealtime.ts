@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Mt5RealtimeTick, StoreV5CheckPayload } from '../../services/mt5/mt5SymbolsApi'
 import {
   readPersistedRealtimeSnapshot,
@@ -7,19 +7,23 @@ import {
   saveWatchlistRealtimeEnabled,
 } from '../mt5DataCenter/storeV5Persistence'
 import { useWatchlistRealtimeLog } from './useWatchlistRealtimeLog'
+import { useForegroundTickStream } from './useForegroundTickStream'
 
 type UseWatchlistRealtimeOptions = {
   foregroundRealtimeSymbol: string
   selectedRowSymbol: string
   selectedStoreTableKey: string
   storePanelPersistenceEnabled: boolean
+  watchlistSymbols: string[]
   setLocalStoreStatus: (payload: StoreV5CheckPayload | null) => void
   onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number }) => void
 }
 
 export function useWatchlistRealtime({
   foregroundRealtimeSymbol,
+  watchlistSymbols,
 }: UseWatchlistRealtimeOptions) {
+  const initialRealtimeSnapshot = useRef(readPersistedRealtimeSnapshot()).current
   const initialRealtimeEnabled = useRef(readWatchlistRealtimeEnabled()).current
   const [watchlistRealtimeEnabled, setWatchlistRealtimeEnabled] = useState(initialRealtimeEnabled)
   const [watchlistRealtimeReady, setWatchlistRealtimeReady] = useState(false)
@@ -27,10 +31,14 @@ export function useWatchlistRealtime({
   const {
     pushWatchlistRealtimeLog,
     watchlistRealtimeLog,
-  } = useWatchlistRealtimeLog(readPersistedRealtimeSnapshot().log ?? [])
-  const [watchlistTicks] = useState<Record<string, Mt5RealtimeTick>>(() => readPersistedRealtimeSnapshot().ticks ?? {})
-  const [watchlistLastTickAt] = useState(() => readPersistedRealtimeSnapshot().lastTickAt ?? '')
+  } = useWatchlistRealtimeLog(initialRealtimeSnapshot.log ?? [])
+  const [watchlistTicks, setWatchlistTicks] = useState<Record<string, Mt5RealtimeTick>>(() => initialRealtimeSnapshot.ticks ?? {})
+  const [watchlistLastTickAt, setWatchlistLastTickAt] = useState(() => initialRealtimeSnapshot.lastTickAt ?? '')
   const restoredRealtimeLoggedRef = useRef(false)
+  const realtimeSymbols = useMemo(() => {
+    return [...new Set([...watchlistSymbols, foregroundRealtimeSymbol].filter(Boolean))]
+  }, [foregroundRealtimeSymbol, watchlistSymbols])
+  const realtimeSymbolsKey = realtimeSymbols.join(',')
 
   useEffect(() => {
     saveWatchlistRealtimeEnabled(watchlistRealtimeEnabled)
@@ -54,11 +62,11 @@ export function useWatchlistRealtime({
       return () => window.clearTimeout(timer)
     }
 
-    if (!foregroundRealtimeSymbol) {
+    if (!realtimeSymbols.length) {
       const timer = window.setTimeout(() => {
         setWatchlistRealtimeReady(false)
         setWatchlistRealtimeStatus('No symbols')
-        pushWatchlistRealtimeLog('No foreground symbol, realtime not started')
+        pushWatchlistRealtimeLog('No watchlist symbols, realtime not started')
       }, 0)
       return () => window.clearTimeout(timer)
     }
@@ -68,11 +76,21 @@ export function useWatchlistRealtime({
       setWatchlistRealtimeStatus('Live')
       if (initialRealtimeEnabled && !restoredRealtimeLoggedRef.current) {
         restoredRealtimeLoggedRef.current = true
-        pushWatchlistRealtimeLog(`Realtime restored for ${foregroundRealtimeSymbol}`)
+        pushWatchlistRealtimeLog(`Realtime restored for ${realtimeSymbols.length} symbol${realtimeSymbols.length === 1 ? '' : 's'}`)
       }
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [foregroundRealtimeSymbol, initialRealtimeEnabled, pushWatchlistRealtimeLog, watchlistRealtimeEnabled])
+  }, [initialRealtimeEnabled, pushWatchlistRealtimeLog, realtimeSymbols.length, realtimeSymbolsKey, watchlistRealtimeEnabled])
+
+  useForegroundTickStream({
+    enabled: watchlistRealtimeEnabled,
+    pushLog: pushWatchlistRealtimeLog,
+    ready: watchlistRealtimeReady,
+    realtimeSymbols,
+    setLastTickAt: setWatchlistLastTickAt,
+    setStatus: setWatchlistRealtimeStatus,
+    setTicks: setWatchlistTicks,
+  })
 
   return {
     setWatchlistRealtimeEnabled,

@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import type { Chart } from 'klinecharts'
 import { queryMt5Tick } from '../../services/mt5/mt5SymbolsApi'
+import { readWatchlistRealtimeEnabled, realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
+import { applyPriceVolumePrecision } from './chartStyleAppliers'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
 
 type Mt5RealtimeTickEventDetail = {
@@ -16,6 +18,7 @@ type Mt5RealtimeTickEventDetail = {
 
 type UseChartRealtimeTicksOptions = {
   chartInstanceRef: MutableRefObject<Chart | null>
+  dataReady?: boolean
   period: string
   symbol: string
   totalRows?: number | null
@@ -45,8 +48,23 @@ function resolveTickSeconds(detail: Partial<Mt5RealtimeTickEventDetail>) {
   return Math.floor(rawTime > 10_000_000_000 ? rawTime / 1000 : rawTime)
 }
 
-export function useChartRealtimeTicks({ chartInstanceRef, period, symbol }: UseChartRealtimeTicksOptions) {
+export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, period, symbol }: UseChartRealtimeTicksOptions) {
+  const [realtimeEnabled, setRealtimeEnabled] = useState(readWatchlistRealtimeEnabled)
+
   useEffect(() => {
+    const syncRealtimeEnabled = () => setRealtimeEnabled(readWatchlistRealtimeEnabled())
+    window.addEventListener(realtimeEnabledChangedEvent, syncRealtimeEnabled)
+    window.addEventListener('storage', syncRealtimeEnabled)
+    syncRealtimeEnabled()
+    return () => {
+      window.removeEventListener(realtimeEnabledChangedEvent, syncRealtimeEnabled)
+      window.removeEventListener('storage', syncRealtimeEnabled)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!realtimeEnabled || !dataReady) return
+
     let disposed = false
     let bindTimer = 0
     let pollTimer = 0
@@ -105,6 +123,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, period, symbol }: UseC
             volume: nextVolume,
             turnover: estimateTurnover(nextHigh, nextLow, last, nextVolume),
           })
+          applyPriceVolumePrecision(activeChart, symbol)
         }
 
         if (!isDirectM1 && latest && bucketTimestamp <= latest.timestamp) {
@@ -128,6 +147,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, period, symbol }: UseC
               volume: 0,
               turnover: 0,
             })
+            applyPriceVolumePrecision(activeChart, symbol)
           }
           return
         }
@@ -143,6 +163,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, period, symbol }: UseC
             volume: tickVolume,
             turnover: estimateTurnover(last, last, last, tickVolume),
           })
+          applyPriceVolumePrecision(activeChart, symbol)
           return
         }
 
@@ -160,6 +181,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, period, symbol }: UseC
             volume: nextVolume,
             turnover: estimateTurnover(nextHigh, nextLow, last, nextVolume),
           })
+          applyPriceVolumePrecision(activeChart, symbol)
         }
       }
 
@@ -192,5 +214,5 @@ export function useChartRealtimeTicks({ chartInstanceRef, period, symbol }: UseC
       if (bindTimer !== 0) window.clearTimeout(bindTimer)
       cleanupListeners?.()
     }
-  }, [chartInstanceRef, period, symbol])
+  }, [chartInstanceRef, dataReady, period, realtimeEnabled, symbol])
 }

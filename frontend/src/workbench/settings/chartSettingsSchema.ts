@@ -8,6 +8,7 @@ export const chartSettingKeys = {
   statusCandleChangeVisible: 'status.candleChange.visible',
   statusCandleVolumeVisible: 'status.candleVolume.visible',
   statusCandleTimeVisible: 'status.candleTime.visible',
+  currentCandleCountdownVisible: 'coordinates.currentCandleCountdown.visible',
   statusIndicatorTitleVisible: 'status.indicatorTitle.visible',
   statusIndicatorTooltipVisible: 'status.indicatorTooltip.visible',
   statusIndicatorInputsVisible: 'status.indicatorInputs.visible',
@@ -16,7 +17,7 @@ export const chartSettingKeys = {
 } as const
 
 export const chartSettingDefaults = {
-  pricePrecision: '6',
+  pricePrecision: 'system',
   timezone: 'UTC',
   statusTitleVisible: true,
   statusTitleMode: 'symbol-name',
@@ -25,6 +26,7 @@ export const chartSettingDefaults = {
   statusCandleChangeVisible: true,
   statusCandleVolumeVisible: true,
   statusCandleTimeVisible: true,
+  currentCandleCountdownVisible: true,
   statusIndicatorTitleVisible: true,
   statusIndicatorTooltipVisible: true,
   statusIndicatorInputsVisible: true,

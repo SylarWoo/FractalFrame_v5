@@ -5,9 +5,9 @@ import { mergeWatchlistRealtimeTicks } from './watchlistRealtimeUtils'
 
 type UseForegroundTickStreamOptions = {
   enabled: boolean
-  foregroundRealtimeSymbol: string
   pushLog: (message: string) => void
   ready: boolean
+  realtimeSymbols: string[]
   restartKey?: string
   setLastTickAt: (updater: string) => void
   setStatus: (status: string) => void
@@ -16,24 +16,26 @@ type UseForegroundTickStreamOptions = {
 
 export function useForegroundTickStream({
   enabled,
-  foregroundRealtimeSymbol,
   pushLog,
   ready,
+  realtimeSymbols,
   restartKey,
   setLastTickAt,
   setStatus,
   setTicks,
 }: UseForegroundTickStreamOptions) {
   const ticksEventSourceRef = useRef<EventSource | null>(null)
+  const realtimeSymbolsKey = realtimeSymbols.join(',')
 
   useEffect(() => {
     ticksEventSourceRef.current?.close()
     ticksEventSourceRef.current = null
 
-    if (!enabled || !ready || !foregroundRealtimeSymbol) return
+    const symbols = realtimeSymbolsKey.split(',').filter(Boolean)
+    if (!enabled || !ready || !symbols.length) return
 
     const connectingTimer = window.setTimeout(() => setStatus('Connecting'), 0)
-    const source = createMt5TicksEventSource([foregroundRealtimeSymbol], 200)
+    const source = createMt5TicksEventSource(symbols, 200)
     ticksEventSourceRef.current = source
 
     source.addEventListener('ready', () => {
@@ -84,5 +86,5 @@ export function useForegroundTickStream({
         ticksEventSourceRef.current = null
       }
     }
-  }, [enabled, foregroundRealtimeSymbol, pushLog, ready, restartKey, setLastTickAt, setStatus, setTicks])
+  }, [enabled, pushLog, ready, realtimeSymbolsKey, restartKey, setLastTickAt, setStatus, setTicks])
 }

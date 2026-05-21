@@ -1,7 +1,8 @@
 import { LineType, TooltipShowRule } from 'klinecharts'
 import type { CandleTooltipCustomCallbackData, Chart } from 'klinecharts'
-import { readSettingsSymbolState } from '../settingsSymbolState'
-import { chartSettingKeys } from '../settings/chartSettingsSchema'
+import { readSettingsBooleanValue, readSettingsSymbolState } from '../settingsSymbolState'
+import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { readWatchlistRealtimeEnabled } from '../mt5DataCenter/storeV5Persistence'
 import {
   chartNumberFontFamily,
   chartNumberFontWeight,
@@ -18,13 +19,20 @@ export function applyCandleBarStyle(chart: Chart) {
   chart.setStyles({ candle: { bar: readCandleBarStyle() } })
 }
 
-export function applyPriceVolumePrecision(chart: Chart) {
-  chart.setPriceVolumePrecision(readPricePrecision(), 0)
+export function applyPriceVolumePrecision(chart: Chart, symbol?: string) {
+  const dataList = chart.getDataList()
+  const latest = dataList[dataList.length - 1]
+  const close = latest ? Number(latest.close) : null
+  chart.setPriceVolumePrecision(readPricePrecision(close, { symbol }), 0)
 }
 
 export function applyLastPriceLineStyle(chart: Chart) {
   const selectedParts = readSymbolLabelVisibleParts()
   const barStyle = readCandleBarStyle()
+  const countdownVisible = readSettingsBooleanValue(
+    chartSettingKeys.currentCandleCountdownVisible,
+    chartSettingDefaults.currentCandleCountdownVisible,
+  ) && readWatchlistRealtimeEnabled()
   const highLowParts = readSettingsSymbolState()['coordinates.highLow.visibleParts']
   const selectedHighLowParts = Array.isArray(highLowParts)
     ? highLowParts.filter((value): value is string => typeof value === 'string')
@@ -48,7 +56,7 @@ export function applyLastPriceLineStyle(chart: Chart) {
           text: {
             borderRadius: 0,
             family: chartNumberFontFamily,
-            show: selectedParts.includes('value'),
+            show: selectedParts.includes('value') && !countdownVisible,
             paddingBottom: 2,
             paddingLeft: 6,
             paddingRight: 7,
