@@ -1693,7 +1693,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
             activeTab={settingsTab}
             loaded={selectedLoaded}
             persistenceEnabled={persistenceEnabled}
-            title={`${selected.key} 路 ${selected.name}`}
+            title={`${selected.key} - ${selected.name}`}
             onLoad={handleLoadSelected}
             onPersistenceChange={handlePersistenceChange}
             onTabChange={setSettingsTab}

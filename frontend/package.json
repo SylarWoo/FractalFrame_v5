@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run check:encoding && tsc -b && vite build",
+    "check:encoding": "node scripts/check_encoding.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:e2e": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe -ExecutionPolicy Bypass -File ./scripts/run_e2e.ps1",

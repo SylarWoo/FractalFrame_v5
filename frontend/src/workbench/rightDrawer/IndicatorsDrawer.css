@@ -583,6 +583,16 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
   grid-template-columns: 150px 120px;
 }
 
+.ff-indicators-stoch-panel-v1 .ff-indicators-input-panel-v1__row {
+  grid-template-columns: 104px 72px;
+}
+
+.ff-indicators-stoch-panel-v1 .ff-indicators-input-panel-v1__control,
+.ff-indicators-stoch-panel-v1 .ff-indicators-input-panel-v1__control--wide {
+  width: 72px;
+  max-width: 72px;
+}
+
 .ff-indicators-vwap-panel-v1__row {
   grid-template-columns: 82px 120px;
   gap: 8px;
@@ -620,7 +630,7 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
 }
 
 .ff-indicators-vwap-panel-v1__band-row {
-  grid-template-columns: 96px 120px;
+  grid-template-columns: 82px 120px;
 }
 
 .ff-indicators-vwap-panel-v1__band-row .ff-indicators-input-panel-v1__control {
