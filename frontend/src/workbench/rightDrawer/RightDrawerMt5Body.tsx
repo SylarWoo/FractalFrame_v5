@@ -84,11 +84,9 @@ type RightDrawerMt5BodyProps = {
   visibleSymbols: Mt5SymbolRow[]
   watchlistAggregatedPeriods: StoreTableRow[]
   watchlistDirectPeriods: StoreTableRow[]
-  watchlistLastTickAt: string
   watchlistRealtimeEnabled: boolean
   watchlistRealtimeLog: string[]
   watchlistRealtimeReady: boolean
-  watchlistRealtimeStatus: string
   watchlistRows: Mt5SymbolRow[]
   watchlistColumnWidths: WatchlistColumnWidths
   watchlistTableHeight: number
@@ -104,8 +102,8 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
     selectedStoreTableKeyIsVisible, selectedSymbol, shortcutMenuEnabled, status, storeCheck, storeCheckError,
     storeCheckLoading, storeOperationLine, storeOperationProgress, storePanelPersistenceEnabled,
     storeTableAggregatePeriods, tableWrapRef, visibleStoreTableRows, visibleSymbols, watchlistAggregatedPeriods,
-    watchlistDirectPeriods, watchlistLastTickAt, watchlistRealtimeEnabled, watchlistRealtimeLog,
-    watchlistRealtimeReady, watchlistRealtimeStatus, watchlistRows, watchlistColumnWidths, watchlistTableHeight,
+    watchlistDirectPeriods, watchlistRealtimeEnabled, watchlistRealtimeLog,
+    watchlistRealtimeReady, watchlistRows, watchlistColumnWidths, watchlistTableHeight,
     watchlistTableWrapRef, watchlistTicks,
   } = props
 
@@ -199,11 +197,9 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
                 selectedSymbol={selectedSymbol}
                 watchlistAggregatedPeriods={watchlistAggregatedPeriods}
                 watchlistDirectPeriods={watchlistDirectPeriods}
-                watchlistLastTickAt={watchlistLastTickAt}
                 watchlistRealtimeEnabled={watchlistRealtimeEnabled}
                 watchlistRealtimeLog={watchlistRealtimeLog}
                 watchlistRealtimeReady={watchlistRealtimeReady}
-                watchlistRealtimeStatus={watchlistRealtimeStatus}
                 watchlistRows={watchlistRows}
                 watchlistTableHeight={watchlistTableHeight}
                 watchlistTableWrapRef={watchlistTableWrapRef}

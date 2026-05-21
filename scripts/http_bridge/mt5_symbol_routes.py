@@ -8,6 +8,24 @@ from .route_helpers import first_query_value
 
 
 def handle_mt5_symbols_get(handler: Any, parsed: ParseResult, services: Any) -> bool:
+    if parsed.path == "/api/market-data/v1/mt5/tick":
+        query = parse_qs(parsed.query)
+        symbol = first_query_value(query, "symbol").strip()
+        payload = services.query_mt5_tick_live(symbol)
+        handler.send_json(200 if payload.get("ok") is True else 503, payload)
+        return True
+
+    if parsed.path == "/api/market-data/v1/mt5/rates":
+        query = parse_qs(parsed.query)
+        symbol = first_query_value(query, "symbol").strip()
+        timeframe = first_query_value(query, "timeframe", "period", default="M1")
+        limit = clamp_limit(first_query_value(query, "limit", default="1000"))
+        time_from = safe_query_int(first_query_value(query, "timeFrom", "time_from", default=None), None)
+        time_to = safe_query_int(first_query_value(query, "timeTo", "time_to", default=None), None)
+        payload = services.query_mt5_rates_live(symbol, timeframe, limit, time_from, time_to)
+        handler.send_json(200 if payload.get("ok") is True else 503, payload)
+        return True
+
     if parsed.path == "/api/market-data/v1/mt5/ticks/events":
         query = parse_qs(parsed.query)
         symbols = services.parse_symbols_query(first_query_value(query, "symbols"))

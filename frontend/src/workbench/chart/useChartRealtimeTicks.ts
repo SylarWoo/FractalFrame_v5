@@ -1,16 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import type { MutableRefObject } from 'react'
 import type { Chart } from 'klinecharts'
-import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
-import { repairStoreV5M1Gaps } from '../../services/mt5/mt5SymbolsApi'
-import { chartWarn } from './chartLogger'
+import { queryMt5Tick } from '../../services/mt5/mt5SymbolsApi'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
-import {
-  historyPageSize,
-  mergeKLineData,
-  realtimeTailRepairLookbackMinutes,
-  realtimeTailRepairMaxGapMinutes,
-} from './chartCoreDataUtils'
 
 type Mt5RealtimeTickEventDetail = {
   ask?: number | null
@@ -18,6 +10,7 @@ type Mt5RealtimeTickEventDetail = {
   last?: number | null
   symbol: string
   time?: number | null
+  timeMsc?: number | null
   volume?: number | null
 }
 
@@ -33,106 +26,171 @@ function estimateTurnover(high: number, low: number, close: number, volume: numb
   return Number.isFinite(typicalPrice) && Number.isFinite(volume) ? typicalPrice * volume : 0
 }
 
-export function useChartRealtimeTicks({ chartInstanceRef, period, symbol, totalRows }: UseChartRealtimeTicksOptions) {
-  const realtimeTailRefreshInFlightRef = useRef(false)
-  const realtimeTailRefreshBucketRef = useRef<number | null>(null)
+function resolveTickLast(detail: Partial<Mt5RealtimeTickEventDetail>) {
+  if (typeof detail.bid === 'number' && Number.isFinite(detail.bid)) return detail.bid
+  if (typeof detail.last === 'number' && Number.isFinite(detail.last)) return detail.last
+  if (typeof detail.bid === 'number' && typeof detail.ask === 'number') return (detail.bid + detail.ask) / 2
+  return detail.ask
+}
 
+function normalizeRealtimeSymbol(value: string | null | undefined) {
+  return String(value ?? '').trim().toUpperCase()
+}
+
+function resolveTickSeconds(detail: Partial<Mt5RealtimeTickEventDetail>) {
+  const rawTime = typeof detail.timeMsc === 'number' && Number.isFinite(detail.timeMsc)
+    ? detail.timeMsc
+    : detail.time
+  if (typeof rawTime !== 'number' || !Number.isFinite(rawTime)) return Math.floor(Date.now() / 1000)
+  return Math.floor(rawTime > 10_000_000_000 ? rawTime / 1000 : rawTime)
+}
+
+export function useChartRealtimeTicks({ chartInstanceRef, period, symbol }: UseChartRealtimeTicksOptions) {
   useEffect(() => {
-    const chart = chartInstanceRef.current
-    if (!chart) return
+    let disposed = false
+    let bindTimer = 0
+    let pollTimer = 0
+    let inFlight = false
+    let cleanupListeners: (() => void) | null = null
 
-    realtimeTailRefreshInFlightRef.current = false
-    realtimeTailRefreshBucketRef.current = null
-
-    const refreshRealtimeTail = async (bucketTimestamp: number) => {
-      if (period.trim().toUpperCase() !== '1M' && period.trim().toUpperCase() !== 'M1') return
-      if (realtimeTailRefreshInFlightRef.current) return
-
-      realtimeTailRefreshInFlightRef.current = true
-      try {
-        await repairStoreV5M1Gaps(symbol, {
-          lookbackMinutes: realtimeTailRepairLookbackMinutes,
-          maxGapMinutes: realtimeTailRepairMaxGapMinutes,
-        })
-
-        const timeTo = Math.floor(bucketTimestamp / 1000) + 60
-        const timeFrom = timeTo - realtimeTailRepairLookbackMinutes * 60
-        const tailData = await loadStoreV5KLineData({
-          symbol,
-          period,
-          limit: realtimeTailRepairLookbackMinutes + 5,
-          timeFrom,
-          timeTo,
-        })
-        if (!tailData.length) return
-
-        const currentData = chart.getDataList()
-        const merged = mergeKLineData(currentData, tailData)
-        const hasMoreOlder = typeof totalRows === 'number' && Number.isFinite(totalRows)
-          ? merged.length < totalRows
-          : currentData.length >= historyPageSize
-        chart.applyNewData(merged, hasMoreOlder)
-      } catch (error) {
-        chartWarn('[StoreV5Datafeed] realtime tail refresh failed', error)
-      } finally {
-        realtimeTailRefreshInFlightRef.current = false
-      }
-    }
-
-    const handleRealtimeTick = (event: Event) => {
-      const detail = event instanceof CustomEvent ? event.detail as Partial<Mt5RealtimeTickEventDetail> : null
-      if (!detail || detail.symbol !== symbol) return
-
-      const last = typeof detail.last === 'number' && Number.isFinite(detail.last)
-        ? detail.last
-        : typeof detail.bid === 'number' && typeof detail.ask === 'number'
-          ? (detail.bid + detail.ask) / 2
-          : detail.bid ?? detail.ask
-      if (typeof last !== 'number' || !Number.isFinite(last)) return
-
-      const tickSeconds = typeof detail.time === 'number' && Number.isFinite(detail.time)
-        ? Math.floor(detail.time)
-        : Math.floor(Date.now() / 1000)
-      const periodSeconds = resolvePeriodSeconds(period)
-      const bucketTimestamp = Math.floor(tickSeconds / periodSeconds) * periodSeconds * 1000
-      const currentData = chart.getDataList()
-      const latest = currentData[currentData.length - 1]
-      const volume = typeof detail.volume === 'number' && Number.isFinite(detail.volume) ? detail.volume : 0
-
-      if (!latest || bucketTimestamp > latest.timestamp) {
-        if (realtimeTailRefreshBucketRef.current !== bucketTimestamp) {
-          realtimeTailRefreshBucketRef.current = bucketTimestamp
-          void refreshRealtimeTail(bucketTimestamp)
-        }
-        const open = latest?.close ?? last
-        chart.updateData({
-          timestamp: bucketTimestamp,
-          open,
-          high: last,
-          low: last,
-          close: last,
-          volume,
-          turnover: estimateTurnover(last, last, last, volume),
-        })
+    const bindWhenReady = () => {
+      if (disposed || cleanupListeners) return
+      const chart = chartInstanceRef.current
+      if (!chart) {
+        bindTimer = window.setTimeout(bindWhenReady, 50)
         return
       }
 
-      if (bucketTimestamp === latest.timestamp) {
-        const nextHigh = Math.max(Number(latest.high), last)
-        const nextLow = Math.min(Number(latest.low), last)
-        const nextVolume = Math.max(Number(latest.volume ?? 0), volume)
-        chart.updateData({
-          ...latest,
-          high: nextHigh,
-          low: nextLow,
-          close: last,
-          volume: nextVolume,
-          turnover: estimateTurnover(nextHigh, nextLow, last, nextVolume),
-        })
+      const normalizedPeriod = period.trim().toUpperCase()
+      const isDirectM1 = normalizedPeriod === '1M' || normalizedPeriod === 'M1'
+      const normalizedSymbol = normalizeRealtimeSymbol(symbol)
+      let latestTick: Partial<Mt5RealtimeTickEventDetail> | null = null
+      let retryTimer = 0
+
+      const applyRealtimeTick = (detail: Partial<Mt5RealtimeTickEventDetail> | null) => {
+        if (!detail || normalizeRealtimeSymbol(detail.symbol) !== normalizedSymbol) return
+        latestTick = detail
+        const activeChart = chartInstanceRef.current
+        if (!activeChart) return
+
+        const last = resolveTickLast(detail)
+        if (typeof last !== 'number' || !Number.isFinite(last)) return
+
+        const tickSeconds = resolveTickSeconds(detail)
+        const periodSeconds = resolvePeriodSeconds(period)
+        const periodMs = periodSeconds * 1000
+        const bucketTimestamp = Math.floor(tickSeconds / periodSeconds) * periodSeconds * 1000
+        const currentData = activeChart.getDataList()
+        const latest = currentData[currentData.length - 1]
+        if (!latest) {
+          if (retryTimer === 0) {
+            retryTimer = window.setTimeout(() => {
+              retryTimer = 0
+              applyRealtimeTick(latestTick)
+            }, 100)
+          }
+          return
+        }
+        const tickVolume = typeof detail.volume === 'number' && Number.isFinite(detail.volume) ? detail.volume : 0
+        const updateLatestPrice = () => {
+          if (!latest) return
+          const nextHigh = Math.max(Number(latest.high), last)
+          const nextLow = Math.min(Number(latest.low), last)
+          const nextVolume = Number(latest.volume ?? 0)
+          activeChart.updateData({
+            ...latest,
+            high: nextHigh,
+            low: nextLow,
+            close: last,
+            volume: nextVolume,
+            turnover: estimateTurnover(nextHigh, nextLow, last, nextVolume),
+          })
+        }
+
+        if (!isDirectM1 && latest && bucketTimestamp <= latest.timestamp) {
+          updateLatestPrice()
+          return
+        }
+
+        if (!isDirectM1) {
+          if (bucketTimestamp > latest.timestamp + periodMs) {
+            updateLatestPrice()
+            return
+          }
+
+          if (bucketTimestamp === latest.timestamp + periodMs) {
+            activeChart.updateData({
+              timestamp: bucketTimestamp,
+              open: latest.close,
+              high: last,
+              low: last,
+              close: last,
+              volume: 0,
+              turnover: 0,
+            })
+          }
+          return
+        }
+
+        if (!latest || bucketTimestamp > latest.timestamp) {
+          const open = latest?.close ?? last
+          activeChart.updateData({
+            timestamp: bucketTimestamp,
+            open,
+            high: last,
+            low: last,
+            close: last,
+            volume: tickVolume,
+            turnover: estimateTurnover(last, last, last, tickVolume),
+          })
+          return
+        }
+
+        if (bucketTimestamp === latest.timestamp) {
+          const nextHigh = Math.max(Number(latest.high), last)
+          const nextLow = Math.min(Number(latest.low), last)
+          const nextVolume = isDirectM1
+            ? Math.max(Number(latest.volume ?? 0), tickVolume)
+            : Number(latest.volume ?? 0)
+          activeChart.updateData({
+            ...latest,
+            high: nextHigh,
+            low: nextLow,
+            close: last,
+            volume: nextVolume,
+            turnover: estimateTurnover(nextHigh, nextLow, last, nextVolume),
+          })
+        }
+      }
+
+      const pollTick = () => {
+        if (disposed || !symbol || inFlight) return
+        inFlight = true
+        queryMt5Tick(symbol)
+          .then((payload) => applyRealtimeTick(payload.tick ?? null))
+          .catch(() => {
+            // Try again on the next interval.
+          })
+          .finally(() => {
+            inFlight = false
+          })
+      }
+
+      pollTick()
+      pollTimer = window.setInterval(pollTick, 200)
+
+      cleanupListeners = () => {
+        if (retryTimer !== 0) window.clearTimeout(retryTimer)
+        if (pollTimer !== 0) window.clearInterval(pollTimer)
       }
     }
 
-    window.addEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
-    return () => window.removeEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
-  }, [chartInstanceRef, period, symbol, totalRows])
+    bindWhenReady()
+
+    return () => {
+      disposed = true
+      if (bindTimer !== 0) window.clearTimeout(bindTimer)
+      cleanupListeners?.()
+    }
+  }, [chartInstanceRef, period, symbol])
 }

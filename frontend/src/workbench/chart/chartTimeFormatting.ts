@@ -4,7 +4,9 @@ import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSetting
 export function resolvePeriodSeconds(period: string) {
   const normalized = period.trim().toUpperCase()
   if (normalized === '1M' || normalized === 'M1') return 60
+  if (/^M\d+$/.test(normalized)) return Number(normalized.slice(1)) * 60 || 60
   if (normalized.endsWith('M') && normalized !== 'MN1') return Number(normalized.slice(0, -1)) * 60 || 60
+  if (/^H\d+$/.test(normalized)) return Number(normalized.slice(1)) * 60 * 60 || 60 * 60
   if (normalized.endsWith('H')) return Number(normalized.slice(0, -1)) * 60 * 60 || 60 * 60
   if (normalized === 'D1') return 24 * 60 * 60
   if (normalized === 'W1') return 7 * 24 * 60 * 60

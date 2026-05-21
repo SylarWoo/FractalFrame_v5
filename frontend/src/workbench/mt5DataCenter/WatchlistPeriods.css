@@ -63,12 +63,14 @@
   gap: 8px;
   margin-top: 8px;
   min-height: 28px;
+  min-width: 0;
 }
 
 .ff-watchlist-realtime-toggle {
   display: inline-flex;
   height: 28px;
   min-width: 124px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 7px;
@@ -130,7 +132,9 @@
 }
 
 .ff-watchlist-realtime-status {
+  display: block;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   color: #64748b;
   font-size: 12px;

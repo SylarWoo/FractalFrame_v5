@@ -32,7 +32,7 @@ export function waitForWatchlistPullJob(jobId: string, symbol: string, options: 
           return
         }
         const line = `${symbol} ${payload.progressLabel || payload.status || 'Pulling M1'}`
-        options.setStatus(line)
+        options.setStatus(`${symbol} Pulling M1`)
         options.pushLog(line)
       } catch {
         options.setStatus(`${symbol} Pulling M1`)
@@ -74,7 +74,7 @@ export function waitForWatchlistAggregateJob(jobId: string, symbol: string, opti
           return
         }
         const line = `${symbol} ${payload.progressLabel || payload.status || 'Aggregating'}`
-        options.setStatus(line)
+        options.setStatus(`${symbol} Aggregating`)
         options.pushLog(line)
       } catch {
         options.setStatus(`${symbol} Aggregating`)

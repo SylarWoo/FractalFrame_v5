@@ -143,11 +143,9 @@ export function RightDrawer({
 
   const {
     setWatchlistRealtimeEnabled,
-    watchlistLastTickAt,
     watchlistRealtimeEnabled,
     watchlistRealtimeLog,
     watchlistRealtimeReady,
-    watchlistRealtimeStatus,
     watchlistTicks,
   } = useWatchlistRealtime({
     foregroundRealtimeSymbol,
@@ -239,7 +237,7 @@ export function RightDrawer({
     publishSharedSelection(symbol, period)
     onOpenChart?.({
       symbol,
-      period: period === 'M1' ? '1m' : period,
+      period,
       totalRows: null,
     })
     if (symbols.length) {
@@ -291,7 +289,7 @@ export function RightDrawer({
     publishSharedSelection(symbol, row.period)
     onOpenChart?.({
       symbol,
-      period: row.period === 'M1' ? '1m' : row.period,
+      period: row.period,
       totalRows: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : null,
     })
   }
@@ -353,9 +351,9 @@ export function RightDrawer({
             tableWrapRef={tableWrapRef} visibleStoreTableRows={visibleStoreTableRows} visibleSymbols={visibleSymbols}
             watchlistColumnWidths={watchlistColumnWidths}
             watchlistAggregatedPeriods={watchlistAggregatedPeriods}
-            watchlistDirectPeriods={watchlistDirectPeriods} watchlistLastTickAt={watchlistLastTickAt}
+            watchlistDirectPeriods={watchlistDirectPeriods}
             watchlistRealtimeEnabled={watchlistRealtimeEnabled} watchlistRealtimeLog={watchlistRealtimeLog}
-            watchlistRealtimeReady={watchlistRealtimeReady} watchlistRealtimeStatus={watchlistRealtimeStatus}
+            watchlistRealtimeReady={watchlistRealtimeReady}
             watchlistRows={watchlistRows} watchlistTableHeight={watchlistTableHeight}
             watchlistTableWrapRef={watchlistTableWrapRef} watchlistTicks={watchlistTicks}
           />

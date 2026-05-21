@@ -34,7 +34,7 @@ describe('topbarPeriodUtils', () => {
 
   it('keeps the expected shortcut period order', () => {
     expect(periodOrder).toEqual(['M1', 'M5', 'M15', 'M30', 'H1', 'H2', 'H3', 'H4', 'D1', 'W1', 'MN1'])
-    expect(periodToChartPeriod('M1')).toBe('1m')
+    expect(periodToChartPeriod('M1')).toBe('M1')
     expect(periodToChartPeriod('H4')).toBe('H4')
   })
 

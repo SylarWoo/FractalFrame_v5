@@ -8,6 +8,7 @@ import type {
   StoreV5PullPayload,
   StoreV5QueryPayload,
 } from './types'
+import type { Mt5RealtimeTick } from './mt5Types'
 
 export async function fetchStoreV5Status(symbol: string): Promise<StoreV5CheckPayload> {
   const params = new URLSearchParams()
@@ -118,6 +119,38 @@ export async function queryStoreV5Ohlcv(options: {
 
   return getMt5Json<StoreV5QueryPayload>(
     '/api/market-data/v1/store-v5/query',
+    params,
+    { requirePayloadOk: true },
+  )
+}
+
+export async function queryMt5Rates(options: {
+  symbol: string
+  timeframe?: string
+  timeFrom?: number
+  timeTo?: number
+  limit?: number
+}): Promise<StoreV5QueryPayload> {
+  const params = new URLSearchParams()
+  params.set('symbol', options.symbol)
+  params.set('timeframe', options.timeframe ?? 'M1')
+  if (typeof options.timeFrom === 'number') params.set('timeFrom', String(options.timeFrom))
+  if (typeof options.timeTo === 'number') params.set('timeTo', String(options.timeTo))
+  if (typeof options.limit === 'number') params.set('limit', String(options.limit))
+
+  return getMt5Json<StoreV5QueryPayload>(
+    '/api/market-data/v1/mt5/rates',
+    params,
+    { requirePayloadOk: true },
+  )
+}
+
+export async function queryMt5Tick(symbol: string): Promise<{ ok: boolean; status?: string; tick?: Mt5RealtimeTick | null }> {
+  const params = new URLSearchParams()
+  params.set('symbol', symbol)
+
+  return getMt5Json<{ ok: boolean; status?: string; error?: string; tick?: Mt5RealtimeTick | null }>(
+    '/api/market-data/v1/mt5/tick',
     params,
     { requirePayloadOk: true },
   )

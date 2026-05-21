@@ -101,7 +101,7 @@ export function useStoreV5Jobs({
     const count = rowsForStorePeriod(payload, period)
     onOpenChart?.({
       symbol,
-      period: period === 'M1' ? '1m' : period,
+      period,
       totalRows: typeof count === 'number' && Number.isFinite(count) ? count : null,
       reloadId: Date.now(),
     })

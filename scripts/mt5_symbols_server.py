@@ -28,7 +28,7 @@ from http_bridge.mt5_symbol_routes import handle_mt5_symbols_get
 from http_bridge.sse import send_aggregate_job_events as send_aggregate_job_events_sse
 from http_bridge.sse import send_mt5_tick_events as send_mt5_tick_events_sse
 from http_bridge.sse import send_pull_job_events as send_pull_job_events_sse
-from http_bridge.mt5_symbol_service import read_symbol_cache, scan_mt5_symbols
+from http_bridge.mt5_symbol_service import query_mt5_rates_live, query_mt5_tick_live, read_symbol_cache, scan_mt5_symbols
 from http_bridge.store_v5_operations_service import (
     aggregate_store_v5,
     clean_store_v5_direct_m1,
@@ -195,6 +195,14 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
             tail = safe_int((query.get("tail") or [200])[0]) or 200
             self.send_json(200, tail_bridge_logs(tail))
             return
+        if parsed.path == "/api/market-data/v1/mt5/tick":
+            from urllib.parse import parse_qs
+
+            query = parse_qs(parsed.query)
+            symbol = str((query.get("symbol") or [""])[0]).strip()
+            payload = query_mt5_tick_live(symbol)
+            self.send_json(200 if payload.get("ok") is True else 503, payload)
+            return
         if handle_mt5_symbols_get(self, parsed, services):
             return
         if handle_mt5_m1_check_get(self, parsed, services):
@@ -248,6 +256,7 @@ def main() -> int:
     server = ThreadingHTTPServer((args.host, args.port), Mt5SymbolsHandler)
     LOGGER.info("listening on http://%s:%s", args.host, args.port)
     LOGGER.info("endpoint /api/market-data/v1/mt5/symbols?refresh=1")
+    LOGGER.info("endpoint /api/market-data/v1/mt5/rates?symbol=XAUUSDm&timeframe=M5")
     LOGGER.info("endpoint /api/market-data/v1/mt5/m1/check?symbol=XAUUSDm")
     LOGGER.info("endpoint /api/market-data/v1/store-v5/status?symbol=XAUUSDm")
     LOGGER.info("endpoint /api/market-data/v1/store-v5/pull?symbol=XAUUSDm")

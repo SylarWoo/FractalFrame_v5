@@ -5,8 +5,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .mt5_m1_rows import mt5_rates_to_rows
+
 SYMBOL_CACHE_FILE = "symbol_universe_info.json"
 SYMBOL_REPORT_FILE = "symbol_universe_scan_report.json"
+MT5_TIMEFRAME_NAMES = {
+    "M1": "TIMEFRAME_M1",
+    "M5": "TIMEFRAME_M5",
+    "M15": "TIMEFRAME_M15",
+    "M30": "TIMEFRAME_M30",
+    "H1": "TIMEFRAME_H1",
+    "H2": "TIMEFRAME_H2",
+    "H3": "TIMEFRAME_H3",
+    "H4": "TIMEFRAME_H4",
+    "D1": "TIMEFRAME_D1",
+    "W1": "TIMEFRAME_W1",
+    "MN1": "TIMEFRAME_MN1",
+}
 
 
 def utc_now_iso() -> str:
@@ -126,6 +141,193 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     tmp.replace(path)
+
+
+def normalize_timeframe(value: str) -> str:
+    timeframe = str(value or "M1").strip().upper()
+    if timeframe == "1M":
+        return "M1"
+    if timeframe.endswith("M") and timeframe != "MN1":
+        return f"M{timeframe[:-1]}"
+    if timeframe.endswith("H"):
+        return f"H{timeframe[:-1]}"
+    return timeframe
+
+
+def mt5_rate_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        return {
+            "time": int(row["time"]),
+            "open": float(row["open"]),
+            "high": float(row["high"]),
+            "low": float(row["low"]),
+            "close": float(row["close"]),
+            "volume": int(row.get("tick_volume", row.get("volume", 0)) or 0),
+        }
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def query_mt5_tick_live(symbol: str, day_open: float | None = None) -> dict[str, Any]:
+    published_at = utc_now_iso()
+    base_payload = {
+        "ok": False,
+        "status": "mt5_tick_failed",
+        "symbol": symbol,
+        "tick": None,
+        "publishedAt": published_at,
+    }
+
+    if not symbol:
+        return {**base_payload, "status": "bad_request", "error": "symbol_required"}
+
+    try:
+        import MetaTrader5 as mt5
+    except ImportError as exc:
+        return {**base_payload, "status": "mt5_tick_unavailable", "error": str(exc)}
+
+    try:
+        if not mt5.initialize():
+            return {
+                **base_payload,
+                "status": "mt5_tick_init_failed",
+                "error": "mt5_initialize_failed",
+                "mt5LastError": mt5.last_error(),
+            }
+
+        if not mt5.symbol_select(symbol, True):
+            return {
+                **base_payload,
+                "status": "mt5_tick_symbol_select_failed",
+                "error": "mt5_symbol_select_failed",
+                "mt5LastError": mt5.last_error(),
+            }
+
+        tick = mt5.symbol_info_tick(symbol)
+        if tick is None:
+            return {
+                **base_payload,
+                "status": "mt5_tick_empty",
+                "error": "symbol_info_tick_returned_none",
+                "mt5LastError": mt5.last_error(),
+            }
+        raw = namedtuple_to_dict(tick)
+        bid = safe_float(raw.get("bid"))
+        ask = safe_float(raw.get("ask"))
+        last = safe_float(raw.get("last"))
+        if last is None or last <= 0:
+            if bid is not None and ask is not None and bid > 0 and ask > 0:
+                last = (bid + ask) / 2
+            elif bid is not None and bid > 0:
+                last = bid
+            elif ask is not None and ask > 0:
+                last = ask
+        return {
+            "ok": True,
+            "status": "mt5_tick_ready",
+            "symbol": symbol,
+            "tick": {
+                "symbol": symbol,
+                "bid": bid,
+                "ask": ask,
+                "last": last,
+                "volume": safe_float(raw.get("volume")),
+                "time": safe_int(raw.get("time")),
+                "timeMsc": safe_int(raw.get("time_msc")),
+                "dayOpen": day_open,
+                "publishedAt": utc_now_iso(),
+            },
+            "publishedAt": utc_now_iso(),
+        }
+    except Exception as exc:
+        return {**base_payload, "status": "mt5_tick_exception", "error": str(exc)}
+
+
+def query_mt5_rates_live(symbol: str, timeframe: str, limit: int, time_from: int | None = None, time_to: int | None = None) -> dict[str, Any]:
+    published_at = utc_now_iso()
+    normalized_timeframe = normalize_timeframe(timeframe)
+    base_payload = {
+        "ok": False,
+        "status": "mt5_rates_failed",
+        "symbol": symbol,
+        "timeframe": normalized_timeframe,
+        "mode": "mt5_live",
+        "rows": [],
+        "publishedAt": published_at,
+    }
+
+    if not symbol:
+        return {**base_payload, "status": "bad_request", "error": "symbol_required"}
+
+    try:
+        import MetaTrader5 as mt5
+    except ImportError as exc:
+        return {**base_payload, "status": "mt5_rates_unavailable", "error": str(exc)}
+
+    timeframe_name = MT5_TIMEFRAME_NAMES.get(normalized_timeframe)
+    mt5_timeframe = getattr(mt5, timeframe_name, None) if timeframe_name else None
+    if mt5_timeframe is None:
+        return {**base_payload, "status": "unsupported_timeframe", "error": normalized_timeframe}
+
+    initialized = False
+    try:
+        if not mt5.initialize():
+            return {
+                **base_payload,
+                "status": "mt5_rates_init_failed",
+                "error": "mt5_initialize_failed",
+                "mt5LastError": mt5.last_error(),
+            }
+        initialized = True
+
+        if not mt5.symbol_select(symbol, True):
+            return {
+                **base_payload,
+                "status": "mt5_rates_symbol_select_failed",
+                "error": "mt5_symbol_select_failed",
+                "mt5LastError": mt5.last_error(),
+            }
+
+        if time_from is not None and time_to is not None:
+            rates = mt5.copy_rates_range(
+                symbol,
+                mt5_timeframe,
+                datetime.fromtimestamp(int(time_from), tz=timezone.utc),
+                datetime.fromtimestamp(int(time_to), tz=timezone.utc),
+            )
+        elif time_to is not None:
+            rates = mt5.copy_rates_from(
+                symbol,
+                mt5_timeframe,
+                datetime.fromtimestamp(int(time_to), tz=timezone.utc),
+                int(limit),
+            )
+        else:
+            rates = mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, int(limit))
+
+        rows = [item for row in mt5_rates_to_rows(rates) if (item := mt5_rate_row(row)) is not None]
+        if time_from is not None:
+            rows = [row for row in rows if int(row["time"]) >= int(time_from)]
+        if time_to is not None:
+            rows = [row for row in rows if int(row["time"]) <= int(time_to)]
+        rows = sorted(rows, key=lambda item: int(item["time"]))[-int(limit):]
+        return {
+            "ok": True,
+            "status": "mt5_rates_ready",
+            "symbol": symbol,
+            "timeframe": normalized_timeframe,
+            "mode": "mt5_live",
+            "rows": rows,
+            "count": len(rows),
+            "publishedAt": utc_now_iso(),
+        }
+    except Exception as exc:
+        return {**base_payload, "status": "mt5_rates_exception", "error": str(exc)}
+    finally:
+        # Do not shutdown MT5 here. The Python MT5 binding uses a process-wide
+        # terminal session; closing it after a rates query interrupts active
+        # chart tick streams.
+        pass
 
 
 def filter_symbols(symbols: list[dict[str, Any]], query: str, market: str, limit: int) -> list[dict[str, Any]]:

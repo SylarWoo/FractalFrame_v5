@@ -102,11 +102,10 @@ def send_mt5_tick_events(
         except (BrokenPipeError, ConnectionResetError, OSError):
             return
     finally:
-        if initialized:
-            try:
-                mt5.shutdown()
-            except Exception:
-                pass
+        # Keep the MT5 terminal session alive for other realtime/rates requests.
+        # MetaTrader5.initialize/shutdown is process-wide, so shutting down one
+        # SSE connection can break another chart's live feed.
+        pass
 
 
 def send_pull_job_events(handler: Any, job_id: str, *, utc_now_iso: Callable[[], str]) -> None:

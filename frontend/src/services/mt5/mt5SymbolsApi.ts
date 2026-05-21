@@ -14,6 +14,8 @@ export {
   deleteStoreV5Symbol,
   fetchStoreV5Status,
   pullStoreV5,
+  queryMt5Rates,
+  queryMt5Tick,
   queryStoreV5Ohlcv,
   repairStoreV5M1Gaps,
 } from './storeV5Api'

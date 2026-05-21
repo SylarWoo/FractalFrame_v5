@@ -8,6 +8,7 @@ type UseForegroundTickStreamOptions = {
   foregroundRealtimeSymbol: string
   pushLog: (message: string) => void
   ready: boolean
+  restartKey?: string
   setLastTickAt: (updater: string) => void
   setStatus: (status: string) => void
   setTicks: (updater: (current: Record<string, Mt5RealtimeTick>) => Record<string, Mt5RealtimeTick>) => void
@@ -18,6 +19,7 @@ export function useForegroundTickStream({
   foregroundRealtimeSymbol,
   pushLog,
   ready,
+  restartKey,
   setLastTickAt,
   setStatus,
   setTicks,
@@ -31,7 +33,7 @@ export function useForegroundTickStream({
     if (!enabled || !ready || !foregroundRealtimeSymbol) return
 
     const connectingTimer = window.setTimeout(() => setStatus('Connecting'), 0)
-    const source = createMt5TicksEventSource([foregroundRealtimeSymbol], 500)
+    const source = createMt5TicksEventSource([foregroundRealtimeSymbol], 200)
     ticksEventSourceRef.current = source
 
     source.addEventListener('ready', () => {
@@ -82,5 +84,5 @@ export function useForegroundTickStream({
         ticksEventSourceRef.current = null
       }
     }
-  }, [enabled, foregroundRealtimeSymbol, pushLog, ready, setLastTickAt, setStatus, setTicks])
+  }, [enabled, foregroundRealtimeSymbol, pushLog, ready, restartKey, setLastTickAt, setStatus, setTicks])
 }

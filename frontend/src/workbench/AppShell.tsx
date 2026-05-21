@@ -149,7 +149,7 @@ function readSharedSelection() {
 }
 
 function periodToChartPeriod(period: string) {
-  return period.toUpperCase() === 'M1' ? '1m' : period
+  return period.toUpperCase()
 }
 
 function readSymbolDisplayName(symbol: string) {

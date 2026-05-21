@@ -1,5 +1,5 @@
 import type { KLineData } from 'klinecharts'
-import { queryStoreV5Ohlcv } from '../services/mt5/mt5SymbolsApi'
+import { queryMt5Rates } from '../services/mt5/mt5SymbolsApi'
 import type { StoreV5QueryPayload } from '../services/mt5/mt5SymbolsApi'
 
 function normalizeTimeframe(period: string) {
@@ -25,32 +25,14 @@ export async function loadStoreV5KLineData(options: {
   timeTo?: number
 }): Promise<KLineData[]> {
   const timeframe = normalizeTimeframe(options.period)
-  const mode = timeframe === 'M1' ? 'direct' : 'aggregated'
   let payload: StoreV5QueryPayload
-  try {
-    payload = await queryStoreV5Ohlcv({
-      symbol: options.symbol,
-      timeframe,
-      mode,
-      baseTimeframe: mode === 'aggregated' ? 'M1' : undefined,
-      anchor: mode === 'aggregated' ? 'UTC2200' : undefined,
-      timeFrom: options.timeFrom,
-      timeTo: options.timeTo,
-      limit: options.limit ?? 1000,
-    })
-  } catch (error) {
-    if (timeframe !== 'M1' || !String(error instanceof Error ? error.message : error).includes('dataset_not_found')) {
-      throw error
-    }
-    payload = await queryStoreV5Ohlcv({
-      symbol: options.symbol,
-      timeframe,
-      mode: 'raw_direct',
-      timeFrom: options.timeFrom,
-      timeTo: options.timeTo,
-      limit: options.limit ?? 1000,
-    })
-  }
+  payload = await queryMt5Rates({
+    symbol: options.symbol,
+    timeframe,
+    timeFrom: options.timeFrom,
+    timeTo: options.timeTo,
+    limit: options.limit ?? 1000,
+  })
 
   const rowsByTimestamp = new Map<number, KLineData>()
   payload.rows.forEach((row) => {

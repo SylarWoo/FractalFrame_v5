@@ -26,11 +26,9 @@ type WatchlistTableProps = {
   selectedSymbol: string
   watchlistAggregatedPeriods: StoreTableRow[]
   watchlistDirectPeriods: StoreTableRow[]
-  watchlistLastTickAt: string
   watchlistRealtimeEnabled: boolean
   watchlistRealtimeLog: string[]
   watchlistRealtimeReady: boolean
-  watchlistRealtimeStatus: string
   watchlistRows: Mt5SymbolRow[]
   watchlistTableHeight: number
   watchlistTableWrapRef: RefObject<HTMLDivElement | null>
@@ -50,11 +48,9 @@ export function WatchlistTable({
   selectedSymbol,
   watchlistAggregatedPeriods,
   watchlistDirectPeriods,
-  watchlistLastTickAt,
   watchlistRealtimeEnabled,
   watchlistRealtimeLog,
   watchlistRealtimeReady,
-  watchlistRealtimeStatus,
   watchlistRows,
   watchlistTableHeight,
   watchlistTableWrapRef,
@@ -188,12 +184,6 @@ export function WatchlistTable({
           <span>{watchlistRealtimeEnabled && !watchlistRealtimeReady ? 'Syncing' : 'Realtime'}</span>
           <i aria-hidden="true" />
         </button>
-        {watchlistRealtimeStatus && (
-          <span className="ff-watchlist-realtime-status">
-            {watchlistRealtimeStatus || 'Live'}
-            {watchlistLastTickAt ? ` · ${watchlistLastTickAt}` : ''}
-          </span>
-        )}
       </div>
       {watchlistRealtimeLog.length > 0 && (
         <div className="ff-watchlist-realtime-log" aria-label="Realtime sync log">

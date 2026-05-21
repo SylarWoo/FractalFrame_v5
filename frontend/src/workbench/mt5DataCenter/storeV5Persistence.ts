@@ -8,6 +8,7 @@ export const shortcutMenuChangedEvent = workbenchEvents.shortcutMenuChanged
 export const watchlistChangedEvent = workbenchEvents.watchlistChanged
 export const storeV5StatusChangedEvent = workbenchEvents.storeV5StatusChanged
 export const sharedSelectionChangedEvent = workbenchEvents.sharedSelectionChanged
+export const realtimeEnabledChangedEvent = workbenchEvents.realtimeEnabledChanged
 
 const storePanelPersistenceKeys = [
   storageKeys.importCenterM1CheckResults,
@@ -72,11 +73,12 @@ export function readStorePanelPersistenceEnabled() {
 }
 
 export function readWatchlistRealtimeEnabled() {
-  return readBooleanFlag(storageKeys.importCenterWatchlistRealtimeEnabled)
+  return readBooleanFlag(storageKeys.importCenterWatchlistRealtimeEnabled, true)
 }
 
 export function saveWatchlistRealtimeEnabled(enabled: boolean) {
-  writeBooleanFlag(storageKeys.importCenterWatchlistRealtimeEnabled, enabled)
+  const written = writeBooleanFlag(storageKeys.importCenterWatchlistRealtimeEnabled, enabled)
+  if (written) dispatchWorkbenchEvent(realtimeEnabledChangedEvent)
 }
 
 export function readImportCenterQuery() {

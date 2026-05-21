@@ -1,5 +1,6 @@
 export const workbenchEvents = {
   settingsSymbolChanged: 'fractalframe:settingsSymbolPanelChanged',
+  realtimeEnabledChanged: 'fractalframe:mt5ImportCenterRealtimeEnabledChanged',
   shortcutMenuChanged: 'fractalframe:mt5ImportCenterShortcutMenuChanged',
   sharedSelectionChanged: 'fractalframe:mt5ImportCenterSharedSelectionChanged',
   storeV5StatusChanged: 'fractalframe:mt5ImportCenterStoreV5StatusChanged',

@@ -91,5 +91,5 @@ export function resolveShortcutActivePeriod(activePeriod: string, periods: Perio
 }
 
 export function periodToChartPeriod(period: string) {
-  return period === 'M1' ? '1m' : period
+  return period.toUpperCase()
 }

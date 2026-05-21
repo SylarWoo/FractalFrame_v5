@@ -177,7 +177,7 @@ export function useRightDrawerSelection({
     autoOpenedStoreTableRef.current = autoOpenKey
     onOpenChart?.({
       symbol: selectedRow.symbol,
-      period: row.period === 'M1' ? '1m' : row.period,
+      period: row.period,
       totalRows: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : null,
     })
   }, [autoOpenedStoreTableRef, onOpenChart, selectedRow?.symbol, selectedStoreTableKey, selectedStoreTableKeyIsVisible, visibleStoreTableRows])
