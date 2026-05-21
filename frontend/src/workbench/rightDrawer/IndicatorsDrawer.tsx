@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { SettingsColorSwatch, SettingsLineSwatch, SettingsLineWeightSwatch } from '../settings/SettingsSwatches'
 import { IndicatorSettingsShell } from './IndicatorSettingsShell'
+import { IndicatorsTable } from './IndicatorsTable'
 import {
   clearPersistedIndicatorsState,
   readIndicatorPersistenceEnabled,
@@ -30,33 +31,15 @@ type IndicatorsDrawerProps = {
   onUnloadIndicator?: (name: SupportedChartIndicator) => void
 }
 
-type IndicatorColumnKey = 'indicator' | 'name' | 'type' | 'description' | 'status'
-type IndicatorColumnWidths = Record<IndicatorColumnKey, number>
-const defaultColumnWidths: IndicatorColumnWidths = {
-  indicator: 76,
-  name: 116,
-  type: 64,
-  description: 202,
-  status: 54,
-}
-
-const minColumnWidths: IndicatorColumnWidths = {
-  indicator: 62,
-  name: 74,
-  type: 54,
-  description: 120,
-  status: 48,
-}
-
 const indicatorRows: IndicatorRow[] = [
   { key: 'RSI', name: '相对强弱指数', type: '副图指标', description: 'Relative Strength Index' },
   { key: 'Stoch', name: '随机指标', type: '副图指标', description: 'Stochastic' },
-  { key: 'MACD', name: '平滑异同移动均线', type: '副图指标', description: 'Moving Average Convergence Divergence' },
-  { key: 'TSI', name: '真实强弱指数', type: '副图指标', description: 'True Strength Index：基于双重 EMA 平滑动量的趋势强弱指标。' },
+  { key: 'MACD', name: '平滑异同移动平均线', type: '副图指标', description: 'Moving Average Convergence Divergence' },
+  { key: 'TSI', name: '真实强弱指数', type: '副图指标', description: 'True Strength Index: 基于双 EMA 平滑动量的趋势强弱指标。' },
   { key: 'VI', name: '漩涡指标', type: '副图指标', description: 'Vortex Indicator' },
-  { key: 'MA', name: '移动均线', type: '主图指标', description: 'Moving Average：基于价格源计算的趋势均线，叠加在主图价格区。' },
-  { key: 'VWAP', name: '成交量加权平均价', type: '主图指标', description: 'Volume Weighted Average Price：按成交量加权的平均价格。' },
-  { key: 'Vol', name: '成交量', type: '主图指标', description: 'MT5 tick volume：周期内跳动次数形成的柱。' },
+  { key: 'MA', name: '移动平均线', type: '主图指标', description: 'Moving Average: 基于价格源计算的趋势均线，叠加在主图价格区。' },
+  { key: 'VWAP', name: '成交量加权平均价', type: '主图指标', description: 'Volume Weighted Average Price: 按成交量加权的平均价格。' },
+  { key: 'Vol', name: '成交量', type: '主图指标', description: 'MT5 tick volume: 周期内跳动次数形成的柱。' },
 ]
 
 const rsiSourceOptions: Array<{ label: string; value: RsiSource }> = [
@@ -106,16 +89,16 @@ const maSourceOptions: Array<{ label: string; value: MaSource }> = [
   { value: 'open', label: '开盘价' },
   { value: 'high', label: '最高价' },
   { value: 'low', label: '最低价' },
-  { value: 'hl2', label: '高 + 低 / 2' },
-  { value: 'hlc3', label: '高 + 低 + 收 / 3' },
-  { value: 'ohlc4', label: '开 + 高 + 低 + 收 / 4' },
+  { value: 'hl2', label: '(高 + 低) / 2' },
+  { value: 'hlc3', label: '(高 + 低 + 收) / 3' },
+  { value: 'ohlc4', label: '(开 + 高 + 低 + 收) / 4' },
 ]
 
 const maMarkerModeOptions: Array<{ label: string; value: MaMarkerMode }> = [
-  { value: 'bar_down', label: 'Bar 下...' },
-  { value: 'bar_up', label: 'Bar 上...' },
-  { value: 'triangle_down', label: '三角 下...' },
-  { value: 'triangle_up', label: '三角 上...' },
+  { value: 'bar_down', label: 'Bar 下方' },
+  { value: 'bar_up', label: 'Bar 上方' },
+  { value: 'triangle_down', label: '三角 下方' },
+  { value: 'triangle_up', label: '三角 上方' },
 ]
 
 const vwapAnchorPeriodOptions: Array<{ label: string; value: VwapAnchorPeriod }> = [
@@ -328,7 +311,7 @@ function RsiInputPanel({
   const patch = (next: Partial<RsiIndicatorSettings>) => onSettingsChange(updateSettings(settings, next))
 
   return (
-    <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-rsi-panel-v1" role="tabpanel">
       <section className="ff-indicators-input-panel-v1__section">
         <h3 className="ff-indicators-input-panel-v1__section-title">RSI 设置</h3>
         <label className="ff-indicators-input-panel-v1__row">
@@ -354,7 +337,7 @@ function RsiInputPanel({
         </label>
         <label className="ff-indicators-input-panel-v1__row">
           <span className="ff-indicators-input-panel-v1__label">
-            计算跨度 <InfoBadge title="检测价格与 RSI 背离形态；当前先保存面板偏好。" />
+            计算背离 <InfoBadge title="检测价格与 RSI 背离形态；当前先保存面板偏好。" />
           </span>
           <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--check">
             <input checked={settings.calculateDivergence} onChange={(event) => patch({ calculateDivergence: event.target.checked })} type="checkbox" />
@@ -558,7 +541,7 @@ function MaInputPanel({
         <h3 className="ff-indicators-input-panel-v1__section-title">MA</h3>
         <label className="ff-indicators-input-panel-v1__row ff-indicators-ma-panel-v1__row">
           <span className="ff-indicators-input-panel-v1__label">类型</span>
-          <span className="ff-indicators-input-panel-v1__control">
+          <span className="ff-indicators-input-panel-v1__control ff-indicators-ma-panel-v1__type-select">
             <OpenableSelect
               ariaLabel="MA type"
               onChange={(value) => patch({ type: value as MaType })}
@@ -713,7 +696,7 @@ function VolInputPanel({
   const patch = (next: Partial<VolIndicatorSettings>) => onSettingsChange({ ...settings, ...next })
 
   return (
-    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-vol-panel-v1" role="tabpanel">
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-vol-panel-v1" role="tabpanel">
       <section className="ff-indicators-input-panel-v1__section">
         <label className="ff-indicators-input-panel-v1__row">
           <span className="ff-indicators-input-panel-v1__label">
@@ -725,7 +708,7 @@ function VolInputPanel({
         </label>
         <label className="ff-indicators-input-panel-v1__row">
           <span className="ff-indicators-input-panel-v1__label">
-            K线颜色基于前一收盘价 <InfoBadge title="成交量柱颜色是否基于当前收盘价与前一根收盘价比较。" />
+            K 线颜色基于前一收盘价 <InfoBadge title="成交量柱颜色是否基于当前收盘价与前一根收盘价比较。" />
           </span>
           <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--check">
             <input checked={settings.colorBasedOnPreviousClose} onChange={(event) => patch({ colorBasedOnPreviousClose: event.target.checked })} type="checkbox" />
@@ -918,12 +901,12 @@ function StochInputPanel({
   const patch = (next: Partial<StochIndicatorSettings>) => onSettingsChange(updateStochSettings(settings, next))
 
   return (
-    <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-stoch-panel-v1" role="tabpanel">
       <section className="ff-indicators-input-panel-v1__section">
         <h3 className="ff-indicators-input-panel-v1__section-title">{stochText.settings}</h3>
         <label className="ff-indicators-input-panel-v1__row">
           <span className="ff-indicators-input-panel-v1__label">{stochText.kLength}</span>
-          <span className="ff-indicators-input-panel-v1__control">
+          <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
             <NumberBox min={1} onChange={(length) => patch({ length })} value={settings.length} />
           </span>
         </label>
@@ -954,7 +937,7 @@ function MacdInputPanel({
   const patch = (next: Partial<MacdIndicatorSettings>) => onSettingsChange(updateMacdSettings(settings, next))
 
   return (
-    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-macd-panel-v1" role="tabpanel">
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-macd-panel-v1" role="tabpanel">
       <section className="ff-indicators-input-panel-v1__section">
         <label className="ff-indicators-input-panel-v1__row">
           <span className="ff-indicators-input-panel-v1__label">来源</span>
@@ -1088,7 +1071,7 @@ function TsiInputPanel({
   const patch = (next: Partial<TsiIndicatorSettings>) => onSettingsChange(updateTsiSettings(settings, next))
 
   return (
-    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-tsi-panel-v1" role="tabpanel">
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-tsi-panel-v1" role="tabpanel">
       <section className="ff-indicators-input-panel-v1__section">
         <label className="ff-indicators-input-panel-v1__row">
           <span className="ff-indicators-input-panel-v1__label">长线长度</span>
@@ -1540,31 +1523,15 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
   const [viSettings, setViSettings] = useState<ViIndicatorSettings>(() => initialPersisted.vi)
   const [vwapSettings, setVwapSettings] = useState<VwapIndicatorSettings>(() => initialPersisted.vwap)
   const [volSettings, setVolSettings] = useState<VolIndicatorSettings>(() => initialPersisted.vol)
-  const [loadedKeys, setLoadedKeys] = useState<Set<string>>(() => {
-    const next = new Set<string>()
-    if (initialPersisted.loaded.MA) next.add('MA')
-    if (initialPersisted.loaded.MACD) next.add('MACD')
-    if (initialPersisted.loaded.RSI) next.add('RSI')
-    if (initialPersisted.loaded.Stoch) next.add('Stoch')
-    if (initialPersisted.loaded.TSI) next.add('TSI')
-    if (initialPersisted.loaded.VI) next.add('VI')
-    if (initialPersisted.loaded.VWAP) next.add('VWAP')
-    if (initialPersisted.loaded.Vol) next.add('Vol')
-    return next
-  })
   const [topHeight, setTopHeight] = useState(254)
-  const [columnWidths, setColumnWidths] = useState<IndicatorColumnWidths>(defaultColumnWidths)
+  const loadedKeySet = new Set(loadedIndicatorKeys)
   const selected = indicatorRows.find((row) => row.key === selectedKey) ?? indicatorRows[0]
-  const selectedLoaded = loadedKeys.has(selected.key)
-
-  useEffect(() => {
-    setLoadedKeys(new Set(loadedIndicatorKeys))
-  }, [loadedIndicatorKeys])
+  const selectedLoaded = loadedKeySet.has(selected.key)
 
   useEffect(() => {
     if (!persistenceEnabled) return
     writePersistedIndicatorsState({
-      loaded: { MA: loadedKeys.has('MA'), MACD: loadedKeys.has('MACD'), RSI: loadedKeys.has('RSI'), Stoch: loadedKeys.has('Stoch'), TSI: loadedKeys.has('TSI'), VI: loadedKeys.has('VI'), VWAP: loadedKeys.has('VWAP'), Vol: loadedKeys.has('Vol') },
+      loaded: { MA: loadedKeySet.has('MA'), MACD: loadedKeySet.has('MACD'), RSI: loadedKeySet.has('RSI'), Stoch: loadedKeySet.has('Stoch'), TSI: loadedKeySet.has('TSI'), VI: loadedKeySet.has('VI'), VWAP: loadedKeySet.has('VWAP'), Vol: loadedKeySet.has('Vol') },
       ma: maSettings,
       macd: macdSettings,
       rsi: rsiSettings,
@@ -1575,46 +1542,46 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
       vol: volSettings,
       ui: { activeTab: settingsTab, selectedKey },
     })
-  }, [loadedKeys, macdSettings, maSettings, persistenceEnabled, rsiSettings, selectedKey, settingsTab, stochSettings, tsiSettings, viSettings, volSettings, vwapSettings])
+  }, [loadedIndicatorKeys, macdSettings, maSettings, persistenceEnabled, rsiSettings, selectedKey, settingsTab, stochSettings, tsiSettings, viSettings, volSettings, vwapSettings])
 
   function handleSettingsChange(next: RsiIndicatorSettings) {
     setRsiSettings(next)
-    if (loadedKeys.has('RSI')) onLoadIndicator?.('RSI', next)
+    if (loadedKeySet.has('RSI')) onLoadIndicator?.('RSI', next)
   }
 
   function handleMaSettingsChange(next: MaIndicatorSettings) {
     setMaSettings(next)
-    if (loadedKeys.has('MA')) onLoadIndicator?.('MA', next)
+    if (loadedKeySet.has('MA')) onLoadIndicator?.('MA', next)
   }
 
   function handleVolSettingsChange(next: VolIndicatorSettings) {
     setVolSettings(next)
-    if (loadedKeys.has('Vol')) onLoadIndicator?.('Vol', next)
+    if (loadedKeySet.has('Vol')) onLoadIndicator?.('Vol', next)
   }
 
   function handleMacdSettingsChange(next: MacdIndicatorSettings) {
     setMacdSettings(next)
-    if (loadedKeys.has('MACD')) onLoadIndicator?.('MACD', next)
+    if (loadedKeySet.has('MACD')) onLoadIndicator?.('MACD', next)
   }
 
   function handleStochSettingsChange(next: StochIndicatorSettings) {
     setStochSettings(next)
-    if (loadedKeys.has('Stoch')) onLoadIndicator?.('Stoch', next)
+    if (loadedKeySet.has('Stoch')) onLoadIndicator?.('Stoch', next)
   }
 
   function handleTsiSettingsChange(next: TsiIndicatorSettings) {
     setTsiSettings(next)
-    if (loadedKeys.has('TSI')) onLoadIndicator?.('TSI', next)
+    if (loadedKeySet.has('TSI')) onLoadIndicator?.('TSI', next)
   }
 
   function handleViSettingsChange(next: ViIndicatorSettings) {
     setViSettings(next)
-    if (loadedKeys.has('VI')) onLoadIndicator?.('VI', next)
+    if (loadedKeySet.has('VI')) onLoadIndicator?.('VI', next)
   }
 
   function handleVwapSettingsChange(next: VwapIndicatorSettings) {
     setVwapSettings(next)
-    if (loadedKeys.has('VWAP')) onLoadIndicator?.('VWAP', next)
+    if (loadedKeySet.has('VWAP')) onLoadIndicator?.('VWAP', next)
   }
 
   function getIndicatorSettings(key: SupportedChartIndicator) {
@@ -1629,20 +1596,10 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
   }
 
   function loadIndicator(key: SupportedChartIndicator) {
-    setLoadedKeys((current) => {
-      const next = new Set(current)
-      next.add(key)
-      return next
-    })
     onLoadIndicator?.(key, getIndicatorSettings(key))
   }
 
   function unloadIndicator(key: SupportedChartIndicator) {
-    setLoadedKeys((current) => {
-      const next = new Set(current)
-      next.delete(key)
-      return next
-    })
     onUnloadIndicator?.(key)
   }
 
@@ -1654,7 +1611,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
       return
     }
     writePersistedIndicatorsState({
-      loaded: { MA: loadedKeys.has('MA'), MACD: loadedKeys.has('MACD'), RSI: loadedKeys.has('RSI'), Stoch: loadedKeys.has('Stoch'), TSI: loadedKeys.has('TSI'), VI: loadedKeys.has('VI'), VWAP: loadedKeys.has('VWAP'), Vol: loadedKeys.has('Vol') },
+      loaded: { MA: loadedKeySet.has('MA'), MACD: loadedKeySet.has('MACD'), RSI: loadedKeySet.has('RSI'), Stoch: loadedKeySet.has('Stoch'), TSI: loadedKeySet.has('TSI'), VI: loadedKeySet.has('VI'), VWAP: loadedKeySet.has('VWAP'), Vol: loadedKeySet.has('Vol') },
       ma: maSettings,
       macd: macdSettings,
       rsi: rsiSettings,
@@ -1675,15 +1632,6 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
   function handleUnloadSelected() {
     if (!isSupportedChartIndicator(selected.key)) return
     unloadIndicator(selected.key)
-  }
-
-  function handleIndicatorCheckedChange(key: string, checked: boolean) {
-    setSelectedKey(key)
-    if (checked) {
-      onIndicatorShortcutKeysChange(indicatorShortcutKeys.includes(key) ? indicatorShortcutKeys : [...indicatorShortcutKeys, key])
-      return
-    }
-    onIndicatorShortcutKeysChange(indicatorShortcutKeys.filter((item) => item !== key))
   }
 
   function handleSplitPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -1718,59 +1666,6 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
     window.addEventListener('pointerup', handlePointerUp, { once: true })
   }
 
-  function handleColumnResizePointerDown(event: ReactPointerEvent<HTMLSpanElement>, column: IndicatorColumnKey) {
-    event.preventDefault()
-    event.stopPropagation()
-
-    const startX = event.clientX
-    const startWidth = columnWidths[column]
-    const pointerId = event.pointerId
-    const target = event.currentTarget
-
-    target.setPointerCapture(pointerId)
-    document.body.dataset.fractalframeIndicatorsColumnResizing = 'true'
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const nextWidth = startWidth + (moveEvent.clientX - startX)
-      setColumnWidths((current) => ({
-        ...current,
-        [column]: Math.max(minColumnWidths[column], Math.round(nextWidth)),
-      }))
-    }
-
-    const handlePointerUp = () => {
-      document.body.removeAttribute('data-fractalframe-indicators-column-resizing')
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-
-      try {
-        target.releasePointerCapture(pointerId)
-      } catch {
-        // Pointer capture may already be released by the browser.
-      }
-    }
-
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp, { once: true })
-  }
-
-  function resetColumnWidth(column: IndicatorColumnKey) {
-    setColumnWidths((current) => ({ ...current, [column]: defaultColumnWidths[column] }))
-  }
-
-  function renderResizableHeader(label: string, column: IndicatorColumnKey) {
-    return (
-      <th scope="col">
-        {label}
-        <span
-          className="ff-indicators-table-v1__column-resizer"
-          onDoubleClick={() => resetColumnWidth(column)}
-          onPointerDown={(event) => handleColumnResizePointerDown(event, column)}
-        />
-      </th>
-    )
-  }
-
   return (
     <section className="ff-indicators-drawer" data-right-widget-panel="indicators" data-testid="ff-indicators-drawer-panel">
       <div
@@ -1778,65 +1673,13 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
         data-ff-indicators-split-v1
         style={{ ['--ff-indicators-top-height' as string]: `${topHeight}px` }}
       >
-        <div className="ff-indicators-split-v1__top" data-ff-indicators-split-top-v1>
-          <table className="right-widget-drawer__table ff-indicators-table-v1" aria-label="Indicators list">
-            <colgroup>
-              <col style={{ width: `${columnWidths.indicator}px` }} />
-              <col style={{ width: `${columnWidths.name}px` }} />
-              <col style={{ width: `${columnWidths.type}px` }} />
-              <col style={{ width: `${columnWidths.description}px` }} />
-              <col style={{ width: `${columnWidths.status}px` }} />
-            </colgroup>
-            <thead>
-              <tr>
-                {renderResizableHeader('Indicators', 'indicator')}
-                {renderResizableHeader('中文名称', 'name')}
-                {renderResizableHeader('类型', 'type')}
-                {renderResizableHeader('描述', 'description')}
-                {renderResizableHeader('状态', 'status')}
-              </tr>
-            </thead>
-            <tbody>
-              {indicatorRows.map((row) => {
-                const loaded = loadedKeys.has(row.key)
-                const inShortcutMenu = indicatorShortcutKeys.includes(row.key)
-                return (
-                  <tr
-                    data-ff-indicator-row-v1={row.key}
-                    data-selected={selectedKey === row.key}
-                    key={row.key}
-                    onClick={() => setSelectedKey(row.key)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        setSelectedKey(row.key)
-                      }
-                    }}
-                    tabIndex={0}
-                  >
-                    <td>
-                      <span className="ff-indicators-table-v1__check">
-                        <input
-                          aria-label={`${row.key} shortcut`}
-                          checked={inShortcutMenu}
-                          onChange={(event) => handleIndicatorCheckedChange(row.key, event.target.checked)}
-                          onClick={(event) => event.stopPropagation()}
-                          onKeyDown={(event) => event.stopPropagation()}
-                          type="checkbox"
-                        />
-                        <span>{row.key}</span>
-                      </span>
-                    </td>
-                    <td>{row.name}</td>
-                    <td>{row.type}</td>
-                    <td title={row.description}>{row.description}</td>
-                    <td data-ff-indicator-status-v1={row.key}>{loaded ? '已加载' : '未加载'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <IndicatorsTable
+          indicatorShortcutKeys={indicatorShortcutKeys}
+          rows={indicatorRows}
+          selectedKey={selectedKey}
+          onIndicatorShortcutKeysChange={onIndicatorShortcutKeysChange}
+          onSelect={setSelectedKey}
+        />
         <button
           aria-label="Resize indicators drawer split"
           className="ff-indicators-split-v1__handle"
@@ -1850,12 +1693,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
             activeTab={settingsTab}
             loaded={selectedLoaded}
             persistenceEnabled={persistenceEnabled}
-            title={`${selected.key} · ${selected.name}`}
-            unloadedContent={
-              <p className="ff-indicators-input-panel-v1__placeholder">
-                {`\u8bf7\u5148\u5728\u4e0a\u65b9\u70b9\u51fb Load \u52a0\u8f7d ${selected.key} \u5230${selected.type === '\u4e3b\u56fe\u6307\u6807' ? '\u4e3b\u56fe' : '\u526f\u56fe'}\u3002`}
-              </p>
-            }
+            title={`${selected.key} 路 ${selected.name}`}
             onLoad={handleLoadSelected}
             onPersistenceChange={handlePersistenceChange}
             onTabChange={setSettingsTab}

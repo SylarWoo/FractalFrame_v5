@@ -19,7 +19,6 @@ type IndicatorSettingsShellProps = {
   persistenceEnabled: boolean
   tabs?: IndicatorSettingsShellTab[]
   title: string
-  unloadedContent?: ReactNode
   onLoad: () => void
   onPersistenceChange: (enabled: boolean) => void
   onTabChange: (tab: IndicatorSettingsTab) => void
@@ -33,7 +32,6 @@ export function IndicatorSettingsShell({
   persistenceEnabled,
   tabs = defaultTabs,
   title,
-  unloadedContent,
   onLoad,
   onPersistenceChange,
   onTabChange,
@@ -46,37 +44,31 @@ export function IndicatorSettingsShell({
           {title}
         </span>
         <span className="ff-indicators-detail-v1__actions ff-indicator-settings-panel-v1__row-control">
-          <button className="ff-indicators-detail-v1__btn" data-active={loaded ? 'true' : undefined} onClick={onLoad} type="button">Load</button>
-          <button className="ff-indicators-detail-v1__btn" data-active={loaded ? undefined : 'true'} onClick={onUnload} type="button">Unload</button>
+          <button className="ff-indicators-detail-v1__btn" disabled={loaded} onClick={onLoad} type="button">Load</button>
+          <button className="ff-indicators-detail-v1__btn" disabled={!loaded} onClick={onUnload} type="button">Unload</button>
         </span>
       </div>
       <div className="ff-indicators-input-panel-v1" data-ff-indicators-input-panel-root="true">
-        {loaded ? (
-          <>
-            <div className="ff-indicators-input-panel-v1__tabs" role="tablist">
-              {tabs.map((tab) => (
-                <button
-                  aria-selected={activeTab === tab.id}
-                  className="ff-indicators-input-panel-v1__tab"
-                  data-active={activeTab === tab.id ? 'true' : undefined}
-                  key={tab.id}
-                  onClick={() => onTabChange(tab.id)}
-                  role="tab"
-                  type="button"
-                >
-                  {tab.label}
-                </button>
-              ))}
-              <span className="ff-indicators-style-persistence-v1">
-                <button className="ff-indicators-style-persistence-v1__button" data-active={persistenceEnabled ? 'true' : undefined} onClick={() => onPersistenceChange(true)} type="button">Save</button>
-                <button className="ff-indicators-style-persistence-v1__button" data-active={persistenceEnabled ? undefined : 'true'} onClick={() => onPersistenceChange(false)} type="button">Unsave</button>
-              </span>
-            </div>
-            {children}
-          </>
-        ) : (
-          unloadedContent
-        )}
+        <div className="ff-indicators-input-panel-v1__tabs" role="tablist">
+          {tabs.map((tab) => (
+            <button
+              aria-selected={activeTab === tab.id}
+              className="ff-indicators-input-panel-v1__tab"
+              data-active={activeTab === tab.id ? 'true' : undefined}
+              key={tab.id}
+              onClick={() => onTabChange(tab.id)}
+              role="tab"
+              type="button"
+            >
+              {tab.label}
+            </button>
+          ))}
+          <span className="ff-indicators-style-persistence-v1">
+            <button className="ff-indicators-style-persistence-v1__button" data-active={persistenceEnabled ? 'true' : undefined} onClick={() => onPersistenceChange(true)} type="button">Save</button>
+            <button className="ff-indicators-style-persistence-v1__button" data-active={persistenceEnabled ? undefined : 'true'} onClick={() => onPersistenceChange(false)} type="button">Unsave</button>
+          </span>
+        </div>
+        {children}
       </div>
     </>
   )

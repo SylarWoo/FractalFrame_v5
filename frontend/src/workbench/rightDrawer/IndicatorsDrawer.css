@@ -24,7 +24,8 @@
   min-height: 72px;
   flex: 0 0 var(--ff-indicators-top-height, 254px);
   box-sizing: border-box;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .ff-indicators-split-v1__handle {
@@ -325,6 +326,12 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
   background: #f8fafc;
 }
 
+.ff-indicators-detail-v1__btn:disabled {
+  background: #f3f4f6;
+  color: #94a3b8;
+  cursor: default;
+}
+
 .ff-indicators-detail-v1__btn[data-active='true'],
 .ff-indicators-style-persistence-v1__button[data-active='true'] {
   background: #e0e3eb;
@@ -530,6 +537,12 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
   max-width: 120px;
 }
 
+.ff-indicators-ma-panel-v1__type-select,
+.ff-indicators-ma-panel-v1__type-select .ff-openable-select {
+  width: 104px;
+  max-width: 104px;
+}
+
 .ff-indicators-ma-panel-v1__shift-check {
   width: auto !important;
   max-width: none !important;
@@ -564,6 +577,10 @@ body[data-fractalframe-indicators-column-resizing='true'] * {
 
 .ff-indicators-vi-panel-v1 .ff-indicators-input-panel-v1__row {
   grid-template-columns: 128px auto;
+}
+
+.ff-indicators-compact-input-panel-v1 .ff-indicators-input-panel-v1__row {
+  grid-template-columns: 150px 120px;
 }
 
 .ff-indicators-vwap-panel-v1__row {
