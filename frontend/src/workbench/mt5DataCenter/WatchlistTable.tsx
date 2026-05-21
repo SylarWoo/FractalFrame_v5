@@ -1,4 +1,4 @@
-﻿import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import type { Mt5RealtimeTick, Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 import { resolveMt5SymbolDisplay } from '../rightDrawer/mt5SymbolDisplay'
 import {
@@ -9,9 +9,16 @@ import {
 import type { StoreTableRow } from './storeV5StatusFormat'
 import './WatchlistTable.css'
 
+export type WatchlistTableColumnKey = 'symbol' | 'name' | 'assetType' | 'last' | 'change'
+
+type WatchlistTableColumnWidths = Record<WatchlistTableColumnKey, number>
+
 type WatchlistTableProps = {
+  columnWidths: WatchlistTableColumnWidths
+  onColumnResizePointerDown: (event: ReactPointerEvent<HTMLSpanElement>, column: WatchlistTableColumnKey) => void
   onOpenWatchlistPeriod: (row: StoreTableRow) => void
   onResizePointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void
+  onResetColumnWidth: (column: WatchlistTableColumnKey) => void
   onResetHeight: () => void
   onSelectSymbol: (symbol: string) => void
   onToggleRealtime: () => void
@@ -26,12 +33,16 @@ type WatchlistTableProps = {
   watchlistRealtimeStatus: string
   watchlistRows: Mt5SymbolRow[]
   watchlistTableHeight: number
+  watchlistTableWrapRef: RefObject<HTMLDivElement | null>
   watchlistTicks: Record<string, Mt5RealtimeTick>
 }
 
 export function WatchlistTable({
+  columnWidths,
+  onColumnResizePointerDown,
   onOpenWatchlistPeriod,
   onResizePointerDown,
+  onResetColumnWidth,
   onResetHeight,
   onSelectSymbol,
   onToggleRealtime,
@@ -46,22 +57,45 @@ export function WatchlistTable({
   watchlistRealtimeStatus,
   watchlistRows,
   watchlistTableHeight,
+  watchlistTableWrapRef,
   watchlistTicks,
 }: WatchlistTableProps) {
+  function renderResizableHeader(label: string, column: WatchlistTableColumnKey) {
+    return (
+      <th>
+        {label}
+        <span
+          className="ff-watchlist-table__column-resizer"
+          onDoubleClick={() => onResetColumnWidth(column)}
+          onPointerDown={(event) => onColumnResizePointerDown(event, column)}
+        />
+      </th>
+    )
+  }
+
   return (
     <div className="ff-import-watchlist-panel" role="tabpanel">
       <div
         className="ff-watchlist-table-wrap"
+        ref={watchlistTableWrapRef}
         style={{ height: `${watchlistTableHeight}px` }}
       >
         <table className="ff-watchlist-table" aria-label="Watchlist">
+          <colgroup>
+            <col style={{ width: `${columnWidths.symbol}px` }} />
+            <col style={{ width: `${columnWidths.name}px` }} />
+            <col style={{ width: `${columnWidths.assetType}px` }} />
+            <col style={{ width: `${columnWidths.last}px` }} />
+            <col style={{ width: `${columnWidths.change}px` }} />
+            <col />
+          </colgroup>
           <thead>
             <tr>
-              <th>SYMBOL</th>
-              <th>{'\u4e2d\u6587\u540d\u79f0'}</th>
-              <th>{'\u8d44\u4ea7\u7c7b\u578b'}</th>
-              <th>LAST</th>
-              <th>CHG</th>
+              {renderResizableHeader('SYMBOL', 'symbol')}
+              {renderResizableHeader('\u4e2d\u6587\u540d\u79f0', 'name')}
+              {renderResizableHeader('\u8d44\u4ea7\u7c7b\u578b', 'assetType')}
+              {renderResizableHeader('LAST', 'last')}
+              {renderResizableHeader('CHG', 'change')}
               <th>CHG%</th>
             </tr>
           </thead>
@@ -176,4 +210,3 @@ export function WatchlistTable({
     </div>
   )
 }
-

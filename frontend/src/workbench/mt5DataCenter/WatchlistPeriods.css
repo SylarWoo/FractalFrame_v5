@@ -1,16 +1,16 @@
 ﻿.ff-watchlist-periods {
   display: grid;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 6px;
+  margin-top: 0;
   border: 1px solid #dbe3ef;
   border-radius: 0;
-  padding: 10px 8px;
+  padding: 6px 8px;
   background: #ffffff;
 }
 
 .ff-watchlist-periods__group {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -20,19 +20,19 @@
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  line-height: 14px;
+  line-height: 13px;
 }
 
 .ff-watchlist-periods__buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
 }
 
 .ff-watchlist-periods__buttons button {
   flex: 0 0 auto;
-  height: 26px;
+  height: 24px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: #ffffff;
@@ -41,7 +41,7 @@
   font-family: Arial, Tahoma, 'Segoe UI', sans-serif;
   font-size: 14px;
   font-weight: 400;
-  line-height: 24px;
+  line-height: 22px;
   padding: 0 6px;
 }
 

@@ -61,13 +61,17 @@ export function RightDrawer({
     handleColumnResizePointerDown,
     handleResizePointerDown,
     handleSplitPointerDown,
+    handleWatchlistColumnResizePointerDown,
     handleWatchlistTableResizePointerDown,
     resetColumnWidth,
     resetTopPaneHeight,
+    resetWatchlistColumnWidth,
     resetWatchlistTableHeight,
     tableWrapRef,
     topPaneHeight,
+    watchlistColumnWidths,
     watchlistTableHeight,
+    watchlistTableWrapRef,
   } = useRightDrawerResize({ drawerWidth, onResize })
   const {
     canAggregateStoreV5,
@@ -320,12 +324,14 @@ export function RightDrawer({
             onCancelMt5M1Check={handleCancelMt5M1Check} onCancelPullStore={handleCancelPullStore}
             onCheckMt5M1Staged={handleCheckMt5M1Staged} onCleanLocalM1={handleCleanLocalM1}
             onColumnResizePointerDown={handleColumnResizePointerDown}
+            onWatchlistColumnResizePointerDown={handleWatchlistColumnResizePointerDown}
             onDeleteLocalStore={handleDeleteLocalStore} onDeleteSelectedAggregates={handleDeleteSelectedAggregates}
             onLoadSymbols={loadSymbols}
             onOpenStoreTableRow={handleOpenStoreTableRow} onOpenWatchlistPeriod={handleOpenWatchlistPeriod}
             onPullStore={handlePullStore} onRefreshStoreStatus={handleRefreshStoreStatus}
             onRepairM1Gaps={handleRefreshStoreStatus}
             onResetColumnWidth={resetColumnWidth}
+            onResetWatchlistColumnWidth={resetWatchlistColumnWidth}
             onResetTopPaneHeight={resetTopPaneHeight} onResetWatchlistHeight={resetWatchlistTableHeight}
             onResizeWatchlistPointerDown={handleWatchlistTableResizePointerDown}
             onSearch={handleSearch} onSelectSymbol={handleSelectSymbol}
@@ -345,11 +351,13 @@ export function RightDrawer({
             storeOperationLine={storeOperationLine} storeOperationProgress={storeOperationProgress}
             storePanelPersistenceEnabled={storePanelPersistenceEnabled} storeTableAggregatePeriods={storeTableAggregatePeriods}
             tableWrapRef={tableWrapRef} visibleStoreTableRows={visibleStoreTableRows} visibleSymbols={visibleSymbols}
+            watchlistColumnWidths={watchlistColumnWidths}
             watchlistAggregatedPeriods={watchlistAggregatedPeriods}
             watchlistDirectPeriods={watchlistDirectPeriods} watchlistLastTickAt={watchlistLastTickAt}
             watchlistRealtimeEnabled={watchlistRealtimeEnabled} watchlistRealtimeLog={watchlistRealtimeLog}
             watchlistRealtimeReady={watchlistRealtimeReady} watchlistRealtimeStatus={watchlistRealtimeStatus}
-            watchlistRows={watchlistRows} watchlistTableHeight={watchlistTableHeight} watchlistTicks={watchlistTicks}
+            watchlistRows={watchlistRows} watchlistTableHeight={watchlistTableHeight}
+            watchlistTableWrapRef={watchlistTableWrapRef} watchlistTicks={watchlistTicks}
           />
         )}
     </RightDrawerFrame>

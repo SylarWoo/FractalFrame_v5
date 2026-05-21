@@ -1,5 +1,6 @@
 import type { FormEvent, PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import type { SymbolTableColumnKey } from '../mt5DataCenter/SymbolTable'
+import type { WatchlistTableColumnKey } from '../mt5DataCenter/WatchlistTable'
 import { SymbolTable } from '../mt5DataCenter/SymbolTable'
 import { StoreV5Panel } from '../mt5DataCenter/StoreV5Panel'
 import { WatchlistTable } from '../mt5DataCenter/WatchlistTable'
@@ -9,6 +10,7 @@ import { formatDetailValue, selectedDetailRows } from '../mt5DataCenter/storeV5S
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
 
 type ColumnWidths = Record<SymbolTableColumnKey, number>
+type WatchlistColumnWidths = Record<WatchlistTableColumnKey, number>
 type Progress = { hasEstimate: boolean; width: number }
 type SymbolDisplay = { chineseName: string; assetType: string; description: string }
 
@@ -33,6 +35,7 @@ type RightDrawerMt5BodyProps = {
   onCheckMt5M1Staged: () => void
   onCleanLocalM1: () => void
   onColumnResizePointerDown: (event: ReactPointerEvent<HTMLSpanElement>, column: SymbolTableColumnKey) => void
+  onWatchlistColumnResizePointerDown: (event: ReactPointerEvent<HTMLSpanElement>, column: WatchlistTableColumnKey) => void
   onDeleteLocalStore: () => void
   onDeleteSelectedAggregates: () => void
   onLoadSymbols: (refresh: boolean) => void
@@ -42,6 +45,7 @@ type RightDrawerMt5BodyProps = {
   onRefreshStoreStatus: () => void
   onRepairM1Gaps: () => void
   onResetColumnWidth: (column: SymbolTableColumnKey) => void
+  onResetWatchlistColumnWidth: (column: WatchlistTableColumnKey) => void
   onResetTopPaneHeight: () => void
   onResetWatchlistHeight: () => void
   onResizeWatchlistPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void
@@ -86,7 +90,9 @@ type RightDrawerMt5BodyProps = {
   watchlistRealtimeReady: boolean
   watchlistRealtimeStatus: string
   watchlistRows: Mt5SymbolRow[]
+  watchlistColumnWidths: WatchlistColumnWidths
   watchlistTableHeight: number
+  watchlistTableWrapRef: RefObject<HTMLDivElement | null>
   watchlistTicks: Record<string, Mt5RealtimeTick>
 }
 
@@ -99,7 +105,8 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
     storeCheckLoading, storeOperationLine, storeOperationProgress, storePanelPersistenceEnabled,
     storeTableAggregatePeriods, tableWrapRef, visibleStoreTableRows, visibleSymbols, watchlistAggregatedPeriods,
     watchlistDirectPeriods, watchlistLastTickAt, watchlistRealtimeEnabled, watchlistRealtimeLog,
-    watchlistRealtimeReady, watchlistRealtimeStatus, watchlistRows, watchlistTableHeight, watchlistTicks,
+    watchlistRealtimeReady, watchlistRealtimeStatus, watchlistRows, watchlistColumnWidths, watchlistTableHeight,
+    watchlistTableWrapRef, watchlistTicks,
   } = props
 
   return (
@@ -180,8 +187,11 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
             )}
             {selectedPanelTab === 'watchlist' && (
               <WatchlistTable
+                columnWidths={watchlistColumnWidths}
+                onColumnResizePointerDown={props.onWatchlistColumnResizePointerDown}
                 onOpenWatchlistPeriod={props.onOpenWatchlistPeriod}
                 onResizePointerDown={props.onResizeWatchlistPointerDown}
+                onResetColumnWidth={props.onResetWatchlistColumnWidth}
                 onResetHeight={props.onResetWatchlistHeight}
                 onSelectSymbol={props.onSelectSymbol}
                 onToggleRealtime={props.onToggleRealtime}
@@ -196,6 +206,7 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
                 watchlistRealtimeStatus={watchlistRealtimeStatus}
                 watchlistRows={watchlistRows}
                 watchlistTableHeight={watchlistTableHeight}
+                watchlistTableWrapRef={watchlistTableWrapRef}
                 watchlistTicks={watchlistTicks}
               />
             )}

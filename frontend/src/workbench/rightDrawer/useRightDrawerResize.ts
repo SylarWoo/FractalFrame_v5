@@ -1,14 +1,18 @@
 import { useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { SymbolTableColumnKey } from '../mt5DataCenter/SymbolTable'
+import type { WatchlistTableColumnKey } from '../mt5DataCenter/WatchlistTable'
 import { writeJson, writeString } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
 import {
   clampColumnWidth,
   clampDrawerWidth,
+  clampWatchlistColumnWidth,
   defaultColumnWidths,
+  defaultWatchlistColumnWidths,
   getInitialColumnWidths,
   getInitialTopPaneHeight,
+  getInitialWatchlistColumnWidths,
   getInitialWatchlistTableHeight,
 } from './rightDrawerLayout'
 
@@ -21,7 +25,9 @@ export function useRightDrawerResize({ drawerWidth, onResize }: UseRightDrawerRe
   const [topPaneHeight, setTopPaneHeight] = useState(getInitialTopPaneHeight)
   const [watchlistTableHeight, setWatchlistTableHeight] = useState(getInitialWatchlistTableHeight)
   const [columnWidths, setColumnWidths] = useState(getInitialColumnWidths)
+  const [watchlistColumnWidths, setWatchlistColumnWidths] = useState(getInitialWatchlistColumnWidths)
   const tableWrapRef = useRef<HTMLDivElement | null>(null)
+  const watchlistTableWrapRef = useRef<HTMLDivElement | null>(null)
 
   function handleResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault()
@@ -207,11 +213,77 @@ export function useRightDrawerResize({ drawerWidth, onResize }: UseRightDrawerRe
     ownerDocument.addEventListener('pointercancel', finishResize)
   }
 
+  function handleWatchlistColumnResizePointerDown(
+    event: ReactPointerEvent<HTMLSpanElement>,
+    column: WatchlistTableColumnKey,
+  ) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const startX = event.clientX
+    const startWidth = watchlistColumnWidths[column]
+    const tableWrap = watchlistTableWrapRef.current
+    const tableWidth = tableWrap?.clientWidth ?? 0
+    const ownerDocument = event.currentTarget.ownerDocument
+    const handle = event.currentTarget
+
+    ownerDocument.body.setAttribute('data-fractalframe-mt5-column-resizing', 'true')
+    handle.setPointerCapture(event.pointerId)
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const deltaX = moveEvent.clientX - startX
+      setWatchlistColumnWidths((current) => {
+        const otherColumnsWidth = Object.entries(current).reduce((sum, [key, value]) => {
+          return key === column ? sum : sum + value
+        }, 0)
+        const minLastColumnWidth = 62
+        const maxToKeepTableFilled = Math.max(
+          defaultWatchlistColumnWidths[column],
+          tableWidth - otherColumnsWidth - minLastColumnWidth,
+        )
+        const next = {
+          ...current,
+          [column]: Math.min(clampWatchlistColumnWidth(startWidth + deltaX, column), maxToKeepTableFilled),
+        }
+        try {
+          writeJson(storageKeys.importCenterWatchlistColumnWidthsPx, next)
+        } catch {
+          // Column width persistence is best-effort only.
+        }
+        return next
+      })
+    }
+
+    const finishResize = (upEvent: PointerEvent) => {
+      ownerDocument.removeEventListener('pointermove', handlePointerMove)
+      ownerDocument.removeEventListener('pointerup', finishResize)
+      ownerDocument.removeEventListener('pointercancel', finishResize)
+      ownerDocument.body.removeAttribute('data-fractalframe-mt5-column-resizing')
+      handle.releasePointerCapture(upEvent.pointerId)
+    }
+
+    ownerDocument.addEventListener('pointermove', handlePointerMove)
+    ownerDocument.addEventListener('pointerup', finishResize)
+    ownerDocument.addEventListener('pointercancel', finishResize)
+  }
+
   function resetColumnWidth(column: SymbolTableColumnKey) {
     setColumnWidths((current) => {
       const next = { ...current, [column]: defaultColumnWidths[column] }
       try {
         writeJson(storageKeys.importCenterColumnWidthsPx, next)
+      } catch {
+        // Column width persistence is best-effort only.
+      }
+      return next
+    })
+  }
+
+  function resetWatchlistColumnWidth(column: WatchlistTableColumnKey) {
+    setWatchlistColumnWidths((current) => {
+      const next = { ...current, [column]: defaultWatchlistColumnWidths[column] }
+      try {
+        writeJson(storageKeys.importCenterWatchlistColumnWidthsPx, next)
       } catch {
         // Column width persistence is best-effort only.
       }
@@ -237,12 +309,16 @@ export function useRightDrawerResize({ drawerWidth, onResize }: UseRightDrawerRe
     handleColumnResizePointerDown,
     handleResizePointerDown,
     handleSplitPointerDown,
+    handleWatchlistColumnResizePointerDown,
     handleWatchlistTableResizePointerDown,
     resetColumnWidth,
     resetTopPaneHeight,
+    resetWatchlistColumnWidth,
     resetWatchlistTableHeight,
     tableWrapRef,
     topPaneHeight,
+    watchlistColumnWidths,
     watchlistTableHeight,
+    watchlistTableWrapRef,
   }
 }
