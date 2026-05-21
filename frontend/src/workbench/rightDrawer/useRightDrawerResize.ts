@@ -30,14 +30,28 @@ export function useRightDrawerResize({ drawerWidth, onResize }: UseRightDrawerRe
     const startWidth = drawerWidth
     const ownerDocument = event.currentTarget.ownerDocument
     const handle = event.currentTarget
+    const appMain = handle.closest('.ff-app-main') as HTMLElement | null
+    let nextWidth = startWidth
+    let writeFrameId = 0
+
+    const writeLiveWidth = () => {
+      writeFrameId = 0
+      appMain?.style.setProperty('--ff-right-drawer-width', `${nextWidth}px`)
+    }
+
+    const scheduleLiveWidthWrite = () => {
+      if (writeFrameId !== 0) return
+      writeFrameId = window.requestAnimationFrame(writeLiveWidth)
+    }
 
     ownerDocument.body.setAttribute('data-fractalframe-right-widget-drawer-resizing', 'true')
+    appMain?.style.setProperty('--ff-right-drawer-width', `${startWidth}px`)
     handle.setPointerCapture(event.pointerId)
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       const deltaX = moveEvent.clientX - startX
-      onResize(clampDrawerWidth(startWidth - deltaX))
-      window.dispatchEvent(new Event('resize'))
+      nextWidth = clampDrawerWidth(startWidth - deltaX)
+      scheduleLiveWidthWrite()
     }
 
     const finishResize = (upEvent: PointerEvent) => {
@@ -45,6 +59,12 @@ export function useRightDrawerResize({ drawerWidth, onResize }: UseRightDrawerRe
       ownerDocument.removeEventListener('pointerup', finishResize)
       ownerDocument.removeEventListener('pointercancel', finishResize)
       ownerDocument.body.removeAttribute('data-fractalframe-right-widget-drawer-resizing')
+      if (writeFrameId !== 0) {
+        window.cancelAnimationFrame(writeFrameId)
+        writeFrameId = 0
+      }
+      appMain?.style.setProperty('--ff-right-drawer-width', `${nextWidth}px`)
+      onResize(nextWidth)
       handle.releasePointerCapture(upEvent.pointerId)
       window.dispatchEvent(new Event('resize'))
     }

@@ -53,14 +53,22 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
 
     chartInstanceRef.current = chart ?? null
 
-    const resize = () => chart?.resize()
+    let resizeFrameId = 0
+    const resize = () => {
+      resizeFrameId = 0
+      chart?.resize()
+    }
+    const scheduleResize = () => {
+      if (resizeFrameId !== 0) return
+      resizeFrameId = window.requestAnimationFrame(resize)
+    }
     const resizeObserver = new ResizeObserver(() => {
-      window.requestAnimationFrame(resize)
+      scheduleResize()
     })
 
     resizeObserver.observe(container)
-    window.addEventListener('resize', resize)
-    window.requestAnimationFrame(resize)
+    window.addEventListener('resize', scheduleResize)
+    scheduleResize()
     let cleanupDragCursor: (() => void) | null = null
     window.requestAnimationFrame(() => {
       if (chart) cleanupDragCursor = installChartDragCursor(chart)
@@ -69,8 +77,9 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     return () => {
       cleanupDragCursor?.()
       if (chart) uninstallChartDragCursor(chart)
+      if (resizeFrameId !== 0) window.cancelAnimationFrame(resizeFrameId)
       resizeObserver.disconnect()
-      window.removeEventListener('resize', resize)
+      window.removeEventListener('resize', scheduleResize)
       chartInstanceRef.current = null
       if (chart) dispose(chart)
     }

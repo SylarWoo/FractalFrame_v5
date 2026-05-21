@@ -6,7 +6,7 @@ import { useChartInstance } from './useChartInstance'
 import { useChartRealtimeTicks } from './useChartRealtimeTicks'
 import { useChartStepLoad } from './useChartStepLoad'
 import { installRsiAxisDragSensitivity, uninstallRsiAxisDragSensitivity } from './rsiAxisDragSensitivity'
-import { installMainVolumeOverlay } from './mainVolumeIndicator'
+import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
 import type { MaIndicatorSettings, RsiIndicatorSettings, VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
@@ -17,6 +17,7 @@ const rsiPaneHeightStorageKey = 'fractalframe.chart.rsiPaneHeight'
 const defaultRsiPaneHeight = 128
 const minRsiPaneHeight = 80
 const maxStoredRsiPaneHeight = 720
+const updateLevelAll = 4
 
 type ChartCoreHostProps = {
   displayName?: string
@@ -64,6 +65,14 @@ function readStoredRsiPaneHeight() {
 function writeStoredRsiPaneHeight(height: number) {
   if (typeof window === 'undefined' || !Number.isFinite(height)) return
   window.localStorage.setItem(rsiPaneHeightStorageKey, String(normalizeRsiPaneHeight(height)))
+}
+
+function refreshPane(chart: unknown, paneId: string) {
+  const updatePane = (chart as { updatePane?: (level: number, paneId?: string) => void }).updatePane
+  if (!updatePane) return
+  window.requestAnimationFrame(() => {
+    updatePane.call(chart, updateLevelAll, paneId)
+  })
 }
 
 export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLoadStateChange, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
@@ -165,15 +174,25 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     }
 
     if (indicatorCommand.name === 'Vol') {
+      ensureMainVolumeLegendIndicator()
+
       if (indicatorCommand.action === 'load') {
+        if (chart.getIndicatorByPaneId('candle_pane', mainVolumeIndicatorName)) {
+          chart.overrideIndicator({ name: mainVolumeIndicatorName, calcParams: [indicatorCommand.settings] }, 'candle_pane')
+        } else {
+          chart.createIndicator({ name: mainVolumeIndicatorName, calcParams: [indicatorCommand.settings] }, true, { id: 'candle_pane' })
+        }
         if (mainVolumeOverlayRef.current) {
           mainVolumeOverlayRef.current.updateSettings(indicatorCommand.settings)
         } else {
           mainVolumeOverlayRef.current = installMainVolumeOverlay(chart, indicatorCommand.settings)
         }
+        refreshPane(chart, 'candle_pane')
       } else {
+        chart.removeIndicator('candle_pane', mainVolumeIndicatorName)
         mainVolumeOverlayRef.current?.destroy()
         mainVolumeOverlayRef.current = null
+        refreshPane(chart, 'candle_pane')
       }
     }
   }, [chartInstanceRef, indicatorCommand])
