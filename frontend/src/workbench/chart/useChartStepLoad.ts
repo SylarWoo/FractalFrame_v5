@@ -6,6 +6,7 @@ import { chartError, chartInfo } from './chartLogger'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import { historyPageSize, mergeKLineData, resolveHasMoreOlder } from './chartCoreDataUtils'
 import { applyPriceVolumePrecision, resetYAxisAutoScale } from './chartStyleAppliers'
+import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
 
 type StepLoad = { direction: 'left' | 'right'; id: number } | null
 type LoadState = {
@@ -90,6 +91,7 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
         window.setTimeout(() => {
           if (disposed) return
           resetYAxisAutoScale(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           applySessionBreakIndicator(chart, symbol, period)
           if (typeof targetTimestamp === 'number') {
             chart.scrollToTimestamp(targetTimestamp, 0)

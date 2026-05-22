@@ -44,6 +44,7 @@
 
 .ff-chart-current-candle-countdown {
   position: absolute;
+  left: calc(100% - var(--ff-current-candle-y-axis-width, 70px) + 1px);
   z-index: 8;
   display: flex;
   width: 70px;

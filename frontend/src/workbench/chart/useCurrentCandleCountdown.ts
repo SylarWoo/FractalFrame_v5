@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { MutableRefObject } from 'react'
-import { DomPosition } from 'klinecharts'
+import { ActionType, DomPosition } from 'klinecharts'
 import type { Chart, Coordinate } from 'klinecharts'
 import { readSettingsBooleanValue, settingsSymbolChangedEvent } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
@@ -17,8 +17,8 @@ type UseCurrentCandleCountdownOptions = {
 }
 
 export type CurrentCandleCountdownState = {
+  axisWidth: number
   color: string
-  left: number
   price: string
   text: string
   top: number
@@ -48,7 +48,7 @@ function isCoordinate(value: Partial<Coordinate> | Partial<Coordinate>[]): value
 
 export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, period, symbol }: UseCurrentCandleCountdownOptions) {
   const [settingVisible, setSettingVisible] = useState(readCountdownVisible)
-  const [state, setState] = useState<CurrentCandleCountdownState>({ color: '#26a69a', left: 0, price: '', text: '', top: 0, visible: false })
+  const [state, setState] = useState<CurrentCandleCountdownState>({ axisWidth: 70, color: '#26a69a', price: '', text: '', top: 0, visible: false })
 
   useEffect(() => {
     const syncVisible = () => setSettingVisible(readCountdownVisible())
@@ -96,20 +96,18 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
       const y = Number(coordinate?.y)
       const hostTopOffset = 8
       const axisDom = chart.getDom('candle_pane', DomPosition.YAxis)
-      const rootDom = chart.getDom()
       const axisRect = axisDom?.getBoundingClientRect()
-      const rootRect = rootDom?.getBoundingClientRect()
-      const axisLeft = axisRect && rootRect ? axisRect.left - rootRect.left : Number.NaN
+      const axisWidth = axisRect?.width ?? Number.NaN
       const endTimestamp = timestamp + periodSeconds * 1000
-      if (!Number.isFinite(y) || !Number.isFinite(axisLeft)) {
+      if (!Number.isFinite(y) || !Number.isFinite(axisWidth)) {
         setState((current) => current.visible ? { ...current, visible: false } : current)
         return
       }
 
       const barStyle = readCandleBarStyle()
       const nextState = {
+        axisWidth: Math.max(1, axisWidth),
         color: resolveCandleValueColor(latest, barStyle),
-        left: Math.max(0, axisLeft + 1),
         price: formatGlobalPrice(close, '', { symbol }),
         text: formatCountdown(endTimestamp - Date.now()),
         top: Math.max(hostTopOffset, y + hostTopOffset),
@@ -118,8 +116,8 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
       setState((current) => {
         if (
           current.visible === nextState.visible &&
+          Math.abs(current.axisWidth - nextState.axisWidth) < 0.25 &&
           current.color === nextState.color &&
-          Math.abs(current.left - nextState.left) < 0.25 &&
           current.price === nextState.price &&
           current.text === nextState.text &&
           Math.abs(current.top - nextState.top) < 0.25
@@ -133,18 +131,34 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
     update()
     let animationFrameId = 0
     const scheduleUpdate = () => {
+      if (animationFrameId !== 0) return
       animationFrameId = window.requestAnimationFrame(() => {
+        animationFrameId = 0
         update()
-        scheduleUpdate()
       })
     }
-    scheduleUpdate()
-    const intervalId = window.setInterval(update, 100)
-    window.addEventListener('resize', update)
+    const intervalId = window.setInterval(update, 250)
+    const actions = [
+      ActionType.OnDataReady,
+      ActionType.OnPaneDrag,
+      ActionType.OnScroll,
+      ActionType.OnVisibleRangeChange,
+      ActionType.OnZoom,
+    ]
+    const chart = chartInstanceRef.current
+    actions.forEach((action) => chart?.subscribeAction(action, scheduleUpdate))
+    const rootDom = chart?.getDom()
+    const resizeObserver = rootDom && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleUpdate)
+      : null
+    resizeObserver?.observe(rootDom as Element)
+    window.addEventListener('resize', scheduleUpdate)
     return () => {
       if (animationFrameId !== 0) window.cancelAnimationFrame(animationFrameId)
       window.clearInterval(intervalId)
-      window.removeEventListener('resize', update)
+      actions.forEach((action) => chart?.unsubscribeAction(action, scheduleUpdate))
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', scheduleUpdate)
     }
   }, [chartInstanceRef, dataReady, period, settingVisible, symbol])
 

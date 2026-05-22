@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import { installChartDragCursor } from './chartDragCursor'
-import { scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
+import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
 import { useChartRealtimeTicks } from './useChartRealtimeTicks'
@@ -275,6 +275,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       if (indicatorCommand.action === 'load') {
         if (chart.getIndicatorByPaneId(macdPaneId, 'MACD')) {
           chart.overrideIndicator({ name: 'MACD', calcParams: [indicatorCommand.settings] }, macdPaneId, observeMacdPaneHeight)
+          scheduleResetIndicatorYAxisAutoScale(chart, [macdPaneId])
           window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
@@ -286,6 +287,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeMacdPaneHeight()
             installChartDragCursor(chart)
+            scheduleResetIndicatorYAxisAutoScale(chart, [macdPaneId])
             scheduleUnlockYAxisManualDrag(chart)
           },
         )
@@ -439,8 +441,8 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         <div
           className="ff-chart-current-candle-countdown"
           style={{
+            ['--ff-current-candle-y-axis-width' as string]: `${candleCountdown.axisWidth}px`,
             backgroundColor: candleCountdown.color,
-            left: `${candleCountdown.left}px`,
             top: `${candleCountdown.top}px`,
           }}
         >

@@ -26,7 +26,7 @@ import {
   LEFT_RAIL_ZOOM_OUT_SVGREPO_ICON_48,
 } from './leftRailV4Icons'
 import { RightDrawer } from './rightDrawer/RightDrawer'
-import { readIndicatorPersistenceEnabled, readPersistedIndicatorsState } from './rightDrawer/indicatorPersistence'
+import { readIndicatorPersistenceEnabled, readPersistedIndicatorsState, writePersistedIndicatorsState } from './rightDrawer/indicatorPersistence'
 import type { MacdIndicatorSettings, MaIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from './rightDrawer/indicatorPersistence'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
 import type { IndicatorShortcutItem, RightDrawerId } from './rightDrawer/RightDrawerTypes'
@@ -313,6 +313,24 @@ export function AppShell() {
   useEffect(() => {
     writeJson(storageKeys.indicatorShortcutKeys, indicatorShortcutKeys)
   }, [indicatorShortcutKeys])
+
+  useEffect(() => {
+    if (!readIndicatorPersistenceEnabled()) return
+    const persisted = readPersistedIndicatorsState()
+    writePersistedIndicatorsState({
+      ...persisted,
+      loaded: {
+        MA: loadedIndicatorKeys.includes('MA'),
+        MACD: loadedIndicatorKeys.includes('MACD'),
+        RSI: loadedIndicatorKeys.includes('RSI'),
+        Stoch: loadedIndicatorKeys.includes('Stoch'),
+        TSI: loadedIndicatorKeys.includes('TSI'),
+        VI: loadedIndicatorKeys.includes('VI'),
+        VWAP: loadedIndicatorKeys.includes('VWAP'),
+        Vol: loadedIndicatorKeys.includes('Vol'),
+      },
+    })
+  }, [loadedIndicatorKeys])
 
   useEffect(() => {
     if (activeRightDrawer) {

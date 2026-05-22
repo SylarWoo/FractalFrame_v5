@@ -15,7 +15,7 @@ import {
   resolveInitialLimit,
 } from './chartCoreDataUtils'
 import { applyPriceVolumePrecision, resetYAxisAutoScale } from './chartStyleAppliers'
-import { scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
+import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 
 export type ChartLoadStateCore = {
   error: boolean
@@ -238,12 +238,14 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
         resetYAxisAutoScale(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
         scrollJumpTargetIntoView(chart, options.jumpTimestamp)
         applySessionBreakIndicator(chart, options.symbol, options.period)
         scheduleUnlockYAxisManualDrag(chart)
         window.setTimeout(() => {
           if (options.shouldIgnore()) return
           resetYAxisAutoScale(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           scrollJumpTargetIntoView(chart, options.jumpTimestamp)
           applySessionBreakIndicator(chart, options.symbol, options.period)
           scheduleUnlockYAxisManualDrag(chart)
@@ -284,6 +286,7 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
         resetYAxisAutoScale(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
         applySessionBreakIndicator(chart, options.symbol, options.period)
         scheduleUnlockYAxisManualDrag(chart)
         options.setLoadState({

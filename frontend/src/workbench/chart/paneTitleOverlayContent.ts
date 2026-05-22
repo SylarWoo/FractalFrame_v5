@@ -85,6 +85,15 @@ function colorWithAlpha(hex: string, alpha = 1) {
   return `rgba(${red}, ${green}, ${blue}, ${Math.max(0, Math.min(alpha, 1))})`
 }
 
+function solidColor(color: string) {
+  const trimmed = color.trim()
+  const hex = trimmed.replace('#', '')
+  if (/^[\da-f]{8}$/i.test(hex)) return `#${hex.slice(0, 6)}`
+  const rgba = trimmed.match(/^rgba\((\d+),\s*(\d+),\s*(\d+),\s*[\d.]+\)$/i)
+  if (rgba) return `rgb(${rgba[1]}, ${rgba[2]}, ${rgba[3]})`
+  return color
+}
+
 function titlePart(text: string, color?: string): PaneTitlePart {
   return { chunks: [{ color, text }] }
 }
@@ -154,7 +163,7 @@ function createCandleParts(chart: Chart, context: PaneTitleContext, crosshairInd
   const volumeVisible = settings[chartSettingKeys.statusCandleVolumeVisible] !== false
   const timeVisible = settings[chartSettingKeys.statusCandleTimeVisible] !== false
   const barStyle = readCandleBarStyle()
-  const valueColor = current ? resolveCandleValueColor(current, barStyle) : '#787b86'
+  const valueColor = current ? solidColor(resolveCandleValueColor(current, barStyle)) : '#787b86'
   const statusTitle = resolveStatusTitle(context.symbol, context.displayName)
   const parts: PaneTitlePart[] = statusTitle ? [titlePart(`${statusTitle} ${context.period}`)] : []
 
@@ -175,7 +184,7 @@ function createCandleParts(chart: Chart, context: PaneTitleContext, crosshairInd
     const open = numberValue(current.open)
     const close = numberValue(current.close)
     const change = open != null && close != null && open !== 0 ? ((close - open) / open) * 100 : undefined
-    const changeColor = change != null && change < 0 ? barStyle.downColor : barStyle.upColor
+    const changeColor = solidColor(change != null && change < 0 ? barStyle.downColor : barStyle.upColor)
     parts.push(titleGroup([
       { text: 'Chg:' },
       { color: changeColor, text: change == null ? '--' : `${change.toFixed(2)}%` },
@@ -295,8 +304,8 @@ function createCandleVolParts(chart: Chart, crosshairIndex: number | null) {
   if (booleanValue(settings.valuesInStatusLine, true) && readStatusValuesVisible()) {
     const isUp = numberValue(row.volumeColorIndex) === 0
     const volumeColor = isUp
-      ? colorWithAlpha(stringValue(settings.volumeUpColor, '#26a69a'), opacityValue(settings.volumeUpOpacity, 1))
-      : colorWithAlpha(stringValue(settings.volumeDownColor, '#ef5350'), opacityValue(settings.volumeDownOpacity, 1))
+      ? stringValue(settings.volumeUpColor, '#26a69a')
+      : stringValue(settings.volumeDownColor, '#ef5350')
     parts.push(titlePart(formatNumber(row.volume, settings.precision, 0), volumeColor))
     if (booleanValue(settings.maChecked, false)) {
       parts.push(titlePart(`MA ${formatNumber(row.volumeMa, settings.precision, 0)}`, colorWithAlpha(stringValue(settings.maColor, '#91a7ff'), opacityValue(settings.maOpacity, 1))))
