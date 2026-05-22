@@ -5,6 +5,7 @@ import type { VwapAnchorPeriod, VwapIndicatorSettings, VwapSource } from '../rig
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
+import { formatIndicatorValue } from './indicatorValueFormat'
 
 type VwapIndicatorRow = {
   lowerBand1?: number
@@ -101,9 +102,7 @@ function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<Vwap
 }
 
 function formatVwapValue(value: number | undefined, precision: VwapIndicatorSettings['precision']) {
-  if (!Number.isFinite(value)) return '--'
-  const digits = precision === 'system' ? 3 : Number(precision)
-  return (value as number).toFixed(Number.isFinite(digits) ? digits : 3).replace(/\.?0+$/, '')
+  return formatIndicatorValue(value, precision, 3)
 }
 
 function isCryptoSymbol(symbol: string) {

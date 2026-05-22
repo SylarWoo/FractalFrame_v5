@@ -5,7 +5,7 @@ import type { MaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
-import { formatGlobalPrice } from './globalPricePrecision'
+import { formatIndicatorValue } from './indicatorValueFormat'
 
 type MaShiftRow = {
   ma?: number
@@ -278,12 +278,13 @@ function drawMaLayer(
 
   const { ctx, indicator, visibleRange, xAxis, yAxis } = params
   const rows = indicator.result ?? []
-  const from = Math.max(1, Math.floor(visibleRange.realFrom) - 1)
-  const to = Math.min(rows.length - 1, Math.ceil(visibleRange.realTo) + 1)
+  const from = Math.max(1, Math.floor(visibleRange.from) - 1)
+  const to = Math.min(rows.length - 1, Math.ceil(visibleRange.to) + 1)
 
   ctx.save()
-  ctx.lineCap = 'square'
+  ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
+  ctx.miterLimit = 2
   ctx.lineWidth = lineWidth
 
   let activeColorIndex: number | null = null
@@ -366,9 +367,8 @@ function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<MaSh
   return Math.max(0, Math.min(Math.floor(params.visibleRange.realTo), params.indicator.result.length - 1))
 }
 
-function formatMaValue(value: number | undefined) {
-  if (!Number.isFinite(value)) return '--'
-  return formatGlobalPrice(value, '--')
+function formatMaValue(value: number | undefined, precision: MaIndicatorSettings['precision']) {
+  return formatIndicatorValue(value, precision, 3)
 }
 
 function readIndicatorInputsVisible() {
@@ -432,7 +432,7 @@ export function ensureTradingViewMaShiftIndicator() {
           ? [{
               title: { text: '', color: params.defaultStyles.tooltip.text.color },
               value: {
-                text: formatMaValue(row?.ma),
+                text: formatMaValue(row?.ma, settings.precision),
                 color: getMaSegmentColor(settings, colorIndex, settings.maLineOpacity),
               },
             }]

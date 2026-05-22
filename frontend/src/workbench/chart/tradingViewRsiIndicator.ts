@@ -5,6 +5,7 @@ import type { RsiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
+import { formatIndicatorValue } from './indicatorValueFormat'
 
 type RsiIndicatorRow = {
   rsi?: number
@@ -147,9 +148,7 @@ function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<RsiI
 }
 
 function formatRsiValue(value: number | undefined, precision: RsiIndicatorSettings['precision']) {
-  if (!Number.isFinite(value)) return '--'
-  const digits = precision === 'system' ? 2 : Number(precision)
-  return (value as number).toFixed(Number.isFinite(digits) ? digits : 2).replace(/\.?0+$/, '')
+  return formatIndicatorValue(value, precision, 2)
 }
 
 function readIndicatorInputsVisible() {

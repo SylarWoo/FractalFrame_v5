@@ -4,7 +4,6 @@ import { OpenableSelect } from '../controls/OpenableSelect'
 import { readString, writeString } from '../persistence/jsonStorage'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../settings/SettingsSwatches'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
-import { VisibilityRangePanel } from '../visibilityRange/VisibilityRangePanel'
 import {
   createDefaultDrawingLineStyle,
   createDefaultDrawingTextStyle,
@@ -23,7 +22,7 @@ import { drawingToolStateEvent, isDrawingToolStateEvent, publishDrawingToolComma
 import './DrawingsDrawer.css'
 
 type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'cursor'
-type DrawingTab = 'style' | 'text' | 'coords' | 'visibility'
+type DrawingTab = 'style' | 'text' | 'coords'
 type CursorMode = 'cursor' | 'crosshair'
 
 type DrawingTool = {
@@ -39,10 +38,10 @@ const minTopHeight = 96
 const maxTopHeight = 420
 
 const drawingTools: DrawingTool[] = [
-  { key: 'horizontalLine', label: '\u6c34\u5e73\u7ebf', tabs: ['style', 'text', 'coords', 'visibility'] },
-  { key: 'trendLine', label: '\u8d8b\u52bf\u7ebf', tabs: ['style', 'text', 'coords', 'visibility'] },
-  { key: 'ruler', label: '\u6807\u5c3a', tabs: ['style', 'text', 'coords', 'visibility'] },
-  { key: 'fibRetracement', label: '\u6590\u6ce2\u90a3\u5951\u56de\u64a4', tabs: ['style', 'coords', 'visibility'] },
+  { key: 'horizontalLine', label: '\u6c34\u5e73\u7ebf', tabs: ['style', 'text', 'coords'] },
+  { key: 'trendLine', label: '\u8d8b\u52bf\u7ebf', tabs: ['style', 'text', 'coords'] },
+  { key: 'ruler', label: '\u6807\u5c3a', tabs: ['style', 'text', 'coords'] },
+  { key: 'fibRetracement', label: '\u6590\u6ce2\u90a3\u5951\u56de\u64a4', tabs: ['style', 'coords'] },
   { key: 'cursor', label: '\u5149\u6807' },
 ]
 
@@ -50,7 +49,6 @@ const tabLabels: Record<DrawingTab, string> = {
   coords: '\u5750\u6807',
   style: '\u6837\u5f0f',
   text: '\u6587\u672c',
-  visibility: '\u53ef\u89c1\u8303\u56f4',
 }
 
 function normalizeToolKey(value: string): DrawingToolKey {
@@ -76,7 +74,7 @@ export function DrawingsDrawer() {
   const [priceLabelTools, setPriceLabelTools] = useState<Record<string, boolean>>(() => Object.fromEntries(
     drawingTools.map((tool) => [tool.key, readDrawingPriceLabel(tool.key)]),
   ))
-  const [selectedDrawing, setSelectedDrawing] = useState<{ lineStyle?: SettingsLineSwatchValue; locked: boolean; price?: number; showPriceLabel: boolean; textStyle?: DrawingTextStyle; tool: DrawingToolKey } | null>(null)
+  const [selectedDrawing, setSelectedDrawing] = useState<{ lineStyle?: SettingsLineSwatchValue; locked: boolean; objectId?: string; price?: number; showPriceLabel: boolean; textStyle?: DrawingTextStyle; tool: DrawingToolKey } | null>(null)
   const [lineStyles, setLineStyles] = useState<Record<string, SettingsLineSwatchValue>>(() => ({
     fibRetracement: readDrawingLineStyle('fibRetracement', createDefaultDrawingLineStyle('#787b86')),
     horizontalLine: readDrawingLineStyle('horizontalLine', createDefaultDrawingLineStyle('#0f766e')),
@@ -133,6 +131,7 @@ export function DrawingsDrawer() {
       setSelectedDrawing(event.detail.selected ? {
         lineStyle: event.detail.lineStyle,
         locked: event.detail.locked,
+        objectId: event.detail.objectId,
         price: event.detail.price,
         showPriceLabel: event.detail.showPriceLabel,
         textStyle: event.detail.textStyle,
@@ -463,14 +462,11 @@ function DrawingTabPanel({
   onPriceChange: (price: number) => void
   onTextStyleChange: (value: DrawingTextStyle) => void
   priceLabelVisible: boolean
-  selectedDrawing: { locked: boolean; price?: number; tool: DrawingToolKey } | null
+  selectedDrawing: { locked: boolean; objectId?: string; price?: number; tool: DrawingToolKey } | null
   tab: DrawingTab
   textStyle: DrawingTextStyle
   tool: DrawingTool
 }) {
-  if (tab === 'visibility') {
-    return <VisibilityRangePanel storageKey={`drawing:${tool.key}`} />
-  }
   if (tab === 'style') {
     return (
       <DrawingStylePanel

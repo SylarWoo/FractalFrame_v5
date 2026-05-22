@@ -8,12 +8,14 @@ import {
   readAxisTextSize,
 } from './chartStyleReaders'
 
+export const fixedYAxisSize = 96
+
 export function resetYAxisAutoScale(chart: Chart) {
   const axisLineColor = readAxisLineColor()
   chart.setStyles({
     yAxis: {
       axisLine: { color: axisLineColor, show: true, size: 1 },
-      size: 'auto' as const,
+      size: fixedYAxisSize,
       tickLine: { color: axisLineColor, length: 3, show: true, size: 1 },
       tickText: {
         color: readAxisTextColor(),
@@ -36,6 +38,7 @@ export function applyAxisTextStyle(chart: Chart) {
       tickText: { color, family: chartNumberFontFamily, marginEnd: 4, marginStart: 4, size, weight: chartNumberFontWeight },
     },
     yAxis: {
+      size: fixedYAxisSize,
       tickText: { color, family: chartNumberFontFamily, marginEnd: 10, marginStart: 7, size, weight: chartNumberFontWeight },
     },
   })
@@ -50,6 +53,7 @@ export function applyAxisLineStyle(chart: Chart) {
     },
     yAxis: {
       axisLine: { color, show: true, size: 1 },
+      size: fixedYAxisSize,
       tickLine: { color, length: 3, show: true, size: 1 },
     },
   })

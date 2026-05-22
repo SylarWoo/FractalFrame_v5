@@ -14,6 +14,7 @@ import { readSettingsBooleanValue, readSettingsSymbolState } from '../settingsSy
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { readCandleBarStyle, resolveCandleValueColor, resolveStatusTitle } from './chartStyleReaders'
 import { formatGlobalPrice } from './globalPricePrecision'
+import { formatIndicatorValue } from './indicatorValueFormat'
 import { mainVolumeIndicatorName } from './mainVolumeIndicator'
 
 export type PaneTitleContext = {
@@ -111,16 +112,8 @@ function titleGroup(chunks: PaneTitleChunk[]): PaneTitlePart {
   return { chunks }
 }
 
-function precisionDigits(value: unknown, fallback: number) {
-  if (value === 'system') return fallback
-  const digits = numberValue(value)
-  return digits == null ? fallback : Math.max(0, Math.min(Math.round(digits), 8))
-}
-
 function formatNumber(value: unknown, precision: unknown, fallbackDigits: number) {
-  const number = numberValue(value)
-  if (number == null) return '--'
-  return number.toFixed(precisionDigits(precision, fallbackDigits)).replace(/\.?0+$/, '')
+  return formatIndicatorValue(value, precision, fallbackDigits)
 }
 
 function formatPrice(value: unknown, symbol: string) {
@@ -183,8 +176,8 @@ function readMarketStatusTitleChunks(symbol: string): PaneTitleChunk[] {
   }
   if (status.status === 'closed') {
     return [
-      { color: '#111827', fontSize: '18px', gapBefore: 8, text: '━', translateY: '-1px' },
-      { color: '#111827', fontSize: '12px', gapBefore: 3, text: '休市' },
+      { color: '#111827', fontSize: '16px', gapBefore: 8, text: '━', translateY: '-1px' },
+      { color: '#111827', fontSize: '12px', gapBefore: 3, text: '休市', translateX: '1px', translateY: '-1.5px' },
     ]
   }
   return []

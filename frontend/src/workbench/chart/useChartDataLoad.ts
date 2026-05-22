@@ -17,6 +17,13 @@ import {
 } from './chartCoreDataUtils'
 import { applyPriceVolumePrecision, resetYAxisAutoScale } from './chartStyleAppliers'
 import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
+import {
+  markChartViewportPersistenceReady,
+  readChartYAxisRange,
+  restoreChartViewportState,
+  restoreChartYAxisRange,
+  type AxisRangeSnapshot,
+} from './chartViewportPersistence'
 
 export type ChartLoadStateCore = {
   error: boolean
@@ -48,6 +55,7 @@ export function useChartDataLoad({
   totalRows,
 }: UseChartDataLoadOptions) {
   const requestSeqRef = useRef(0)
+  const previousContextRef = useRef<{ period: string; symbol: string } | null>(null)
   const [loadState, setLoadState] = useState<ChartLoadStateCore>({
     error: false,
     loadedPeriod: '',
@@ -67,6 +75,12 @@ export function useChartDataLoad({
     requestSeqRef.current = requestSeq
 
     if (!chart) return
+
+    const previousContext = previousContextRef.current
+    const inheritedYAxisRange = previousContext?.symbol === symbol && previousContext.period !== period
+      ? readChartYAxisRange(chart)
+      : null
+    previousContextRef.current = { period, symbol }
 
     const shouldIgnore = () => disposed || requestSeqRef.current !== requestSeq
     const finishLoaded = () => {
@@ -150,9 +164,9 @@ export function useChartDataLoad({
 
     const setFallbackTimer = (timer: number) => { fallbackTimer = timer }
     if (jump?.timestamp != null) {
-      loadJumpWindow(chart, { jumpTimestamp: jump.timestamp, period, setFallbackTimer, setLoadState, shouldIgnore, symbol })
+      loadJumpWindow(chart, { inheritedYAxisRange, jumpTimestamp: jump.timestamp, period, setFallbackTimer, setLoadState, shouldIgnore, symbol })
     } else {
-      loadInitialWindow(chart, { period, requestedRows, setFallbackTimer, setLoadState, shouldIgnore, symbol, totalRows })
+      loadInitialWindow(chart, { inheritedYAxisRange, period, requestedRows, setFallbackTimer, setLoadState, shouldIgnore, symbol, totalRows })
     }
 
     return () => {
@@ -167,6 +181,7 @@ export function useChartDataLoad({
 }
 
 type LoadOptions = {
+  inheritedYAxisRange?: AxisRangeSnapshot | null
   period: string
   setFallbackTimer: (timer: number) => void
   setLoadState: Dispatch<SetStateAction<ChartLoadStateCore>>
@@ -200,6 +215,20 @@ function scrollJumpTargetIntoView(chart: Chart, timestamp: number) {
   const visibleCount = Math.max(1, Math.floor(visibleRange.to - visibleRange.from))
   const rightEdgeIndex = Math.min(chart.getDataList().length - 1, targetIndex + Math.floor(visibleCount / 2))
   chart.scrollToDataIndex(rightEdgeIndex, 0)
+}
+
+function restorePersistedViewport(chart: Chart, symbol: string, period: string) {
+  restoreChartViewportState(chart, symbol, period)
+  markChartViewportPersistenceReady(chart, symbol, period)
+}
+
+function restoreViewportAfterLoad(chart: Chart, options: LoadOptions) {
+  if (options.inheritedYAxisRange) {
+    restoreChartYAxisRange(chart, options.inheritedYAxisRange)
+    markChartViewportPersistenceReady(chart, options.symbol, options.period)
+    return
+  }
+  restorePersistedViewport(chart, options.symbol, options.period)
 }
 
 function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: number }) {
@@ -249,6 +278,7 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
           scrollJumpTargetIntoView(chart, options.jumpTimestamp)
           applySessionBreakIndicator(chart, options.symbol, options.period)
           scheduleUnlockYAxisManualDrag(chart)
+          markChartViewportPersistenceReady(chart, options.symbol, options.period)
         }, 0)
           options.setLoadState({
             error: false,
@@ -289,6 +319,7 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
         scheduleResetIndicatorYAxisAutoScale(chart)
         applySessionBreakIndicator(chart, options.symbol, options.period)
         scheduleUnlockYAxisManualDrag(chart)
+        restoreViewportAfterLoad(chart, options)
         options.setLoadState({
           error: false,
           loadedPeriod: options.period,

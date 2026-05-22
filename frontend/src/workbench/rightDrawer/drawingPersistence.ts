@@ -16,6 +16,8 @@ export type DrawingTextStyle = {
 export type StoredHorizontalLineDrawing = {
   lineStyle: SettingsLineSwatchValue
   locked: boolean
+  manualVisible: boolean
+  objectId: string
   paneId: string
   showPriceLabel: boolean
   textStyle: DrawingTextStyle
@@ -124,6 +126,8 @@ export function readStoredHorizontalLineDrawings() {
     .map((drawing) => ({
       lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#0f766e'),
       locked: drawing.locked === true,
+      manualVisible: drawing.manualVisible !== false,
+      objectId: typeof drawing.objectId === 'string' && drawing.objectId.trim() ? drawing.objectId.trim() : '',
       paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
       showPriceLabel: drawing.showPriceLabel !== false,
       textStyle: normalizeDrawingTextStyle(drawing.textStyle),
@@ -136,6 +140,8 @@ export function writeStoredHorizontalLineDrawings(drawings: StoredHorizontalLine
   return writeJson(horizontalLineDrawingsStorageKey, drawings.map((drawing) => ({
     lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#0f766e'),
     locked: drawing.locked === true,
+    manualVisible: drawing.manualVisible !== false,
+    objectId: typeof drawing.objectId === 'string' && drawing.objectId.trim() ? drawing.objectId.trim() : '',
     paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
     showPriceLabel: drawing.showPriceLabel !== false,
     textStyle: normalizeDrawingTextStyle(drawing.textStyle),

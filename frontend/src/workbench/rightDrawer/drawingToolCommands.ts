@@ -17,6 +17,7 @@ export type DrawingToolState = {
   armed: boolean
   locked: boolean
   lineStyle?: SettingsLineSwatchValue
+  objectId?: string
   price?: number
   selected: boolean
   showPriceLabel: boolean

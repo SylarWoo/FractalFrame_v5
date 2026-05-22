@@ -11,19 +11,30 @@ import './VisibilityRangePanel.css'
 
 type VisibilityRangePanelProps = {
   storageKey?: string
+  storageKeys?: string[]
 }
 
-export function VisibilityRangePanel({ storageKey }: VisibilityRangePanelProps) {
-  const resolvedStorageKey = useMemo(() => visibilityRangeStorageKey(storageKey), [storageKey])
-  const [rows, setRows] = useState<VisibilityRangeRow[]>(() => readVisibilityRangeRows(storageKey))
+export function VisibilityRangePanel({ storageKey, storageKeys }: VisibilityRangePanelProps) {
+  const effectiveStorageKeys = useMemo(() => {
+    const keys = storageKeys && storageKeys.length > 0 ? storageKeys : storageKey ? [storageKey] : []
+    return Array.from(new Set(keys.filter((key) => typeof key === 'string' && key.trim().length > 0)))
+  }, [storageKey, storageKeys])
+  const primaryStorageKey = effectiveStorageKeys[0]
+  const resolvedStorageKey = useMemo(() => visibilityRangeStorageKey(primaryStorageKey), [primaryStorageKey])
+  const resolvedStorageKeys = useMemo(() => effectiveStorageKeys.map((key) => visibilityRangeStorageKey(key)).join('|'), [effectiveStorageKeys])
+  const [rows, setRows] = useState<VisibilityRangeRow[]>(() => readVisibilityRangeRows(primaryStorageKey))
+  const [loadedStorageKeys, setLoadedStorageKeys] = useState(resolvedStorageKeys)
 
   useEffect(() => {
-    setRows(readVisibilityRangeRows(storageKey))
-  }, [resolvedStorageKey, storageKey])
+    setRows(readVisibilityRangeRows(primaryStorageKey))
+    setLoadedStorageKeys(resolvedStorageKeys)
+  }, [primaryStorageKey, resolvedStorageKey, resolvedStorageKeys])
 
   useEffect(() => {
-    if (resolvedStorageKey) writeVisibilityRangeRows(storageKey, rows)
-  }, [resolvedStorageKey, rows, storageKey])
+    if (!resolvedStorageKey) return
+    if (loadedStorageKeys !== resolvedStorageKeys) return
+    effectiveStorageKeys.forEach((key) => writeVisibilityRangeRows(key, rows))
+  }, [effectiveStorageKeys, loadedStorageKeys, resolvedStorageKey, resolvedStorageKeys, rows])
 
   const patchRow = (key: VisibilityRangeUnitKey, patch: Partial<VisibilityRangeRow>) => {
     setRows((current) => current.map((row) => {

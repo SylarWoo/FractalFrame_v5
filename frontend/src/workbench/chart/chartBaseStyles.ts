@@ -10,6 +10,7 @@ import {
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
+import { fixedYAxisSize } from './chartAxisStyles'
 
 function readIndicatorTooltipShowRule() {
   if (domPaneTitleOverlayEnabled) return TooltipShowRule.None
@@ -90,7 +91,7 @@ export function createChartBaseStyles() {
     },
     yAxis: {
       axisLine: { color: readAxisLineColor(), show: true, size: 1 },
-      size: 'auto' as const,
+      size: fixedYAxisSize,
       tickLine: { color: readAxisLineColor(), length: 3, show: true, size: 1 },
       tickText: {
         color: readAxisTextColor(),

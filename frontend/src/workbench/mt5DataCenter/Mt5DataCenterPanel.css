@@ -130,16 +130,16 @@
 .ff-import-market-status {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   min-height: 18px;
   margin-top: 4px;
-  overflow: hidden;
+  overflow: visible;
   color: #374151;
   font-size: 12px;
   font-weight: 700;
   line-height: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .ff-import-market-status[data-status='open'] {
@@ -164,13 +164,17 @@
 
 .ff-import-market-status__label,
 .ff-import-market-status__muted {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .ff-import-market-status__muted {
+  flex: 1 1 auto;
   color: #6b7280;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .ff-import-load-row {

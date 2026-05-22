@@ -10,6 +10,7 @@ import { installChartDragCursor, uninstallChartDragCursor } from './chartDragCur
 import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
 import { installPaneTitleOverlay } from './paneTitleOverlayManager'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
+import { installChartViewportPersistence } from './chartViewportPersistence'
 import {
   applyAxisLineStyle,
   applyAxisTextStyle,
@@ -90,10 +91,12 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     scheduleResize()
     let cleanupDragCursor: (() => void) | null = null
     let cleanupDrawingTools: (() => void) | null = null
+    let cleanupViewportPersistence: (() => void) | null = null
     window.requestAnimationFrame(() => {
       if (chart) {
         cleanupDragCursor = installChartDragCursor(chart)
         cleanupDrawingTools = installChartDrawingTools(chart, () => chartContextRef.current.period)
+        cleanupViewportPersistence = installChartViewportPersistence(chart, () => chartContextRef.current)
       }
     })
     if (chart && domPaneTitleOverlayEnabled) {
@@ -103,6 +106,7 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     return () => {
       paneTitleOverlayRef.current?.destroy()
       paneTitleOverlayRef.current = null
+      cleanupViewportPersistence?.()
       cleanupDrawingTools?.()
       cleanupDragCursor?.()
       if (chart) uninstallChartDragCursor(chart)
