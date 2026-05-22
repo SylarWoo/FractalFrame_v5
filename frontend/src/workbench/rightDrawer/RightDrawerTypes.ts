@@ -1,6 +1,6 @@
 import type { MacdIndicatorSettings, MaIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from './indicatorPersistence'
 
-export type RightDrawerId = 'drawings' | 'indicators' | 'mt5' | 'settings'
+export type RightDrawerId = 'drawings' | 'objectTree' | 'indicators' | 'mt5' | 'settings'
 
 export type SupportedChartIndicatorName = 'MA' | 'MACD' | 'RSI' | 'Stoch' | 'TSI' | 'VI' | 'VWAP' | 'Vol'
 

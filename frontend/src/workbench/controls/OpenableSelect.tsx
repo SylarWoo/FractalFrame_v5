@@ -8,13 +8,14 @@ export type OpenableSelectOption = {
 
 type OpenableSelectProps = {
   ariaLabel?: string
+  className?: string
   defaultValue?: string
   onChange?: (value: string) => void
   options: OpenableSelectOption[]
   value?: string
 }
 
-export function OpenableSelect({ ariaLabel, defaultValue, onChange, options, value: controlledValue }: OpenableSelectProps) {
+export function OpenableSelect({ ariaLabel, className = '', defaultValue, onChange, options, value: controlledValue }: OpenableSelectProps) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const fallback = options[0]?.value ?? ''
   const [internalValue, setInternalValue] = useState(defaultValue ?? fallback)
@@ -40,7 +41,7 @@ export function OpenableSelect({ ariaLabel, defaultValue, onChange, options, val
   }, [open])
 
   return (
-    <div className="ff-openable-select" data-open={open} ref={rootRef}>
+    <div className={`ff-openable-select ${className}`.trim()} data-open={open} ref={rootRef}>
       <button
         aria-expanded={open}
         aria-label={ariaLabel}

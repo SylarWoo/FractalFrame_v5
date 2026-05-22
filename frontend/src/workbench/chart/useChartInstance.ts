@@ -5,7 +5,7 @@ import { settingsSymbolChangedEvent } from '../settingsSymbolState'
 import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
 import { formatChartDate, readChartTimezone } from './chartTimeFormatting'
 import { readRightPlaceholderVisible, refreshChartFuturePlaceholders } from './chartFuturePlaceholders'
-import { installChartDrawingTools } from './chartDrawingTools'
+import { chartDrawingVisibilityRefreshEvent, installChartDrawingTools } from './chartDrawingTools'
 import { installChartDragCursor, uninstallChartDragCursor } from './chartDragCursor'
 import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
 import { installPaneTitleOverlay } from './paneTitleOverlayManager'
@@ -49,7 +49,16 @@ function applyChartStyles(chart: Chart, symbol: string, period: string, displayN
 export function useChartInstance({ displayName, period, symbol }: UseChartInstanceOptions) {
   const chartInstanceRef = useRef<Chart | null>(null)
   const chartRef = useRef<HTMLDivElement | null>(null)
+  const chartContextRef = useRef({ period, symbol })
   const paneTitleOverlayRef = useRef<ReturnType<typeof installPaneTitleOverlay> | null>(null)
+
+  useEffect(() => {
+    chartContextRef.current = { period, symbol }
+    window.dispatchEvent(new Event(chartDrawingVisibilityRefreshEvent))
+    window.requestAnimationFrame(() => {
+      window.dispatchEvent(new Event(chartDrawingVisibilityRefreshEvent))
+    })
+  }, [period, symbol])
 
   useEffect(() => {
     if (!chartRef.current) return
@@ -84,7 +93,7 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     window.requestAnimationFrame(() => {
       if (chart) {
         cleanupDragCursor = installChartDragCursor(chart)
-        cleanupDrawingTools = installChartDrawingTools(chart)
+        cleanupDrawingTools = installChartDrawingTools(chart, () => chartContextRef.current.period)
       }
     })
     if (chart && domPaneTitleOverlayEnabled) {

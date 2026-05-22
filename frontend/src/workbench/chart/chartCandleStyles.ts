@@ -14,6 +14,7 @@ import {
   resolveStatusTitle,
 } from './chartStyleReaders'
 import { lastRealKLine } from './chartFuturePlaceholders'
+import { createPriceAxisLabelTextStyle } from './chartPriceLabelStyles'
 import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
 
 export function applyCandleBarStyle(chart: Chart) {
@@ -54,16 +55,7 @@ export function applyLastPriceLineStyle(chart: Chart) {
           downColor: barStyle.downColor,
           line: { dashedValue: [2, 2], show: selectedParts.includes('line'), size: 1, style: LineType.Dashed },
           noChangeColor: barStyle.noChangeColor,
-          text: {
-            borderRadius: 0,
-            family: chartNumberFontFamily,
-            show: selectedParts.includes('value') && !countdownVisible,
-            paddingBottom: 2,
-            paddingLeft: 6,
-            paddingRight: 7,
-            paddingTop: 4,
-            weight: chartNumberFontWeight,
-          },
+          text: createPriceAxisLabelTextStyle(selectedParts.includes('value') && !countdownVisible),
           upColor: barStyle.upColor,
         },
         low: {

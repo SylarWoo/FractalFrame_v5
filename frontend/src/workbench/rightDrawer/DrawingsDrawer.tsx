@@ -1,10 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { readBooleanFlag, readString, writeBooleanFlag, writeString } from '../persistence/jsonStorage'
-import { SettingsLineSwatch } from '../settings/SettingsSwatches'
+import { OpenableSelect } from '../controls/OpenableSelect'
+import { readString, writeString } from '../persistence/jsonStorage'
+import { SettingsColorSwatch, SettingsLineSwatch } from '../settings/SettingsSwatches'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import { VisibilityRangePanel } from '../visibilityRange/VisibilityRangePanel'
-import { publishDrawingToolCommand } from './drawingToolCommands'
+import {
+  createDefaultDrawingLineStyle,
+  createDefaultDrawingTextStyle,
+  normalizeDrawingTextStyle,
+  readDrawingLineStyle,
+  readDrawingPersistence,
+  readDrawingPriceLabel,
+  readDrawingTextStyle,
+  writeDrawingLineStyle,
+  writeDrawingPersistence,
+  writeDrawingPriceLabel,
+  writeDrawingTextStyle,
+} from './drawingPersistence'
+import type { DrawingTextStyle } from './drawingPersistence'
+import { drawingToolStateEvent, isDrawingToolStateEvent, publishDrawingToolCommand } from './drawingToolCommands'
 import './DrawingsDrawer.css'
 
 type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'cursor'
@@ -50,34 +65,42 @@ function readCursorMode() {
   return readString(cursorModeStorageKey, 'cursor') === 'crosshair' ? 'crosshair' : 'cursor'
 }
 
-function createDefaultDrawingLineStyle(color = '#2962ff'): SettingsLineSwatchValue {
-  return {
-    hex: color,
-    lineStyle: 'solid',
-    opacity: 1,
-    thickness: 1,
-  }
-}
-
 export function DrawingsDrawer() {
   const [selectedKey, setSelectedKey] = useState<DrawingToolKey>(readInitialSelectedTool)
   const [armedKey, setArmedKey] = useState<DrawingToolKey | null>(null)
   const [activeTab, setActiveTab] = useState<DrawingTab>('style')
   const [persistedTools, setPersistedTools] = useState<Record<string, boolean>>(() => Object.fromEntries(
-    drawingTools.map((tool) => [tool.key, readBooleanFlag(`fractalframe.drawingsDrawer.persist.${tool.key}`, true)]),
+    drawingTools.map((tool) => [tool.key, readDrawingPersistence(tool.key)]),
   ))
   const [lockedTools, setLockedTools] = useState<Record<string, boolean>>({})
+  const [priceLabelTools, setPriceLabelTools] = useState<Record<string, boolean>>(() => Object.fromEntries(
+    drawingTools.map((tool) => [tool.key, readDrawingPriceLabel(tool.key)]),
+  ))
+  const [selectedDrawing, setSelectedDrawing] = useState<{ lineStyle?: SettingsLineSwatchValue; locked: boolean; price?: number; showPriceLabel: boolean; textStyle?: DrawingTextStyle; tool: DrawingToolKey } | null>(null)
   const [lineStyles, setLineStyles] = useState<Record<string, SettingsLineSwatchValue>>(() => ({
-    fibRetracement: createDefaultDrawingLineStyle('#787b86'),
-    horizontalLine: createDefaultDrawingLineStyle('#0f766e'),
-    ruler: createDefaultDrawingLineStyle('#2962ff'),
-    trendLine: createDefaultDrawingLineStyle('#2962ff'),
+    fibRetracement: readDrawingLineStyle('fibRetracement', createDefaultDrawingLineStyle('#787b86')),
+    horizontalLine: readDrawingLineStyle('horizontalLine', createDefaultDrawingLineStyle('#0f766e')),
+    ruler: readDrawingLineStyle('ruler', createDefaultDrawingLineStyle('#2962ff')),
+    trendLine: readDrawingLineStyle('trendLine', createDefaultDrawingLineStyle('#2962ff')),
+  }))
+  const [textStyles, setTextStyles] = useState<Record<string, DrawingTextStyle>>(() => ({
+    fibRetracement: createDefaultDrawingTextStyle(),
+    horizontalLine: readDrawingTextStyle('horizontalLine'),
+    ruler: createDefaultDrawingTextStyle(),
+    trendLine: createDefaultDrawingTextStyle(),
   }))
   const [cursorMode, setCursorMode] = useState<CursorMode>(readCursorMode)
   const [topHeight, setTopHeight] = useState(defaultTopHeight)
   const selectedTool = drawingTools.find((tool) => tool.key === selectedKey) ?? drawingTools[0]
   const selectedPersisted = persistedTools[selectedKey] !== false
-  const selectedLocked = lockedTools[selectedKey] === true
+  const selectedLocked = selectedDrawing?.tool === selectedKey ? selectedDrawing.locked : lockedTools[selectedKey] === true
+  const selectedPriceLabel = selectedDrawing?.tool === selectedKey ? selectedDrawing.showPriceLabel : priceLabelTools[selectedKey] !== false
+  const selectedLineStyle = selectedDrawing?.tool === selectedKey && selectedDrawing.lineStyle
+    ? selectedDrawing.lineStyle
+    : lineStyles[selectedTool.key] ?? createDefaultDrawingLineStyle()
+  const selectedTextStyle = normalizeDrawingTextStyle(selectedDrawing?.tool === selectedKey && selectedDrawing.textStyle
+    ? selectedDrawing.textStyle
+    : textStyles[selectedTool.key] ?? createDefaultDrawingTextStyle())
   const tabs = selectedTool.tabs ?? []
   const visibleTab = tabs.includes(activeTab) ? activeTab : tabs[0] ?? 'style'
 
@@ -89,13 +112,46 @@ export function DrawingsDrawer() {
 
   function setPersistence(enabled: boolean) {
     setPersistedTools((current) => ({ ...current, [selectedKey]: enabled }))
-    writeBooleanFlag(`fractalframe.drawingsDrawer.persist.${selectedKey}`, enabled)
+    writeDrawingPersistence(selectedKey, enabled)
+    if (selectedKey !== 'horizontalLine') return
+    publishDrawingToolCommand({
+      action: 'updatePersistence',
+      persisted: enabled,
+      tool: 'horizontalLine',
+    })
   }
 
   function setCursor(next: CursorMode) {
     setCursorMode(next)
     writeString(cursorModeStorageKey, next)
   }
+
+  useEffect(() => {
+    const handleState = (event: Event) => {
+      if (!isDrawingToolStateEvent(event)) return
+      if (!event.detail.armed) setArmedKey((current) => current === event.detail.tool ? null : current)
+      setSelectedDrawing(event.detail.selected ? {
+        lineStyle: event.detail.lineStyle,
+        locked: event.detail.locked,
+        price: event.detail.price,
+        showPriceLabel: event.detail.showPriceLabel,
+        textStyle: event.detail.textStyle,
+        tool: event.detail.tool,
+      } : null)
+    }
+    window.addEventListener(drawingToolStateEvent, handleState)
+    return () => {
+      window.removeEventListener(drawingToolStateEvent, handleState)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedKey !== 'horizontalLine' || visibleTab !== 'coords') return
+    publishDrawingToolCommand({
+      action: 'refreshSelectedState',
+      tool: 'horizontalLine',
+    })
+  }, [selectedKey, visibleTab])
 
   function armSelectedTool() {
     setArmedKey(selectedKey)
@@ -104,6 +160,8 @@ export function DrawingsDrawer() {
       action: 'start',
       lineStyle: lineStyles.horizontalLine ?? createDefaultDrawingLineStyle('#0f766e'),
       locked: selectedLocked,
+      showPriceLabel: selectedPriceLabel,
+      textStyle: selectedTextStyle,
       tool: 'horizontalLine',
     })
   }
@@ -113,6 +171,71 @@ export function DrawingsDrawer() {
     if (selectedKey !== 'horizontalLine') return
     publishDrawingToolCommand({
       action: 'release',
+      tool: 'horizontalLine',
+    })
+  }
+
+  function toggleSelectedLock() {
+    if (selectedDrawing?.tool === selectedKey) {
+      publishDrawingToolCommand({
+        action: 'toggleSelectedLock',
+        tool: 'horizontalLine',
+      })
+      return
+    }
+    setLockedTools((current) => ({ ...current, [selectedKey]: !selectedLocked }))
+  }
+
+  function deleteSelectedDrawing() {
+    if (selectedKey !== 'horizontalLine') return
+    publishDrawingToolCommand({
+      action: 'deleteSelected',
+      tool: 'horizontalLine',
+    })
+  }
+
+  function setSelectedPriceLabel(enabled: boolean) {
+    setPriceLabelTools((current) => ({ ...current, [selectedKey]: enabled }))
+    writeDrawingPriceLabel(selectedKey, enabled)
+    if (selectedDrawing?.tool !== selectedKey || selectedKey !== 'horizontalLine') return
+    publishDrawingToolCommand({
+      action: 'updateSelectedPriceLabel',
+      showPriceLabel: enabled,
+      tool: 'horizontalLine',
+    })
+  }
+
+  function setSelectedLineStyle(value: SettingsLineSwatchValue) {
+    setLineStyles((current) => ({ ...current, [selectedTool.key]: value }))
+    writeDrawingLineStyle(selectedTool.key, value)
+    if (selectedKey !== 'horizontalLine') return
+    publishDrawingToolCommand({
+      action: 'updateSelectedLineStyle',
+      lineStyle: value,
+      tool: 'horizontalLine',
+    })
+  }
+
+  function setSelectedTextStyle(value: DrawingTextStyle) {
+    const normalized = normalizeDrawingTextStyle(value)
+    setTextStyles((current) => ({ ...current, [selectedTool.key]: normalized }))
+    writeDrawingTextStyle(selectedTool.key, normalized)
+    if (selectedKey !== 'horizontalLine') return
+    publishDrawingToolCommand({
+      action: 'updateSelectedTextStyle',
+      textStyle: normalized,
+      tool: 'horizontalLine',
+    })
+  }
+
+  function setSelectedPrice(price: number) {
+    if (selectedKey !== 'horizontalLine') return
+    setSelectedDrawing((current) => current?.tool === 'horizontalLine'
+      ? { ...current, price }
+      : current)
+    publishDrawingToolCommand({
+      action: 'updateSelectedPrice',
+      price,
       tool: 'horizontalLine',
     })
   }
@@ -222,9 +345,9 @@ export function DrawingsDrawer() {
                 ariaLabel={`${selectedTool.label} actions`}
                 className="ff-drawing-hline-actions-v1--segmented"
                 items={[
-                  { active: false, label: '\u9009\u4e2d', onClick: () => undefined },
-                  { active: selectedLocked, label: '\u9501\u5b9a', onClick: () => setLockedTools((current) => ({ ...current, [selectedKey]: !selectedLocked })) },
-                  { active: false, label: '\u5220\u9664', onClick: () => undefined },
+                  { active: selectedDrawing?.tool === selectedKey, label: '\u9009\u4e2d', onClick: () => undefined },
+                  { active: selectedLocked, label: '\u9501\u5b9a', onClick: toggleSelectedLock },
+                  { active: false, label: '\u5220\u9664', onClick: deleteSelectedDrawing },
                 ]}
               />
               <div className="ff-drawing-hline-settings-v1">
@@ -253,9 +376,15 @@ export function DrawingsDrawer() {
                       role="tabpanel"
                     >
                       <DrawingTabPanel
-                        lineStyle={lineStyles[selectedTool.key] ?? createDefaultDrawingLineStyle()}
-                        onLineStyleChange={(value) => setLineStyles((current) => ({ ...current, [selectedTool.key]: value }))}
+                        lineStyle={selectedLineStyle}
+                        onLineStyleChange={setSelectedLineStyle}
+                        onPriceLabelChange={setSelectedPriceLabel}
+                        onTextStyleChange={setSelectedTextStyle}
+                        priceLabelVisible={selectedPriceLabel}
+                        selectedDrawing={selectedDrawing}
+                        onPriceChange={setSelectedPrice}
                         tab={tab}
+                        textStyle={selectedTextStyle}
                         tool={selectedTool}
                       />
                     </div>
@@ -319,29 +448,55 @@ function CursorToolPanel({
 function DrawingTabPanel({
   lineStyle,
   onLineStyleChange,
+  onPriceLabelChange,
+  onPriceChange,
+  onTextStyleChange,
+  priceLabelVisible,
+  selectedDrawing,
   tab,
+  textStyle,
   tool,
 }: {
   lineStyle: SettingsLineSwatchValue
   onLineStyleChange: (value: SettingsLineSwatchValue) => void
+  onPriceLabelChange: (enabled: boolean) => void
+  onPriceChange: (price: number) => void
+  onTextStyleChange: (value: DrawingTextStyle) => void
+  priceLabelVisible: boolean
+  selectedDrawing: { locked: boolean; price?: number; tool: DrawingToolKey } | null
   tab: DrawingTab
+  textStyle: DrawingTextStyle
   tool: DrawingTool
 }) {
   if (tab === 'visibility') {
     return <VisibilityRangePanel storageKey={`drawing:${tool.key}`} />
   }
-  if (tab === 'style') return <DrawingStylePanel lineStyle={lineStyle} onLineStyleChange={onLineStyleChange} tool={tool} />
-  if (tab === 'text') return <DrawingTextPanel />
-  return <DrawingCoordsPanel tool={tool} />
+  if (tab === 'style') {
+    return (
+      <DrawingStylePanel
+        lineStyle={lineStyle}
+        onLineStyleChange={onLineStyleChange}
+        onPriceLabelChange={onPriceLabelChange}
+        priceLabelVisible={priceLabelVisible}
+        tool={tool}
+      />
+    )
+  }
+  if (tab === 'text') return <DrawingTextPanel onTextStyleChange={onTextStyleChange} textStyle={textStyle} />
+  return <DrawingCoordsPanel onPriceChange={onPriceChange} selectedDrawing={selectedDrawing} tool={tool} />
 }
 
 function DrawingStylePanel({
   lineStyle,
   onLineStyleChange,
+  onPriceLabelChange,
+  priceLabelVisible,
   tool,
 }: {
   lineStyle: SettingsLineSwatchValue
   onLineStyleChange: (value: SettingsLineSwatchValue) => void
+  onPriceLabelChange: (enabled: boolean) => void
+  priceLabelVisible: boolean
   tool: DrawingTool
 }) {
   return (
@@ -361,7 +516,7 @@ function DrawingStylePanel({
       <div className="ff-drawing-tline-tv-row-v1">
         <span className="ff-drawing-tline-tv-label-v1">{'\u4ef7\u683c\u6807\u7b7e'}</span>
         <label className="ff-drawing-tline-tv-check-row-v1">
-          <input defaultChecked type="checkbox" />
+          <input checked={priceLabelVisible} onChange={(event) => onPriceLabelChange(event.target.checked)} type="checkbox" />
           <span className="ff-drawing-tline-tv-check-box-v1" />
         </label>
       </div>
@@ -380,38 +535,185 @@ function DrawingStylePanel({
   )
 }
 
-function DrawingTextPanel() {
+function DrawingTextPanel({
+  onTextStyleChange,
+  textStyle,
+}: {
+  onTextStyleChange: (value: DrawingTextStyle) => void
+  textStyle: DrawingTextStyle
+}) {
+  const displayTextStyle = normalizeDrawingTextStyle(textStyle)
+  useEffect(() => {
+    if (displayTextStyle.body === textStyle.body) return
+    onTextStyleChange(displayTextStyle)
+  }, [displayTextStyle, onTextStyleChange, textStyle.body])
+
+  const update = (patch: Partial<DrawingTextStyle>) => {
+    onTextStyleChange(normalizeDrawingTextStyle({ ...displayTextStyle, ...patch }))
+  }
+
   return (
     <div className="ff-drawing-hline-text-tab-v1">
+      <p className="ff-drawing-hline-text-tab-v1__hint">{'\u672a\u9009\u4e2d\u6c34\u5e73\u7ebf\uff1a\u6b64\u5904\u7f16\u8f91\u7684\u662f\u65b0\u753b\u7ebf\u7684\u9ed8\u8ba4\u6587\u5b57\u3002'}</p>
       <div className="ff-drawing-hline-text-tab-v1__toolbar">
-        <select className="ff-drawing-hline-text-tab-v1__font-size" defaultValue="12" aria-label="Font size">
-          <option value="10">10</option>
-          <option value="12">12</option>
-          <option value="14">14</option>
-          <option value="16">16</option>
-        </select>
-        <button className="ff-drawing-hline-text-tab-v1__toggle" type="button">B</button>
-        <button className="ff-drawing-hline-text-tab-v1__toggle" type="button">I</button>
+        <SettingsColorSwatch
+          color={displayTextStyle.textColor}
+          onChange={(value) => update({ textColor: value.hex })}
+          value={{ hex: displayTextStyle.textColor, opacity: 1 }}
+        />
+        <OpenableSelect
+          ariaLabel="Font size"
+          className="ff-drawing-hline-text-tab-v1__font-size"
+          onChange={(value) => update({ fontSize: Number(value) })}
+          options={[
+            { label: '10', value: '10' },
+            { label: '12', value: '12' },
+            { label: '14', value: '14' },
+            { label: '16', value: '16' },
+            { label: '18', value: '18' },
+            { label: '20', value: '20' },
+            { label: '24', value: '24' },
+          ]}
+          value={String(displayTextStyle.fontSize)}
+        />
+        <button
+          aria-pressed={displayTextStyle.bold}
+          className="ff-drawing-hline-text-tab-v1__toggle"
+          data-active={displayTextStyle.bold ? 'true' : undefined}
+          onClick={() => update({ bold: !displayTextStyle.bold })}
+          type="button"
+        >
+          B
+        </button>
+        <button
+          aria-pressed={displayTextStyle.italic}
+          className="ff-drawing-hline-text-tab-v1__toggle"
+          data-active={displayTextStyle.italic ? 'true' : undefined}
+          onClick={() => update({ italic: !displayTextStyle.italic })}
+          type="button"
+        >
+          I
+        </button>
       </div>
-      <textarea className="ff-drawing-hline-text-tab-v1__textarea" rows={4} />
+      <textarea
+        className="ff-drawing-hline-text-tab-v1__textarea"
+        onChange={(event) => update({ body: event.target.value })}
+        placeholder="添加文字"
+        rows={4}
+        spellCheck={false}
+        value={displayTextStyle.body}
+      />
       <div className="ff-drawing-hline-text-tab-v1__align-row">
         <span className="ff-drawing-hline-text-tab-v1__align-label">{'\u5bf9\u9f50'}</span>
-        <select className="ff-drawing-hline-text-tab-v1__align-select" defaultValue="center" aria-label="Text align">
-          <option value="left">{'\u5de6'}</option>
-          <option value="center">{'\u4e2d'}</option>
-          <option value="right">{'\u53f3'}</option>
-        </select>
+        <OpenableSelect
+          ariaLabel="\u5782\u76f4\u5bf9\u9f50"
+          className="ff-drawing-hline-text-tab-v1__align-select"
+          options={[
+            { label: '\u9876\u90e8', value: 'top' },
+            { label: '\u4e2d\u95f4', value: 'middle' },
+            { label: '\u5e95\u90e8', value: 'bottom' },
+          ]}
+          onChange={(value) => update({ alignV: value as DrawingTextStyle['alignV'] })}
+          value={displayTextStyle.alignV}
+        />
+        <OpenableSelect
+          ariaLabel="\u6c34\u5e73\u5bf9\u9f50"
+          className="ff-drawing-hline-text-tab-v1__align-select"
+          options={[
+            { label: '\u5de6', value: 'left' },
+            { label: '\u4e2d', value: 'center' },
+            { label: '\u53f3', value: 'right' },
+          ]}
+          onChange={(value) => update({ alignH: value as DrawingTextStyle['alignH'] })}
+          value={displayTextStyle.alignH}
+        />
       </div>
     </div>
   )
 }
 
-function DrawingCoordsPanel({ tool }: { tool: DrawingTool }) {
-  const twoPoint = tool.key !== 'horizontalLine'
+function DrawingCoordsPanel({
+  onPriceChange,
+  selectedDrawing,
+  tool,
+}: {
+  onPriceChange: (price: number) => void
+  selectedDrawing: { locked: boolean; price?: number; tool: DrawingToolKey } | null
+  tool: DrawingTool
+}) {
+  if (tool.key === 'horizontalLine') {
+    return (
+      <HorizontalLineCoordsPanel
+        locked={selectedDrawing?.tool === 'horizontalLine' && selectedDrawing.locked}
+        onPriceChange={onPriceChange}
+        price={selectedDrawing?.tool === 'horizontalLine' ? selectedDrawing.price : undefined}
+        selected={selectedDrawing?.tool === 'horizontalLine'}
+      />
+    )
+  }
+  const twoPoint = true
   return (
     <div className="ff-drawing-tline-coords-v1">
       <CoordinateRow label={twoPoint ? '1' : '\u4ef7\u683c'} />
       {twoPoint ? <CoordinateRow label="2" /> : null}
+    </div>
+  )
+}
+
+function HorizontalLineCoordsPanel({
+  locked,
+  onPriceChange,
+  price,
+  selected,
+}: {
+  locked: boolean
+  onPriceChange: (price: number) => void
+  price?: number
+  selected: boolean
+}) {
+  const [draft, setDraft] = useState('')
+
+  useEffect(() => {
+    setDraft(Number.isFinite(price) ? String(Number(price)) : '')
+  }, [price])
+
+  if (!selected) {
+    return <p className="ff-drawing-hline-coords-tab-v1__hint">{'\u672a\u9009\u4e2d\u6c34\u5e73\u7ebf\uff1a\u8bf7\u5148\u5728\u56fe\u4e0a\u9009\u4e2d\u4e00\u6761\u6c34\u5e73\u7ebf\uff0c\u518d\u5728\u6b64\u4fee\u6539\u4ef7\u683c\u5750\u6807\u3002'}</p>
+  }
+
+  if (locked) {
+    return <p className="ff-drawing-hline-coords-tab-v1__hint">{'\u5f53\u524d\u9009\u4e2d\u7684\u6c34\u5e73\u7ebf\u5df2\u9501\u5b9a\uff0c\u65e0\u6cd5\u4fee\u6539\u5750\u6807\u3002\u8bf7\u5148\u89e3\u9501\u3002'}</p>
+  }
+
+  const commit = () => {
+    const nextPrice = Number(draft.trim().replace(/,/g, ''))
+    if (!Number.isFinite(nextPrice)) return
+    onPriceChange(nextPrice)
+  }
+
+  return (
+    <div className="ff-drawing-hline-coords-tab-v1">
+      <div className="ff-drawing-hline-coords-tab-v1__row">
+        <label className="ff-drawing-hline-coords-tab-v1__label" htmlFor="ff-drawing-hline-coords-price-v1">
+          {'#1\uff08\u4ef7\u683c\uff09'}
+        </label>
+        <input
+          autoComplete="off"
+          className="ff-drawing-hline-coords-tab-v1__input"
+          id="ff-drawing-hline-coords-price-v1"
+          inputMode="decimal"
+          onBlur={commit}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return
+            event.preventDefault()
+            commit()
+          }}
+          step="any"
+          type="number"
+          value={draft}
+        />
+      </div>
     </div>
   )
 }

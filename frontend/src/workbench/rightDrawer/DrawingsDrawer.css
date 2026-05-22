@@ -166,6 +166,12 @@
   box-sizing: border-box;
 }
 
+.ff-drawing-hline-text-tab-v1__hint {
+  margin: 0 0 10px;
+  color: #64748b;
+  font: 12px/1.4 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
 .ff-drawing-hline-text-tab-v1__toolbar {
   display: flex;
   align-items: center;
@@ -174,20 +180,21 @@
   flex-wrap: wrap;
 }
 
-.ff-drawing-hline-text-tab-v1__font-size,
-.ff-drawing-hline-text-tab-v1__align-select {
-  height: 28px;
-  padding: 0 6px;
-  border: 1px solid #d1d4dc;
-  border-radius: 4px;
-  background: #ffffff;
-  box-sizing: border-box;
-  color: #131722;
-  font: 12px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-
 .ff-drawing-hline-text-tab-v1__font-size {
   width: 78px;
+}
+
+.ff-drawing-hline-text-tab-v1__font-size .ff-openable-select__button,
+.ff-drawing-hline-text-tab-v1__align-select .ff-openable-select__button {
+  height: 29px;
+}
+
+.ff-drawing-hline-text-tab-v1__align-select {
+  width: 72px;
+}
+
+.ff-drawing-hline-text-tab-v1__align-select .ff-openable-select__button {
+  padding: 0 8px;
 }
 
 .ff-drawing-hline-text-tab-v1__toggle {
@@ -204,6 +211,12 @@
 
 .ff-drawing-hline-text-tab-v1__toggle:hover {
   background: #f8fafc;
+}
+
+.ff-drawing-hline-text-tab-v1__toggle[data-active='true'] {
+  border-color: #2962ff;
+  background: #eff6ff;
+  color: #0f172a;
 }
 
 .ff-drawing-hline-text-tab-v1__textarea {
@@ -230,7 +243,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 12px;
+  margin-top: 14px;
   flex-wrap: wrap;
 }
 
@@ -280,6 +293,51 @@
   border-color: #2962ff;
   outline: none;
   box-shadow: 0 0 0 1px #2962ff;
+}
+
+.ff-drawing-hline-coords-tab-v1 {
+  padding-top: 26px;
+  color: #131722;
+  font: 13px/1.25 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.ff-drawing-hline-coords-tab-v1__row {
+  display: grid;
+  grid-template-columns: auto 100px;
+  align-items: center;
+  justify-content: start;
+  gap: 14px;
+}
+
+.ff-drawing-hline-coords-tab-v1__label {
+  color: #131722;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ff-drawing-hline-coords-tab-v1__input {
+  width: 100px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d1d4dc;
+  border-radius: 6px;
+  background: #ffffff;
+  box-sizing: border-box;
+  color: #131722;
+  font: 13px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.ff-drawing-hline-coords-tab-v1__input:focus {
+  border-color: #2962ff;
+  outline: none;
+  box-shadow: 0 0 0 1px #2962ff;
+}
+
+.ff-drawing-hline-coords-tab-v1__hint {
+  margin: 16px 0 0;
+  color: #64748b;
+  font: 12px/1.4 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 body[data-fractalframe-drawings-splitting='true'],

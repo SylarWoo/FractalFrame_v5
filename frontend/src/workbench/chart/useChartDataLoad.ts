@@ -82,7 +82,6 @@ export function useChartDataLoad({
       })
     }
 
-    chart.unsubscribeAction(ActionType.OnDataReady)
     chart.subscribeAction(ActionType.OnDataReady, finishLoaded)
     setLoadState({
       error: false,

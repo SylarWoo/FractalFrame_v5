@@ -1,4 +1,5 @@
 import type { ReactNode, PointerEvent as ReactPointerEvent } from 'react'
+import { ObjectTreeIcon } from './RightDrawerIcons'
 import type { RightDrawerId } from './RightDrawerTypes'
 
 type RightDrawerFrameProps = {
@@ -14,6 +15,7 @@ type RightDrawerFrameProps = {
 
 function resolveRightDrawerTitle(activeDrawer: RightDrawerId | null) {
   if (activeDrawer === 'drawings') return 'Drawings'
+  if (activeDrawer === 'objectTree') return 'Object Tree'
   if (activeDrawer === 'indicators') return 'Indicators'
   if (activeDrawer === 'settings') return 'Settings'
   return 'MT5 Import Center'
@@ -38,6 +40,9 @@ export function RightDrawerFrame({
             <path d="M42.55,39.0406,24.9023,21.2927l3.9106-.8022-5.0136-5.0136L25.905,8.7588l-6.9187,1.9051L14.2736,5.55,12.6692,12.168,5.55,13.6721l5.2141,5.0135L8.4579,25.504l7.0189-2.0054,4.813,5.2141,1.103-3.81L38.94,42.45C40.344,42.65,42.35,40.2439,42.55,39.0406Z" />
             <path d="M21.3928,24.9024l-5.3144-5.0135a4.5925,4.5925,0,0,1,3.71-3.71l5.1138,5.1138" />
           </svg>
+        </button>
+        <button className="ff-right-rail__button" data-active={activeDrawer === 'objectTree'} onClick={() => onToggleDrawer('objectTree')} title="Object Tree" type="button">
+          <ObjectTreeIcon />
         </button>
         <button className="ff-right-rail__button" data-active={activeDrawer === 'indicators'} onClick={() => onToggleDrawer('indicators')} title="指标" type="button">
           <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">

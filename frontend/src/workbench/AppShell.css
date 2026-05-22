@@ -103,3 +103,7 @@
   overflow: hidden;
   background: #ffffff;
 }
+
+.ff-app-shell button:not(.ff-indicators-split-v1__handle) {
+  cursor: default !important;
+}
