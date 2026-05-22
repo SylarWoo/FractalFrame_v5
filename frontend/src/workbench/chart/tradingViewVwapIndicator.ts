@@ -4,6 +4,7 @@ import { defaultVwapIndicatorSettings } from '../rightDrawer/indicatorPersistenc
 import type { VwapAnchorPeriod, VwapIndicatorSettings, VwapSource } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 
 type VwapIndicatorRow = {
   lowerBand1?: number
@@ -310,6 +311,9 @@ export function ensureTradingViewVwapIndicator() {
       ctx.restore()
       return false
     },
-    calc: (dataList, indicator) => calculateTradingViewVwapRows(dataList, indicator.calcParams[0] as VwapCalcSettings | undefined),
+    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
+      dataList,
+      (realRows) => calculateTradingViewVwapRows(realRows, indicator.calcParams[0] as VwapCalcSettings | undefined),
+    ),
   })
 }

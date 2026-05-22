@@ -4,6 +4,7 @@ import { defaultStochIndicatorSettings } from '../rightDrawer/indicatorPersisten
 import type { StochIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 
 type StochIndicatorRow = {
   d?: number
@@ -278,6 +279,9 @@ export function ensureTradingViewStochIndicator() {
       drawStochLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'd', settings.dColor, settings.dVisible, settings.dLineStyle, settings.dLineWidth, settings.dOpacity)
       return true
     },
-    calc: (dataList, indicator) => calculateTradingViewStochRows(dataList, indicator.calcParams[0]),
+    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
+      dataList,
+      (realRows) => calculateTradingViewStochRows(realRows, indicator.calcParams[0]),
+    ),
   })
 }

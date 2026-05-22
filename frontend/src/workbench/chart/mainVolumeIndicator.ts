@@ -4,6 +4,7 @@ import { defaultVolIndicatorSettings } from '../rightDrawer/indicatorPersistence
 import type { VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 
 const candlePaneId = 'candle_pane'
 const overlayClassName = 'ff-main-volume-overlay-canvas'
@@ -185,7 +186,10 @@ export function ensureMainVolumeLegendIndicator() {
         values,
       }
     },
-    calc: (dataList, indicator) => calculateLegendRows(dataList, indicator.calcParams[0]),
+    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
+      dataList,
+      (realRows) => calculateLegendRows(realRows, indicator.calcParams[0]),
+    ),
   })
 }
 

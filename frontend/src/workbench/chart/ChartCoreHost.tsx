@@ -18,6 +18,7 @@ import { ensureTradingViewTsiIndicator } from './tradingViewTsiIndicator'
 import { ensureTradingViewViIndicator } from './tradingViewViIndicator'
 import { ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
 import type { MacdIndicatorSettings, MaIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import './ChartCoreHost.css'
 
 const rsiPaneId = 'rsi_pane'
@@ -198,6 +199,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const observeMacdPaneHeight = () => observeIndicatorPaneHeight(macdPaneId, macdPaneHeightStorageKey, macdPaneHeightObserverRef)
   const observeTsiPaneHeight = () => observeIndicatorPaneHeight(tsiPaneId, tsiPaneHeightStorageKey, tsiPaneHeightObserverRef)
   const observeViPaneHeight = () => observeIndicatorPaneHeight(viPaneId, viPaneHeightStorageKey, viPaneHeightObserverRef)
+  const isIndicatorVisibleInCurrentPeriod = (name: ChartIndicatorCommand['name']) => isStoredVisibilityRangePeriodVisible(`indicator:${name}`, period)
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -207,6 +209,16 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       ensureTradingViewRsiIndicator()
 
       if (indicatorCommand.action === 'load') {
+        if (!isIndicatorVisibleInCurrentPeriod('RSI')) {
+          const size = chart.getSize(rsiPaneId)
+          if (size?.height) writeStoredPaneHeight(rsiPaneHeightStorageKey, size.height)
+          rsiPaneHeightObserverRef.current?.disconnect()
+          rsiPaneHeightObserverRef.current = null
+          chart.removeIndicator(rsiPaneId, 'RSI')
+          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+          scheduleUnlockYAxisManualDrag(chart)
+          return
+        }
         if (chart.getIndicatorByPaneId(rsiPaneId, 'RSI')) {
           chart.overrideIndicator({ name: 'RSI', calcParams: [indicatorCommand.settings] }, rsiPaneId, observeRsiPaneHeight)
           window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
@@ -240,6 +252,16 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       ensureTradingViewStochIndicator()
 
       if (indicatorCommand.action === 'load') {
+        if (!isIndicatorVisibleInCurrentPeriod('Stoch')) {
+          const size = chart.getSize(stochPaneId)
+          if (size?.height) writeStoredPaneHeight(stochPaneHeightStorageKey, size.height)
+          stochPaneHeightObserverRef.current?.disconnect()
+          stochPaneHeightObserverRef.current = null
+          chart.removeIndicator(stochPaneId, 'Stoch')
+          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+          scheduleUnlockYAxisManualDrag(chart)
+          return
+        }
         if (chart.getIndicatorByPaneId(stochPaneId, 'Stoch')) {
           chart.overrideIndicator({ name: 'Stoch', calcParams: [indicatorCommand.settings] }, stochPaneId, observeStochPaneHeight)
           window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
@@ -273,6 +295,16 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       ensureTradingViewMacdIndicator()
 
       if (indicatorCommand.action === 'load') {
+        if (!isIndicatorVisibleInCurrentPeriod('MACD')) {
+          const size = chart.getSize(macdPaneId)
+          if (size?.height) writeStoredPaneHeight(macdPaneHeightStorageKey, size.height)
+          macdPaneHeightObserverRef.current?.disconnect()
+          macdPaneHeightObserverRef.current = null
+          chart.removeIndicator(macdPaneId, 'MACD')
+          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+          scheduleUnlockYAxisManualDrag(chart)
+          return
+        }
         if (chart.getIndicatorByPaneId(macdPaneId, 'MACD')) {
           chart.overrideIndicator({ name: 'MACD', calcParams: [indicatorCommand.settings] }, macdPaneId, observeMacdPaneHeight)
           scheduleResetIndicatorYAxisAutoScale(chart, [macdPaneId])
@@ -308,6 +340,16 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       ensureTradingViewTsiIndicator()
 
       if (indicatorCommand.action === 'load') {
+        if (!isIndicatorVisibleInCurrentPeriod('TSI')) {
+          const size = chart.getSize(tsiPaneId)
+          if (size?.height) writeStoredPaneHeight(tsiPaneHeightStorageKey, size.height)
+          tsiPaneHeightObserverRef.current?.disconnect()
+          tsiPaneHeightObserverRef.current = null
+          chart.removeIndicator(tsiPaneId, 'TSI')
+          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+          scheduleUnlockYAxisManualDrag(chart)
+          return
+        }
         if (chart.getIndicatorByPaneId(tsiPaneId, 'TSI')) {
           chart.overrideIndicator({ name: 'TSI', calcParams: [indicatorCommand.settings] }, tsiPaneId, observeTsiPaneHeight)
           window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
@@ -341,6 +383,16 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       ensureTradingViewViIndicator()
 
       if (indicatorCommand.action === 'load') {
+        if (!isIndicatorVisibleInCurrentPeriod('VI')) {
+          const size = chart.getSize(viPaneId)
+          if (size?.height) writeStoredPaneHeight(viPaneHeightStorageKey, size.height)
+          viPaneHeightObserverRef.current?.disconnect()
+          viPaneHeightObserverRef.current = null
+          chart.removeIndicator(viPaneId, 'VI')
+          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
+          scheduleUnlockYAxisManualDrag(chart)
+          return
+        }
         if (chart.getIndicatorByPaneId(viPaneId, 'VI')) {
           chart.overrideIndicator({ name: 'VI', calcParams: [indicatorCommand.settings] }, viPaneId, observeViPaneHeight)
           window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
@@ -374,6 +426,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       ensureTradingViewMaShiftIndicator()
 
       if (indicatorCommand.action === 'load') {
+        if (!isIndicatorVisibleInCurrentPeriod('MA')) {
+          chart.removeIndicator('candle_pane', 'MA')
+          return
+        }
         if (chart.getIndicatorByPaneId('candle_pane', 'MA')) {
           chart.overrideIndicator({ name: 'MA', calcParams: [indicatorCommand.settings] }, 'candle_pane')
           return
@@ -389,6 +445,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       const vwapSettings = { ...indicatorCommand.settings, symbol }
 
       if (indicatorCommand.action === 'load') {
+        if (!isIndicatorVisibleInCurrentPeriod('VWAP')) {
+          chart.removeIndicator('candle_pane', 'VWAP')
+          return
+        }
         if (chart.getIndicatorByPaneId('candle_pane', 'VWAP')) {
           chart.overrideIndicator({ name: 'VWAP', calcParams: [vwapSettings] }, 'candle_pane')
           return
@@ -403,6 +463,13 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       ensureMainVolumeLegendIndicator()
 
       if (indicatorCommand.action === 'load') {
+        if (!isIndicatorVisibleInCurrentPeriod('Vol')) {
+          chart.removeIndicator('candle_pane', mainVolumeIndicatorName)
+          mainVolumeOverlayRef.current?.destroy()
+          mainVolumeOverlayRef.current = null
+          refreshPane(chart, 'candle_pane')
+          return
+        }
         if (chart.getIndicatorByPaneId('candle_pane', mainVolumeIndicatorName)) {
           chart.overrideIndicator({ name: mainVolumeIndicatorName, calcParams: [indicatorCommand.settings], zLevel: -20 }, 'candle_pane')
         } else {
@@ -421,7 +488,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         refreshPane(chart, 'candle_pane')
       }
     }
-  }, [chartInstanceRef, indicatorCommand, symbol])
+  }, [chartInstanceRef, indicatorCommand, period, symbol])
 
   useEffect(() => () => {
     mainVolumeOverlayRef.current?.destroy()

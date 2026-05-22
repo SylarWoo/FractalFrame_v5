@@ -5,6 +5,7 @@ import type { Chart } from 'klinecharts'
 import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import { chartError, chartInfo } from './chartLogger'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
+import { applyNewDataWithFuturePlaceholders, stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import {
   historyPageSize,
@@ -77,7 +78,7 @@ export function useChartDataLoad({
         loadingMore: false,
         loading: false,
         requestedRows,
-        rows: chart.getDataList().length,
+        rows: stripFuturePlaceholders(chart.getDataList()).length,
       })
     }
 
@@ -108,7 +109,7 @@ export function useChartDataLoad({
             callback([], false)
             return
           }
-          const loadedRows = chart.getDataList().length + olderData.length
+          const loadedRows = stripFuturePlaceholders(chart.getDataList()).length + olderData.length
           const hasMoreOlder = resolveHasMoreOlder({
             loadedRows,
             pageSize: historyPageSize,
@@ -127,7 +128,7 @@ export function useChartDataLoad({
               loading: false,
               loadingMore: false,
               requestedRows,
-              rows: chart.getDataList().length,
+              rows: stripFuturePlaceholders(chart.getDataList()).length,
             })
           }, 0)
         })
@@ -143,7 +144,7 @@ export function useChartDataLoad({
             error: true,
             loading: false,
             loadingMore: false,
-            rows: chart.getDataList().length,
+            rows: stripFuturePlaceholders(chart.getDataList()).length,
           }))
         })
     })
@@ -233,7 +234,7 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
         target: options.jumpTimestamp,
         hasMoreOlder,
       })
-      chart.applyNewData(data, hasMoreOlder)
+      applyNewDataWithFuturePlaceholders(chart, data, options.period, hasMoreOlder)
       applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
@@ -257,14 +258,14 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
             loadingMore: false,
             loading: false,
           requestedRows: jumpDisplayWindowBars,
-          rows: chart.getDataList().length || data.length,
+          rows: stripFuturePlaceholders(chart.getDataList()).length || data.length,
         })
       }, 0))
     })
     .catch((error: unknown) => {
       if (options.shouldIgnore()) return
       chartError('[StoreV5Datafeed] request jump failed', error)
-      chart.applyNewData([], false)
+      applyNewDataWithFuturePlaceholders(chart, [], options.period, false)
       options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: jumpDisplayWindowBars, rows: 0 })
     })
 }
@@ -281,7 +282,7 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
         totalRows: options.totalRows,
       })
       chartInfo('[StoreV5Datafeed] callback init done', { rows: data.length, hasMoreOlder })
-      chart.applyNewData(data, hasMoreOlder)
+      applyNewDataWithFuturePlaceholders(chart, data, options.period, hasMoreOlder)
       applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
@@ -296,13 +297,13 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
           loadingMore: false,
           loading: false,
           requestedRows: options.requestedRows,
-          rows: chart.getDataList().length || data.length,
+          rows: stripFuturePlaceholders(chart.getDataList()).length || data.length,
         })
       }, 0))
     })
     .catch(() => {
       if (options.shouldIgnore()) return
-      chart.applyNewData([], false)
+      applyNewDataWithFuturePlaceholders(chart, [], options.period, false)
       options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: options.requestedRows, rows: 0 })
     })
 }

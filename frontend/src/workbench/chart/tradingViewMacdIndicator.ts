@@ -4,6 +4,7 @@ import { defaultMacdIndicatorSettings } from '../rightDrawer/indicatorPersistenc
 import type { MacdIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 
 type MacdIndicatorRow = {
   histogram?: number
@@ -313,6 +314,9 @@ export function ensureTradingViewMacdIndicator() {
       drawLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'signal', settings.signalColor, settings.signalVisible, settings.signalLineStyle, settings.signalLineWidth, settings.signalOpacity)
       return true
     },
-    calc: (dataList, indicator) => calculateTradingViewMacdRows(dataList, indicator.calcParams[0]),
+    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
+      dataList,
+      (realRows) => calculateTradingViewMacdRows(realRows, indicator.calcParams[0]),
+    ),
   })
 }

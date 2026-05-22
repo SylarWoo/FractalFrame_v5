@@ -4,6 +4,7 @@ import { defaultRsiIndicatorSettings } from '../rightDrawer/indicatorPersistence
 import type { RsiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 
 type RsiIndicatorRow = {
   rsi?: number
@@ -450,7 +451,10 @@ export function ensureTradingViewRsiIndicator() {
       return true
     },
     calc: (dataList, indicator) => {
-      return calculateTradingViewRsiRows(dataList, indicator.calcParams[0])
+      return calculateWithoutFuturePlaceholders(
+        dataList,
+        (realRows) => calculateTradingViewRsiRows(realRows, indicator.calcParams[0]),
+      )
     },
   })
 }

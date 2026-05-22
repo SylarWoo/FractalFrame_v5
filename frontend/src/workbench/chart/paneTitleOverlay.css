@@ -16,7 +16,7 @@
   overflow: hidden;
   color: #787b86;
   font: 13px/18px Arial, Tahoma, 'Segoe UI', sans-serif;
-  gap: 3px;
+  gap: 4px;
   white-space: nowrap;
 }
 
@@ -27,7 +27,8 @@
   min-width: 0;
   align-content: flex-start;
   align-items: flex-start;
-  column-gap: 8px;
+  column-gap: 7px;
+  row-gap: 4px;
   flex-wrap: wrap;
   overflow: hidden;
 }
@@ -36,6 +37,10 @@
   display: inline-flex;
   flex: 0 0 auto;
   min-width: 0;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 0;
+  border-radius: 0;
   white-space: nowrap;
 }
 

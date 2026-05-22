@@ -13,6 +13,7 @@ import {
   resolveCandleValueColor,
   resolveStatusTitle,
 } from './chartStyleReaders'
+import { lastRealKLine } from './chartFuturePlaceholders'
 import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
 
 export function applyCandleBarStyle(chart: Chart) {
@@ -21,7 +22,7 @@ export function applyCandleBarStyle(chart: Chart) {
 
 export function applyPriceVolumePrecision(chart: Chart, symbol?: string) {
   const dataList = chart.getDataList()
-  const latest = dataList[dataList.length - 1]
+  const latest = lastRealKLine(dataList)
   const close = latest ? Number(latest.close) : null
   chart.setPriceVolumePrecision(readPricePrecision(close, { symbol }), 0)
 }

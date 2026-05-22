@@ -8,6 +8,7 @@ import { readWatchlistRealtimeEnabled, realtimeEnabledChangedEvent } from '../mt
 import { readCandleBarStyle, resolveCandleValueColor } from './chartStyleReaders'
 import { formatGlobalPrice } from './globalPricePrecision'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
+import { lastRealKLine } from './chartFuturePlaceholders'
 
 type UseCurrentCandleCountdownOptions = {
   chartInstanceRef: MutableRefObject<Chart | null>
@@ -77,7 +78,7 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
       }
 
       const dataList = chart.getDataList()
-      const latest = dataList[dataList.length - 1]
+      const latest = lastRealKLine(dataList)
       const periodSeconds = resolvePeriodSeconds(period)
       if (!latest || !Number.isFinite(periodSeconds) || periodSeconds <= 0) {
         setState((current) => current.visible ? { ...current, visible: false } : current)

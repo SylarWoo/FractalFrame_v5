@@ -169,7 +169,7 @@ export function SettingsCoordinatesPanel() {
             value={hourFormat}
           />
         </div>
-        <SettingsCheckRow>改变周期时保存图表左边缘位置</SettingsCheckRow>
+        <SettingsCheckRow storageKey={chartSettingKeys.rightPlaceholderVisible}>{'\u53f3\u4fa7\u5360\u4f4d\u7b26'}</SettingsCheckRow>
       </section>
     </div>
   )

@@ -4,6 +4,8 @@ import type { Chart } from 'klinecharts'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
 import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
 import { formatChartDate, readChartTimezone } from './chartTimeFormatting'
+import { readRightPlaceholderVisible, refreshChartFuturePlaceholders } from './chartFuturePlaceholders'
+import { installChartDrawingTools } from './chartDrawingTools'
 import { installChartDragCursor, uninstallChartDragCursor } from './chartDragCursor'
 import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
 import { installPaneTitleOverlay } from './paneTitleOverlayManager'
@@ -78,8 +80,12 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     window.addEventListener('resize', scheduleResize)
     scheduleResize()
     let cleanupDragCursor: (() => void) | null = null
+    let cleanupDrawingTools: (() => void) | null = null
     window.requestAnimationFrame(() => {
-      if (chart) cleanupDragCursor = installChartDragCursor(chart)
+      if (chart) {
+        cleanupDragCursor = installChartDragCursor(chart)
+        cleanupDrawingTools = installChartDrawingTools(chart)
+      }
     })
     if (chart && domPaneTitleOverlayEnabled) {
       paneTitleOverlayRef.current = installPaneTitleOverlay(chart, container, { period: '', symbol: '' })
@@ -88,6 +94,7 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     return () => {
       paneTitleOverlayRef.current?.destroy()
       paneTitleOverlayRef.current = null
+      cleanupDrawingTools?.()
       cleanupDragCursor?.()
       if (chart) uninstallChartDragCursor(chart)
       if (resizeFrameId !== 0) window.cancelAnimationFrame(resizeFrameId)
@@ -123,6 +130,23 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     if (!chart) return
     applyCandleTooltipStyle(chart, symbol, period, displayName)
   }, [displayName, period, symbol])
+
+  useEffect(() => {
+    let previousVisible = readRightPlaceholderVisible()
+    const refresh = () => {
+      const nextVisible = readRightPlaceholderVisible()
+      if (nextVisible === previousVisible) return
+      previousVisible = nextVisible
+      const chart = chartInstanceRef.current
+      if (chart) refreshChartFuturePlaceholders(chart, period)
+    }
+    window.addEventListener(settingsSymbolChangedEvent, refresh)
+    window.addEventListener('storage', refresh)
+    return () => {
+      window.removeEventListener(settingsSymbolChangedEvent, refresh)
+      window.removeEventListener('storage', refresh)
+    }
+  }, [period])
 
   return { chartInstanceRef, chartRef }
 }

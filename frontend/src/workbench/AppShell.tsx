@@ -37,6 +37,7 @@ import { storageKeys } from './persistence/storageKeys'
 import { readSettingsBooleanValue, readSettingsStringValue, settingsSymbolChangedEvent } from './settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from './settings/chartSettingsSchema'
 import { TopBar } from './topbar/TopBar'
+import { visibilityRangeChangedEvent } from './visibilityRange/visibilityRangeModel'
 import './openableControl.css'
 import './AppShell.css'
 
@@ -105,6 +106,18 @@ function getPersistedIndicatorSettings(name: ChartIndicatorCommand['name']) {
   if (name === 'TSI') return persisted.tsi
   if (name === 'VI') return persisted.vi
   return persisted.rsi
+}
+
+function createLoadIndicatorCommand(name: ChartIndicatorCommand['name']): ChartIndicatorCommand {
+  const persisted = readPersistedIndicatorsState()
+  if (name === 'MA') return { action: 'load', id: Date.now(), name, settings: persisted.ma }
+  if (name === 'MACD') return { action: 'load', id: Date.now(), name, settings: persisted.macd }
+  if (name === 'VWAP') return { action: 'load', id: Date.now(), name, settings: persisted.vwap }
+  if (name === 'Vol') return { action: 'load', id: Date.now(), name, settings: persisted.vol }
+  if (name === 'Stoch') return { action: 'load', id: Date.now(), name, settings: persisted.stoch }
+  if (name === 'TSI') return { action: 'load', id: Date.now(), name, settings: persisted.tsi }
+  if (name === 'VI') return { action: 'load', id: Date.now(), name, settings: persisted.vi }
+  return { action: 'load', id: Date.now(), name: 'RSI', settings: persisted.rsi }
 }
 
 function getInitialDrawerWidth() {
@@ -330,6 +343,34 @@ export function AppShell() {
         Vol: loadedIndicatorKeys.includes('Vol'),
       },
     })
+  }, [loadedIndicatorKeys])
+
+  function refreshLoadedIndicatorsVisibility(targetKey?: string) {
+    const keys = loadedIndicatorKeys.filter((key): key is ChartIndicatorCommand['name'] => {
+      const supported = key === 'MA' || key === 'MACD' || key === 'RSI' || key === 'Stoch' || key === 'TSI' || key === 'VI' || key === 'VWAP' || key === 'Vol'
+      return supported && (!targetKey || key === targetKey)
+    })
+    keys.forEach((key, index) => {
+      window.setTimeout(() => {
+        setChartIndicatorCommand({ ...createLoadIndicatorCommand(key), id: Date.now() })
+      }, index * 30)
+    })
+  }
+
+  useEffect(() => {
+    refreshLoadedIndicatorsVisibility()
+  }, [chartTarget.period])
+
+  useEffect(() => {
+    const handleVisibilityRangeChanged = (event: Event) => {
+      const detail = event instanceof CustomEvent ? event.detail as { key?: string } : {}
+      const targetKey = typeof detail.key === 'string' && detail.key.startsWith('indicator:')
+        ? detail.key.slice('indicator:'.length)
+        : undefined
+      refreshLoadedIndicatorsVisibility(targetKey)
+    }
+    window.addEventListener(visibilityRangeChangedEvent, handleVisibilityRangeChanged)
+    return () => window.removeEventListener(visibilityRangeChangedEvent, handleVisibilityRangeChanged)
   }, [loadedIndicatorKeys])
 
   useEffect(() => {

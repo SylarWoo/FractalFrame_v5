@@ -5,6 +5,7 @@ import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import { chartError, chartInfo } from './chartLogger'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import { historyPageSize, mergeKLineData, resolveHasMoreOlder } from './chartCoreDataUtils'
+import { applyNewDataWithFuturePlaceholders, stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { applyPriceVolumePrecision, resetYAxisAutoScale } from './chartStyleAppliers'
 import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
 
@@ -34,7 +35,7 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
     if (!chart) return
 
     let disposed = false
-    const currentData = chart.getDataList()
+    const currentData = stripFuturePlaceholders(chart.getDataList())
     if (!currentData.length) return
 
     setLoadState((current) => ({
@@ -69,8 +70,8 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
         if (disposed) return
 
         const merged = stepLoad.direction === 'left'
-          ? mergeKLineData(data, chart.getDataList())
-          : mergeKLineData(chart.getDataList(), data)
+          ? mergeKLineData(data, stripFuturePlaceholders(chart.getDataList()))
+          : mergeKLineData(stripFuturePlaceholders(chart.getDataList()), data)
         const hasMoreOlder = resolveHasMoreOlder({
           loadedRows: merged.length,
           pageSize: historyPageSize,
@@ -86,7 +87,7 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
         const targetTimestamp = stepLoad.direction === 'left'
           ? data[Math.floor(data.length / 2)]?.timestamp
           : data[Math.max(0, data.length - Math.floor(data.length / 2) - 1)]?.timestamp
-        chart.applyNewData(merged, hasMoreOlder)
+        applyNewDataWithFuturePlaceholders(chart, merged, period, hasMoreOlder)
         applyPriceVolumePrecision(chart, symbol)
         window.setTimeout(() => {
           if (disposed) return
@@ -102,7 +103,7 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
             loading: false,
             loadingMore: false,
             requestedRows: current.requestedRows,
-            rows: chart.getDataList().length || merged.length,
+            rows: stripFuturePlaceholders(chart.getDataList()).length || merged.length,
           }))
         }, 0)
       })
@@ -115,7 +116,7 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
           error: true,
           loading: false,
           loadingMore: false,
-          rows: chart.getDataList().length,
+          rows: stripFuturePlaceholders(chart.getDataList()).length,
         }))
       })
 

@@ -1,5 +1,6 @@
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { SettingsColorSwatch, SettingsLineSwatch, SettingsLineWeightSwatch } from '../settings/SettingsSwatches'
+import { VisibilityRangePanel } from '../visibilityRange/VisibilityRangePanel'
 import type {
   IndicatorSettingsTab,
   MacdIndicatorSettings,
@@ -1477,7 +1478,7 @@ export function LoadedIndicatorSettingsPanel({
       {selectedKey === 'Vol' && settingsTab === 'style' ? <VolStylePanel onSettingsChange={onVolSettingsChange} settings={volSettings} /> : null}
       {settingsTab === 'visibility' ? (
         <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">
-          <p className="ff-indicators-input-panel-v1__placeholder">可见范围面板按当前指标框架预留。</p>
+          <VisibilityRangePanel storageKey={`indicator:${selectedKey || 'default'}`} />
         </div>
       ) : null}
     </>

@@ -4,6 +4,7 @@ import { defaultMaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 import { formatGlobalPrice } from './globalPricePrecision'
 
 type MaShiftRow = {
@@ -439,6 +440,9 @@ export function ensureTradingViewMaShiftIndicator() {
       }
     },
     draw: drawMaShiftIndicator,
-    calc: (dataList, indicator) => calculateTradingViewMaShiftRows(dataList, indicator.calcParams[0]),
+    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
+      dataList,
+      (realRows) => calculateTradingViewMaShiftRows(realRows, indicator.calcParams[0]),
+    ),
   })
 }

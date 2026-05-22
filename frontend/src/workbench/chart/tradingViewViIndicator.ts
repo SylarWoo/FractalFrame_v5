@@ -4,6 +4,7 @@ import { defaultViIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { ViIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
+import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 
 type ViIndicatorRow = {
   minus?: number
@@ -208,6 +209,9 @@ export function ensureTradingViewViIndicator() {
       drawLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'minus', settings.minusColor, settings.minusVisible, settings.minusLineStyle, settings.minusLineWidth, settings.minusOpacity)
       return true
     },
-    calc: (dataList, indicator) => calculateTradingViewViRows(dataList, indicator.calcParams[0]),
+    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
+      dataList,
+      (realRows) => calculateTradingViewViRows(realRows, indicator.calcParams[0]),
+    ),
   })
 }

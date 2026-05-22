@@ -1,0 +1,64 @@
+.ff-visibility-range-panel {
+  display: grid;
+  max-width: 430px;
+  gap: 16px;
+  padding: 2px 0 8px;
+  color: #131722;
+  font: 13px/1.25 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.ff-visibility-range-row {
+  display: grid;
+  grid-template-columns: 66px 72px 18px 72px;
+  align-items: center;
+  gap: 10px;
+}
+
+.ff-visibility-range-row[data-disabled='true'] {
+  opacity: 0.46;
+}
+
+.ff-visibility-range-row__check {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: #131722;
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.ff-visibility-range-row__check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #2f2f33;
+  cursor: pointer;
+}
+
+.ff-visibility-range-row__number {
+  width: 72px;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid #d1d4dc;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #131722;
+  font: 13px/1 Arial, Tahoma, 'Segoe UI', sans-serif;
+}
+
+.ff-visibility-range-row__number:focus,
+.ff-visibility-range-row__number:focus-visible {
+  border-color: #2962ff;
+  box-shadow: inset 0 0 0 1px #2962ff;
+  outline: none;
+}
+
+.ff-visibility-range-row__separator {
+  color: #131722;
+  font-size: 14px;
+  text-align: center;
+}
