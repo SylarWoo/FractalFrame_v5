@@ -45,6 +45,7 @@ export function SettingsStatusPanel() {
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleChangeVisible}>K线变化值</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleVolumeVisible}>成交量</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleTimeVisible}>K线时间</SettingsCheckRow>
+        <SettingsCheckRow storageKey={chartSettingKeys.statusMarketStatusVisible}>{'\u5f00\u5e02\u72b6\u6001'}</SettingsCheckRow>
       </section>
 
       <section className="ff-settings-status-group">

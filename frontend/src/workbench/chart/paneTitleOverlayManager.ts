@@ -1,6 +1,7 @@
 import { ActionType, DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
+import { marketStatusTitleChangedEvent } from '../mt5DataCenter/marketStatusTitleState'
 import { chartNumberFontFamily } from './chartStyleReaders'
 import {
   createPaneTitleLines,
@@ -17,8 +18,27 @@ function renderPart(part: PaneTitlePart) {
     const chunkSpan = document.createElement('span')
     chunkSpan.className = 'ff-pane-title-overlay__chunk'
     chunkSpan.textContent = chunk.text
+    if (chunk.backgroundColor) chunkSpan.style.backgroundColor = chunk.backgroundColor
+    if (chunk.borderRadius) chunkSpan.style.borderRadius = chunk.borderRadius
     if (chunk.color) chunkSpan.style.color = chunk.color
+    if (chunk.fontSize) chunkSpan.style.fontSize = chunk.fontSize
     if (chunk.gapBefore != null) chunkSpan.style.marginLeft = `${chunk.gapBefore}px`
+    if (chunk.height) chunkSpan.style.height = chunk.height
+    if (chunk.position) chunkSpan.style.position = chunk.position
+    if (chunk.width) chunkSpan.style.width = chunk.width
+    if (chunk.width || chunk.height) {
+      chunkSpan.style.boxSizing = 'border-box'
+      chunkSpan.style.flex = '0 0 auto'
+      chunkSpan.style.lineHeight = '0'
+      chunkSpan.style.verticalAlign = 'middle'
+    }
+    if (chunk.translateY) {
+      chunkSpan.style.display = 'inline-block'
+      chunkSpan.style.transform = `translate(${chunk.translateX ?? '0'}, ${chunk.translateY})`
+    } else if (chunk.translateX) {
+      chunkSpan.style.display = 'inline-block'
+      chunkSpan.style.transform = `translateX(${chunk.translateX})`
+    }
     span.appendChild(chunkSpan)
   })
   return span
@@ -104,6 +124,7 @@ export function installPaneTitleOverlay(chart: Chart, container: HTMLElement, co
   window.addEventListener('resize', handleChartChange)
   window.addEventListener('storage', handleSettingsChange)
   window.addEventListener(settingsSymbolChangedEvent, handleSettingsChange)
+  window.addEventListener(marketStatusTitleChangedEvent, handleSettingsChange)
   scheduleRender()
 
   return {
@@ -118,6 +139,7 @@ export function installPaneTitleOverlay(chart: Chart, container: HTMLElement, co
       window.removeEventListener('resize', handleChartChange)
       window.removeEventListener('storage', handleSettingsChange)
       window.removeEventListener(settingsSymbolChangedEvent, handleSettingsChange)
+      window.removeEventListener(marketStatusTitleChangedEvent, handleSettingsChange)
       mutationObserver.disconnect()
       resizeObserver.disconnect()
       root.remove()

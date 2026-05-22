@@ -28,7 +28,7 @@ from http_bridge.mt5_symbol_routes import handle_mt5_symbols_get
 from http_bridge.sse import send_aggregate_job_events as send_aggregate_job_events_sse
 from http_bridge.sse import send_mt5_tick_events as send_mt5_tick_events_sse
 from http_bridge.sse import send_pull_job_events as send_pull_job_events_sse
-from http_bridge.mt5_symbol_service import query_mt5_rates_live, query_mt5_tick_live, read_symbol_cache, scan_mt5_symbols
+from http_bridge.mt5_symbol_service import query_mt5_market_status_live, query_mt5_rates_live, query_mt5_tick_live, read_symbol_cache, scan_mt5_symbols
 from http_bridge.store_v5_operations_service import (
     aggregate_store_v5,
     clean_store_v5_direct_m1,

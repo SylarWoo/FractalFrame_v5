@@ -1,4 +1,4 @@
-export type { Mt5RealtimeTick, Mt5SymbolRow, Mt5SymbolsPayload } from './mt5Types'
+export type { Mt5MarketStatus, Mt5MarketStatusPayload, Mt5MarketStatusValue, Mt5RealtimeTick, Mt5SymbolRow, Mt5SymbolsPayload } from './mt5Types'
 export type {
   StoreV5AggregatePayload,
   StoreV5AggregatedCell,

@@ -19,6 +19,7 @@ export const storageKeys = {
   importCenterWatchlistSymbols: 'fractalframe:mt5ImportCenterWatchlistSymbols:v1',
   importCenterWatchlistColumnWidthsPx: 'fractalframe:mt5ImportCenterWatchlistColumnWidthsPx:v1',
   importCenterWatchlistTableHeightPx: 'fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1',
+  marketStatusTitleSnapshots: 'fractalframe:marketStatusTitleSnapshots:v1',
   indicatorShortcutKeys: 'fractalframe:indicatorShortcutKeys:v1',
   rightWidgetActiveDrawer: 'fractalframe:rightWidgetActiveDrawer:v1',
   rightWidgetDrawerWidthPx: 'fractalframe:rightWidgetDrawerWidthPx:v1',

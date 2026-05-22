@@ -9,6 +9,7 @@ import {
   defaultVolIndicatorSettings,
   defaultVwapIndicatorSettings,
 } from '../rightDrawer/indicatorPersistence'
+import { readMarketStatusTitleSnapshot } from '../mt5DataCenter/marketStatusTitleState'
 import { readSettingsBooleanValue, readSettingsSymbolState } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { readCandleBarStyle, resolveCandleValueColor, resolveStatusTitle } from './chartStyleReaders'
@@ -22,9 +23,17 @@ export type PaneTitleContext = {
 }
 
 export type PaneTitleChunk = {
+  backgroundColor?: string
+  borderRadius?: string
   color?: string
+  fontSize?: string
   gapBefore?: number
+  height?: string
+  position?: string
   text: string
+  translateX?: string
+  translateY?: string
+  width?: string
 }
 
 export type PaneTitlePart = {
@@ -153,6 +162,34 @@ function readIndicatorTitleVisible() {
   return chartSettingDefaults.statusIndicatorTitleVisible
 }
 
+function readMarketStatusTitleChunks(symbol: string): PaneTitleChunk[] {
+  if (!readSettingsBooleanValue(chartSettingKeys.statusMarketStatusVisible, chartSettingDefaults.statusMarketStatusVisible)) return []
+  const status = readMarketStatusTitleSnapshot(symbol)?.status
+  if (!status) return []
+  if (status.status === 'open') {
+    return [
+      {
+        backgroundColor: '#00897b',
+        borderRadius: '999px',
+        gapBefore: 8,
+        height: '10px',
+        text: '',
+        translateX: '-1px',
+        translateY: '3px',
+        width: '10px',
+      },
+      { color: '#00897b', fontSize: '12px', gapBefore: 3, text: '开市' },
+    ]
+  }
+  if (status.status === 'closed') {
+    return [
+      { color: '#111827', fontSize: '18px', gapBefore: 8, text: '━', translateY: '-1px' },
+      { color: '#111827', fontSize: '12px', gapBefore: 3, text: '休市' },
+    ]
+  }
+  return []
+}
+
 function createCandleParts(chart: Chart, context: PaneTitleContext, crosshairIndex: number | null): PaneTitlePart[] {
   const dataList = chart.getDataList()
   const index = readTooltipIndex(chart, crosshairIndex, dataList.length)
@@ -200,6 +237,7 @@ function createCandleParts(chart: Chart, context: PaneTitleContext, crosshairInd
       ...(timeVisible ? [
         { gapBefore: volumeVisible ? 12 : 0, text: 'Time:' },
         { text: new Date(Number(current.timestamp)).toLocaleString('zh-CN', { hour12: false }) },
+        ...readMarketStatusTitleChunks(context.symbol),
       ] : []),
     ]))
   }

@@ -8,7 +8,7 @@ import type {
   StoreV5PullPayload,
   StoreV5QueryPayload,
 } from './types'
-import type { Mt5RealtimeTick } from './mt5Types'
+import type { Mt5MarketStatusPayload, Mt5RealtimeTick } from './mt5Types'
 
 export async function fetchStoreV5Status(symbol: string): Promise<StoreV5CheckPayload> {
   const params = new URLSearchParams()
@@ -151,6 +151,18 @@ export async function queryMt5Tick(symbol: string): Promise<{ ok: boolean; statu
 
   return getMt5Json<{ ok: boolean; status?: string; error?: string; tick?: Mt5RealtimeTick | null }>(
     '/api/market-data/v1/mt5/tick',
+    params,
+    { requirePayloadOk: true },
+  )
+}
+
+export async function queryMt5MarketStatus(symbol: string, staleSeconds = 120): Promise<Mt5MarketStatusPayload> {
+  const params = new URLSearchParams()
+  params.set('symbol', symbol)
+  params.set('staleSeconds', String(staleSeconds))
+
+  return getMt5Json<Mt5MarketStatusPayload>(
+    '/api/market-data/v1/mt5/market-status',
     params,
     { requirePayloadOk: true },
   )

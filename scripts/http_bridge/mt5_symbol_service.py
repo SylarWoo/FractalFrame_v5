@@ -243,6 +243,100 @@ def query_mt5_tick_live(symbol: str, day_open: float | None = None) -> dict[str,
         return {**base_payload, "status": "mt5_tick_exception", "error": str(exc)}
 
 
+def query_mt5_market_status_live(symbol: str, stale_seconds: int = 120) -> dict[str, Any]:
+    published_at = utc_now_iso()
+    stale_seconds = max(60, min(int(stale_seconds or 120), 3600))
+    base_payload = {
+        "ok": False,
+        "status": "mt5_market_status_failed",
+        "symbol": symbol,
+        "marketStatus": None,
+        "publishedAt": published_at,
+    }
+
+    if not symbol:
+        return {**base_payload, "status": "bad_request", "error": "symbol_required"}
+
+    try:
+        import MetaTrader5 as mt5
+    except ImportError as exc:
+        return {**base_payload, "status": "mt5_market_status_unavailable", "error": str(exc)}
+
+    try:
+        if not mt5.initialize():
+            return {
+                **base_payload,
+                "status": "mt5_market_status_init_failed",
+                "error": "mt5_initialize_failed",
+                "mt5LastError": mt5.last_error(),
+            }
+
+        if not mt5.symbol_select(symbol, True):
+            return {
+                **base_payload,
+                "status": "mt5_market_status_symbol_select_failed",
+                "error": "mt5_symbol_select_failed",
+                "mt5LastError": mt5.last_error(),
+            }
+
+        symbol_info = mt5.symbol_info(symbol)
+        trade_mode = safe_int(namedtuple_to_dict(symbol_info).get("trade_mode")) if symbol_info is not None else None
+        tick = mt5.symbol_info_tick(symbol)
+        tick_raw = namedtuple_to_dict(tick)
+        tick_time = safe_int(tick_raw.get("time"))
+        tick_time_msc = safe_int(tick_raw.get("time_msc"))
+        rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, 1)
+        rows = [item for row in mt5_rates_to_rows(rates) if (item := mt5_rate_row(row)) is not None]
+
+        server_time = int(datetime.now(timezone.utc).timestamp())
+        last_m1_time = safe_int(rows[-1].get("time")) if rows else None
+        age_seconds = server_time - last_m1_time if last_m1_time is not None else None
+        tick_age_seconds = server_time - tick_time if tick_time is not None else None
+        is_disabled = trade_mode == 0
+        is_m1_synced = age_seconds is not None and -60 <= age_seconds <= stale_seconds
+        is_tick_synced = tick_age_seconds is not None and -60 <= tick_age_seconds <= stale_seconds
+        status_value = "open" if (is_m1_synced or is_tick_synced) and not is_disabled else "closed"
+        if is_disabled:
+            reason = "trade_mode_disabled"
+        elif is_m1_synced:
+            reason = "m1_synced"
+        elif is_tick_synced:
+            reason = "tick_synced"
+        elif rows:
+            reason = "m1_and_tick_stale"
+        else:
+            reason = "no_m1_data"
+
+        last_m1_iso = (
+            datetime.fromtimestamp(last_m1_time, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            if last_m1_time is not None
+            else None
+        )
+        return {
+            "ok": True,
+            "status": "mt5_market_status_ready",
+            "symbol": symbol,
+            "marketStatus": {
+                "status": status_value,
+                "label": "\u5f00\u5e02" if status_value == "open" else "\u4f11\u5e02",
+                "lastM1Time": last_m1_time,
+                "lastM1TimeMsc": last_m1_time * 1000 if last_m1_time is not None else None,
+                "lastM1Iso": last_m1_iso,
+                "lastTickTime": tick_time,
+                "lastTickTimeMsc": tick_time_msc,
+                "serverTime": server_time,
+                "serverTimeIso": datetime.fromtimestamp(server_time, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                "ageSeconds": age_seconds,
+                "tickAgeSeconds": tick_age_seconds,
+                "staleSeconds": stale_seconds,
+                "tradeMode": trade_mode,
+                "reason": reason,
+            },
+            "publishedAt": utc_now_iso(),
+        }
+    except Exception as exc:
+        return {**base_payload, "status": "mt5_market_status_exception", "error": str(exc)}
+
 def query_mt5_rates_live(symbol: str, timeframe: str, limit: int, time_from: int | None = None, time_to: int | None = None) -> dict[str, Any]:
     published_at = utc_now_iso()
     normalized_timeframe = normalize_timeframe(timeframe)

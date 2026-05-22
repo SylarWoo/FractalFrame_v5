@@ -127,6 +127,52 @@
   white-space: nowrap;
 }
 
+.ff-import-market-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 18px;
+  margin-top: 4px;
+  overflow: hidden;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ff-import-market-status[data-status='open'] {
+  color: #00897b;
+}
+
+.ff-import-market-status__dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #00b386;
+}
+
+.ff-import-market-status__bar {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 4px;
+  border-radius: 999px;
+  background: #111827;
+}
+
+.ff-import-market-status__label,
+.ff-import-market-status__muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ff-import-market-status__muted {
+  color: #6b7280;
+  font-weight: 600;
+}
+
 .ff-import-load-row {
   display: grid;
   grid-template-columns: auto auto;

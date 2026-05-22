@@ -15,6 +15,14 @@ def handle_mt5_symbols_get(handler: Any, parsed: ParseResult, services: Any) -> 
         handler.send_json(200 if payload.get("ok") is True else 503, payload)
         return True
 
+    if parsed.path == "/api/market-data/v1/mt5/market-status":
+        query = parse_qs(parsed.query)
+        symbol = first_query_value(query, "symbol").strip()
+        stale_seconds = safe_query_int(first_query_value(query, "staleSeconds", "stale_seconds", default=None), 120) or 120
+        payload = services.query_mt5_market_status_live(symbol, stale_seconds)
+        handler.send_json(200 if payload.get("ok") is True else 503, payload)
+        return True
+
     if parsed.path == "/api/market-data/v1/mt5/rates":
         query = parse_qs(parsed.query)
         symbol = first_query_value(query, "symbol").strip()
