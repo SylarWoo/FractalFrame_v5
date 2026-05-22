@@ -51,6 +51,11 @@
   stroke-width: 1px;
 }
 
+.ff-right-rail__button svg.ff-right-rail__object-tree-icon {
+  width: 28px;
+  height: 28px;
+}
+
 .ff-right-drawer {
   --ff-mt5-panel-x: 10px;
   position: relative;

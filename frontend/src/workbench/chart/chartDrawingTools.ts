@@ -2,6 +2,7 @@ import { ActionType, DomPosition, LineType, PolygonType, registerFigure, registe
 import type { Chart, DeepPartial, OverlayStyle } from 'klinecharts'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import { drawingToolCommandEvent, isDrawingToolCommandEvent, publishDrawingToolState } from '../rightDrawer/drawingToolCommands'
+import { isObjectTreeDrawingCommandEvent, objectTreeDrawingCommandEvent, objectTreeDrawingsRequestEvent, publishObjectTreeDrawings } from '../rightDrawer/objectTreeModel'
 import {
   clearStoredHorizontalLineDrawings,
   normalizeDrawingLineStyle,
@@ -18,6 +19,8 @@ const horizontalLineOverlayName = 'ffHorizontalLine'
 const horizontalLineTextFigureName = 'ffHorizontalLineText'
 let horizontalLineOverlayRegistered = false
 let horizontalLineTextFigureRegistered = false
+const candlePaneId = 'candle_pane'
+const knownDrawingPaneIds = [candlePaneId, 'rsi_pane', 'stoch_pane', 'macd_pane', 'tsi_pane', 'vi_pane']
 const selectedHandleColor = '#2962ff'
 const selectedHandleDistanceFromScale = 102
 const selectedHandleSize = 12
@@ -58,6 +61,11 @@ type HorizontalLineFigure = {
   key?: string
   styles?: Record<string, unknown>
   type: string
+}
+
+type HorizontalLineMoveEntry = {
+  id: string
+  startValue: number
 }
 
 function isCoordinate(value: Partial<{ x: number; y: number }> | Array<Partial<{ x: number; y: number }>>): value is Partial<{ x: number; y: number }> {
@@ -413,17 +421,29 @@ function ensureHorizontalLineOverlay() {
 export function installChartDrawingTools(chart: Chart, getPeriod: () => string = () => '') {
   ensureHorizontalLineOverlay()
   let pendingOverlayId: string | null = null
+  let pendingOverlayOptions: {
+    lineStyle: SettingsLineSwatchValue
+    locked: boolean
+    showPriceLabel: boolean
+    textStyle?: DrawingTextStyle
+  } | null = null
   let selectedOverlayId: string | null = null
   let lastSelectedOverlayId: string | null = null
   let restoreHoverCursor: (() => void) | null = null
   const horizontalLineOverlayIds = new Set<string>()
+  const paneInteractionCleanups: Array<() => void> = []
+  const registeredPaneInteractions = new Map<string, { cleanup: () => void; element: HTMLElement }>()
   let persistenceEnabled = readDrawingPersistence('horizontalLine')
+  let pendingStoredHorizontalLineDrawings = persistenceEnabled ? readStoredHorizontalLineDrawings() : []
   let horizontalLineVisible = true
+  let lastPointerPaneId = candlePaneId
+  let additiveSelectionActive = false
+  let pressedMoveState: { activeId: string; activeStartValue: number; entries: HorizontalLineMoveEntry[]; paneId: string } | null = null
   let destroyed = false
 
-  const applyHoverCursor = () => {
+  const applyHoverCursor = (paneId = candlePaneId) => {
     restoreHoverCursor?.()
-    const paneMain = chart.getDom('candle_pane', DomPosition.Main)
+    const paneMain = chart.getDom(paneId, DomPosition.Main)
     if (!paneMain) return
     restoreHoverCursor = setCursor(collectCursorElements(paneMain), 'pointer')
   }
@@ -471,6 +491,32 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       drawings.push({
         lineStyle: normalizeLineStyle(extendData?.lineStyle),
         locked: extendData?.locked === true,
+        paneId: overlay.paneId || candlePaneId,
+        showPriceLabel: extendData?.showPriceLabel !== false,
+        textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
+        value,
+      })
+    })
+    writeStoredHorizontalLineDrawings(drawings)
+  }
+
+  const persistCurrentHorizontalLinesWithLock = (targetId: string, locked: boolean) => {
+    if (destroyed) return
+    if (!persistenceEnabled) return
+    const drawings: StoredHorizontalLineDrawing[] = []
+    horizontalLineOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) {
+        horizontalLineOverlayIds.delete(id)
+        return
+      }
+      const value = Number(overlay.points[0]?.value)
+      if (!Number.isFinite(value)) return
+      const extendData = overlay.extendData as HorizontalLineExtendData | undefined
+      drawings.push({
+        lineStyle: normalizeLineStyle(extendData?.lineStyle),
+        locked: id === targetId ? locked : extendData?.locked === true,
+        paneId: overlay.paneId || candlePaneId,
         showPriceLabel: extendData?.showPriceLabel !== false,
         textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
         value,
@@ -492,6 +538,107 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     })
   }
 
+  const getSelectedHorizontalLineIds = () => Array.from(horizontalLineOverlayIds).filter((id) => {
+    const overlay = chart.getOverlayById(id)
+    const extendData = overlay?.extendData as HorizontalLineExtendData | undefined
+    return extendData?.selected === true
+  })
+
+  const setSelectedHorizontalLine = (id: string, additive: boolean) => {
+    horizontalLineOverlayIds.forEach((overlayId) => {
+      if (additive && overlayId !== id) return
+      updateOverlayState(overlayId, { selected: overlayId === id })
+    })
+    selectedOverlayId = id
+    lastSelectedOverlayId = id
+  }
+
+  const toggleSelectedHorizontalLine = (id: string) => {
+    const overlay = chart.getOverlayById(id)
+    const selected = (overlay?.extendData as HorizontalLineExtendData | undefined)?.selected === true
+    updateOverlayState(id, { selected: !selected })
+    selectedOverlayId = selected ? resolveSelectedOverlayId() : id
+    lastSelectedOverlayId = selected ? selectedOverlayId : id
+  }
+
+  const resolvePointValueFromMoveEvent = (event: { x?: number; y?: number }, paneId: string) => {
+    const y = Number(event.y)
+    if (!Number.isFinite(y)) return Number.NaN
+    const point = chart.convertFromPixel([{ y }], { paneId })
+    const coordinate = Array.isArray(point) ? point[0] : point
+    const value = Number(coordinate?.value)
+    return Number.isFinite(value) ? value : Number.NaN
+  }
+
+  const beginPressedMove = (overlayId: string) => {
+    const overlay = chart.getOverlayById(overlayId)
+    if (!overlay) {
+      pressedMoveState = null
+      return
+    }
+    const paneId = overlay.paneId || candlePaneId
+    const selectedIds = getSelectedHorizontalLineIds()
+    const activeIsAlreadySelected = selectedIds.includes(overlayId)
+    if (activeIsAlreadySelected && selectedIds.length > 1) {
+      selectedOverlayId = overlayId
+      lastSelectedOverlayId = overlayId
+    } else {
+      setSelectedHorizontalLine(overlayId, additiveSelectionActive)
+    }
+
+    const moveIds = getSelectedHorizontalLineIds()
+    const entries = moveIds
+      .map((id) => {
+        const selectedOverlay = chart.getOverlayById(id)
+        const extendData = selectedOverlay?.extendData as HorizontalLineExtendData | undefined
+        if (!selectedOverlay || (selectedOverlay.paneId || candlePaneId) !== paneId || extendData?.locked === true || selectedOverlay.lock === true) return null
+        const startValue = Number(selectedOverlay.points[0]?.value)
+        return Number.isFinite(startValue) ? { id, startValue } : null
+      })
+      .filter((entry): entry is HorizontalLineMoveEntry => entry != null)
+    const activeEntry = entries.find((entry) => entry.id === overlayId)
+    pressedMoveState = activeEntry ? { activeId: overlayId, activeStartValue: activeEntry.startValue, entries, paneId } : null
+  }
+
+  const moveSelectedHorizontalLines = (event: { x?: number; y?: number }, overlayId: string) => {
+    const moveState = pressedMoveState
+    if (!moveState || moveState.activeId !== overlayId || moveState.entries.length <= 1) return false
+    const value = resolvePointValueFromMoveEvent(event, moveState.paneId)
+    if (!Number.isFinite(value)) return false
+    const delta = value - moveState.activeStartValue
+    moveState.entries.forEach((entry) => {
+      const overlay = chart.getOverlayById(entry.id)
+      if (!overlay) return
+      chart.overrideOverlay({
+        id: entry.id,
+        points: [{
+          ...(overlay.points[0] ?? {}),
+          value: entry.startValue + delta,
+        }],
+      })
+    })
+    return true
+  }
+
+  const publishObjectTreeState = () => {
+    publishObjectTreeDrawings(Array.from(horizontalLineOverlayIds)
+      .map((id) => {
+        const overlay = chart.getOverlayById(id)
+        if (!overlay) return null
+        const extendData = overlay.extendData as HorizontalLineExtendData | undefined
+        return {
+          id,
+          kind: 'horizontalLine' as const,
+          label: '\u6c34\u5e73\u7ebf',
+          locked: extendData?.locked === true || overlay.lock === true,
+          paneId: overlay.paneId || candlePaneId,
+          selected: extendData?.selected === true,
+          visible: overlay.visible !== false,
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item != null))
+  }
+
   const resolveDeleteTargetOverlayId = () => {
     if (selectedOverlayId && chart.getOverlayById(selectedOverlayId)) return selectedOverlayId
     if (lastSelectedOverlayId && chart.getOverlayById(lastSelectedOverlayId)) return lastSelectedOverlayId
@@ -499,7 +646,11 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   }
 
   const resolveSelectedOverlayId = () => {
-    if (selectedOverlayId && chart.getOverlayById(selectedOverlayId)) return selectedOverlayId
+    if (selectedOverlayId) {
+      const selectedOverlay = chart.getOverlayById(selectedOverlayId)
+      const selectedExtendData = selectedOverlay?.extendData as HorizontalLineExtendData | undefined
+      if (selectedExtendData?.selected === true) return selectedOverlayId
+    }
     if (!lastSelectedOverlayId) return null
     const lastSelectedOverlay = chart.getOverlayById(lastSelectedOverlayId)
     const lastSelectedExtendData = lastSelectedOverlay?.extendData as HorizontalLineExtendData | undefined
@@ -524,19 +675,21 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       clearHoverCursor()
       publishState({ selected: false })
     }
+    publishObjectTreeState()
   }
 
-  const eventHitsHorizontalLine = (event: MouseEvent) => {
-    const paneMain = chart.getDom('candle_pane', DomPosition.Main)
+  const eventHitsHorizontalLine = (event: MouseEvent, paneId: string) => {
+    const paneMain = chart.getDom(paneId, DomPosition.Main)
     if (!paneMain) return false
     const rect = paneMain.getBoundingClientRect()
     const eventY = event.clientY - rect.top
     if (!Number.isFinite(eventY)) return false
     for (const id of horizontalLineOverlayIds) {
       const overlay = chart.getOverlayById(id)
+      if (!overlay || (overlay.paneId || candlePaneId) !== paneId) continue
       const value = Number(overlay?.points[0]?.value)
       if (!Number.isFinite(value)) continue
-      const pixel = chart.convertToPixel({ value }, { paneId: 'candle_pane' })
+      const pixel = chart.convertToPixel({ value }, { paneId })
       const coordinate = isCoordinate(pixel) ? pixel : pixel[0]
       const y = Number(coordinate?.y)
       if (Number.isFinite(y) && Math.abs(eventY - y) <= horizontalLineHitSlop) return true
@@ -558,12 +711,13 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     selectedOverlayId = null
     clearHoverCursor()
     publishState({ selected: false })
+    publishObjectTreeState()
   }
 
-  const handlePaneClick = (event: MouseEvent) => {
+  const handlePaneClick = (event: MouseEvent, paneId: string) => {
     window.setTimeout(() => {
       if (destroyed) return
-      if (eventHitsHorizontalLine(event)) return
+      if (eventHitsHorizontalLine(event, paneId)) return
       clearHorizontalLineSelection()
     }, 0)
   }
@@ -571,6 +725,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const createHorizontalLineOverlay = ({
     lineStyle,
     locked,
+    paneId = candlePaneId,
     points,
     selected,
     showPriceLabel,
@@ -578,6 +733,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   }: {
     lineStyle: SettingsLineSwatchValue
     locked: boolean
+    paneId?: string
     points?: Array<{ value: number }>
     selected: boolean
     showPriceLabel: boolean
@@ -599,12 +755,14 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     visible: horizontalLineVisible,
     onDrawEnd: ({ overlay }) => {
       pendingOverlayId = null
+      pendingOverlayOptions = null
       selectedOverlayId = overlay.id
       lastSelectedOverlayId = overlay.id
       horizontalLineOverlayIds.add(overlay.id)
-      updateOverlayState(overlay.id, { selected: true })
+      setSelectedHorizontalLine(overlay.id, false)
       persistCurrentHorizontalLines()
       publishState({ armed: false, locked, selected: true })
+      publishObjectTreeState()
       return false
     },
     onRemoved: ({ overlay }) => {
@@ -613,17 +771,20 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       if (lastSelectedOverlayId === overlay.id) lastSelectedOverlayId = null
       persistCurrentHorizontalLines()
       publishState({ selected: false })
+      publishObjectTreeState()
       return false
     },
     onDeselected: ({ overlay }) => {
+      if (additiveSelectionActive) return false
       updateOverlayState(overlay.id, { selected: false })
       if (selectedOverlayId === overlay.id) selectedOverlayId = null
       publishState({ selected: false })
+      publishObjectTreeState()
       return false
     },
     onMouseEnter: ({ overlay }) => {
       updateOverlayState(overlay.id, { hovered: true })
-      applyHoverCursor()
+      applyHoverCursor(overlay.paneId || candlePaneId)
       return false
     },
     onMouseLeave: ({ overlay }) => {
@@ -632,41 +793,55 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       return false
     },
     onPressedMoveEnd: ({ overlay }) => {
-      updateOverlayState(overlay.id, { pressed: false })
+      const movedIds = pressedMoveState?.entries.map((entry) => entry.id) ?? [overlay.id]
+      movedIds.forEach((id) => updateOverlayState(id, { pressed: false }))
+      pressedMoveState = null
       persistCurrentHorizontalLines()
       publishState({ selected: true })
+      publishObjectTreeState()
       return false
     },
     onPressedMoveStart: ({ overlay }) => {
-      selectedOverlayId = overlay.id
-      lastSelectedOverlayId = overlay.id
+      beginPressedMove(overlay.id)
       updateOverlayState(overlay.id, { pressed: true, selected: true })
       publishState({
         locked: Boolean((overlay.extendData as { locked?: boolean } | null)?.locked),
         selected: true,
       })
+      publishObjectTreeState()
       return false
     },
-    onPressedMoving: ({ overlay }) => {
-      return (overlay.extendData as { locked?: boolean } | null)?.locked === true
+    onPressedMoving: (event) => {
+      const { overlay } = event
+      if (overlay.lock === true || (overlay.extendData as { locked?: boolean } | null)?.locked === true) return true
+      return moveSelectedHorizontalLines(event as { x?: number; y?: number }, overlay.id)
     },
     onSelected: ({ overlay }) => {
-      selectedOverlayId = overlay.id
-      lastSelectedOverlayId = overlay.id
-      updateOverlayState(overlay.id, { selected: true })
+      setSelectedHorizontalLine(overlay.id, additiveSelectionActive)
       publishState({
         locked: Boolean((overlay.extendData as { locked?: boolean } | null)?.locked),
         selected: true,
       })
+      publishObjectTreeState()
       return false
     },
-  }, 'candle_pane')
+  }, paneId)
 
-  if (persistenceEnabled) {
-    readStoredHorizontalLineDrawings().forEach((drawing) => {
+  const canCreateOverlayOnPane = (paneId: string) => paneId === candlePaneId || chart.getDom(paneId, DomPosition.Main) != null
+
+  const restorePendingStoredHorizontalLines = () => {
+    if (!persistenceEnabled || pendingStoredHorizontalLineDrawings.length === 0) return
+    const remaining: StoredHorizontalLineDrawing[] = []
+    pendingStoredHorizontalLineDrawings.forEach((drawing) => {
+      const paneId = drawing.paneId || candlePaneId
+      if (!canCreateOverlayOnPane(paneId)) {
+        remaining.push(drawing)
+        return
+      }
       const overlayId = createHorizontalLineOverlay({
         lineStyle: drawing.lineStyle,
         locked: drawing.locked,
+        paneId,
         points: [{ value: drawing.value }],
         selected: false,
         showPriceLabel: drawing.showPriceLabel,
@@ -674,8 +849,88 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       })
       if (typeof overlayId === 'string') horizontalLineOverlayIds.add(overlayId)
     })
+    pendingStoredHorizontalLineDrawings = remaining
   }
+
+  restorePendingStoredHorizontalLines()
   applyHorizontalLineVisibility()
+  publishObjectTreeState()
+
+  const recreatePendingOverlayForPane = (paneId: string) => {
+    if (!pendingOverlayId || !pendingOverlayOptions) return
+    const overlay = chart.getOverlayById(pendingOverlayId)
+    if (!overlay || (overlay.points?.length ?? 0) > 0 || (overlay.paneId || candlePaneId) === paneId) return
+    chart.removeOverlay({ id: pendingOverlayId })
+    const overlayId = createHorizontalLineOverlay({
+      ...pendingOverlayOptions,
+      paneId,
+      selected: false,
+    })
+    pendingOverlayId = typeof overlayId === 'string' ? overlayId : null
+    publishState({ armed: pendingOverlayId != null })
+  }
+
+  const setPointerPane = (paneId: string) => {
+    if (lastPointerPaneId === paneId) return
+    lastPointerPaneId = paneId
+    recreatePendingOverlayForPane(paneId)
+  }
+
+  const resolvePaneIdFromPointerEvent = (event: MouseEvent | PointerEvent) => {
+    for (const paneId of knownDrawingPaneIds) {
+      const paneMain = chart.getDom(paneId, DomPosition.Main)
+      if (!paneMain) continue
+      const rect = paneMain.getBoundingClientRect()
+      if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) return paneId
+    }
+    return null
+  }
+
+  const handleRootPointer = (event: MouseEvent | PointerEvent) => {
+    additiveSelectionActive = event.ctrlKey || event.metaKey
+    const paneId = resolvePaneIdFromPointerEvent(event)
+    if (paneId) setPointerPane(paneId)
+  }
+
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Control' || event.key === 'Meta') additiveSelectionActive = true
+  }
+
+  const handleKeyUp = (event: KeyboardEvent) => {
+    if (event.key === 'Control' || event.key === 'Meta') additiveSelectionActive = false
+  }
+
+  const ensurePaneInteractionListeners = () => {
+    knownDrawingPaneIds.forEach((paneId) => {
+      const paneMain = chart.getDom(paneId, DomPosition.Main)
+      if (!paneMain) return
+      const registered = registeredPaneInteractions.get(paneId)
+      if (registered?.element === paneMain) return
+      registered?.cleanup()
+      const handleClick = (event: MouseEvent) => handlePaneClick(event, paneId)
+      const handlePointer = () => setPointerPane(paneId)
+      paneMain.addEventListener('click', handleClick, true)
+      paneMain.addEventListener('mouseenter', handlePointer)
+      paneMain.addEventListener('pointerenter', handlePointer)
+      paneMain.addEventListener('mousemove', handlePointer)
+      const cleanup = () => {
+        paneMain.removeEventListener('click', handleClick, true)
+        paneMain.removeEventListener('mouseenter', handlePointer)
+        paneMain.removeEventListener('pointerenter', handlePointer)
+        paneMain.removeEventListener('mousemove', handlePointer)
+      }
+      paneInteractionCleanups.push(cleanup)
+      registeredPaneInteractions.set(paneId, { cleanup, element: paneMain })
+    })
+  }
+
+  ensurePaneInteractionListeners()
+  const chartRootDom = chart.getDom()
+  chartRootDom?.addEventListener('pointerdown', handleRootPointer, true)
+  chartRootDom?.addEventListener('pointermove', handleRootPointer, true)
+  chartRootDom?.addEventListener('mousemove', handleRootPointer, true)
+  window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
 
   const handleCommand = (event: Event) => {
     if (!isDrawingToolCommandEvent(event)) return
@@ -683,6 +938,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     if (event.detail.action === 'release') {
       if (pendingOverlayId) chart.removeOverlay({ id: pendingOverlayId })
       pendingOverlayId = null
+      pendingOverlayOptions = null
       publishState({ armed: false })
       return
     }
@@ -717,6 +973,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       chart.overrideOverlay({ id: selectedOverlayId, lock: locked })
       persistCurrentHorizontalLines()
       publishState({ locked, selected: true })
+      publishObjectTreeState()
       return
     }
 
@@ -794,16 +1051,81 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     if (!lineStyle) return
 
     if (pendingOverlayId) chart.removeOverlay({ id: pendingOverlayId })
-    const overlayId = createHorizontalLineOverlay({
+    pendingOverlayOptions = {
       lineStyle,
       locked: event.detail.locked === true,
-      selected: false,
       showPriceLabel: event.detail.showPriceLabel !== false,
       textStyle: event.detail.textStyle,
+    }
+    const overlayId = createHorizontalLineOverlay({
+      ...pendingOverlayOptions,
+      paneId: lastPointerPaneId,
+      selected: false,
     })
     pendingOverlayId = typeof overlayId === 'string' ? overlayId : null
     applyHorizontalLineVisibility()
     publishState({ armed: pendingOverlayId != null, selected: selectedOverlayId != null })
+    publishObjectTreeState()
+  }
+
+  const handleObjectTreeCommand = (event: Event) => {
+    if (!isObjectTreeDrawingCommandEvent(event)) return
+    if (event.detail.action === 'deselectAll') {
+      clearHorizontalLineSelection()
+      return
+    }
+    const { id } = event.detail
+    if (!horizontalLineOverlayIds.has(id)) return
+    const overlay = chart.getOverlayById(id)
+    if (!overlay) return
+
+    if (event.detail.action === 'delete') {
+      chart.removeOverlay({ id })
+      return
+    }
+
+    if (event.detail.action === 'setVisible') {
+      chart.overrideOverlay({ id, visible: event.detail.visible })
+      if (!event.detail.visible && selectedOverlayId === id) {
+        selectedOverlayId = null
+        updateOverlayState(id, { hovered: false, pressed: false, selected: false })
+        publishState({ selected: false })
+      }
+      publishObjectTreeState()
+      return
+    }
+
+    if (event.detail.action === 'setLocked') {
+      chart.overrideOverlay({
+        id,
+        extendData: {
+          ...(overlay.extendData ?? {}),
+          locked: event.detail.locked,
+        },
+        lock: event.detail.locked,
+      })
+      persistCurrentHorizontalLinesWithLock(id, event.detail.locked)
+      publishObjectTreeState()
+      return
+    }
+
+    if (event.detail.action === 'select') {
+      if (event.detail.additive === true) {
+        toggleSelectedHorizontalLine(id)
+      } else {
+        setSelectedHorizontalLine(id, false)
+      }
+      publishState({ selected: true })
+      publishObjectTreeState()
+      return
+    }
+
+    if (event.detail.action === 'deselect') {
+      updateOverlayState(id, { hovered: false, pressed: false, selected: false })
+      if (selectedOverlayId === id) selectedOverlayId = null
+      publishState({ selected: false })
+      publishObjectTreeState()
+    }
   }
 
   const handleVisibilityRangeChanged = (event: Event) => {
@@ -818,28 +1140,46 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   }
 
   const handleDataReady = () => {
+    ensurePaneInteractionListeners()
+    restorePendingStoredHorizontalLines()
     applyHorizontalLineVisibility()
   }
 
   const handleVisibilityRefresh = () => {
+    ensurePaneInteractionListeners()
+    restorePendingStoredHorizontalLines()
     applyHorizontalLineVisibility()
   }
 
+  const handleObjectTreeDrawingsRequest = () => {
+    ensurePaneInteractionListeners()
+    restorePendingStoredHorizontalLines()
+    publishObjectTreeState()
+  }
+
   window.addEventListener(drawingToolCommandEvent, handleCommand)
+  window.addEventListener(objectTreeDrawingCommandEvent, handleObjectTreeCommand)
+  window.addEventListener(objectTreeDrawingsRequestEvent, handleObjectTreeDrawingsRequest)
   window.addEventListener(visibilityRangeChangedEvent, handleVisibilityRangeChanged)
   window.addEventListener(chartDrawingVisibilityRefreshEvent, handleVisibilityRefresh)
   window.addEventListener('storage', handleStorage)
   chart.subscribeAction(ActionType.OnDataReady, handleDataReady)
-  chart.getDom('candle_pane', DomPosition.Main)?.addEventListener('click', handlePaneClick, true)
   return () => {
     destroyed = true
     clearHoverCursor()
     if (pendingOverlayId) chart.removeOverlay({ id: pendingOverlayId })
     window.removeEventListener(drawingToolCommandEvent, handleCommand)
+    window.removeEventListener(objectTreeDrawingCommandEvent, handleObjectTreeCommand)
+    window.removeEventListener(objectTreeDrawingsRequestEvent, handleObjectTreeDrawingsRequest)
     window.removeEventListener(visibilityRangeChangedEvent, handleVisibilityRangeChanged)
     window.removeEventListener(chartDrawingVisibilityRefreshEvent, handleVisibilityRefresh)
     window.removeEventListener('storage', handleStorage)
     chart.unsubscribeAction(ActionType.OnDataReady, handleDataReady)
-    chart.getDom('candle_pane', DomPosition.Main)?.removeEventListener('click', handlePaneClick, true)
+    chartRootDom?.removeEventListener('pointerdown', handleRootPointer, true)
+    chartRootDom?.removeEventListener('pointermove', handleRootPointer, true)
+    chartRootDom?.removeEventListener('mousemove', handleRootPointer, true)
+    window.removeEventListener('keydown', handleKeyDown)
+    window.removeEventListener('keyup', handleKeyUp)
+    paneInteractionCleanups.forEach((cleanup) => cleanup())
   }
 }

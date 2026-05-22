@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
+import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
 import { installChartDragCursor } from './chartDragCursor'
 import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 import { useChartDataLoad } from './useChartDataLoad'
@@ -35,6 +36,13 @@ const defaultRsiPaneHeight = 128
 const minRsiPaneHeight = 80
 const maxStoredRsiPaneHeight = 720
 const updateLevelAll = 4
+
+function refreshChartDrawings() {
+  window.dispatchEvent(new Event(chartDrawingVisibilityRefreshEvent))
+  window.requestAnimationFrame(() => {
+    window.dispatchEvent(new Event(chartDrawingVisibilityRefreshEvent))
+  })
+}
 
 type ChartCoreHostProps = {
   displayName?: string
@@ -232,6 +240,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeRsiPaneHeight()
             installChartDragCursor(chart)
+            refreshChartDrawings()
             scheduleUnlockYAxisManualDrag(chart)
           },
         )
@@ -275,6 +284,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeStochPaneHeight()
             installChartDragCursor(chart)
+            refreshChartDrawings()
             scheduleUnlockYAxisManualDrag(chart)
           },
         )
@@ -319,6 +329,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeMacdPaneHeight()
             installChartDragCursor(chart)
+            refreshChartDrawings()
             scheduleResetIndicatorYAxisAutoScale(chart, [macdPaneId])
             scheduleUnlockYAxisManualDrag(chart)
           },
@@ -363,6 +374,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeTsiPaneHeight()
             installChartDragCursor(chart)
+            refreshChartDrawings()
             scheduleUnlockYAxisManualDrag(chart)
           },
         )
@@ -406,6 +418,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeViPaneHeight()
             installChartDragCursor(chart)
+            refreshChartDrawings()
             scheduleUnlockYAxisManualDrag(chart)
           },
         )
