@@ -47,6 +47,10 @@
   vector-effect: non-scaling-stroke;
 }
 
+.ff-right-rail__button svg.ff-right-rail__drawing-icon {
+  stroke-width: 1px;
+}
+
 .ff-right-drawer {
   --ff-mt5-panel-x: 10px;
   position: relative;

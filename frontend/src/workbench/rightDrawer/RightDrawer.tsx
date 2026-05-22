@@ -12,6 +12,7 @@ import { useRightDrawerResize } from './useRightDrawerResize'
 import { useRightDrawerSelection } from './useRightDrawerSelection'
 import { useStoreV5Jobs } from './useStoreV5Jobs'
 import { useWatchlistRealtime } from './useWatchlistRealtime'
+import { DrawingsDrawer } from './DrawingsDrawer'
 import { IndicatorsDrawer } from './IndicatorsDrawer'
 import { RightDrawerFrame } from './RightDrawerFrame'
 import { RightDrawerMt5Body } from './RightDrawerMt5Body'
@@ -301,7 +302,9 @@ export function RightDrawer({
 
   return (
     <RightDrawerFrame activeDrawer={activeDrawer} onClose={onClose} onResize={onResize} onResizePointerDown={handleResizePointerDown} onToggleDrawer={onToggleDrawer} open={open} topPaneHeight={topPaneHeight}>
-        {activeDrawer === 'settings' ? (
+        {activeDrawer === 'drawings' ? (
+          <DrawingsDrawer />
+        ) : activeDrawer === 'settings' ? (
           <RightDrawerSettingsHost
             selectedTab={selectedSettingsPanelTab}
             onSelectedTabChange={setSelectedSettingsPanelTab}

@@ -1,0 +1,17 @@
+.ff-drawings-drawer {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px var(--ff-mt5-panel-x);
+  overflow: auto;
+}
+
+.ff-drawings-drawer__empty {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed #cbd5e1;
+  border-radius: 4px;
+  color: #64748b;
+  font-size: 12px;
+}

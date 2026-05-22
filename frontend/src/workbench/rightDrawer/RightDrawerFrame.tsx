@@ -13,6 +13,7 @@ type RightDrawerFrameProps = {
 }
 
 function resolveRightDrawerTitle(activeDrawer: RightDrawerId | null) {
+  if (activeDrawer === 'drawings') return 'Drawings'
   if (activeDrawer === 'indicators') return 'Indicators'
   if (activeDrawer === 'settings') return 'Settings'
   return 'MT5 Import Center'
@@ -31,6 +32,13 @@ export function RightDrawerFrame({
   return (
     <>
       <div className="ff-right-rail" aria-label="Right toolbar">
+        <button className="ff-right-rail__button" data-active={activeDrawer === 'drawings'} onClick={() => onToggleDrawer('drawings')} title="画图" type="button">
+          <svg className="ff-right-rail__drawing-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+            <path d="M22.7966,26.3062l3.5555-3.5555" />
+            <path d="M42.55,39.0406,24.9023,21.2927l3.9106-.8022-5.0136-5.0136L25.905,8.7588l-6.9187,1.9051L14.2736,5.55,12.6692,12.168,5.55,13.6721l5.2141,5.0135L8.4579,25.504l7.0189-2.0054,4.813,5.2141,1.103-3.81L38.94,42.45C40.344,42.65,42.35,40.2439,42.55,39.0406Z" />
+            <path d="M21.3928,24.9024l-5.3144-5.0135a4.5925,4.5925,0,0,1,3.71-3.71l5.1138,5.1138" />
+          </svg>
+        </button>
         <button className="ff-right-rail__button" data-active={activeDrawer === 'indicators'} onClick={() => onToggleDrawer('indicators')} title="指标" type="button">
           <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
             <path d="M41.68,13H24.77c-2-.1-5.93-4.23-8.19-4.23H6.68A2.18,2.18,0,0,0,4.5,11h0v7.29h39V14.87A1.83,1.83,0,0,0,41.68,13Z" />

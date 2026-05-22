@@ -137,7 +137,7 @@ function getInitialBottomDrawerHeight() {
 
 function getInitialRightDrawerActive(): RightDrawerId | null {
   const value = readString(storageKeys.rightWidgetActiveDrawer)
-  return value === 'indicators' || value === 'mt5' || value === 'settings' ? value : null
+  return value === 'drawings' || value === 'indicators' || value === 'mt5' || value === 'settings' ? value : null
 }
 
 function readSharedSelection() {
