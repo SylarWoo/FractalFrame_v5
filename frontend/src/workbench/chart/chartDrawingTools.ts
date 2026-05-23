@@ -1,6 +1,6 @@
 import { ActionType, DomPosition, registerOverlay } from 'klinecharts'
 import type { Chart } from 'klinecharts'
-import { drawingMainPaneId, knownDrawingPaneIds } from '../drawing/drawingPaneModel'
+import { drawingMainPaneId } from '../drawing/drawingPaneModel'
 import {
   horizontalLineOverlayName,
   trendLineOverlayName,
@@ -26,6 +26,7 @@ import {
 } from './chartDrawingObjectIds'
 import { createChartDrawingPersistenceController, readInitialStoredDrawingState } from './chartDrawingPersistenceController'
 import { createChartDrawingVisibilityController } from './chartDrawingVisibilityController'
+import { createChartDrawingPaneInteractionController } from './chartDrawingPaneInteractionController'
 import {
   getSelectedDrawingCount as getSelectedDrawingCountFromState,
   getSelectedHorizontalLineIds as getSelectedHorizontalLineIdsFromState,
@@ -42,14 +43,13 @@ import type {
   MixedDrawingMoveState,
   TrendLineExtendData,
 } from './chartDrawingTypes'
-import { isCoordinate } from './chartDrawingTypes'
-import { distanceToSegment } from './chartDrawingGeometry'
 import { normalizeLineStyle, overlayStylesFromLine, trendOverlayStylesFromLine } from './chartDrawingStyle'
-import { createHorizontalLinePointFigures, createHorizontalLineYAxisFigures, horizontalLineHitSlop } from './horizontalLineOverlayFigures'
+import { createHorizontalLinePointFigures, createHorizontalLineYAxisFigures } from './horizontalLineOverlayFigures'
 import { createHorizontalLineOverlayFactory } from './horizontalLineOverlayController'
 import { createTrendLineOverlayFactory } from './trendLineOverlayController'
 import { createTrendLinePointFigures, createTrendLineYAxisFigures } from './trendLineOverlayFigures'
 import { trendHandleColor, trendHandleLineWidth } from './trendLineFigures'
+import { createChartDrawingHitTester } from './chartDrawingHitTesting'
 
 let horizontalLineOverlayRegistered = false
 let trendLineOverlayRegistered = false
@@ -118,12 +118,9 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   let pendingTrendStartHandle: HTMLDivElement | null = null
   const horizontalLineOverlayIds = new Set<string>()
   const trendLineOverlayIds = new Set<string>()
-  const paneInteractionCleanups: Array<() => void> = []
-  const registeredPaneInteractions = new Map<string, { cleanup: () => void; element: HTMLElement }>()
   const initialStoredDrawings = readInitialStoredDrawingState()
   let persistenceEnabled = initialStoredDrawings.horizontalLinePersistenceEnabled
   let trendLinePersistenceEnabled = initialStoredDrawings.trendLinePersistenceEnabled
-  let lastPointerPaneId = candlePaneId
   let additiveSelectionActive = false
   let pressedMoveState: PressedHorizontalLineMoveState | null = null
   let mixedDrawingMoveState: MixedDrawingMoveState | null = null
@@ -167,6 +164,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const restorePendingStoredTrendLines = () => drawingPersistenceController?.restorePendingStoredTrendLines()
 
   let drawingVisibilityController: ReturnType<typeof createChartDrawingVisibilityController> | null = null
+  let paneInteractionController: ReturnType<typeof createChartDrawingPaneInteractionController> | null = null
   const applyDrawingVisibility = () => drawingVisibilityController?.applyDrawingVisibility()
   const applyHorizontalLineVisibility = () => drawingVisibilityController?.applyHorizontalLineVisibility()
   const isHorizontalLineVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isHorizontalLineVisibleInCurrentPeriod(objectId) ?? true
@@ -185,6 +183,8 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     drawingVisibilityController?.restoreObjectCurrentPeriodVisibility(kind, objectId)
   }
   const getHorizontalLineVisible = () => drawingVisibilityController?.getHorizontalLineVisible() ?? true
+  const ensurePaneInteractionListeners = () => paneInteractionController?.ensurePaneInteractionListeners()
+  const getLastPointerPaneId = () => paneInteractionController?.getLastPointerPaneId() ?? candlePaneId
 
   const resolveTrendPointPrices = (overlay: { points?: Array<{ value?: number }> } | null | undefined): [number | undefined, number | undefined] => {
     const first = Number(overlay?.points?.[0]?.value)
@@ -260,42 +260,19 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
 
   const resolveEditableOverlayId = () => resolveSelectedOverlayId()
 
-  const eventHitsHorizontalLine = (event: MouseEvent, paneId: string, hitSlop = horizontalLineHitSlop) => {
-    const paneMain = chart.getDom(paneId, DomPosition.Main)
-    if (!paneMain) return false
-    const rect = paneMain.getBoundingClientRect()
-    const eventY = event.clientY - rect.top
-    if (!Number.isFinite(eventY)) return false
-    for (const id of horizontalLineOverlayIds) {
-      const overlay = chart.getOverlayById(id)
-      if (!overlay || (overlay.paneId || candlePaneId) !== paneId) continue
-      const extendData = overlay.extendData as HorizontalLineExtendData | undefined
-      if (!resolveHorizontalLineVisibility(extendData).visible) continue
-      const value = Number(overlay?.points[0]?.value)
-      if (!Number.isFinite(value)) continue
-      const pixel = chart.convertToPixel({ value }, { paneId })
-      const coordinate = isCoordinate(pixel) ? pixel : pixel[0]
-      const y = Number(coordinate?.y)
-      if (Number.isFinite(y) && Math.abs(eventY - y) <= hitSlop) return true
-    }
-    return false
-  }
-
-  const resolveOverlayPointPixel = (point: { dataIndex?: number; timestamp?: number; value?: number }, paneId: string) => {
-    const value = Number(point?.value)
-    if (!Number.isFinite(value)) return null
-    const dataIndex = Number(point?.dataIndex)
-    const timestamp = Number(point?.timestamp)
-    const pixel = chart.convertToPixel({
-      ...(Number.isFinite(dataIndex) ? { dataIndex } : {}),
-      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
-      value,
-    }, { paneId })
-    const coordinate = isCoordinate(pixel) ? pixel : pixel[0]
-    const x = Number(coordinate?.x)
-    const y = Number(coordinate?.y)
-    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null
-  }
+  const {
+    eventHitsHorizontalLine,
+    eventHitsTrendLine,
+    resolveOverlayPointPixel,
+  } = createChartDrawingHitTester({
+    chart,
+    fallbackPaneId: candlePaneId,
+    getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
+    horizontalLineOverlayIds,
+    resolveHorizontalLineVisibility,
+    resolveTrendLineVisibility,
+    trendLineOverlayIds,
+  })
 
   const updatePendingTrendStartHandle = (overlay: { paneId?: string; points: Array<{ dataIndex?: number; timestamp?: number; value?: number }> }) => {
     const paneId = overlay.paneId || candlePaneId
@@ -321,25 +298,6 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     }
     pendingTrendStartHandle.style.left = `${rect.left + point.x - 6.5}px`
     pendingTrendStartHandle.style.top = `${rect.top + point.y - 6.5}px`
-  }
-
-  const eventHitsTrendLine = (event: MouseEvent, paneId: string, hitSlop = horizontalLineHitSlop) => {
-    const paneMain = chart.getDom(paneId, DomPosition.Main)
-    if (!paneMain) return false
-    const rect = paneMain.getBoundingClientRect()
-    const eventPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top }
-    if (!Number.isFinite(eventPoint.x) || !Number.isFinite(eventPoint.y)) return false
-    for (const id of trendLineOverlayIds) {
-      if (id === pendingTrendLineOverlayId) continue
-      const overlay = chart.getOverlayById(id)
-      if (!overlay || (overlay.paneId || candlePaneId) !== paneId) continue
-      if (!resolveTrendLineVisibility(overlay.extendData as TrendLineExtendData | undefined).visible) continue
-      const start = resolveOverlayPointPixel(overlay.points[0] ?? {}, paneId)
-      const end = resolveOverlayPointPixel(overlay.points[1] ?? {}, paneId)
-      if (!start || !end) continue
-      if (distanceToSegment(eventPoint, start, end) <= hitSlop) return true
-    }
-    return false
   }
 
   const clearHorizontalLineSelection = () => {
@@ -496,16 +454,6 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     },
     setSelectedHorizontalLine,
   })
-
-  const handlePaneClick = (event: MouseEvent, paneId: string) => {
-    window.setTimeout(() => {
-      if (destroyed) return
-      if (eventHitsHorizontalLine(event, paneId)) return
-      if (eventHitsTrendLine(event, paneId)) return
-      clearHorizontalLineSelection()
-      clearTrendLineSelection()
-    }, 0)
-  }
 
   const createHorizontalLineOverlayBase = createHorizontalLineOverlayFactory({
     beginPressedMove,
@@ -674,26 +622,6 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   applyDrawingVisibility()
   publishObjectTreeState()
 
-  const recreatePendingOverlayForPane = (paneId: string) => {
-    if (!pendingOverlayId || !pendingOverlayOptions) return
-    const overlay = chart.getOverlayById(pendingOverlayId)
-    if (!overlay || (overlay.points?.length ?? 0) > 0 || (overlay.paneId || candlePaneId) === paneId) return
-    chart.removeOverlay({ id: pendingOverlayId })
-    const overlayId = createHorizontalLineOverlay({
-      ...pendingOverlayOptions,
-      paneId,
-      selected: false,
-    })
-    pendingOverlayId = typeof overlayId === 'string' ? overlayId : null
-    publishState({ armed: pendingOverlayId != null })
-  }
-
-  const setPointerPane = (paneId: string) => {
-    if (lastPointerPaneId === paneId) return
-    lastPointerPaneId = paneId
-    recreatePendingOverlayForPane(paneId)
-  }
-
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Control' || event.key === 'Meta') additiveSelectionActive = true
   }
@@ -702,29 +630,20 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     if (event.key === 'Control' || event.key === 'Meta') additiveSelectionActive = false
   }
 
-  const ensurePaneInteractionListeners = () => {
-    knownDrawingPaneIds.forEach((paneId) => {
-      const paneMain = chart.getDom(paneId, DomPosition.Main)
-      if (!paneMain) return
-      const registered = registeredPaneInteractions.get(paneId)
-      if (registered?.element === paneMain) return
-      registered?.cleanup()
-      const handleClick = (event: MouseEvent) => handlePaneClick(event, paneId)
-      const handlePointer = () => setPointerPane(paneId)
-      paneMain.addEventListener('click', handleClick, true)
-      paneMain.addEventListener('mouseenter', handlePointer)
-      paneMain.addEventListener('pointerenter', handlePointer)
-      paneMain.addEventListener('mousemove', handlePointer)
-      const cleanup = () => {
-        paneMain.removeEventListener('click', handleClick, true)
-        paneMain.removeEventListener('mouseenter', handlePointer)
-        paneMain.removeEventListener('pointerenter', handlePointer)
-        paneMain.removeEventListener('mousemove', handlePointer)
-      }
-      paneInteractionCleanups.push(cleanup)
-      registeredPaneInteractions.set(paneId, { cleanup, element: paneMain })
-    })
-  }
+  paneInteractionController = createChartDrawingPaneInteractionController({
+    chart,
+    clearHorizontalLineSelection,
+    clearTrendLineSelection,
+    createHorizontalLineOverlay,
+    eventHitsHorizontalLine,
+    eventHitsTrendLine,
+    fallbackPaneId: candlePaneId,
+    getDestroyed: () => destroyed,
+    getPendingOverlayId: () => pendingOverlayId,
+    getPendingOverlayOptions: () => pendingOverlayOptions,
+    publishHorizontalLineState: publishState,
+    setPendingOverlayId: (id) => { pendingOverlayId = id },
+  })
 
   ensurePaneInteractionListeners()
   window.addEventListener('keydown', handleKeyDown)
@@ -1049,7 +968,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       }
       const overlayId = createTrendLineOverlay({
         ...pendingTrendLineOptions,
-        paneId: lastPointerPaneId,
+        paneId: getLastPointerPaneId(),
         selected: false,
       })
       pendingTrendLineOverlayId = typeof overlayId === 'string' ? overlayId : null
@@ -1191,7 +1110,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     }
     const overlayId = createHorizontalLineOverlay({
       ...pendingOverlayOptions,
-      paneId: lastPointerPaneId,
+      paneId: getLastPointerPaneId(),
       selected: false,
     })
     pendingOverlayId = typeof overlayId === 'string' ? overlayId : null
@@ -1285,6 +1204,6 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     chart.unsubscribeAction(ActionType.OnDataReady, handleDataReady)
     window.removeEventListener('keydown', handleKeyDown)
     window.removeEventListener('keyup', handleKeyUp)
-    paneInteractionCleanups.forEach((cleanup) => cleanup())
+    paneInteractionController?.cleanup()
   }
 }

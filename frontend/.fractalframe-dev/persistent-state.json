@@ -1,6 +1,6 @@
 {
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
-    "lastTickAt": "06:59:09",
+    "lastTickAt": "07:06:59",
     "log": [
       "06:01:35  Realtime feed connected",
       "06:01:35  Realtime restored for 10 symbols",
@@ -36,20 +36,20 @@
         "dayOpen": 4535.491,
         "change": -27.52900000000045,
         "changePercent": -0.6069684627309468,
-        "publishedAt": "2026-05-23T22:59:09Z"
+        "publishedAt": "2026-05-23T23:06:59Z"
       },
       "BTCUSDm": {
         "symbol": "BTCUSDm",
-        "bid": 76465.11,
-        "ask": 76479.11,
-        "last": 76472.11,
+        "bid": 76637.44,
+        "ask": 76651.44,
+        "last": 76644.44,
         "volume": 0,
-        "time": 1779577147,
-        "timeMsc": 1779577147944,
+        "time": 1779577614,
+        "timeMsc": 1779577614811,
         "dayOpen": 75453.55,
-        "change": 1018.5599999999977,
-        "changePercent": 1.3499166043214634,
-        "publishedAt": "2026-05-23T22:59:09Z"
+        "change": 1190.8899999999994,
+        "changePercent": 1.5783087740735848,
+        "publishedAt": "2026-05-23T23:06:59Z"
       },
       "DXYm": {
         "symbol": "DXYm",
@@ -62,7 +62,7 @@
         "dayOpen": 99.195,
         "change": 0.13300000000000978,
         "changePercent": 0.13407933867635444,
-        "publishedAt": "2026-05-23T22:59:09Z"
+        "publishedAt": "2026-05-23T23:06:59Z"
       },
       "EURUSDm": {
         "symbol": "EURUSDm",
@@ -75,7 +75,7 @@
         "dayOpen": 1.16173,
         "change": -0.0014899999999999913,
         "changePercent": -0.12825699603177945,
-        "publishedAt": "2026-05-23T22:59:09Z"
+        "publishedAt": "2026-05-23T23:06:59Z"
       },
       "GBPUSDm": {
         "symbol": "GBPUSDm",
@@ -88,7 +88,7 @@
         "dayOpen": 1.3431600000000001,
         "change": 0.000009999999999843467,
         "changePercent": 0.0007445129396232367,
-        "publishedAt": "2026-05-23T22:59:09Z"
+        "publishedAt": "2026-05-23T23:06:59Z"
       },
       "USDJPYm": {
         "symbol": "USDJPYm",
@@ -101,20 +101,20 @@
         "dayOpen": 159.022,
         "change": 0.17900000000003047,
         "changePercent": 0.11256304159174861,
-        "publishedAt": "2026-05-23T22:59:09Z"
+        "publishedAt": "2026-05-23T23:06:59Z"
       },
       "ETHUSDm": {
         "symbol": "ETHUSDm",
-        "bid": 2112.66,
-        "ask": 2114.06,
-        "last": 2113.3599999999997,
+        "bid": 2115.49,
+        "ask": 2116.89,
+        "last": 2116.1899999999996,
         "volume": 0,
-        "time": 1779577147,
-        "timeMsc": 1779577147927,
+        "time": 1779577616,
+        "timeMsc": 1779577616314,
         "dayOpen": 2063.01,
-        "change": 50.349999999999454,
-        "changePercent": 2.4406086252611208,
-        "publishedAt": "2026-05-23T22:59:09Z"
+        "change": 53.17999999999938,
+        "changePercent": 2.577786826045408,
+        "publishedAt": "2026-05-23T23:06:59Z"
       },
       "XAGUSDm": {
         "symbol": "XAGUSDm",
@@ -127,7 +127,7 @@
         "dayOpen": 76.62,
         "change": -1.1470000000000056,
         "changePercent": -1.4969981728008426,
-        "publishedAt": "2026-05-23T22:59:09Z"
+        "publishedAt": "2026-05-23T23:06:59Z"
       },
       "USTEC_x100m": {
         "symbol": "USTEC_x100m",
@@ -140,7 +140,7 @@
         "dayOpen": 29495.81,
         "change": -16.520000000000437,
         "changePercent": -0.056007955028190226,
-        "publishedAt": "2026-05-23T22:59:09Z"
+        "publishedAt": "2026-05-23T23:06:59Z"
       },
       "US30m": {
         "symbol": "US30m",
@@ -153,7 +153,7 @@
         "dayOpen": 50419.7,
         "change": 179.0500000000029,
         "changePercent": 0.35511913002259615,
-        "publishedAt": "2026-05-23T22:59:09Z"
+        "publishedAt": "2026-05-23T23:06:59Z"
       }
     }
   },
@@ -3850,19 +3850,19 @@
     }
   },
   "fractalframe:chartViewport:v3:latest": {
-    "barSpace": 5.014587295017769,
+    "barSpace": 1.7484784757720742,
     "dataLength": 10000,
-    "offsetRightDistance": 45.20778079196305,
-    "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-23T22:58:51.571Z",
-    "visibleTo": 10000,
+    "offsetRightDistance": 0,
+    "rightTimestamp": 1779438900000,
+    "savedAt": "2026-05-23T23:06:59.807Z",
+    "visibleTo": 9851,
     "yAxisRange": {
-      "from": 4434.586461769061,
-      "range": 148.43671890650012,
-      "realFrom": 4434.586461769061,
-      "realRange": 148.43671890649966,
-      "realTo": 4583.023180675561,
-      "to": 4583.023180675561
+      "from": 4403.204491598555,
+      "range": 188.91946042645395,
+      "realFrom": 4403.204491598555,
+      "realRange": 188.91946042645395,
+      "realTo": 4592.123952025009,
+      "to": 4592.123952025009
     },
     "symbol": "XAUUSDm",
     "period": "M5"
@@ -14852,19 +14852,19 @@
     "period": "M1"
   },
   "fractalframe:chartViewport:v3:global:M5": {
-    "barSpace": 5.014587295017769,
+    "barSpace": 1.7484784757720742,
     "dataLength": 10000,
-    "offsetRightDistance": 45.20778079196305,
-    "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-23T22:58:51.571Z",
-    "visibleTo": 10000,
+    "offsetRightDistance": 0,
+    "rightTimestamp": 1779438900000,
+    "savedAt": "2026-05-23T23:06:59.807Z",
+    "visibleTo": 9851,
     "yAxisRange": {
-      "from": 4434.586461769061,
-      "range": 148.43671890650012,
-      "realFrom": 4434.586461769061,
-      "realRange": 148.43671890649966,
-      "realTo": 4583.023180675561,
-      "to": 4583.023180675561
+      "from": 4403.204491598555,
+      "range": 188.91946042645395,
+      "realFrom": 4403.204491598555,
+      "realRange": 188.91946042645395,
+      "realTo": 4592.123952025009,
+      "to": 4592.123952025009
     },
     "symbol": "XAUUSDm",
     "period": "M5"
@@ -14992,7 +14992,7 @@
         "italic": false,
         "textColor": "#131722"
       },
-      "value": 4495.217281741177
+      "value": 4489.6077545732
     },
     {
       "lineStyle": {
