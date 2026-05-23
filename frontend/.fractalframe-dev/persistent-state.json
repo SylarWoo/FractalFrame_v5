@@ -1,6 +1,6 @@
 {
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
-    "lastTickAt": "07:32:37",
+    "lastTickAt": "07:32:45",
     "log": [
       "06:01:35  Realtime feed connected",
       "06:01:35  Realtime restored for 10 symbols",
@@ -36,20 +36,20 @@
         "dayOpen": 4535.491,
         "change": -27.52900000000045,
         "changePercent": -0.6069684627309468,
-        "publishedAt": "2026-05-23T23:32:37Z"
+        "publishedAt": "2026-05-23T23:32:45Z"
       },
       "BTCUSDm": {
         "symbol": "BTCUSDm",
-        "bid": 76628.39,
-        "ask": 76642.39,
-        "last": 76635.39,
+        "bid": 76633.26,
+        "ask": 76647.26,
+        "last": 76640.26,
         "volume": 0,
-        "time": 1779579154,
-        "timeMsc": 1779579154287,
+        "time": 1779579163,
+        "timeMsc": 1779579163581,
         "dayOpen": 75453.55,
-        "change": 1181.8399999999965,
-        "changePercent": 1.5663146399341004,
-        "publishedAt": "2026-05-23T23:32:37Z"
+        "change": 1186.7099999999919,
+        "changePercent": 1.572768941951693,
+        "publishedAt": "2026-05-23T23:32:45Z"
       },
       "DXYm": {
         "symbol": "DXYm",
@@ -62,7 +62,7 @@
         "dayOpen": 99.195,
         "change": 0.13300000000000978,
         "changePercent": 0.13407933867635444,
-        "publishedAt": "2026-05-23T23:32:37Z"
+        "publishedAt": "2026-05-23T23:32:45Z"
       },
       "EURUSDm": {
         "symbol": "EURUSDm",
@@ -75,7 +75,7 @@
         "dayOpen": 1.16173,
         "change": -0.0014899999999999913,
         "changePercent": -0.12825699603177945,
-        "publishedAt": "2026-05-23T23:32:37Z"
+        "publishedAt": "2026-05-23T23:32:45Z"
       },
       "GBPUSDm": {
         "symbol": "GBPUSDm",
@@ -88,7 +88,7 @@
         "dayOpen": 1.3431600000000001,
         "change": 0.000009999999999843467,
         "changePercent": 0.0007445129396232367,
-        "publishedAt": "2026-05-23T23:32:37Z"
+        "publishedAt": "2026-05-23T23:32:45Z"
       },
       "USDJPYm": {
         "symbol": "USDJPYm",
@@ -101,20 +101,20 @@
         "dayOpen": 159.022,
         "change": 0.17900000000003047,
         "changePercent": 0.11256304159174861,
-        "publishedAt": "2026-05-23T23:32:37Z"
+        "publishedAt": "2026-05-23T23:32:45Z"
       },
       "ETHUSDm": {
         "symbol": "ETHUSDm",
-        "bid": 2116.76,
-        "ask": 2118.16,
-        "last": 2117.46,
+        "bid": 2116.87,
+        "ask": 2118.27,
+        "last": 2117.5699999999997,
         "volume": 0,
-        "time": 1779579155,
-        "timeMsc": 1779579155897,
+        "time": 1779579162,
+        "timeMsc": 1779579162427,
         "dayOpen": 2063.01,
-        "change": 54.44999999999982,
-        "changePercent": 2.6393473613797225,
-        "publishedAt": "2026-05-23T23:32:37Z"
+        "change": 54.55999999999949,
+        "changePercent": 2.644679376251181,
+        "publishedAt": "2026-05-23T23:32:45Z"
       },
       "XAGUSDm": {
         "symbol": "XAGUSDm",
@@ -127,7 +127,7 @@
         "dayOpen": 76.62,
         "change": -1.1470000000000056,
         "changePercent": -1.4969981728008426,
-        "publishedAt": "2026-05-23T23:32:37Z"
+        "publishedAt": "2026-05-23T23:32:45Z"
       },
       "USTEC_x100m": {
         "symbol": "USTEC_x100m",
@@ -140,7 +140,7 @@
         "dayOpen": 29495.81,
         "change": -16.520000000000437,
         "changePercent": -0.056007955028190226,
-        "publishedAt": "2026-05-23T23:32:37Z"
+        "publishedAt": "2026-05-23T23:32:45Z"
       },
       "US30m": {
         "symbol": "US30m",
@@ -153,7 +153,7 @@
         "dayOpen": 50419.7,
         "change": 179.0500000000029,
         "changePercent": 0.35511913002259615,
-        "publishedAt": "2026-05-23T23:32:37Z"
+        "publishedAt": "2026-05-23T23:32:45Z"
       }
     }
   },
