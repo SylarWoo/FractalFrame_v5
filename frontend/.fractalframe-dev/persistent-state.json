@@ -1,6 +1,6 @@
 {
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
-    "lastTickAt": "06:15:13",
+    "lastTickAt": "06:15:30",
     "log": [
       "06:01:35  Realtime feed connected",
       "06:01:35  Realtime restored for 10 symbols",
@@ -36,20 +36,20 @@
         "dayOpen": 4535.491,
         "change": -27.52900000000045,
         "changePercent": -0.6069684627309468,
-        "publishedAt": "2026-05-23T22:15:13Z"
+        "publishedAt": "2026-05-23T22:15:30Z"
       },
       "BTCUSDm": {
         "symbol": "BTCUSDm",
-        "bid": 76585.7,
-        "ask": 76599.7,
-        "last": 76592.7,
+        "bid": 76564.24,
+        "ask": 76578.24,
+        "last": 76571.24,
         "volume": 0,
-        "time": 1779574512,
-        "timeMsc": 1779574512924,
+        "time": 1779574528,
+        "timeMsc": 1779574528589,
         "dayOpen": 75453.55,
-        "change": 1139.1499999999942,
-        "changePercent": 1.509736785081675,
-        "publishedAt": "2026-05-23T22:15:13Z"
+        "change": 1117.6900000000023,
+        "changePercent": 1.4812954460061882,
+        "publishedAt": "2026-05-23T22:15:30Z"
       },
       "DXYm": {
         "symbol": "DXYm",
@@ -62,7 +62,7 @@
         "dayOpen": 99.195,
         "change": 0.13300000000000978,
         "changePercent": 0.13407933867635444,
-        "publishedAt": "2026-05-23T22:15:13Z"
+        "publishedAt": "2026-05-23T22:15:30Z"
       },
       "EURUSDm": {
         "symbol": "EURUSDm",
@@ -75,7 +75,7 @@
         "dayOpen": 1.16173,
         "change": -0.0014899999999999913,
         "changePercent": -0.12825699603177945,
-        "publishedAt": "2026-05-23T22:15:13Z"
+        "publishedAt": "2026-05-23T22:15:30Z"
       },
       "GBPUSDm": {
         "symbol": "GBPUSDm",
@@ -88,7 +88,7 @@
         "dayOpen": 1.3431600000000001,
         "change": 0.000009999999999843467,
         "changePercent": 0.0007445129396232367,
-        "publishedAt": "2026-05-23T22:15:13Z"
+        "publishedAt": "2026-05-23T22:15:30Z"
       },
       "USDJPYm": {
         "symbol": "USDJPYm",
@@ -101,20 +101,20 @@
         "dayOpen": 159.022,
         "change": 0.17900000000003047,
         "changePercent": 0.11256304159174861,
-        "publishedAt": "2026-05-23T22:15:13Z"
+        "publishedAt": "2026-05-23T22:15:30Z"
       },
       "ETHUSDm": {
         "symbol": "ETHUSDm",
-        "bid": 2112.8,
-        "ask": 2114.2,
-        "last": 2113.5,
+        "bid": 2112.31,
+        "ask": 2113.71,
+        "last": 2113.01,
         "volume": 0,
-        "time": 1779574509,
-        "timeMsc": 1779574509763,
+        "time": 1779574529,
+        "timeMsc": 1779574529325,
         "dayOpen": 2063.01,
-        "change": 50.48999999999978,
-        "changePercent": 2.4473948260066494,
-        "publishedAt": "2026-05-23T22:15:13Z"
+        "change": 50,
+        "changePercent": 2.4236431233973654,
+        "publishedAt": "2026-05-23T22:15:30Z"
       },
       "XAGUSDm": {
         "symbol": "XAGUSDm",
@@ -127,7 +127,7 @@
         "dayOpen": 76.62,
         "change": -1.1470000000000056,
         "changePercent": -1.4969981728008426,
-        "publishedAt": "2026-05-23T22:15:13Z"
+        "publishedAt": "2026-05-23T22:15:30Z"
       },
       "USTEC_x100m": {
         "symbol": "USTEC_x100m",
@@ -140,7 +140,7 @@
         "dayOpen": 29495.81,
         "change": -16.520000000000437,
         "changePercent": -0.056007955028190226,
-        "publishedAt": "2026-05-23T22:15:13Z"
+        "publishedAt": "2026-05-23T22:15:30Z"
       },
       "US30m": {
         "symbol": "US30m",
@@ -153,7 +153,7 @@
         "dayOpen": 50419.7,
         "change": 179.0500000000029,
         "changePercent": 0.35511913002259615,
-        "publishedAt": "2026-05-23T22:15:13Z"
+        "publishedAt": "2026-05-23T22:15:30Z"
       }
     }
   },
@@ -3854,7 +3854,7 @@
     "dataLength": 10000,
     "offsetRightDistance": 101.56146581145153,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-23T22:15:13.626Z",
+    "savedAt": "2026-05-23T22:15:30.626Z",
     "visibleTo": 10000,
     "yAxisRange": {
       "from": 4321.978052954549,
@@ -14856,7 +14856,7 @@
     "dataLength": 10000,
     "offsetRightDistance": 101.56146581145153,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-23T22:15:13.626Z",
+    "savedAt": "2026-05-23T22:15:30.626Z",
     "visibleTo": 10000,
     "yAxisRange": {
       "from": 4321.978052954549,
