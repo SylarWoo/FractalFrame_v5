@@ -4,9 +4,14 @@ export const objectTreeDrawingsChangedEvent = 'fractalframe:object-tree-drawings
 export const objectTreeDrawingsRequestEvent = 'fractalframe:object-tree-drawings-request'
 export const objectTreeDrawingCommandEvent = 'fractalframe:object-tree-drawing-command'
 
-export function publishObjectTreeDrawings(items: ObjectTreeDrawingItem[]) {
-  window.dispatchEvent(new CustomEvent<{ items: ObjectTreeDrawingItem[] }>(objectTreeDrawingsChangedEvent, {
-    detail: { items },
+export type ObjectTreeDrawingsChangedDetail = {
+  activeId?: string
+  items: ObjectTreeDrawingItem[]
+}
+
+export function publishObjectTreeDrawings(items: ObjectTreeDrawingItem[], activeId?: string) {
+  window.dispatchEvent(new CustomEvent<ObjectTreeDrawingsChangedDetail>(objectTreeDrawingsChangedEvent, {
+    detail: { activeId, items },
   }))
 }
 

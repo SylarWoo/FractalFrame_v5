@@ -212,7 +212,7 @@
   height: 18px;
   margin: 0;
   accent-color: #2f2f33;
-  cursor: pointer;
+  cursor: default;
 }
 
 .ff-indicators-input-panel-v1__control--check {

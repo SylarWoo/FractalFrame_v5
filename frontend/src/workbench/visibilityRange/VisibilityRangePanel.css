@@ -24,7 +24,7 @@
   align-items: center;
   gap: 8px;
   color: #131722;
-  cursor: pointer;
+  cursor: default;
   font-size: 13px;
   user-select: none;
   white-space: nowrap;
@@ -35,7 +35,7 @@
   height: 18px;
   margin: 0;
   accent-color: #2f2f33;
-  cursor: pointer;
+  cursor: default;
 }
 
 .ff-visibility-range-row__number {

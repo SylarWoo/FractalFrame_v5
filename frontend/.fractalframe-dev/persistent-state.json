@@ -1,15 +1,15 @@
 {
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
-    "lastTickAt": "14:58:14",
+    "lastTickAt": "19:37:33",
     "log": [
-      "14:37:53  Realtime feed connected",
-      "14:37:53  Realtime restored for 10 symbols",
-      "14:36:10  Realtime feed connected",
-      "14:36:10  Realtime restored for 10 symbols",
-      "14:33:33  Realtime feed connected",
-      "14:33:32  Realtime restored for 10 symbols",
-      "14:30:51  Realtime feed connected",
-      "14:30:51  Realtime restored for 10 symbols"
+      "19:34:50  Realtime feed connected",
+      "19:34:50  Realtime restored for 10 symbols",
+      "19:32:45  Realtime feed connected",
+      "19:32:45  Realtime restored for 10 symbols",
+      "19:31:18  Realtime feed connected",
+      "19:31:18  Realtime restored for 10 symbols",
+      "19:29:33  Realtime feed connected",
+      "19:29:33  Realtime restored for 10 symbols"
     ],
     "ticks": {
       "1INCHUSDm": {
@@ -36,20 +36,20 @@
         "dayOpen": 4535.491,
         "change": -27.52900000000045,
         "changePercent": -0.6069684627309468,
-        "publishedAt": "2026-05-23T06:58:14Z"
+        "publishedAt": "2026-05-23T11:37:33Z"
       },
       "BTCUSDm": {
         "symbol": "BTCUSDm",
-        "bid": 75323.22,
-        "ask": 75337.22,
-        "last": 75330.22,
+        "bid": 74730.97,
+        "ask": 74744.97,
+        "last": 74737.97,
         "volume": 0,
-        "time": 1779519484,
-        "timeMsc": 1779519484806,
+        "time": 1779536249,
+        "timeMsc": 1779536249565,
         "dayOpen": 75453.55,
-        "change": -123.33000000000175,
-        "changePercent": -0.16345155396929864,
-        "publishedAt": "2026-05-23T06:58:14Z"
+        "change": -715.5800000000017,
+        "changePercent": -0.9483715477933136,
+        "publishedAt": "2026-05-23T11:37:33Z"
       },
       "DXYm": {
         "symbol": "DXYm",
@@ -62,7 +62,7 @@
         "dayOpen": 99.195,
         "change": 0.13300000000000978,
         "changePercent": 0.13407933867635444,
-        "publishedAt": "2026-05-23T06:58:14Z"
+        "publishedAt": "2026-05-23T11:37:33Z"
       },
       "EURUSDm": {
         "symbol": "EURUSDm",
@@ -75,7 +75,7 @@
         "dayOpen": 1.16173,
         "change": -0.0014899999999999913,
         "changePercent": -0.12825699603177945,
-        "publishedAt": "2026-05-23T06:58:14Z"
+        "publishedAt": "2026-05-23T11:37:33Z"
       },
       "GBPUSDm": {
         "symbol": "GBPUSDm",
@@ -88,7 +88,7 @@
         "dayOpen": 1.3431600000000001,
         "change": 0.000009999999999843467,
         "changePercent": 0.0007445129396232367,
-        "publishedAt": "2026-05-23T06:58:14Z"
+        "publishedAt": "2026-05-23T11:37:33Z"
       },
       "USDJPYm": {
         "symbol": "USDJPYm",
@@ -101,20 +101,20 @@
         "dayOpen": 159.022,
         "change": 0.17900000000003047,
         "changePercent": 0.11256304159174861,
-        "publishedAt": "2026-05-23T06:58:14Z"
+        "publishedAt": "2026-05-23T11:37:33Z"
       },
       "ETHUSDm": {
         "symbol": "ETHUSDm",
-        "bid": 2058.81,
-        "ask": 2060.21,
-        "last": 2059.51,
+        "bid": 2028.64,
+        "ask": 2030.04,
+        "last": 2029.3400000000001,
         "volume": 0,
-        "time": 1779519484,
-        "timeMsc": 1779519484777,
+        "time": 1779536252,
+        "timeMsc": 1779536252788,
         "dayOpen": 2063.01,
-        "change": -3.5,
-        "changePercent": -0.1696550186378156,
-        "publishedAt": "2026-05-23T06:58:14Z"
+        "change": -33.67000000000007,
+        "changePercent": -1.6320812792957897,
+        "publishedAt": "2026-05-23T11:37:33Z"
       },
       "XAGUSDm": {
         "symbol": "XAGUSDm",
@@ -127,7 +127,7 @@
         "dayOpen": 76.62,
         "change": -1.1470000000000056,
         "changePercent": -1.4969981728008426,
-        "publishedAt": "2026-05-23T06:58:14Z"
+        "publishedAt": "2026-05-23T11:37:33Z"
       },
       "USTEC_x100m": {
         "symbol": "USTEC_x100m",
@@ -140,7 +140,7 @@
         "dayOpen": 29495.81,
         "change": -16.520000000000437,
         "changePercent": -0.056007955028190226,
-        "publishedAt": "2026-05-23T06:58:14Z"
+        "publishedAt": "2026-05-23T11:37:33Z"
       },
       "US30m": {
         "symbol": "US30m",
@@ -153,12 +153,11 @@
         "dayOpen": 50419.7,
         "change": 179.0500000000029,
         "changePercent": 0.35511913002259615,
-        "publishedAt": "2026-05-23T06:58:14Z"
+        "publishedAt": "2026-05-23T11:37:33Z"
       }
     }
   },
-  "fractalframe:rightWidgetDrawerWidthPx:v1": "318",
-  "fractalframe:rightWidgetActiveDrawer:v1": "drawings",
+  "fractalframe:rightWidgetDrawerWidthPx:v1": "348",
   "fractalframe.objectTree.groups.v1": [],
   "fractalframe:v5:indicators:state:v1": {
     "loaded": {
@@ -472,7 +471,7 @@
       "symbol": "1INCHUSDm"
     },
     "XAUUSDM": {
-      "savedAt": "2026-05-23T05:32:38.444Z",
+      "savedAt": "2026-05-23T08:53:47.488Z",
       "status": {
         "status": "closed",
         "label": "休市",
@@ -481,10 +480,10 @@
         "lastM1Iso": "2026-05-22T20:57:00Z",
         "lastTickTime": 1779483478,
         "lastTickTimeMsc": 1779483478190,
-        "serverTime": 1779514358,
-        "serverTimeIso": "2026-05-23T05:32:38Z",
-        "ageSeconds": 30938,
-        "tickAgeSeconds": 30880,
+        "serverTime": 1779526427,
+        "serverTimeIso": "2026-05-23T08:53:47Z",
+        "ageSeconds": 43007,
+        "tickAgeSeconds": 42949,
         "staleSeconds": 120,
         "tradeMode": 4,
         "reason": "m1_and_tick_stale"
@@ -3851,22 +3850,22 @@
     }
   },
   "fractalframe:chartViewport:v3:latest": {
-    "barSpace": 4.760425942646041,
+    "barSpace": 1.9752482447699404,
     "dataLength": 10000,
-    "offsetRightDistance": 151.98560063402473,
-    "rightTimestamp": 1779480000000,
-    "savedAt": "2026-05-23T06:57:52.019Z",
+    "offsetRightDistance": 124.41083751467484,
+    "rightTimestamp": 1779482700000,
+    "savedAt": "2026-05-23T11:37:33.627Z",
     "visibleTo": 10000,
     "yAxisRange": {
-      "from": 4180.103340954761,
-      "range": 627.4791206655682,
-      "realFrom": 4180.103340954761,
-      "realRange": 627.4791206655682,
-      "realTo": 4807.582461620329,
-      "to": 4807.582461620329
+      "from": 4182.212511318754,
+      "range": 524.1730869620615,
+      "realFrom": 4182.212511318754,
+      "realRange": 524.1730869620615,
+      "realTo": 4706.385598280815,
+      "to": 4706.385598280815
     },
     "symbol": "XAUUSDm",
-    "period": "H1"
+    "period": "M15"
   },
   "fractalframe:mt5ImportCenterWatchlistSymbols:v1": [
     "XAUUSDm",
@@ -3930,7 +3929,7 @@
   "fractalframe:mt5ImportCenterQuery:v1": "",
   "fractalframe:mt5ImportCenterSharedSelection:v1": {
     "symbol": "XAUUSDm",
-    "period": "H1"
+    "period": "M15"
   },
   "fractalframe:mt5ImportCenterSymbolSnapshot:v1": {
     "selectedSymbol": "XAUUSDm",
@@ -14871,42 +14870,42 @@
     "period": "M5"
   },
   "fractalframe:chartViewport:v3:global:M15": {
-    "barSpace": 5.344585653655061,
+    "barSpace": 1.9752482447699404,
     "dataLength": 10000,
-    "offsetRightDistance": 125.11513705273691,
+    "offsetRightDistance": 124.41083751467484,
     "rightTimestamp": 1779482700000,
-    "savedAt": "2026-05-23T05:31:06.069Z",
+    "savedAt": "2026-05-23T11:37:33.627Z",
     "visibleTo": 10000,
     "yAxisRange": {
-      "from": 51.280890427281065,
-      "range": 49.63261914543787,
-      "realFrom": 51.280890427281065,
-      "realRange": 49.63261914543786,
-      "realTo": 100.91350957271892,
-      "to": 100.91350957271892
+      "from": 4182.212511318754,
+      "range": 524.1730869620615,
+      "realFrom": 4182.212511318754,
+      "realRange": 524.1730869620615,
+      "realTo": 4706.385598280815,
+      "to": 4706.385598280815
     },
-    "symbol": "XAGUSDm",
+    "symbol": "XAUUSDm",
     "period": "M15"
   },
   "fractalframe:chartViewport:v3:global:M30": {
-    "barSpace": 5.344585653655061,
+    "barSpace": 1.9752482447699404,
     "dataLength": 10000,
-    "offsetRightDistance": 125.11513705273691,
+    "offsetRightDistance": 232.41083751467485,
     "rightTimestamp": 1779481800000,
-    "savedAt": "2026-05-23T05:30:59.215Z",
+    "savedAt": "2026-05-23T11:36:05.704Z",
     "visibleTo": 10000,
     "yAxisRange": {
-      "from": 72.48277176470589,
-      "range": 7.2288564705882346,
-      "realFrom": 72.48277176470589,
-      "realRange": 7.228856470588227,
-      "realTo": 79.71162823529411,
-      "to": 79.71162823529411
+      "from": 4182.212511318754,
+      "range": 524.1730869620615,
+      "realFrom": 4182.212511318754,
+      "realRange": 524.1730869620615,
+      "realTo": 4706.385598280815,
+      "to": 4706.385598280815
     },
-    "symbol": "XAGUSDm",
+    "symbol": "XAUUSDm",
     "period": "M30"
   },
-  "fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1": "378",
+  "fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1": "310",
   "fractalframe:mt5ImportCenterWatchlistColumnWidthsPx:v1": {
     "symbol": 81,
     "name": 78,
@@ -14916,19 +14915,19 @@
   },
   "fractalframe:mt5ImportCenterTopPaneHeightPx:v1": "180",
   "fractalframe:chartViewport:v3:global:H1": {
-    "barSpace": 4.760425942646041,
+    "barSpace": 1.9752482447699404,
     "dataLength": 10000,
-    "offsetRightDistance": 151.98560063402473,
+    "offsetRightDistance": 232.41083751467485,
     "rightTimestamp": 1779480000000,
-    "savedAt": "2026-05-23T06:57:52.019Z",
+    "savedAt": "2026-05-23T11:36:04.161Z",
     "visibleTo": 10000,
     "yAxisRange": {
-      "from": 4180.103340954761,
-      "range": 627.4791206655682,
-      "realFrom": 4180.103340954761,
-      "realRange": 627.4791206655682,
-      "realTo": 4807.582461620329,
-      "to": 4807.582461620329
+      "from": 4182.212511318754,
+      "range": 524.1730869620615,
+      "realFrom": 4182.212511318754,
+      "realRange": 524.1730869620615,
+      "realTo": 4706.385598280815,
+      "to": 4706.385598280815
     },
     "symbol": "XAUUSDm",
     "period": "H1"
@@ -14969,8 +14968,8 @@
     "symbol": "XAGUSDm",
     "period": "H4"
   },
-  "fractalframe.chart.macdPaneHeight": "246",
-  "fractalframe.chart.viPaneHeight": "262",
+  "fractalframe.chart.macdPaneHeight": "258",
+  "fractalframe.chart.viPaneHeight": "271",
   "fractalframe.drawings.horizontalLine.items": [
     {
       "lineStyle": {
@@ -14985,6 +14984,29 @@
       "paneId": "candle_pane",
       "showPriceLabel": true,
       "textStyle": {
+        "alignH": "left",
+        "alignV": "bottom",
+        "body": "支撑线",
+        "bold": false,
+        "fontSize": 14,
+        "italic": false,
+        "textColor": "#131722"
+      },
+      "value": 4507.2316898605795
+    },
+    {
+      "lineStyle": {
+        "hex": "#0f766e",
+        "lineStyle": "solid",
+        "opacity": 1,
+        "thickness": 1
+      },
+      "locked": false,
+      "manualVisible": true,
+      "objectId": "HL0004",
+      "paneId": "vi_pane",
+      "showPriceLabel": true,
+      "textStyle": {
         "alignH": "right",
         "alignV": "top",
         "body": "",
@@ -14993,7 +15015,7 @@
         "italic": false,
         "textColor": "#131722"
       },
-      "value": 4578.962727178546
+      "value": 1.0097000971715524
     }
   ],
   "fractalframe.drawingsDrawer.selectedTool": "trendLine",
@@ -15006,21 +15028,23 @@
         "thickness": 1
       },
       "locked": false,
-      "paneId": "candle_pane",
+      "manualVisible": true,
+      "objectId": "TL0006",
+      "paneId": "macd_pane",
       "points": [
         {
-          "dataIndex": 10007,
-          "value": 4503.546186658662
+          "dataIndex": 10014,
+          "value": 13.796306122672995
         },
         {
-          "dataIndex": 9925,
-          "timestamp": 1779202800000,
-          "value": 4366.776069046727
+          "dataIndex": 9848,
+          "timestamp": 1779343200000,
+          "value": -9.703168245678768
         }
       ],
       "showPriceLabel": true,
       "textStyle": {
-        "alignH": "right",
+        "alignH": "center",
         "alignV": "top",
         "body": "",
         "bold": false,
@@ -15029,21 +15053,71 @@
         "textColor": "#131722"
       },
       "trendLineStyle": {
-        "endMarker": "normal",
+        "endMarker": "arrow",
         "extendMode": "none",
         "middleVisible": false,
         "statsAlwaysVisible": false,
         "statsData": [
-          "price-range",
-          "percent-change",
-          "point-change",
-          "bar-range",
-          "date-time-range",
+          "angle",
           "distance",
-          "angle"
+          "date-time-range",
+          "bar-range",
+          "point-change",
+          "percent-change",
+          "price-range"
         ],
         "statsPosition": "center",
-        "startMarker": "arrow"
+        "startMarker": "normal"
+      }
+    },
+    {
+      "lineStyle": {
+        "hex": "#8d52e0",
+        "lineStyle": "solid",
+        "opacity": 1,
+        "thickness": 1
+      },
+      "locked": false,
+      "manualVisible": true,
+      "objectId": "TL0010",
+      "paneId": "candle_pane",
+      "points": [
+        {
+          "dataIndex": 9790,
+          "timestamp": 1779287400000,
+          "value": 4338.349175520219
+        },
+        {
+          "dataIndex": 10010,
+          "value": 4450.671979869232
+        }
+      ],
+      "showPriceLabel": true,
+      "textStyle": {
+        "alignH": "center",
+        "alignV": "top",
+        "body": "",
+        "bold": false,
+        "fontSize": 14,
+        "italic": false,
+        "textColor": "#131722"
+      },
+      "trendLineStyle": {
+        "endMarker": "arrow",
+        "extendMode": "none",
+        "middleVisible": false,
+        "statsAlwaysVisible": false,
+        "statsData": [
+          "angle",
+          "distance",
+          "date-time-range",
+          "bar-range",
+          "point-change",
+          "percent-change",
+          "price-range"
+        ],
+        "statsPosition": "center",
+        "startMarker": "normal"
       }
     }
   ],
@@ -15055,20 +15129,509 @@
     "thickness": 1
   },
   "fractalframe.drawingsDrawer.trendLineStyle": {
-    "endMarker": "normal",
+    "endMarker": "arrow",
     "extendMode": "none",
     "middleVisible": false,
     "statsAlwaysVisible": false,
     "statsData": [
-      "price-range",
-      "percent-change",
-      "point-change",
-      "bar-range",
-      "date-time-range",
+      "angle",
       "distance",
-      "angle"
+      "date-time-range",
+      "bar-range",
+      "point-change",
+      "percent-change",
+      "price-range"
     ],
     "statsPosition": "center",
-    "startMarker": "arrow"
-  }
+    "startMarker": "normal"
+  },
+  "fractalframe:visibilityRange:drawing:trendLine:TL0002:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": false,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ],
+  "fractalframe:visibilityRange:drawing:horizontalLine:HL0004:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ],
+  "fractalframe.drawingsDrawer.textStyle.horizontalLine": {
+    "alignH": "left",
+    "alignV": "bottom",
+    "body": "支撑线",
+    "bold": false,
+    "fontSize": 14,
+    "italic": false,
+    "textColor": "#131722"
+  },
+  "fractalframe.drawingsDrawer.textStyle.trendLine": {
+    "alignH": "right",
+    "alignV": "middle",
+    "body": "趋势线",
+    "bold": false,
+    "fontSize": 14,
+    "italic": false,
+    "textColor": "#131722"
+  },
+  "fractalframe:visibilityRange:drawing:horizontalLine:HL0006:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ],
+  "fractalframe:visibilityRange:drawing:horizontalLine:HL0008:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ],
+  "fractalframe:rightWidgetActiveDrawer:v1": "drawings",
+  "fractalframe:visibilityRange:drawing:horizontalLine:HL0010:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ],
+  "fractalframe:visibilityRange:drawing:trendLine:TL0004:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": false,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ],
+  "fractalframe:visibilityRange:drawing:horizontalLine:HL0002:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ],
+  "fractalframe:visibilityRange:drawing:trendLine:TL0006:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ],
+  "fractalframe:visibilityRange:drawing:trendLine:TL0008:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": false,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ],
+  "fractalframe:visibilityRange:drawing:trendLine:TL0010:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ]
 }

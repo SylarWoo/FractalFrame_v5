@@ -1,4 +1,4 @@
-export type ObjectTreeDrawingKind = 'horizontalLine'
+export type ObjectTreeDrawingKind = 'horizontalLine' | 'trendLine'
 
 export type ObjectTreeDrawingItem = {
   id: string

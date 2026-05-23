@@ -23,21 +23,13 @@ export function VisibilityRangePanel({ storageKey, storageKeys }: VisibilityRang
   const resolvedStorageKey = useMemo(() => visibilityRangeStorageKey(primaryStorageKey), [primaryStorageKey])
   const resolvedStorageKeys = useMemo(() => effectiveStorageKeys.map((key) => visibilityRangeStorageKey(key)).join('|'), [effectiveStorageKeys])
   const [rows, setRows] = useState<VisibilityRangeRow[]>(() => readVisibilityRangeRows(primaryStorageKey))
-  const [loadedStorageKeys, setLoadedStorageKeys] = useState(resolvedStorageKeys)
 
   useEffect(() => {
     setRows(readVisibilityRangeRows(primaryStorageKey))
-    setLoadedStorageKeys(resolvedStorageKeys)
   }, [primaryStorageKey, resolvedStorageKey, resolvedStorageKeys])
 
-  useEffect(() => {
-    if (!resolvedStorageKey) return
-    if (loadedStorageKeys !== resolvedStorageKeys) return
-    effectiveStorageKeys.forEach((key) => writeVisibilityRangeRows(key, rows))
-  }, [effectiveStorageKeys, loadedStorageKeys, resolvedStorageKey, resolvedStorageKeys, rows])
-
   const patchRow = (key: VisibilityRangeUnitKey, patch: Partial<VisibilityRangeRow>) => {
-    setRows((current) => current.map((row) => {
+    const nextRows = rows.map((row) => {
       if (row.key !== key) return row
       const from = patch.from == null ? row.from : clampVisibilityRangeValue(patch.from, row.min, row.max)
       const to = patch.to == null ? row.to : clampVisibilityRangeValue(patch.to, row.min, row.max)
@@ -47,7 +39,9 @@ export function VisibilityRangePanel({ storageKey, storageKeys }: VisibilityRang
         from: Math.min(from, to),
         to: Math.max(from, to),
       }
-    }))
+    })
+    setRows(nextRows)
+    effectiveStorageKeys.forEach((storageKey) => writeVisibilityRangeRows(storageKey, nextRows))
   }
 
   return (

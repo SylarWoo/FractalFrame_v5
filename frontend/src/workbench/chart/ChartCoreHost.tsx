@@ -2,14 +2,12 @@ import { useEffect, useRef } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
-import { installChartDragCursor } from './chartDragCursor'
 import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
 import { useChartRealtimeTicks } from './useChartRealtimeTicks'
 import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
 import { useChartStepLoad } from './useChartStepLoad'
-import { installIndicatorAxisDragSensitivity, uninstallIndicatorAxisDragSensitivity } from './rsiAxisDragSensitivity'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
@@ -224,13 +222,11 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           rsiPaneHeightObserverRef.current?.disconnect()
           rsiPaneHeightObserverRef.current = null
           chart.removeIndicator(rsiPaneId, 'RSI')
-          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
         }
         if (chart.getIndicatorByPaneId(rsiPaneId, 'RSI')) {
           chart.overrideIndicator({ name: 'RSI', calcParams: [indicatorCommand.settings] }, rsiPaneId, observeRsiPaneHeight)
-          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
         }
@@ -240,12 +236,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           { id: rsiPaneId, height: readStoredPaneHeight(rsiPaneHeightStorageKey), minHeight: minRsiPaneHeight },
           () => {
             observeRsiPaneHeight()
-            installChartDragCursor(chart)
             refreshChartDrawings()
             scheduleUnlockYAxisManualDrag(chart)
           },
         )
-        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       } else {
         const size = chart.getSize(rsiPaneId)
@@ -253,7 +247,6 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         rsiPaneHeightObserverRef.current?.disconnect()
         rsiPaneHeightObserverRef.current = null
         chart.removeIndicator(rsiPaneId, 'RSI')
-        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       }
     }
@@ -268,13 +261,11 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           stochPaneHeightObserverRef.current?.disconnect()
           stochPaneHeightObserverRef.current = null
           chart.removeIndicator(stochPaneId, 'Stoch')
-          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
         }
         if (chart.getIndicatorByPaneId(stochPaneId, 'Stoch')) {
           chart.overrideIndicator({ name: 'Stoch', calcParams: [indicatorCommand.settings] }, stochPaneId, observeStochPaneHeight)
-          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
         }
@@ -284,12 +275,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           { id: stochPaneId, height: readStoredPaneHeight(stochPaneHeightStorageKey), minHeight: minRsiPaneHeight },
           () => {
             observeStochPaneHeight()
-            installChartDragCursor(chart)
             refreshChartDrawings()
             scheduleUnlockYAxisManualDrag(chart)
           },
         )
-        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       } else {
         const size = chart.getSize(stochPaneId)
@@ -297,7 +286,6 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         stochPaneHeightObserverRef.current?.disconnect()
         stochPaneHeightObserverRef.current = null
         chart.removeIndicator(stochPaneId, 'Stoch')
-        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       }
     }
@@ -312,14 +300,12 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           macdPaneHeightObserverRef.current?.disconnect()
           macdPaneHeightObserverRef.current = null
           chart.removeIndicator(macdPaneId, 'MACD')
-          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
         }
         if (chart.getIndicatorByPaneId(macdPaneId, 'MACD')) {
           chart.overrideIndicator({ name: 'MACD', calcParams: [indicatorCommand.settings] }, macdPaneId, observeMacdPaneHeight)
           scheduleResetIndicatorYAxisAutoScale(chart, [macdPaneId])
-          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
         }
@@ -329,13 +315,11 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           { id: macdPaneId, height: readStoredPaneHeight(macdPaneHeightStorageKey), minHeight: minRsiPaneHeight },
           () => {
             observeMacdPaneHeight()
-            installChartDragCursor(chart)
             refreshChartDrawings()
             scheduleResetIndicatorYAxisAutoScale(chart, [macdPaneId])
             scheduleUnlockYAxisManualDrag(chart)
           },
         )
-        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       } else {
         const size = chart.getSize(macdPaneId)
@@ -343,7 +327,6 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         macdPaneHeightObserverRef.current?.disconnect()
         macdPaneHeightObserverRef.current = null
         chart.removeIndicator(macdPaneId, 'MACD')
-        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       }
     }
@@ -358,13 +341,11 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           tsiPaneHeightObserverRef.current?.disconnect()
           tsiPaneHeightObserverRef.current = null
           chart.removeIndicator(tsiPaneId, 'TSI')
-          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
         }
         if (chart.getIndicatorByPaneId(tsiPaneId, 'TSI')) {
           chart.overrideIndicator({ name: 'TSI', calcParams: [indicatorCommand.settings] }, tsiPaneId, observeTsiPaneHeight)
-          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
         }
@@ -374,12 +355,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           { id: tsiPaneId, height: readStoredPaneHeight(tsiPaneHeightStorageKey), minHeight: minRsiPaneHeight },
           () => {
             observeTsiPaneHeight()
-            installChartDragCursor(chart)
             refreshChartDrawings()
             scheduleUnlockYAxisManualDrag(chart)
           },
         )
-        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       } else {
         const size = chart.getSize(tsiPaneId)
@@ -387,7 +366,6 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         tsiPaneHeightObserverRef.current?.disconnect()
         tsiPaneHeightObserverRef.current = null
         chart.removeIndicator(tsiPaneId, 'TSI')
-        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       }
     }
@@ -402,13 +380,11 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           viPaneHeightObserverRef.current?.disconnect()
           viPaneHeightObserverRef.current = null
           chart.removeIndicator(viPaneId, 'VI')
-          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
         }
         if (chart.getIndicatorByPaneId(viPaneId, 'VI')) {
           chart.overrideIndicator({ name: 'VI', calcParams: [indicatorCommand.settings] }, viPaneId, observeViPaneHeight)
-          window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
           scheduleUnlockYAxisManualDrag(chart)
           return
         }
@@ -418,12 +394,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           { id: viPaneId, height: readStoredPaneHeight(viPaneHeightStorageKey), minHeight: minRsiPaneHeight },
           () => {
             observeViPaneHeight()
-            installChartDragCursor(chart)
             refreshChartDrawings()
             scheduleUnlockYAxisManualDrag(chart)
           },
         )
-        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       } else {
         const size = chart.getSize(viPaneId)
@@ -431,7 +405,6 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         viPaneHeightObserverRef.current?.disconnect()
         viPaneHeightObserverRef.current = null
         chart.removeIndicator(viPaneId, 'VI')
-        window.requestAnimationFrame(() => installIndicatorAxisDragSensitivity(chart))
         scheduleUnlockYAxisManualDrag(chart)
       }
     }
@@ -512,7 +485,6 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     macdPaneHeightObserverRef.current?.disconnect()
     tsiPaneHeightObserverRef.current?.disconnect()
     viPaneHeightObserverRef.current?.disconnect()
-    uninstallIndicatorAxisDragSensitivity()
   }, [])
 
   return (

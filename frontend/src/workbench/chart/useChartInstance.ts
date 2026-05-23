@@ -7,7 +7,7 @@ import { marketStatusTitleChangedEvent } from '../mt5DataCenter/marketStatusTitl
 import { formatChartDate, readChartTimezone } from './chartTimeFormatting'
 import { readRightPlaceholderVisible, refreshChartFuturePlaceholders } from './chartFuturePlaceholders'
 import { chartDrawingVisibilityRefreshEvent, installChartDrawingTools } from './chartDrawingTools'
-import { installChartDragCursor, uninstallChartDragCursor } from './chartDragCursor'
+import { installChartMouseBehaviorOverrides } from './chartMouseBehaviorOverrides'
 import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
 import { installPaneTitleOverlay } from './paneTitleOverlayManager'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
@@ -90,12 +90,12 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     resizeObserver.observe(container)
     window.addEventListener('resize', scheduleResize)
     scheduleResize()
-    let cleanupDragCursor: (() => void) | null = null
     let cleanupDrawingTools: (() => void) | null = null
+    let cleanupMouseBehaviorOverrides: (() => void) | null = null
     let cleanupViewportPersistence: (() => void) | null = null
     window.requestAnimationFrame(() => {
       if (chart) {
-        cleanupDragCursor = installChartDragCursor(chart)
+        cleanupMouseBehaviorOverrides = installChartMouseBehaviorOverrides(chart)
         cleanupDrawingTools = installChartDrawingTools(chart, () => chartContextRef.current.period)
         cleanupViewportPersistence = installChartViewportPersistence(chart, () => chartContextRef.current)
       }
@@ -109,8 +109,7 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
       paneTitleOverlayRef.current = null
       cleanupViewportPersistence?.()
       cleanupDrawingTools?.()
-      cleanupDragCursor?.()
-      if (chart) uninstallChartDragCursor(chart)
+      cleanupMouseBehaviorOverrides?.()
       if (resizeFrameId !== 0) window.cancelAnimationFrame(resizeFrameId)
       resizeObserver.disconnect()
       window.removeEventListener('resize', scheduleResize)

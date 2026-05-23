@@ -14,6 +14,28 @@ import './ObjectTreeDrawer.css'
 const defaultTopHeight = 340
 const minTopHeight = 96
 const maxTopHeight = 520
+const objectTreeSubPaneNames: Record<string, string> = {
+  macd_pane: 'MACD',
+  rsi_pane: 'RSI',
+  stoch_pane: 'Stoch',
+  tsi_pane: 'TSI',
+  vi_pane: 'VI',
+}
+const objectTreeSubPaneOrder = ['rsi_pane', 'stoch_pane', 'macd_pane', 'tsi_pane', 'vi_pane']
+
+function objectTreeSubPaneTitle(paneId: string) {
+  const name = objectTreeSubPaneNames[paneId]
+  return name ? `\u526f\u56fe ${name}` : '\u526f\u56fe'
+}
+
+function compareObjectTreeSubPaneIds(left: string, right: string) {
+  const leftIndex = objectTreeSubPaneOrder.indexOf(left)
+  const rightIndex = objectTreeSubPaneOrder.indexOf(right)
+  if (leftIndex === -1 && rightIndex === -1) return left.localeCompare(right)
+  if (leftIndex === -1) return 1
+  if (rightIndex === -1) return -1
+  return leftIndex - rightIndex
+}
 
 export function ObjectTreeDrawer() {
   const [drawingItems, setDrawingItems] = useState<ObjectTreeDrawingItem[]>([])
@@ -21,6 +43,7 @@ export function ObjectTreeDrawer() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [groups, setGroups] = useState<ObjectTreeGroup[]>(readObjectTreeGroups)
   const [topHeight, setTopHeight] = useState(defaultTopHeight)
+  const [visibilityPanelVersion, setVisibilityPanelVersion] = useState(0)
 
   useEffect(() => {
     const handleDrawingsChanged = (event: Event) => {
@@ -41,7 +64,10 @@ export function ObjectTreeDrawer() {
 
   const mainDrawings = drawingItems.filter((item) => item.paneId === objectTreeMainPaneId)
   const subPaneDrawings = drawingItems.filter((item) => item.paneId !== objectTreeMainPaneId)
-  const subPaneIds = useMemo(() => Array.from(new Set(subPaneDrawings.map((item) => item.paneId))), [subPaneDrawings])
+  const subPaneIds = useMemo(
+    () => Array.from(new Set(subPaneDrawings.map((item) => item.paneId))).sort(compareObjectTreeSubPaneIds),
+    [subPaneDrawings],
+  )
   const selectedDrawings = drawingItems.filter((item) => selectedDrawingIds.includes(item.id))
   const selectedGroup = selectedGroupId ? groups.find((group) => group.id === selectedGroupId) ?? null : null
   const visibilityStorageKeys = (selectedGroup
@@ -72,6 +98,11 @@ export function ObjectTreeDrawer() {
     setSelectedDrawingIds([])
     setSelectedGroupId(null)
     publishObjectTreeDrawingCommand({ action: 'deselectAll' })
+  }
+
+  const setDrawingVisible = (id: string, ids: string[] | undefined, visible: boolean, refreshVisibilityPanel: boolean) => {
+    publishObjectTreeDrawingCommand({ action: 'setVisible', id, ids, visible })
+    if (refreshVisibilityPanel) setVisibilityPanelVersion((current) => current + 1)
   }
 
   const groupSelectedDrawings = () => {
@@ -152,14 +183,14 @@ export function ObjectTreeDrawer() {
 
           <div className="ff-object-tree-list">
             <ObjectTreeSection title={'\u4e3b\u56fe'}>
-              <DrawingRows drawings={mainDrawings} groups={groups.filter((group) => group.paneId === objectTreeMainPaneId)} selectedIds={selectedDrawingIds} onRenameGroup={renameGroup} onSelect={selectDrawing} onSelectGroup={selectGroup} onToggleGroupCollapsed={toggleGroupCollapsed} />
+              <DrawingRows drawings={mainDrawings} groups={groups.filter((group) => group.paneId === objectTreeMainPaneId)} selectedIds={selectedDrawingIds} onRenameGroup={renameGroup} onSelect={selectDrawing} onSelectGroup={selectGroup} onSetVisible={setDrawingVisible} onToggleGroupCollapsed={toggleGroupCollapsed} />
             </ObjectTreeSection>
 
             <div className="ff-object-tree-separator" />
 
             {subPaneIds.map((paneId) => (
-              <ObjectTreeSection key={paneId} title={'\u526f\u56fe'}>
-                <DrawingRows drawings={subPaneDrawings.filter((item) => item.paneId === paneId)} groups={groups.filter((group) => group.paneId === paneId)} selectedIds={selectedDrawingIds} onRenameGroup={renameGroup} onSelect={selectDrawing} onSelectGroup={selectGroup} onToggleGroupCollapsed={toggleGroupCollapsed} />
+              <ObjectTreeSection key={paneId} title={objectTreeSubPaneTitle(paneId)}>
+                <DrawingRows drawings={subPaneDrawings.filter((item) => item.paneId === paneId)} groups={groups.filter((group) => group.paneId === paneId)} selectedIds={selectedDrawingIds} onRenameGroup={renameGroup} onSelect={selectDrawing} onSelectGroup={selectGroup} onSetVisible={setDrawingVisible} onToggleGroupCollapsed={toggleGroupCollapsed} />
               </ObjectTreeSection>
             ))}
           </div>
@@ -189,7 +220,7 @@ export function ObjectTreeDrawer() {
             ))}
           </div>
           <div className="ff-object-tree-visibility-pane__body">
-            <VisibilityRangePanel storageKeys={visibilityStorageKeys} />
+            <VisibilityRangePanel key={`${visibilityStorageKeys.join('|')}:${visibilityPanelVersion}`} storageKeys={visibilityStorageKeys} />
           </div>
         </div>
       </div>
@@ -212,6 +243,7 @@ function DrawingRows({
   onRenameGroup,
   onSelect,
   onSelectGroup,
+  onSetVisible,
   onToggleGroupCollapsed,
   selectedIds,
 }: {
@@ -220,6 +252,7 @@ function DrawingRows({
   onRenameGroup: (groupId: string, name: string) => void
   onSelect: (id: string, additive: boolean) => void
   onSelectGroup: (groupId: string, ids: string[], additive: boolean) => void
+  onSetVisible: (id: string, ids: string[] | undefined, visible: boolean, refreshVisibilityPanel: boolean) => void
   onToggleGroupCollapsed: (groupId: string) => void
   selectedIds: string[]
 }) {
@@ -229,14 +262,14 @@ function DrawingRows({
     <>
       {groups.map((group) => (
         <div className="ff-object-tree-group" key={group.id}>
-          <GroupRow group={group} items={drawings.filter((item) => group.itemIds.includes(item.id))} selectedIds={selectedIds} onRename={onRenameGroup} onSelectGroup={onSelectGroup} onToggleCollapsed={onToggleGroupCollapsed} />
+          <GroupRow group={group} items={drawings.filter((item) => group.itemIds.includes(item.id))} selectedIds={selectedIds} onRename={onRenameGroup} onSelectGroup={onSelectGroup} onSetVisible={onSetVisible} onToggleCollapsed={onToggleGroupCollapsed} />
           {group.collapsed ? null : drawings.filter((item) => group.itemIds.includes(item.id)).map((item) => (
-            <DrawingRow child key={item.id} item={item} selected={selectedIds.includes(item.id)} selectedIds={selectedIds} onSelect={onSelect} />
+            <DrawingRow child key={item.id} item={item} selected={selectedIds.includes(item.id)} selectedIds={selectedIds} onSelect={onSelect} onSetVisible={onSetVisible} />
           ))}
         </div>
       ))}
       {ungrouped.map((item) => (
-        <DrawingRow key={item.id} item={item} selected={selectedIds.includes(item.id)} selectedIds={selectedIds} onSelect={onSelect} />
+        <DrawingRow key={item.id} item={item} selected={selectedIds.includes(item.id)} selectedIds={selectedIds} onSelect={onSelect} onSetVisible={onSetVisible} />
       ))}
     </>
   )
@@ -247,6 +280,7 @@ function GroupRow({
   items,
   onRename,
   onSelectGroup,
+  onSetVisible,
   onToggleCollapsed,
   selectedIds,
 }: {
@@ -254,6 +288,7 @@ function GroupRow({
   items: ObjectTreeDrawingItem[]
   onRename: (groupId: string, name: string) => void
   onSelectGroup: (groupId: string, ids: string[], additive: boolean) => void
+  onSetVisible: (id: string, ids: string[] | undefined, visible: boolean, refreshVisibilityPanel: boolean) => void
   onToggleCollapsed: (groupId: string) => void
   selectedIds: string[]
 }) {
@@ -266,6 +301,7 @@ function GroupRow({
   const selected = itemIds.length > 0 && itemIds.every((id) => selectedIds.includes(id))
   const firstId = itemIds[0]
   const groupHiddenKind = objectTreeHiddenKind({ manualVisible, periodVisible, visible })
+  const nextVisible = groupHiddenKind === 'period' ? true : !manualVisible
   if (!firstId) return null
   return (
     <div
@@ -321,7 +357,7 @@ function GroupRow({
           </button>
         </div>
       )}
-      <button className="ff-object-tree-row__tool" data-hidden-kind={groupHiddenKind} onClick={(event) => { event.stopPropagation(); publishObjectTreeDrawingCommand({ action: 'setVisible', id: firstId, ids: itemIds, visible: !manualVisible }) }} type="button">{visible ? '\u663e\u793a' : '\u9690\u85cf'}</button>
+      <button className="ff-object-tree-row__tool" data-hidden-kind={groupHiddenKind} onClick={(event) => { event.stopPropagation(); onSetVisible(firstId, itemIds, nextVisible, groupHiddenKind === 'period' && nextVisible) }} type="button">{visible ? '\u663e\u793a' : '\u9690\u85cf'}</button>
       <button className="ff-object-tree-row__tool" onClick={(event) => { event.stopPropagation(); publishObjectTreeDrawingCommand({ action: 'setLocked', id: firstId, ids: itemIds, locked: !locked }) }} type="button">{locked ? '\u9501' : '\u5f00'}</button>
       <button className="ff-object-tree-row__tool" onClick={(event) => { event.stopPropagation(); publishObjectTreeDrawingCommand({ action: 'delete', id: firstId, ids: itemIds }) }} type="button">{'\u5220'}</button>
     </div>
@@ -332,20 +368,23 @@ function DrawingRow({
   child,
   item,
   onSelect,
+  onSetVisible,
   selected,
   selectedIds,
 }: {
   child?: boolean
   item: ObjectTreeDrawingItem
   onSelect: (id: string, additive: boolean) => void
+  onSetVisible: (id: string, ids: string[] | undefined, visible: boolean, refreshVisibilityPanel: boolean) => void
   selected: boolean
   selectedIds?: string[]
 }) {
   const targetIds = selected && selectedIds && selectedIds.length > 1 ? selectedIds : [item.id]
   const shortId = shortObjectTreeId(item.id)
   const rowHiddenKind = objectTreeHiddenKind(item)
+  const nextVisible = rowHiddenKind === 'period' ? true : !item.manualVisible
   return (
-    <div className="ff-object-tree-row" data-kind="drawing" data-selected={item.selected ? 'true' : undefined} onClick={(event) => event.stopPropagation()}>
+    <div className="ff-object-tree-row" data-kind="drawing" data-selected={selected ? 'true' : undefined} onClick={(event) => event.stopPropagation()}>
       <button
         className="ff-object-tree-row__label-button"
         data-multiselected={selected ? 'true' : undefined}
@@ -357,7 +396,7 @@ function DrawingRow({
         <span className="ff-object-tree-row__id" title={item.id}>{shortId}</span>
         <span className="ff-object-tree-row__label-text">{item.label}</span>
       </button>
-      <button className="ff-object-tree-row__tool" data-hidden-kind={rowHiddenKind} onClick={() => publishObjectTreeDrawingCommand({ action: 'setVisible', id: item.id, ids: targetIds, visible: !item.manualVisible })} type="button">{item.visible ? '\u663e\u793a' : '\u9690\u85cf'}</button>
+      <button className="ff-object-tree-row__tool" data-hidden-kind={rowHiddenKind} onClick={() => onSetVisible(item.id, targetIds, nextVisible, rowHiddenKind === 'period' && nextVisible)} type="button">{item.visible ? '\u663e\u793a' : '\u9690\u85cf'}</button>
       <button className="ff-object-tree-row__tool" onClick={() => publishObjectTreeDrawingCommand({ action: 'setLocked', id: item.id, ids: targetIds, locked: !item.locked })} type="button">{item.locked ? '\u9501' : '\u5f00'}</button>
       <button className="ff-object-tree-row__tool" onClick={() => publishObjectTreeDrawingCommand({ action: 'delete', id: item.id, ids: targetIds })} type="button">{'\u5220'}</button>
     </div>

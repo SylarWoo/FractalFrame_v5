@@ -15,6 +15,7 @@ export function objectTreeHiddenKind(item: Pick<ObjectTreeDrawingItem, 'manualVi
 export function shortObjectTreeId(id: string) {
   const normalized = id.trim()
   if (/^HL\d+$/i.test(normalized)) return normalized.toUpperCase()
+  if (/^TL\d+$/i.test(normalized)) return normalized.toUpperCase()
   if (normalized.length <= 6) return normalized
   return normalized.slice(-6).toUpperCase()
 }

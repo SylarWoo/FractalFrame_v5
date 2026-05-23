@@ -39,6 +39,8 @@ export type StoredHorizontalLineDrawing = {
 export type StoredTrendLineDrawing = {
   lineStyle: SettingsLineSwatchValue
   locked: boolean
+  manualVisible: boolean
+  objectId: string
   paneId: string
   points: Array<{
     dataIndex?: number
@@ -252,6 +254,8 @@ export function readStoredTrendLineDrawings() {
     .map((drawing) => ({
       lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#2962ff'),
       locked: drawing.locked === true,
+      manualVisible: drawing.manualVisible !== false,
+      objectId: typeof drawing.objectId === 'string' && drawing.objectId.trim() ? drawing.objectId.trim() : '',
       paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
       points: Array.isArray(drawing.points) ? drawing.points.map(normalizeTrendLinePoint) : [],
       showPriceLabel: drawing.showPriceLabel !== false,
@@ -265,6 +269,8 @@ export function writeStoredTrendLineDrawings(drawings: StoredTrendLineDrawing[])
   return writeJson(trendLineDrawingsStorageKey, drawings.map((drawing) => ({
     lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#2962ff'),
     locked: drawing.locked === true,
+    manualVisible: drawing.manualVisible !== false,
+    objectId: typeof drawing.objectId === 'string' && drawing.objectId.trim() ? drawing.objectId.trim() : '',
     paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
     points: drawing.points.slice(0, 2).map(normalizeTrendLinePoint),
     showPriceLabel: drawing.showPriceLabel !== false,

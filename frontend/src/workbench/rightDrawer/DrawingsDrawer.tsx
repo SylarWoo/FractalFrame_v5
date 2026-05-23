@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { formatGlobalPrice } from '../chart/globalPricePrecision'
@@ -23,6 +23,9 @@ import {
 } from './drawingPersistence'
 import type { DrawingTextStyle, DrawingTrendLineStatsData, DrawingTrendLineStyle } from './drawingPersistence'
 import { drawingToolStateEvent, isDrawingToolStateEvent, publishDrawingToolCommand } from './drawingToolCommands'
+import { objectTreeDrawingsChangedEvent, publishObjectTreeDrawingCommand, requestObjectTreeDrawings, type ObjectTreeDrawingsChangedDetail } from './objectTree/objectTreeModel'
+import type { ObjectTreeDrawingItem } from './objectTree/objectTreeTypes'
+import { shortObjectTreeId } from './objectTree/objectTreeVisibility'
 import './DrawingsDrawer.css'
 
 type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'cursor'
@@ -33,6 +36,17 @@ type DrawingTool = {
   key: DrawingToolKey
   label: string
   tabs?: DrawingTab[]
+}
+
+type SelectedDrawingState = {
+  lineStyle?: SettingsLineSwatchValue
+  locked: boolean
+  objectId?: string
+  price?: number
+  showPriceLabel: boolean
+  textStyle?: DrawingTextStyle
+  tool: DrawingToolKey
+  trendPointPrices?: [number | undefined, number | undefined]
 }
 
 const selectedToolStorageKey = 'fractalframe.drawingsDrawer.selectedTool'
@@ -67,6 +81,24 @@ function readCursorMode() {
   return readString(cursorModeStorageKey, 'cursor') === 'crosshair' ? 'crosshair' : 'cursor'
 }
 
+function createDefaultTrendLineTextStyle(): DrawingTextStyle {
+  return {
+    ...createDefaultDrawingTextStyle(),
+    alignH: 'center',
+  }
+}
+
+function createEmptyTrendLineTextStyle(): DrawingTextStyle {
+  return {
+    ...createDefaultTrendLineTextStyle(),
+    body: '',
+  }
+}
+
+function drawingToolKeyFromObjectTreeItem(item: ObjectTreeDrawingItem): DrawingToolKey {
+  return item.kind === 'trendLine' ? 'trendLine' : 'horizontalLine'
+}
+
 export function DrawingsDrawer() {
   const [selectedKey, setSelectedKey] = useState<DrawingToolKey>(readInitialSelectedTool)
   const [armedKey, setArmedKey] = useState<DrawingToolKey | null>(null)
@@ -78,7 +110,7 @@ export function DrawingsDrawer() {
   const [priceLabelTools, setPriceLabelTools] = useState<Record<string, boolean>>(() => Object.fromEntries(
     drawingTools.map((tool) => [tool.key, readDrawingPriceLabel(tool.key)]),
   ))
-  const [selectedDrawing, setSelectedDrawing] = useState<{ lineStyle?: SettingsLineSwatchValue; locked: boolean; objectId?: string; price?: number; showPriceLabel: boolean; textStyle?: DrawingTextStyle; tool: DrawingToolKey; trendPointPrices?: [number | undefined, number | undefined] } | null>(null)
+  const [selectedDrawing, setSelectedDrawing] = useState<SelectedDrawingState | null>(null)
   const [lineStyles, setLineStyles] = useState<Record<string, SettingsLineSwatchValue>>(() => ({
     fibRetracement: readDrawingLineStyle('fibRetracement', createDefaultDrawingLineStyle('#787b86')),
     horizontalLine: readDrawingLineStyle('horizontalLine', createDefaultDrawingLineStyle('#0f766e')),
@@ -89,7 +121,7 @@ export function DrawingsDrawer() {
     fibRetracement: createDefaultDrawingTextStyle(),
     horizontalLine: readDrawingTextStyle('horizontalLine'),
     ruler: createDefaultDrawingTextStyle(),
-    trendLine: createDefaultDrawingTextStyle(),
+    trendLine: readDrawingTextStyle('trendLine').body ? readDrawingTextStyle('trendLine') : createDefaultTrendLineTextStyle(),
   }))
   const [trendLineStyle, setTrendLineStyle] = useState<DrawingTrendLineStyle>(readDrawingTrendLineStyle)
   const [cursorMode, setCursorMode] = useState<CursorMode>(readCursorMode)
@@ -101,13 +133,27 @@ export function DrawingsDrawer() {
   const selectedLineStyle = selectedDrawing?.tool === selectedKey && selectedDrawing.lineStyle
     ? selectedDrawing.lineStyle
     : lineStyles[selectedTool.key] ?? createDefaultDrawingLineStyle()
-  const selectedTextStyle = normalizeDrawingTextStyle(selectedDrawing?.tool === selectedKey && selectedDrawing.textStyle
-    ? selectedDrawing.textStyle
-    : textStyles[selectedTool.key] ?? createDefaultDrawingTextStyle())
+  const selectedDrawingHasObject = (selectedKey === 'horizontalLine' || selectedKey === 'trendLine')
+    && selectedDrawing?.tool === selectedKey
+    && Boolean(selectedDrawing.objectId)
+  const selectedTextStyle = normalizeDrawingTextStyle((selectedKey === 'horizontalLine' || selectedKey === 'trendLine') && !selectedDrawingHasObject
+    ? selectedKey === 'trendLine'
+      ? createEmptyTrendLineTextStyle()
+      : { ...createDefaultDrawingTextStyle(), body: '' }
+    : selectedDrawing?.tool === selectedKey && selectedDrawing.textStyle
+      ? selectedDrawing.textStyle
+      : textStyles[selectedTool.key] ?? createDefaultDrawingTextStyle())
   const tabs = selectedTool.tabs ?? []
   const visibleTab = tabs.includes(activeTab) ? activeTab : tabs[0] ?? 'style'
+  const selectedObjectId = selectedDrawing?.tool === selectedKey && selectedDrawing.objectId
+    ? shortObjectTreeId(selectedDrawing.objectId)
+    : ''
 
   function selectTool(key: DrawingToolKey) {
+    if (selectedDrawing?.tool !== key && selectedDrawing?.objectId && (key === 'horizontalLine' || key === 'trendLine')) {
+      publishObjectTreeDrawingCommand({ action: 'deselect', id: selectedDrawing.objectId })
+      setSelectedDrawing(null)
+    }
     setSelectedKey(key)
     writeString(selectedToolStorageKey, key)
     if (!drawingTools.find((tool) => tool.key === key)?.tabs?.includes(activeTab)) setActiveTab('style')
@@ -116,11 +162,11 @@ export function DrawingsDrawer() {
   function setPersistence(enabled: boolean) {
     setPersistedTools((current) => ({ ...current, [selectedKey]: enabled }))
     writeDrawingPersistence(selectedKey, enabled)
-    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine') return
+    if (selectedKey !== 'horizontalLine') return
     publishDrawingToolCommand({
       action: 'updatePersistence',
       persisted: enabled,
-      tool: selectedKey,
+      tool: 'horizontalLine',
     })
   }
 
@@ -156,6 +202,44 @@ export function DrawingsDrawer() {
     window.addEventListener(drawingToolStateEvent, handleState)
     return () => {
       window.removeEventListener(drawingToolStateEvent, handleState)
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleDrawingsChanged = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return
+      const detail = event.detail as ObjectTreeDrawingsChangedDetail | undefined
+      const items = Array.isArray(detail?.items) ? detail.items : []
+      const selectedItems = items.filter((item) => item.selected)
+      const activeItem = typeof detail?.activeId === 'string'
+        ? selectedItems.find((item) => item.id === detail.activeId)
+        : selectedItems[selectedItems.length - 1]
+      if (!activeItem) return
+      const tool = drawingToolKeyFromObjectTreeItem(activeItem)
+      setSelectedKey(tool)
+      writeString(selectedToolStorageKey, tool)
+      setSelectedDrawing((current) => {
+        if (current?.objectId === activeItem.id) {
+          return {
+            ...current,
+            locked: activeItem.locked,
+            objectId: activeItem.id,
+            tool,
+          }
+        }
+        return {
+          locked: activeItem.locked,
+          objectId: activeItem.id,
+          showPriceLabel: true,
+          tool,
+        }
+      })
+    }
+
+    window.addEventListener(objectTreeDrawingsChangedEvent, handleDrawingsChanged)
+    requestObjectTreeDrawings()
+    return () => {
+      window.removeEventListener(objectTreeDrawingsChangedEvent, handleDrawingsChanged)
     }
   }, [])
 
@@ -255,11 +339,11 @@ export function DrawingsDrawer() {
     const normalized = normalizeDrawingTextStyle(value)
     setTextStyles((current) => ({ ...current, [selectedTool.key]: normalized }))
     writeDrawingTextStyle(selectedTool.key, normalized)
-    if (selectedKey !== 'horizontalLine') return
+    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine') return
     publishDrawingToolCommand({
       action: 'updateSelectedTextStyle',
       textStyle: normalized,
-      tool: 'horizontalLine',
+      tool: selectedKey,
     })
   }
 
@@ -380,7 +464,10 @@ export function DrawingsDrawer() {
         <div className="ff-indicators-split-v1__bottom" data-ff-drawing-tools-split-bottom-v1>
           <div className="ff-indicators-detail-v1 ff-indicator-settings-panel-v1__row" data-modifier="detail">
             <span className="ff-indicators-detail-v1__title ff-indicator-settings-panel-v1__row-label" data-ff-drawing-tools-detail-title-v1>
-              {selectedTool.label}
+              <span className="ff-drawing-detail-title-v1__label">{selectedTool.label}</span>
+              {selectedObjectId ? (
+                <span className="ff-drawing-detail-title-v1__id">{selectedObjectId}</span>
+              ) : null}
             </span>
           </div>
 
@@ -932,7 +1019,6 @@ function DrawingTextPanel({
 
   return (
     <div className="ff-drawing-hline-text-tab-v1">
-      <p className="ff-drawing-hline-text-tab-v1__hint">{'\u672a\u9009\u4e2d\u6c34\u5e73\u7ebf\uff1a\u6b64\u5904\u7f16\u8f91\u7684\u662f\u65b0\u753b\u7ebf\u7684\u9ed8\u8ba4\u6587\u5b57\u3002'}</p>
       <div className="ff-drawing-hline-text-tab-v1__toolbar">
         <SettingsColorSwatch
           color={displayTextStyle.textColor}
@@ -976,7 +1062,7 @@ function DrawingTextPanel({
       <textarea
         className="ff-drawing-hline-text-tab-v1__textarea"
         onChange={(event) => update({ body: event.target.value })}
-        placeholder="添加文字"
+        placeholder={'\u6dfb\u52a0\u6587\u5b57'}
         rows={4}
         spellCheck={false}
         value={displayTextStyle.body}
@@ -1142,10 +1228,10 @@ function TrendLineCoordsPanel({
   selected: boolean
 }) {
   if (!selected) {
-    return <p className="ff-drawing-hline-coords-tab-v1__hint">{'未选中趋势线：请先在图上选中一条趋势线。'}</p>
+    return <p className="ff-drawing-hline-coords-tab-v1__hint">{'\u672a\u9009\u4e2d\u8d8b\u52bf\u7ebf\uff1a\u8bf7\u5148\u5728\u56fe\u4e0a\u9009\u4e2d\u4e00\u6761\u8d8b\u52bf\u7ebf\u3002'}</p>
   }
   if (locked) {
-    return <p className="ff-drawing-hline-coords-tab-v1__hint">{'当前选中的趋势线已锁定，无法修改坐标。请先解锁。'}</p>
+    return <p className="ff-drawing-hline-coords-tab-v1__hint">{'\u5f53\u524d\u9009\u4e2d\u7684\u8d8b\u52bf\u7ebf\u5df2\u9501\u5b9a\uff0c\u65e0\u6cd5\u4fee\u6539\u5750\u6807\u3002\u8bf7\u5148\u89e3\u9501\u3002'}</p>
   }
   return (
     <div className="ff-drawing-tline-price-coords-v1">
@@ -1179,7 +1265,7 @@ function TrendLinePriceCoordinateRow({ index, onChange, price }: { index: number
   return (
     <div className="ff-drawing-tline-price-coords-v1__row">
       <label className="ff-drawing-tline-price-coords-v1__label" htmlFor={`ff-drawing-tline-price-${index + 1}-v1`}>
-        {`#${index + 1}（价格）`}
+        {`#${index + 1}\uff08\u4ef7\u683c\uff09`}
       </label>
       <input
         autoComplete="off"
@@ -1204,3 +1290,4 @@ function TrendLinePriceCoordinateRow({ index, onChange, price }: { index: number
     </div>
   )
 }
+

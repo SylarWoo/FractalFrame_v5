@@ -224,7 +224,7 @@
   height: 16px;
   margin: 0;
   accent-color: #1f2430;
-  cursor: pointer;
+  cursor: default;
 }
 
 .ff-indicators-style-row-v1__check button {
@@ -234,7 +234,7 @@
   border: 0;
   background: transparent;
   color: #131722;
-  cursor: pointer;
+  cursor: default;
   font: inherit;
   text-align: left;
 }
