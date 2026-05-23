@@ -1,5 +1,5 @@
-import { ActionType, DomPosition, LineType, PolygonType, registerFigure, registerOverlay } from 'klinecharts'
-import type { Chart, DeepPartial, OverlayStyle } from 'klinecharts'
+import { ActionType, DomPosition, registerOverlay } from 'klinecharts'
+import type { Chart } from 'klinecharts'
 import { drawingMainPaneId, knownDrawingPaneIds } from '../drawing/drawingPaneModel'
 import {
   horizontalLineObjectVisibilityRangeKey,
@@ -16,7 +16,6 @@ import { isObjectTreeDrawingCommandEvent, objectTreeDrawingCommandEvent, objectT
 import {
   clearStoredHorizontalLineDrawings,
   clearStoredTrendLineDrawings,
-  normalizeDrawingLineStyle,
   normalizeDrawingTextStyle,
   normalizeDrawingTrendLineStyle,
   readDrawingPersistence,
@@ -27,637 +26,42 @@ import {
 } from '../rightDrawer/drawingPersistence'
 import type { DrawingTextStyle, DrawingTrendLineStyle, StoredHorizontalLineDrawing, StoredTrendLineDrawing } from '../rightDrawer/drawingPersistence'
 import { isStoredVisibilityRangePeriodVisible, restoreVisibilityRangeCurrentPeriod, visibilityRangeChangedEvent } from '../visibilityRange/visibilityRangeModel'
-import { createPriceAxisLabelTextStyle } from './chartPriceLabelStyles'
-import { measureCanvasText } from './drawingTextMeasure'
-import { resolveTrendTextLayout, resolveTrendTextLineExclusion, splitTrendLineSegments } from './trendLineTextLayout'
+import { collectDrawingObjectTreeState, resolveDrawingObjectTreeTarget } from './chartDrawingObjectTreeState'
+import {
+  createHorizontalLineObjectId,
+  createTrendLineObjectId,
+  syncHorizontalLineObjectIdSeed,
+  syncTrendLineObjectIdSeed,
+} from './chartDrawingObjectIds'
+import { storedHorizontalLineFromOverlay, storedTrendLineFromOverlay } from './chartDrawingSerialization'
+import {
+  ensureHorizontalLineTextFigure,
+  ensureTrendLineHitFigure,
+  ensureTrendLineStatsBoxFigure,
+  ensureTrendLineTextFigure,
+} from './chartDrawingFigures'
+import type {
+  HorizontalLineExtendData,
+  HorizontalLineMoveEntry,
+  MixedDrawingMoveState,
+  ScreenPoint,
+  TrendLineExtendData,
+  TrendLineMoveEntry,
+} from './chartDrawingTypes'
+import { isCoordinate } from './chartDrawingTypes'
+import { distanceToSegment } from './chartDrawingGeometry'
+import { normalizeLineStyle, overlayStylesFromLine, trendOverlayStylesFromLine } from './chartDrawingStyle'
+import { createHorizontalLinePointFigures, createHorizontalLineYAxisFigures, horizontalLineHitSlop } from './horizontalLineOverlayFigures'
+import { createTrendLinePointFigures, createTrendLineYAxisFigures } from './trendLineOverlayFigures'
+import { trendHandleColor, trendHandleLineWidth } from './trendLineFigures'
 
-const horizontalLineTextFigureName = 'ffHorizontalLineText'
-const trendLineHitFigureName = 'ffTrendLineHit'
-const trendLineTextFigureName = 'ffTrendLineText'
-const trendLineStatsBoxFigureName: string = 'ffTrendLineStatsBox'
 let horizontalLineOverlayRegistered = false
-let horizontalLineTextFigureRegistered = false
 let trendLineOverlayRegistered = false
-let trendLineHitFigureRegistered = false
-let trendLineTextFigureRegistered = false
-let trendLineStatsBoxFigureRegistered = false
 const candlePaneId = drawingMainPaneId
-const selectedHandleColor = '#2962ff'
-const selectedHandleDistanceFromScale = 102
-const selectedHandleSize = 12
-const selectedHandleBorderSize = 2
-const selectedHandleRadius = 3
-const hoverHandleSize = 12
-const hoverHandleBorderSize = 1
-const horizontalLineHitSlop = 6
-const lockedHandleSize = 7
-const lockedHandleBorderSize = 1
-const lockedHandleGap = 2
-const trendHandleColor = '#2962ff'
-const trendHandleRadius = 5.5
-const trendHandleLineWidth = 2
-const trendLockedHandleRadius = 3
-const trendLockedHandleLineWidth = 1
-const trendMiddleHandleRadius = 3
-const trendMiddleHandleLineWidth = 1
-const trendStatsPointMultiplier = 1000
-const trendYAxisSelectionWidth = 80
 const trendLineOverlayZLevel = -1
 export const chartDrawingVisibilityRefreshEvent = 'fractalframe:chart-drawing-visibility-refresh'
 const horizontalLineHandleDragThreshold = 3
 const trendLineEndpointDragThreshold = 3
-const textMiddleLineGap = 5
-const textTopLineGap = 1
-const textBottomLineGap = 5
-const textMiddleYOffset = 1
-let horizontalLineObjectIdSeed = 0
-let trendLineObjectIdSeed = 0
-
-type HorizontalLineExtendData = {
-  handlePressed?: boolean
-  hovered?: boolean
-  lineStyle?: SettingsLineSwatchValue
-  locked?: boolean
-  manualVisible?: boolean
-  objectId?: string
-  periodVisible?: boolean
-  pressed?: boolean
-  selected?: boolean
-  showPriceLabel?: boolean
-  textStyle?: DrawingTextStyle
-}
-
-type TrendLineExtendData = {
-  drawing?: boolean
-  endpointPressed?: boolean
-  pressedPointIndex?: number
-  hovered?: boolean
-  lineStyle?: SettingsLineSwatchValue
-  locked?: boolean
-  manualVisible?: boolean
-  objectId?: string
-  periodVisible?: boolean
-  pressed?: boolean
-  selected?: boolean
-  showPriceLabel?: boolean
-  textStyle?: DrawingTextStyle
-  trendLineStyle?: DrawingTrendLineStyle
-}
-
-type HorizontalLineFigure = {
-  attrs: Record<string, unknown>
-  ignoreEvent?: boolean
-  key?: string
-  styles?: Record<string, unknown>
-  type: string
-}
-
-type HorizontalLineMoveEntry = {
-  id: string
-  startValue: number
-}
-
-type TrendLineMoveEntry = {
-  id: string
-  points: Array<{
-    point: { dataIndex?: number; timestamp?: number; value?: number }
-    pixel: ScreenPoint
-  }>
-}
-
-type MixedDrawingMoveState = {
-  activeId: string
-  horizontalEntries: Array<HorizontalLineMoveEntry & { startY: number }>
-  paneId: string
-  startX: number
-  startY: number
-  trendEntries: TrendLineMoveEntry[]
-}
-
-type TrendStatsBoxAttrs = {
-  anchor: ScreenPoint
-  lineEnd: ScreenPoint
-  lineStart: ScreenPoint
-  right: number
-  rows: string[]
-}
-
-function isCoordinate(value: Partial<{ x: number; y: number }> | Array<Partial<{ x: number; y: number }>>): value is Partial<{ x: number; y: number }> {
-  return !Array.isArray(value)
-}
-
-function colorWithAlpha(hex: string, opacity: number) {
-  const normalized = hex.trim().replace('#', '')
-  if (!/^[\da-f]{6}$/i.test(normalized)) return hex
-  const value = Number.parseInt(normalized, 16)
-  const alpha = Math.max(0, Math.min(Number.isFinite(opacity) ? opacity : 1, 1))
-  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`
-}
-
-function dashedValueForStyle(style: SettingsLineSwatchValue['lineStyle']) {
-  if (style === 'dotted') return [1, 3]
-  if (style === 'dashed') return [6, 4]
-  return [2, 2]
-}
-
-function lineTypeForStyle(style: SettingsLineSwatchValue['lineStyle']) {
-  return style === 'solid' ? LineType.Solid : LineType.Dashed
-}
-
-function normalizeLineStyle(lineStyle: SettingsLineSwatchValue | undefined): SettingsLineSwatchValue {
-  return normalizeDrawingLineStyle(lineStyle, '#0f766e')
-}
-
-function overlayStylesFromLine(lineStyle: SettingsLineSwatchValue): DeepPartial<OverlayStyle> {
-  const color = colorWithAlpha(lineStyle.hex, lineStyle.opacity)
-  const size = Math.max(1, Math.min(Math.round(lineStyle.thickness), 4))
-  return {
-    line: {
-      color,
-      dashedValue: dashedValueForStyle(lineStyle.lineStyle),
-      size,
-      style: lineTypeForStyle(lineStyle.lineStyle),
-    },
-    point: {
-      activeBorderColor: color,
-      activeColor: color,
-      borderColor: color,
-      color,
-    },
-    text: {
-      ...createPriceAxisLabelTextStyle(),
-      backgroundColor: color,
-      borderColor: 'transparent',
-      borderSize: 0,
-      color: '#ffffff',
-      style: PolygonType.Fill,
-    },
-  }
-}
-
-function trendOverlayStylesFromLine(lineStyle: SettingsLineSwatchValue): DeepPartial<OverlayStyle> {
-  return {
-    ...overlayStylesFromLine(lineStyle),
-    point: {
-      activeBorderColor: 'rgba(0,0,0,0)',
-      activeBorderSize: 0,
-      activeColor: 'rgba(0,0,0,0)',
-      activeRadius: 10,
-      borderColor: 'rgba(0,0,0,0)',
-      borderSize: 0,
-      color: 'rgba(0,0,0,0)',
-      radius: 10,
-    },
-  }
-}
-
-type ScreenPoint = { x: number; y: number }
-
-function isScreenPoint(value: Partial<ScreenPoint> | undefined): value is ScreenPoint {
-  return Number.isFinite(value?.x) && Number.isFinite(value?.y)
-}
-
-function resolveTrendLineBoundsEndpoint(origin: ScreenPoint, through: ScreenPoint, bounding: { height: number; width: number }, reverse: boolean): ScreenPoint {
-  const dx = through.x - origin.x
-  const dy = through.y - origin.y
-  const candidates: Array<{ point: ScreenPoint; t: number }> = []
-  const pushCandidate = (t: number) => {
-    if (!Number.isFinite(t)) return
-    const x = origin.x + dx * t
-    const y = origin.y + dy * t
-    if (x >= 0 && x <= bounding.width && y >= 0 && y <= bounding.height) candidates.push({ point: { x, y }, t })
-  }
-  if (dx !== 0) {
-    pushCandidate((0 - origin.x) / dx)
-    pushCandidate((bounding.width - origin.x) / dx)
-  }
-  if (dy !== 0) {
-    pushCandidate((0 - origin.y) / dy)
-    pushCandidate((bounding.height - origin.y) / dy)
-  }
-  const directional = candidates
-    .filter(({ t }) => reverse ? t <= 0 : t >= 0)
-    .sort((a, b) => reverse ? a.t - b.t : b.t - a.t)
-  return directional[0]?.point ?? origin
-}
-
-function resolveTrendLineEndpoints(start: ScreenPoint, end: ScreenPoint, bounding: { height: number; width: number }, extendMode: DrawingTrendLineStyle['extendMode']) {
-  if (extendMode === 'none') return { end, start }
-  return {
-    end: extendMode === 'right' || extendMode === 'both'
-      ? resolveTrendLineBoundsEndpoint(start, end, bounding, false)
-      : end,
-    start: extendMode === 'left' || extendMode === 'both'
-      ? resolveTrendLineBoundsEndpoint(end, start, bounding, false)
-      : start,
-  }
-}
-
-function createTrendArrowFigures(tip: ScreenPoint, from: ScreenPoint, color: string, size: number): HorizontalLineFigure[] {
-  const angle = Math.atan2(tip.y - from.y, tip.x - from.x)
-  const length = 8
-  const spread = 40 * Math.PI / 180
-  const left = {
-    x: tip.x - Math.cos(angle - spread) * length,
-    y: tip.y - Math.sin(angle - spread) * length,
-  }
-  const right = {
-    x: tip.x - Math.cos(angle + spread) * length,
-    y: tip.y - Math.sin(angle + spread) * length,
-  }
-  return [{
-    type: 'line',
-    attrs: { coordinates: [left, tip, right] },
-    styles: {
-      color,
-      dashedValue: [],
-      size,
-      style: LineType.Solid,
-    },
-  }]
-}
-
-function createTrendHandleFigure(point: ScreenPoint, locked: boolean, selected: boolean, color = trendHandleColor, key?: string): HorizontalLineFigure {
-  const borderSize = locked
-    ? trendLockedHandleLineWidth
-    : selected
-      ? trendHandleLineWidth
-      : 1
-  const outerRadius = trendHandleRadius + trendHandleLineWidth / 2
-  const radius = locked
-    ? trendLockedHandleRadius
-    : outerRadius - borderSize / 2
-  return {
-    ...(key ? { key } : {}),
-    type: 'circle',
-    attrs: {
-      r: radius,
-      x: point.x,
-      y: point.y,
-    },
-    styles: {
-      borderColor: color,
-      borderSize,
-      color: '#ffffff',
-      style: PolygonType.StrokeFill,
-    },
-  }
-}
-
-function distanceToSegment(point: ScreenPoint, start: ScreenPoint, end: ScreenPoint) {
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  const lengthSq = dx * dx + dy * dy
-  if (lengthSq <= 0) return Math.hypot(point.x - start.x, point.y - start.y)
-  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq))
-  const projected = {
-    x: start.x + t * dx,
-    y: start.y + t * dy,
-  }
-  return Math.hypot(point.x - projected.x, point.y - projected.y)
-}
-
-function formatTrendStatsNumber(value: number, digits = 6) {
-  if (!Number.isFinite(value)) return null
-  return value.toFixed(digits).replace(/\.?0+$/, '')
-}
-
-function formatTrendStatsInteger(value: number) {
-  if (!Number.isFinite(value)) return null
-  return Math.round(value).toLocaleString('en-US')
-}
-
-function formatTrendStatsDuration(seconds: number) {
-  const total = Math.round(Math.abs(seconds))
-  if (!Number.isFinite(total)) return null
-  const day = Math.floor(total / 86400)
-  const hour = Math.floor((total % 86400) / 3600)
-  const minute = Math.floor((total % 3600) / 60)
-  const parts: string[] = []
-  if (day) parts.push(`${day}天`)
-  if (hour) parts.push(`${hour}小时`)
-  if (minute || parts.length === 0) parts.push(`${minute}分钟`)
-  return parts.join(' ')
-}
-
-function readTrendPointTimeSeconds(point: { timestamp?: number } | undefined) {
-  const timestamp = Number(point?.timestamp)
-  if (!Number.isFinite(timestamp)) return null
-  return timestamp > 100000000000 ? timestamp / 1000 : timestamp
-}
-
-function buildTrendStatsRows(points: Array<{ dataIndex?: number; timestamp?: number; value?: number }>, style: DrawingTrendLineStyle, start: ScreenPoint, end: ScreenPoint) {
-  const selected = style.statsData
-  if (!selected.length) return []
-  const pointA = points[0]
-  const pointB = points[1]
-  const priceA = Number(pointA?.value)
-  const priceB = Number(pointB?.value)
-  const dPrice = priceB - priceA
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  const rows: string[] = []
-  const row1: string[] = []
-
-  if (selected.includes('price-range')) {
-    const text = formatTrendStatsNumber(dPrice, 6)
-    if (text != null) row1.push(text)
-  }
-  if (selected.includes('percent-change') && Number.isFinite(priceA) && priceA !== 0) {
-    const text = formatTrendStatsNumber((dPrice / priceA) * 100, 2)
-    if (text != null) {
-      if (row1.length) row1[row1.length - 1] = `${row1[row1.length - 1]} (${text}%)`
-      else row1.push(`${text}%`)
-    }
-  }
-  if (selected.includes('point-change')) {
-    const text = formatTrendStatsInteger(dPrice * trendStatsPointMultiplier)
-    if (text != null) row1.push(text)
-  }
-  if (row1.length) rows.push(row1.join(', '))
-
-  const row2: string[] = []
-  if (selected.includes('bar-range')) {
-    const bars = Math.abs(Number(pointB?.dataIndex) - Number(pointA?.dataIndex))
-    const text = formatTrendStatsInteger(bars)
-    if (text != null) row2.push(`${text}根K线`)
-  }
-  if (selected.includes('date-time-range')) {
-    const timeA = readTrendPointTimeSeconds(pointA)
-    const timeB = readTrendPointTimeSeconds(pointB)
-    const text = timeA != null && timeB != null ? formatTrendStatsDuration(timeB - timeA) : null
-    if (text) {
-      if (row2.length) row2[row2.length - 1] = `${row2[row2.length - 1]} (${text})`
-      else row2.push(text)
-    }
-  }
-  if (selected.includes('distance')) {
-    const text = formatTrendStatsInteger(Math.sqrt(dx * dx + dy * dy))
-    if (text != null) row2.push(`距离: ${text} px`)
-  }
-  if (row2.length) rows.push(row2.join(', '))
-
-  if (selected.includes('angle')) {
-    const text = formatTrendStatsNumber(Math.atan2(-dy, dx) * 180 / Math.PI, 2)
-    if (text != null) rows.push(`${text}\u00b0`)
-  }
-  return rows
-}
-
-function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
-  const r = Math.max(0, Math.min(radius, width / 2, height / 2))
-  ctx.beginPath()
-  ctx.moveTo(x + r, y)
-  ctx.lineTo(x + width - r, y)
-  ctx.quadraticCurveTo(x + width, y, x + width, y + r)
-  ctx.lineTo(x + width, y + height - r)
-  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height)
-  ctx.lineTo(x + r, y + height)
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r)
-  ctx.lineTo(x, y + r)
-  ctx.quadraticCurveTo(x, y, x + r, y)
-}
-
-function rectIntersectsLine(rect: { height: number; width: number; x: number; y: number }, start: ScreenPoint, end: ScreenPoint) {
-  const minX = Math.min(start.x, end.x)
-  const maxX = Math.max(start.x, end.x)
-  const minY = Math.min(start.y, end.y)
-  const maxY = Math.max(start.y, end.y)
-  if (maxX < rect.x || minX > rect.x + rect.width || maxY < rect.y || minY > rect.y + rect.height) return false
-  const inside = (point: ScreenPoint) => point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height
-  if (inside(start) || inside(end)) return true
-  const ccw = (p: ScreenPoint, q: ScreenPoint, r: ScreenPoint) => (r.y - p.y) * (q.x - p.x) > (q.y - p.y) * (r.x - p.x)
-  const intersects = (p: ScreenPoint, q: ScreenPoint, r: ScreenPoint, s: ScreenPoint) => ccw(p, r, s) !== ccw(q, r, s) && ccw(p, q, r) !== ccw(p, q, s)
-  const corners = [
-    { x: rect.x, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y },
-    { x: rect.x + rect.width, y: rect.y + rect.height },
-    { x: rect.x, y: rect.y + rect.height },
-  ]
-  return corners.some((corner, index) => intersects(start, end, corner, corners[(index + 1) % corners.length]))
-}
-
-function resolveTrendStatsBoxPosition(attrs: TrendStatsBoxAttrs, width: number, height: number) {
-  const rightLimit = Number.isFinite(attrs.right) && attrs.right > 0 ? attrs.right : attrs.anchor.x + width + 4
-  const clampX = (x: number) => Math.max(0, Math.min(x, rightLimit - width - 4))
-  const candidates = [
-    { x: attrs.anchor.x + 10, y: attrs.anchor.y + 6 },
-    { x: attrs.anchor.x + 10, y: attrs.anchor.y - height - 6 },
-    { x: attrs.anchor.x - width - 10, y: attrs.anchor.y + 6 },
-    { x: attrs.anchor.x - width - 10, y: attrs.anchor.y - height - 6 },
-  ].map((row) => ({ x: clampX(row.x), y: Math.max(0, row.y), width, height }))
-  return candidates.find((rect) => !rectIntersectsLine(rect, attrs.lineStart, attrs.lineEnd)) ?? candidates[0]
-}
-
-function resolveTrendStatsAnchorPoint(style: DrawingTrendLineStyle, start: ScreenPoint, end: ScreenPoint): ScreenPoint {
-  if (style.statsPosition === 'left') return start
-  if (style.statsPosition === 'right') return end
-  return {
-    x: (start.x + end.x) / 2,
-    y: (start.y + end.y) / 2,
-  }
-}
-
-function ensureTrendLineHitFigure() {
-  if (trendLineHitFigureRegistered) return
-  trendLineHitFigureRegistered = true
-  registerFigure({
-    name: trendLineHitFigureName,
-    checkEventOn: (coordinate: unknown, attrs: unknown) => {
-      const point = coordinate as Partial<ScreenPoint>
-      const hitAttrs = attrs as { coordinates?: ScreenPoint[]; hitSlop?: number }
-      const start = hitAttrs.coordinates?.[0]
-      const end = hitAttrs.coordinates?.[1]
-      const hitSlop = Number(hitAttrs.hitSlop)
-      if (!isScreenPoint(point) || !isScreenPoint(start) || !isScreenPoint(end)) return false
-      return distanceToSegment(point, start, end) <= (Number.isFinite(hitSlop) ? hitSlop : 8)
-    },
-    draw: () => undefined,
-  })
-}
-
-function ensureTrendLineStatsBoxFigure() {
-  if (trendLineStatsBoxFigureRegistered) return
-  trendLineStatsBoxFigureRegistered = true
-  registerFigure({
-    name: trendLineStatsBoxFigureName,
-    checkEventOn: () => false,
-    draw: (ctx, attrs: TrendStatsBoxAttrs) => {
-      if (!Array.isArray(attrs.rows) || attrs.rows.length === 0) return
-      ctx.save()
-      ctx.font = '12px Arial, Tahoma, sans-serif'
-      const lineHeight = 20
-      const padX = 12
-      const padY = 8
-      const width = Math.ceil(attrs.rows.reduce((max, row) => Math.max(max, Number(ctx.measureText(row).width) || row.length * 7), 0) + padX * 2)
-      const height = attrs.rows.length * lineHeight + padY * 2
-      const box = resolveTrendStatsBoxPosition(attrs, width, height)
-      ctx.fillStyle = 'rgba(242, 242, 242, 0.94)'
-      roundedRectPath(ctx, box.x, box.y, width, height, 4)
-      ctx.fill()
-      ctx.fillStyle = '#111827'
-      ctx.textAlign = 'left'
-      ctx.textBaseline = 'middle'
-      attrs.rows.forEach((row, index) => {
-        ctx.fillText(row, box.x + padX, box.y + padY + lineHeight * index + lineHeight / 2)
-      })
-      ctx.restore()
-    },
-  })
-}
-
-function formatOverlayPrice(value: number, pricePrecision: number, thousandsSeparator: string) {
-  const precision = Number.isFinite(pricePrecision) ? Math.max(0, Math.min(Math.round(pricePrecision), 10)) : 2
-  const fixed = value.toFixed(precision)
-  const [integer, decimal] = fixed.split('.')
-  const grouped = thousandsSeparator
-    ? integer.replace(/\B(?=(\d{3})+(?!\d))/g, thousandsSeparator)
-    : integer
-  return decimal == null ? grouped : `${grouped}.${decimal}`
-}
-
-function resolveHorizontalLineLabelPrecision(paneId: string | undefined, pricePrecision: number) {
-  if (paneId === 'macd_pane' || paneId === 'vi_pane') return 4
-  if (paneId === 'rsi_pane' || paneId === 'stoch_pane' || paneId === 'tsi_pane') return 2
-  return pricePrecision
-}
-
-function resolveHorizontalLineTextLayout(textStyle: DrawingTextStyle | undefined, y: number, left: number, right: number, measure: (value: string, font: string) => number) {
-  const text = normalizeDrawingTextStyle(textStyle)
-  if (!text.body.trim()) return null
-  const fontStyle = text.italic ? 'italic ' : ''
-  const fontWeight = text.bold ? '700 ' : '400 '
-  const font = `${fontStyle}${fontWeight}${text.fontSize}px Arial, Tahoma, sans-serif`
-  const rows = text.body.split(/\r?\n/)
-  const width = rows.reduce((max, row) => Math.max(max, measure(row, font)), 0)
-  const x = text.alignH === 'left'
-    ? left + 8
-    : text.alignH === 'center'
-      ? (left + right) / 2
-      : right - 8
-  const textY = text.alignV === 'top'
-    ? y - textTopLineGap
-    : text.alignV === 'bottom'
-      ? y + textBottomLineGap
-      : y + textMiddleYOffset
-  return {
-    ...text,
-    font,
-    lineHeight: Math.round(text.fontSize * 1.25),
-    rows,
-    width,
-    x,
-    y: textY,
-  }
-}
-
-function textLayoutBounds(layout: ReturnType<typeof resolveHorizontalLineTextLayout>) {
-  if (!layout) return null
-  const left = layout.alignH === 'left'
-    ? layout.x
-    : layout.alignH === 'center'
-      ? layout.x - layout.width / 2
-      : layout.x - layout.width
-  return { left, right: left + layout.width }
-}
-
-function createHorizontalLineObjectId() {
-  horizontalLineObjectIdSeed += 1
-  return `HL${String(horizontalLineObjectIdSeed).padStart(4, '0')}`
-}
-
-function numericObjectIdValue(objectId: string) {
-  const match = /^HL(\d+)$/i.exec(objectId.trim())
-  return match ? Number(match[1]) : Number.NaN
-}
-
-function syncHorizontalLineObjectIdSeed(drawings: StoredHorizontalLineDrawing[]) {
-  drawings.forEach((drawing) => {
-    const value = numericObjectIdValue(drawing.objectId)
-    if (Number.isFinite(value)) horizontalLineObjectIdSeed = Math.max(horizontalLineObjectIdSeed, value)
-  })
-}
-
-function createTrendLineObjectId() {
-  trendLineObjectIdSeed += 1
-  return `TL${String(trendLineObjectIdSeed).padStart(4, '0')}`
-}
-
-function numericTrendLineObjectIdValue(objectId: string) {
-  const match = /^TL(\d+)$/i.exec(objectId.trim())
-  return match ? Number(match[1]) : Number.NaN
-}
-
-function syncTrendLineObjectIdSeed(drawings: StoredTrendLineDrawing[]) {
-  drawings.forEach((drawing) => {
-    const value = numericTrendLineObjectIdValue(drawing.objectId)
-    if (Number.isFinite(value)) trendLineObjectIdSeed = Math.max(trendLineObjectIdSeed, value)
-  })
-}
-
-function ensureHorizontalLineTextFigure() {
-  if (horizontalLineTextFigureRegistered) return
-  horizontalLineTextFigureRegistered = true
-  registerFigure({
-    name: horizontalLineTextFigureName,
-    checkEventOn: () => false,
-    draw: (ctx, attrs: {
-      left: number
-      right: number
-      textStyle?: DrawingTextStyle
-      y: number
-    }) => {
-      const layout = resolveHorizontalLineTextLayout(
-        attrs.textStyle,
-        attrs.y,
-        attrs.left,
-        attrs.right,
-        measureCanvasText,
-      )
-      if (!layout) return
-      ctx.save()
-      ctx.font = layout.font
-      ctx.fillStyle = layout.textColor
-      ctx.textAlign = layout.alignH
-      ctx.textBaseline = layout.alignV === 'top' ? 'bottom' : layout.alignV === 'bottom' ? 'top' : 'middle'
-      const offsetStart = layout.rows.length > 1 ? -((layout.rows.length - 1) * layout.lineHeight) / 2 : 0
-      layout.rows.forEach((row, index) => {
-        ctx.fillText(row, layout.x, layout.y + (layout.alignV === 'middle' ? offsetStart + index * layout.lineHeight : index * layout.lineHeight))
-      })
-      ctx.restore()
-    },
-  })
-}
-
-function ensureTrendLineTextFigure() {
-  if (trendLineTextFigureRegistered) return
-  trendLineTextFigureRegistered = true
-  registerFigure({
-    name: trendLineTextFigureName,
-    checkEventOn: () => false,
-    draw: (ctx, attrs: {
-      end: ScreenPoint
-      start: ScreenPoint
-      textStyle?: DrawingTextStyle
-    }) => {
-      const layout = resolveTrendTextLayout(attrs.textStyle, attrs.start, attrs.end, measureCanvasText)
-      if (!layout) return
-      ctx.save()
-      ctx.translate(layout.anchor.x, layout.anchor.y)
-      ctx.rotate(layout.angle)
-      ctx.font = layout.font
-      ctx.textAlign = layout.canvasAlign
-      ctx.textBaseline = 'top'
-      ctx.fillStyle = layout.text.textColor
-      ctx.shadowColor = 'rgba(255, 255, 255, 0.92)'
-      ctx.shadowBlur = 2
-      layout.lines.forEach((row, index) => {
-        ctx.fillText(row, 0, layout.offsetY + index * layout.lineHeight)
-      })
-      ctx.restore()
-    },
-  })
-}
 
 function ensureHorizontalLineOverlay() {
   if (horizontalLineOverlayRegistered) return
@@ -669,181 +73,8 @@ function ensureHorizontalLineOverlay() {
     needDefaultPointFigure: false,
     needDefaultXAxisFigure: false,
     needDefaultYAxisFigure: false,
-    createPointFigures: ({ bounding, coordinates, overlay }) => {
-      const y = coordinates[0]?.y
-      if (!Number.isFinite(y)) return []
-      const extendData = overlay.extendData as HorizontalLineExtendData | undefined
-      if (extendData?.manualVisible === false || extendData?.periodVisible === false) return []
-      const lineStyle = normalizeLineStyle(extendData?.lineStyle)
-      const color = colorWithAlpha(lineStyle.hex, lineStyle.opacity)
-      const selected = extendData?.selected === true
-      const hovered = extendData?.hovered === true
-      const handlePressed = extendData?.handlePressed === true
-      const locked = extendData?.locked === true
-      const active = selected || hovered
-      const handleX = Math.max(0, bounding.width - selectedHandleDistanceFromScale)
-      const textLayout = resolveHorizontalLineTextLayout(extendData?.textStyle, y, 0, bounding.width, measureCanvasText)
-      const textBounds = textLayout?.alignV === 'middle' ? textLayoutBounds(textLayout) : null
-      const textGap = textBounds ? { left: textBounds.left - textMiddleLineGap, right: textBounds.right + textMiddleLineGap } : null
-      const figures: HorizontalLineFigure[] = [{
-        type: 'rect',
-        styles: {
-          borderSize: 0,
-          color: 'rgba(0,0,0,0.001)',
-          style: PolygonType.Fill,
-        },
-        attrs: {
-          height: horizontalLineHitSlop * 2,
-          width: bounding.width,
-          x: 0,
-          y: y - horizontalLineHitSlop,
-        },
-      }]
-      const lineStyles = {
-        color,
-        dashedValue: dashedValueForStyle(lineStyle.lineStyle),
-        size: lineStyle.thickness,
-        style: lineTypeForStyle(lineStyle.lineStyle),
-      }
-      const pushLine = (x1: number, x2: number) => {
-        if (x2 <= x1) return
-        figures.push({
-          type: 'line',
-          styles: lineStyles,
-          attrs: {
-            coordinates: [
-              { x: x1, y },
-              { x: x2, y },
-            ],
-          },
-        })
-      }
-      if (locked && active && !handlePressed) {
-        const lockedHandleGapHalf = lockedHandleSize / 2 + lockedHandleGap
-        const gaps = [
-          { left: handleX - lockedHandleGapHalf, right: handleX + lockedHandleGapHalf },
-          textGap,
-        ].filter((gap): gap is { left: number; right: number } => Boolean(gap))
-          .sort((a, b) => a.left - b.left)
-        let cursor = 0
-        gaps.forEach((gap) => {
-          const left = Math.max(0, gap.left)
-          const right = Math.min(bounding.width, gap.right)
-          pushLine(cursor, left)
-          cursor = Math.max(cursor, right)
-        })
-        pushLine(cursor, bounding.width)
-      } else {
-        if (textGap) {
-          pushLine(0, Math.max(0, textGap.left))
-          pushLine(Math.min(bounding.width, textGap.right), bounding.width)
-        } else {
-          pushLine(0, bounding.width)
-        }
-      }
-      if (locked && active) {
-        figures.push({
-          type: 'circle',
-          attrs: { x: handleX, y, r: lockedHandleSize / 2 },
-          styles: {
-            borderColor: selectedHandleColor,
-            borderSize: lockedHandleBorderSize,
-            color: '#ffffff',
-            style: PolygonType.StrokeFill,
-          },
-        })
-      } else if (selected && !handlePressed) {
-        const innerHandleSize = selectedHandleSize - selectedHandleBorderSize * 2
-        figures.push({
-          type: 'rect',
-          key: 'handle',
-          attrs: {
-            height: selectedHandleSize,
-            width: selectedHandleSize,
-            x: handleX - selectedHandleSize / 2,
-            y: y - selectedHandleSize / 2,
-          },
-          styles: {
-            borderRadius: selectedHandleRadius,
-            borderSize: 0,
-            color: selectedHandleColor,
-            style: PolygonType.Fill,
-          },
-        }, {
-          type: 'rect',
-          key: 'handle',
-          attrs: {
-            height: innerHandleSize,
-            width: innerHandleSize,
-            x: handleX - innerHandleSize / 2,
-            y: y - innerHandleSize / 2,
-          },
-          styles: {
-            borderRadius: Math.max(0, selectedHandleRadius - 1),
-            borderSize: 0,
-            color: '#ffffff',
-            style: PolygonType.Fill,
-          },
-        })
-      } else if (hovered && !handlePressed) {
-        figures.push({
-          type: 'rect',
-          key: 'handle',
-          attrs: {
-            height: hoverHandleSize,
-            width: hoverHandleSize,
-            x: handleX - hoverHandleSize / 2,
-            y: y - hoverHandleSize / 2,
-          },
-          styles: {
-            borderColor: selectedHandleColor,
-            borderRadius: selectedHandleRadius,
-            borderSize: hoverHandleBorderSize,
-            color: '#ffffff',
-            style: PolygonType.StrokeFill,
-          },
-        })
-      }
-      if (textLayout) {
-        figures.push({
-          type: horizontalLineTextFigureName,
-          attrs: {
-            left: 0,
-            right: bounding.width,
-            textStyle: extendData?.textStyle,
-            y,
-          },
-          ignoreEvent: true,
-        })
-      }
-      return figures
-    },
-    createYAxisFigures: ({ coordinates, overlay, precision, thousandsSeparator }) => {
-      const extendData = overlay.extendData as HorizontalLineExtendData | undefined
-      if (extendData?.manualVisible === false || extendData?.periodVisible === false) return []
-      if (extendData?.showPriceLabel === false) return []
-      const y = coordinates[0]?.y
-      const value = Number(overlay.points[0]?.value)
-      if (!Number.isFinite(y) || !Number.isFinite(value)) return []
-      const lineStyle = normalizeLineStyle(extendData?.lineStyle)
-      const labelPrecision = resolveHorizontalLineLabelPrecision(overlay.paneId, precision.price)
-      return [{
-        type: 'text',
-        attrs: {
-          align: 'left',
-          baseline: 'middle',
-          text: formatOverlayPrice(value, labelPrecision, thousandsSeparator),
-          x: 0,
-          y,
-        },
-        ignoreEvent: true,
-        styles: {
-          ...createPriceAxisLabelTextStyle(),
-          backgroundColor: colorWithAlpha(lineStyle.hex, lineStyle.opacity),
-          color: '#ffffff',
-        },
-      }]
-    },
+    createPointFigures: createHorizontalLinePointFigures,
+    createYAxisFigures: createHorizontalLineYAxisFigures,
   })
 }
 
@@ -859,220 +90,8 @@ function ensureTrendLineOverlay() {
     needDefaultPointFigure: true,
     needDefaultXAxisFigure: false,
     needDefaultYAxisFigure: false,
-    createPointFigures: ({ bounding, coordinates, overlay }) => {
-      const start = coordinates[0]
-      const end = coordinates[1]
-      const extendData = overlay.extendData as TrendLineExtendData | undefined
-      const locked = extendData?.locked === true
-      const drawing = extendData?.drawing === true
-      if (extendData?.manualVisible === false || extendData?.periodVisible === false) return []
-      if (!isScreenPoint(start)) return []
-      if (!isScreenPoint(end)) return drawing ? [createTrendHandleFigure(start, locked, true, trendHandleColor, 'point_0')] : []
-      const lineStyle = normalizeLineStyle(extendData?.lineStyle)
-      const trendStyle = normalizeDrawingTrendLineStyle(extendData?.trendLineStyle)
-      const color = colorWithAlpha(lineStyle.hex, lineStyle.opacity)
-      const size = Math.max(1, Math.min(Math.round(lineStyle.thickness), 4))
-      const endpointPressed = extendData?.endpointPressed === true
-      const pressedPointIndex = Number(extendData?.pressedPointIndex)
-      const active = !endpointPressed && (extendData?.selected === true || extendData?.hovered === true || extendData?.pressed === true)
-      const selected = extendData?.selected === true || extendData?.pressed === true
-      const resolved = resolveTrendLineEndpoints(start, end, bounding, trendStyle.extendMode)
-      const middleHandleVisible = active && trendStyle.middleVisible
-      const lineFigureStyles = {
-        color,
-        dashedValue: dashedValueForStyle(lineStyle.lineStyle),
-        size,
-        style: lineTypeForStyle(lineStyle.lineStyle),
-      }
-      const figures: HorizontalLineFigure[] = [{
-        key: 'trend-hit-line',
-        type: trendLineHitFigureName,
-        attrs: {
-          coordinates: [resolved.start, resolved.end],
-          hitSlop: horizontalLineHitSlop,
-        },
-      }]
-      const textLayout = resolveTrendTextLayout(extendData?.textStyle, start, end, measureCanvasText)
-      const textExclusion = resolveTrendTextLineExclusion(textLayout)
-      const exclusions: Array<{ from: ScreenPoint; to: ScreenPoint }> = []
-      if (middleHandleVisible) {
-        const middle = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }
-        const dx = resolved.end.x - resolved.start.x
-        const dy = resolved.end.y - resolved.start.y
-        const lineLength = Math.hypot(dx, dy)
-        const gap = trendMiddleHandleRadius + trendMiddleHandleLineWidth + 1
-        if (lineLength > gap * 2) {
-          const unitX = dx / lineLength
-          const unitY = dy / lineLength
-          exclusions.push({
-            from: { x: middle.x - unitX * gap, y: middle.y - unitY * gap },
-            to: { x: middle.x + unitX * gap, y: middle.y + unitY * gap },
-          })
-        }
-      }
-      if (textExclusion) exclusions.push(textExclusion)
-      const lineSegments = splitTrendLineSegments(resolved.start, resolved.end, exclusions)
-      if (lineSegments.length === 0) {
-        figures.push({
-          type: 'line',
-          attrs: {
-            coordinates: [resolved.start, resolved.end],
-          },
-          styles: lineFigureStyles,
-        })
-      } else {
-        lineSegments.forEach((segment) => {
-          figures.push({
-            type: 'line',
-            attrs: {
-              coordinates: [segment.start, segment.end],
-            },
-            styles: lineFigureStyles,
-          })
-        })
-      }
-      if (trendStyle.startMarker === 'arrow') figures.push(...createTrendArrowFigures(resolved.start, resolved.end, color, size))
-      if (trendStyle.endMarker === 'arrow') figures.push(...createTrendArrowFigures(resolved.end, resolved.start, color, size))
-      if (active || endpointPressed || drawing) {
-        if (!endpointPressed || pressedPointIndex !== 0) figures.push(createTrendHandleFigure(start, locked, selected, trendHandleColor, 'point_0'))
-        if (!drawing && (!endpointPressed || pressedPointIndex !== 1)) figures.push(createTrendHandleFigure(end, locked, selected, trendHandleColor, 'point_1'))
-      }
-      if (middleHandleVisible) {
-        figures.push({
-          type: 'circle',
-          attrs: {
-            r: trendMiddleHandleRadius,
-            x: (start.x + end.x) / 2,
-            y: (start.y + end.y) / 2,
-          },
-          styles: {
-            borderColor: color,
-            borderSize: trendMiddleHandleLineWidth,
-            color: '#ffffff',
-            style: PolygonType.StrokeFill,
-          },
-        })
-      }
-      if (textLayout) {
-        figures.push({
-          type: trendLineTextFigureName,
-          attrs: {
-            end,
-            start,
-            textStyle: extendData?.textStyle,
-          },
-          ignoreEvent: true,
-        })
-      }
-      const statsVisible = trendStyle.statsAlwaysVisible || selected || extendData?.pressed === true || endpointPressed || drawing
-      if (statsVisible && trendStyle.statsData.length > 0) {
-        const rows = buildTrendStatsRows(overlay.points, trendStyle, start, end)
-        if (rows.length > 0) {
-          figures.push({
-            key: 'trend-stats-box',
-            type: trendLineStatsBoxFigureName,
-            attrs: {
-              anchor: resolveTrendStatsAnchorPoint(trendStyle, start, end),
-              lineEnd: end,
-              lineStart: start,
-              right: bounding.width,
-              rows,
-            },
-          })
-        }
-      }
-      if (trendLineStatsBoxFigureName === '' && trendStyle.statsAlwaysVisible && trendStyle.statsData.length > 0) {
-        const valueStart = Number(overlay.points[0]?.value)
-        const valueEnd = Number(overlay.points[1]?.value)
-        const valueDelta = Number.isFinite(valueStart) && Number.isFinite(valueEnd) ? valueEnd - valueStart : null
-        const statsText = trendStyle.statsData.map((item) => {
-          if (item === 'point-change' && valueDelta != null) return valueDelta.toFixed(4)
-          if (item === 'percent-change' && valueDelta != null && valueStart !== 0) return `${((valueDelta / valueStart) * 100).toFixed(2)}%`
-          if (item === 'price-range' && valueDelta != null) return `${Math.min(valueStart, valueEnd).toFixed(4)} - ${Math.max(valueStart, valueEnd).toFixed(4)}`
-          if (item === 'bar-range') return `${Math.abs(Number(overlay.points[1]?.dataIndex ?? 0) - Number(overlay.points[0]?.dataIndex ?? 0))}`
-          if (item === 'angle') return `${Math.round(Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI)}°`
-          return ''
-        }).filter(Boolean).join('  ')
-        if (statsText) {
-          const x = trendStyle.statsPosition === 'left'
-            ? Math.min(start.x, end.x)
-            : trendStyle.statsPosition === 'right'
-              ? Math.max(start.x, end.x)
-              : (start.x + end.x) / 2
-          figures.push({
-            type: 'text',
-            attrs: {
-              align: trendStyle.statsPosition === 'left' ? 'left' : trendStyle.statsPosition === 'right' ? 'right' : 'center',
-              baseline: 'bottom',
-              text: statsText,
-              x,
-              y: Math.min(start.y, end.y) - 8,
-            },
-            styles: {
-              backgroundColor: 'rgba(255,255,255,0.82)',
-              color,
-              size: 12,
-            },
-          })
-        }
-      }
-      return figures
-    },
-    createYAxisFigures: ({ bounding, coordinates, overlay, precision, thousandsSeparator }) => {
-      const extendData = overlay.extendData as TrendLineExtendData | undefined
-      if (overlay.visible === false || extendData?.manualVisible === false || extendData?.periodVisible === false || extendData?.showPriceLabel === false) return []
-      const lineStyle = normalizeLineStyle(extendData?.lineStyle)
-      const labelPrecision = resolveHorizontalLineLabelPrecision(overlay.paneId, precision.price)
-      const selected = extendData?.selected === true || extendData?.pressed === true
-      const figures: HorizontalLineFigure[] = []
-      const endpointYs = coordinates
-        .slice(0, 2)
-        .map((coordinate) => coordinate?.y)
-        .filter((y): y is number => Number.isFinite(y))
-      if (selected && endpointYs.length > 1) {
-        const topY = Math.min(...endpointYs)
-        const bottomY = Math.max(...endpointYs)
-        if (bottomY > topY) {
-          figures.push({
-            type: 'rect',
-            attrs: {
-              height: bottomY - topY,
-              width: Math.min(trendYAxisSelectionWidth, bounding.width),
-              x: 0,
-              y: topY,
-            },
-            ignoreEvent: true,
-            styles: {
-              borderRadius: 0,
-              color: 'rgba(41, 98, 255, 0.25)',
-              style: PolygonType.Fill,
-            },
-          })
-        }
-      }
-      return figures.concat([0, 1].flatMap((index) => {
-        const coordinate = coordinates[index]
-        const y = coordinate?.y
-        const value = Number(overlay.points[index]?.value)
-        if (!Number.isFinite(y) || !Number.isFinite(value)) return []
-        return [{
-          type: 'text',
-          attrs: {
-            align: 'left',
-            baseline: 'middle',
-            text: formatOverlayPrice(value, labelPrecision, thousandsSeparator),
-            x: 0,
-            y,
-          },
-          ignoreEvent: true,
-          styles: {
-            ...createPriceAxisLabelTextStyle(),
-            backgroundColor: colorWithAlpha(lineStyle.hex, lineStyle.opacity),
-            color: '#ffffff',
-          },
-        }]
-      }))
-    },
+    createPointFigures: createTrendLinePointFigures,
+    createYAxisFigures: createTrendLineYAxisFigures,
   })
 }
 
@@ -1160,19 +179,8 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
         horizontalLineOverlayIds.delete(id)
         return
       }
-      const value = Number(overlay.points[0]?.value)
-      if (!Number.isFinite(value)) return
-      const extendData = overlay.extendData as HorizontalLineExtendData | undefined
-      drawings.push({
-        lineStyle: normalizeLineStyle(extendData?.lineStyle),
-        locked: extendData?.locked === true,
-        manualVisible: extendData?.manualVisible !== false,
-        objectId: extendData?.objectId || createHorizontalLineObjectId(),
-        paneId: overlay.paneId || candlePaneId,
-        showPriceLabel: extendData?.showPriceLabel !== false,
-        textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-        value,
-      })
+      const drawing = storedHorizontalLineFromOverlay(overlay, createHorizontalLineObjectId, candlePaneId)
+      if (drawing) drawings.push(drawing)
     })
     writeStoredHorizontalLineDrawings(drawings)
   }
@@ -1188,29 +196,8 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
         return
       }
       if (overlay.id === pendingTrendLineOverlayId || overlay.points.length < 2) return
-      const points = overlay.points.slice(0, 2).map((point) => {
-        const dataIndex = Number(point?.dataIndex)
-        const timestamp = Number(point?.timestamp)
-        const value = Number(point?.value)
-        return {
-          ...(Number.isFinite(dataIndex) ? { dataIndex } : {}),
-          ...(Number.isFinite(timestamp) ? { timestamp } : {}),
-          ...(Number.isFinite(value) ? { value } : {}),
-        }
-      })
-      if (points.length < 2 || points.some((point) => typeof point.value !== 'number')) return
-      const extendData = overlay.extendData as TrendLineExtendData | undefined
-      drawings.push({
-        lineStyle: normalizeLineStyle(extendData?.lineStyle),
-        locked: extendData?.locked === true,
-        manualVisible: extendData?.manualVisible !== false,
-        objectId: extendData?.objectId || createTrendLineObjectId(),
-        paneId: overlay.paneId || candlePaneId,
-        points,
-        showPriceLabel: extendData?.showPriceLabel !== false,
-        textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-        trendLineStyle: normalizeDrawingTrendLineStyle(extendData?.trendLineStyle),
-      })
+      const drawing = storedTrendLineFromOverlay(overlay, createTrendLineObjectId, candlePaneId)
+      if (drawing) drawings.push(drawing)
     })
     writeStoredTrendLineDrawings(drawings)
   }
@@ -1424,53 +411,19 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   }
 
   const publishObjectTreeState = () => {
-    const horizontalItems = Array.from(horizontalLineOverlayIds)
-      .map((id) => {
-        const overlay = chart.getOverlayById(id)
-        if (!overlay) return null
-        const extendData = overlay.extendData as HorizontalLineExtendData | undefined
-        const visibility = resolveHorizontalLineVisibility(extendData)
-        return {
-          id: extendData?.objectId || id,
-          kind: 'horizontalLine' as const,
-          label: '\u6c34\u5e73\u7ebf',
-          locked: extendData?.locked === true || overlay.lock === true,
-          manualVisible: visibility.manualVisible,
-          overlayId: id,
-          paneId: overlay.paneId || candlePaneId,
-          periodVisible: visibility.periodVisible,
-          selected: selectedHorizontalLineOverlayIds.has(id),
-          visible: visibility.visible,
-        }
-      })
-      .filter((item): item is NonNullable<typeof item> => item != null)
-    const trendItems = Array.from(trendLineOverlayIds)
-      .map((id) => {
-        if (id === pendingTrendLineOverlayId) return null
-        const overlay = chart.getOverlayById(id)
-        if (!overlay) return null
-        if (overlay.points.length < 2) return null
-        const extendData = overlay.extendData as TrendLineExtendData | undefined
-        const visibility = resolveTrendLineVisibility(extendData)
-        return {
-          id: extendData?.objectId || id,
-          kind: 'trendLine' as const,
-          label: '\u8d8b\u52bf\u7ebf',
-          locked: extendData?.locked === true || overlay.lock === true,
-          manualVisible: visibility.manualVisible,
-          overlayId: id,
-          paneId: overlay.paneId || candlePaneId,
-          periodVisible: visibility.periodVisible,
-          selected: selectedTrendLineOverlayId === id || extendData?.selected === true || extendData?.pressed === true,
-          visible: visibility.visible,
-        }
-      })
-      .filter((item): item is NonNullable<typeof item> => item != null)
-    const items = [...horizontalItems, ...trendItems]
-    const activeItem = activeObjectTreeOverlayId
-      ? items.find((item) => item.overlayId === activeObjectTreeOverlayId && item.selected)
-      : undefined
-    publishObjectTreeDrawings(items, activeItem?.id)
+    const state = collectDrawingObjectTreeState({
+      activeObjectTreeOverlayId,
+      chart,
+      fallbackPaneId: candlePaneId,
+      horizontalLineOverlayIds,
+      pendingTrendLineOverlayId,
+      resolveHorizontalLineVisibility,
+      resolveTrendLineVisibility,
+      selectedHorizontalLineOverlayIds,
+      selectedTrendLineOverlayId,
+      trendLineOverlayIds,
+    })
+    publishObjectTreeDrawings(state.items, state.activeId)
   }
 
   const resolveDeleteTargetOverlayId = () => {
@@ -2768,21 +1721,12 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       return
     }
     const command = event.detail
-    const resolveObjectTreeOverlayTarget = (treeId: string): { id: string; kind: 'horizontalLine' | 'trendLine' } | null => {
-      if (horizontalLineOverlayIds.has(treeId) && chart.getOverlayById(treeId)) return { id: treeId, kind: 'horizontalLine' }
-      for (const overlayId of horizontalLineOverlayIds) {
-        const treeOverlay = chart.getOverlayById(overlayId)
-        const extendData = treeOverlay?.extendData as HorizontalLineExtendData | undefined
-        if (extendData?.objectId === treeId) return { id: overlayId, kind: 'horizontalLine' }
-      }
-      if (trendLineOverlayIds.has(treeId) && chart.getOverlayById(treeId)) return { id: treeId, kind: 'trendLine' }
-      for (const overlayId of trendLineOverlayIds) {
-        const treeOverlay = chart.getOverlayById(overlayId)
-        const extendData = treeOverlay?.extendData as TrendLineExtendData | undefined
-        if (extendData?.objectId === treeId) return { id: overlayId, kind: 'trendLine' }
-      }
-      return null
-    }
+    const resolveObjectTreeOverlayTarget = (treeId: string) => resolveDrawingObjectTreeTarget({
+      chart,
+      horizontalLineOverlayIds,
+      treeId,
+      trendLineOverlayIds,
+    })
     const target = resolveObjectTreeOverlayTarget(command.id)
     if (!target) return
     const overlay = chart.getOverlayById(target.id)
