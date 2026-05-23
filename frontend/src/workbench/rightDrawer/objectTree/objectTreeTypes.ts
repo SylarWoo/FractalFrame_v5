@@ -1,6 +1,6 @@
 import { drawingMainPaneId } from '../../drawing/drawingPaneModel'
 
-export type ObjectTreeDrawingKind = 'horizontalLine' | 'trendLine'
+export type ObjectTreeDrawingKind = 'horizontalLine' | 'trendLine' | 'ruler'
 
 export type ObjectTreeDrawingItem = {
   id: string

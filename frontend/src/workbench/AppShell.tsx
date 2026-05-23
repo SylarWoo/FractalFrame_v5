@@ -221,6 +221,7 @@ function renderChartLoadStatus(state: ChartLoadState | null) {
 
 export function AppShell() {
   const [activeRightDrawer, setActiveRightDrawer] = useState<RightDrawerId | null>(getInitialRightDrawerActive)
+  const activeRightDrawerRef = useRef<RightDrawerId | null>(activeRightDrawer)
   const [rightDrawerWidth, setRightDrawerWidth] = useState(getInitialDrawerWidth)
   const [bottomDrawerOpen, setBottomDrawerOpen] = useState(getInitialBottomDrawerOpen)
   const [bottomDrawerHeight, setBottomDrawerHeight] = useState(getInitialBottomDrawerHeight)
@@ -383,11 +384,15 @@ export function AppShell() {
   }, [chartTarget.period, chartTarget.symbol])
 
   useEffect(() => {
+    activeRightDrawerRef.current = activeRightDrawer
+  }, [activeRightDrawer])
+
+  useEffect(() => {
     const handleObjectTreeDrawingsChanged = (event: Event) => {
       if (!(event instanceof CustomEvent)) return
       const items = Array.isArray(event.detail?.items) ? event.detail.items as ObjectTreeDrawingItem[] : []
       const selectedCount = items.filter((item) => item.selected).length
-      if (selectedCount > 1) setActiveRightDrawer('objectTree')
+      if (selectedCount > 1 && activeRightDrawerRef.current !== 'drawings') setActiveRightDrawer('objectTree')
     }
     window.addEventListener(objectTreeDrawingsChangedEvent, handleObjectTreeDrawingsChanged)
     return () => window.removeEventListener(objectTreeDrawingsChangedEvent, handleObjectTreeDrawingsChanged)

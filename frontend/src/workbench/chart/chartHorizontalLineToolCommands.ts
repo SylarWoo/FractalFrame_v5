@@ -1,5 +1,6 @@
 import type { Chart } from 'klinecharts'
-import { clearStoredHorizontalLineDrawings, normalizeDrawingTextStyle } from '../rightDrawer/drawingPersistence'
+import { normalizeDrawingTextStyle } from '../rightDrawer/drawingPersistence'
+import { clearStoredHorizontalLineDrawings } from '../rightDrawer/drawingObjectPersistence'
 import type { DrawingTextStyle } from '../rightDrawer/drawingPersistence'
 import type { DrawingToolCommand } from '../rightDrawer/drawingToolCommands'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'

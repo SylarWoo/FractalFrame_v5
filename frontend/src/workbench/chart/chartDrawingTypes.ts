@@ -1,5 +1,6 @@
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import type { DrawingTextStyle, DrawingTrendLineStyle } from '../rightDrawer/drawingPersistence'
+import type { DrawingRulerStyle } from '../rightDrawer/rulerDrawingStyle'
 
 export type HorizontalLineExtendData = {
   handlePressed?: boolean
@@ -30,6 +31,29 @@ export type TrendLineExtendData = {
   showPriceLabel?: boolean
   textStyle?: DrawingTextStyle
   trendLineStyle?: DrawingTrendLineStyle
+}
+
+export type RulerExtendData = {
+  dataList?: Array<{
+    real_volume?: number
+    tick_volume?: number
+    timestamp?: number
+    volume?: number
+  }>
+  drawing?: boolean
+  endpointPressed?: boolean
+  hovered?: boolean
+  lineStyle?: SettingsLineSwatchValue
+  locked?: boolean
+  manualVisible?: boolean
+  objectId?: string
+  periodVisible?: boolean
+  pressed?: boolean
+  pressedPointIndex?: number
+  selected?: boolean
+  showPriceLabel?: boolean
+  textStyle?: DrawingTextStyle
+  rulerStyle?: DrawingRulerStyle
 }
 
 export type HorizontalLineFigure = {

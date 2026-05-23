@@ -1,10 +1,9 @@
 import { PolygonType } from 'klinecharts'
-import { createPriceAxisLabelTextStyle } from './chartPriceLabelStyles'
 import { colorWithAlpha, dashedValueForStyle, lineTypeForStyle, normalizeLineStyle } from './chartDrawingStyle'
 import type { HorizontalLineExtendData, HorizontalLineFigure } from './chartDrawingTypes'
-import { formatOverlayPrice, resolveHorizontalLineLabelPrecision } from './drawingPriceLabelFormat'
 import { measureCanvasText } from './drawingTextMeasure'
 import { horizontalLineTextFigureName } from './chartDrawingFigures'
+import { createSinglePointYAxisPriceFigures } from './drawingYAxisPriceLabels'
 import { horizontalLineTextLayoutBounds, horizontalLineTextMiddleLineGap, resolveHorizontalLineTextLayout } from './horizontalLineTextLayout'
 
 export const horizontalLineHitSlop = 6
@@ -198,25 +197,11 @@ export function createHorizontalLineYAxisFigures({
   const extendData = overlay.extendData as HorizontalLineExtendData | undefined
   if (extendData?.manualVisible === false || extendData?.periodVisible === false) return []
   if (extendData?.showPriceLabel === false) return []
-  const y = Number(coordinates[0]?.y)
-  const value = Number(overlay.points[0]?.value)
-  if (!Number.isFinite(y) || !Number.isFinite(value)) return []
-  const lineStyle = normalizeLineStyle(extendData?.lineStyle)
-  const labelPrecision = resolveHorizontalLineLabelPrecision(overlay.paneId, precision.price)
-  return [{
-    type: 'text',
-    attrs: {
-      align: 'left',
-      baseline: 'middle',
-      text: formatOverlayPrice(value, labelPrecision, thousandsSeparator),
-      x: 0,
-      y,
-    },
-    ignoreEvent: true,
-    styles: {
-      ...createPriceAxisLabelTextStyle(),
-      backgroundColor: colorWithAlpha(lineStyle.hex, lineStyle.opacity),
-      color: '#ffffff',
-    },
-  }]
+  return createSinglePointYAxisPriceFigures({
+    coordinates,
+    lineStyle: extendData?.lineStyle,
+    overlay,
+    precision,
+    thousandsSeparator,
+  })
 }

@@ -7,9 +7,11 @@ import type { DrawingTextStyle } from '../rightDrawer/drawingPersistence'
 export function createChartDrawingPaneInteractionController({
   chart,
   clearHorizontalLineSelection,
+  clearRulerSelection,
   clearTrendLineSelection,
   createHorizontalLineOverlay,
   eventHitsHorizontalLine,
+  eventHitsRuler,
   eventHitsTrendLine,
   fallbackPaneId,
   getDestroyed,
@@ -20,6 +22,7 @@ export function createChartDrawingPaneInteractionController({
 }: {
   chart: Chart
   clearHorizontalLineSelection: () => void
+  clearRulerSelection: () => void
   clearTrendLineSelection: () => void
   createHorizontalLineOverlay: (options: {
     lineStyle: SettingsLineSwatchValue
@@ -33,6 +36,7 @@ export function createChartDrawingPaneInteractionController({
     textStyle?: DrawingTextStyle
   }) => unknown
   eventHitsHorizontalLine: (event: MouseEvent, paneId: string) => boolean
+  eventHitsRuler: (event: MouseEvent, paneId: string) => boolean
   eventHitsTrendLine: (event: MouseEvent, paneId: string) => boolean
   fallbackPaneId: string
   getDestroyed: () => boolean
@@ -55,8 +59,10 @@ export function createChartDrawingPaneInteractionController({
       if (getDestroyed()) return
       if (eventHitsHorizontalLine(event, paneId)) return
       if (eventHitsTrendLine(event, paneId)) return
+      if (eventHitsRuler(event, paneId)) return
       clearHorizontalLineSelection()
       clearTrendLineSelection()
+      clearRulerSelection()
     }, 0)
   }
 

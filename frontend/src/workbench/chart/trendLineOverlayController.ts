@@ -6,6 +6,7 @@ import { publishDrawingToolState } from '../rightDrawer/drawingToolCommands'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import { normalizeLineStyle, trendOverlayStylesFromLine } from './chartDrawingStyle'
 import type { MixedDrawingMoveState, TrendLineExtendData } from './chartDrawingTypes'
+import { isTwoPointEndpointFigureKey, resolveTwoPointEndpointPressStart, shouldActivateTwoPointEndpointDrag } from './twoPointDrawingInteraction'
 
 export type CreateTrendLineOverlayOptions = {
   lineStyle: SettingsLineSwatchValue
@@ -23,12 +24,9 @@ export type CreateTrendLineOverlayOptions = {
 export function createTrendLineOverlayFactory({
   beginMixedDrawingMove,
   chart,
-  getAdditiveSelectionActive,
   getMixedDrawingMoveState,
   getPendingTrendLineEndpointPress,
   getPendingTrendLineOverlayId,
-  getSelectedDrawingCount,
-  getSelectedTrendLineIds,
   getSelectedTrendLineOverlayId,
   getLastSelectedTrendLineAt,
   getLastSelectedTrendLineOverlayId,
@@ -38,6 +36,7 @@ export function createTrendLineOverlayFactory({
   persistCurrentTrendLines,
   publishObjectTreeState,
   resolveTrendPointPrices,
+  selectedTrendLineOverlayIds,
   selectTrendLineForInteraction,
   setActiveTrendLine,
   clearRemovedTrendLine,
@@ -54,12 +53,9 @@ export function createTrendLineOverlayFactory({
 }: {
   beginMixedDrawingMove: (activeId: string, paneId: string, event: { x?: number; y?: number }) => void
   chart: Chart
-  getAdditiveSelectionActive: () => boolean
   getMixedDrawingMoveState: () => MixedDrawingMoveState | null
   getPendingTrendLineEndpointPress: () => { overlayId: string; pointIndex: number; x: number; y: number } | null
   getPendingTrendLineOverlayId: () => string | null
-  getSelectedDrawingCount: () => number
-  getSelectedTrendLineIds: () => string[]
   getSelectedTrendLineOverlayId: () => string | null
   getLastSelectedTrendLineAt: () => number
   getLastSelectedTrendLineOverlayId: () => string | null
@@ -69,6 +65,7 @@ export function createTrendLineOverlayFactory({
   persistCurrentTrendLines: () => void
   publishObjectTreeState: () => void
   resolveTrendPointPrices: (overlay: { points?: Array<{ value?: number }> } | null | undefined) => [number | undefined, number | undefined]
+  selectedTrendLineOverlayIds: Set<string>
   selectTrendLineForInteraction: (overlay: { id: string; extendData?: unknown }, additive: boolean, preserveSelection?: boolean) => TrendLineExtendData | undefined
   setActiveTrendLine: (id: string) => void
   clearRemovedTrendLine: (id: string) => void
@@ -131,6 +128,7 @@ export function createTrendLineOverlayFactory({
         setPendingTrendLineOptionsCleared()
         setActiveTrendLine(overlay.id)
         trendLineOverlayIds.add(overlay.id)
+        selectedTrendLineOverlayIds.add(overlay.id)
         chart.overrideOverlay({
           id: overlay.id,
           extendData: {
@@ -178,6 +176,7 @@ export function createTrendLineOverlayFactory({
       onPressedMoveEnd: ({ overlay }) => {
         const extendData = overlay.extendData as TrendLineExtendData | undefined
         setActiveTrendLine(overlay.id)
+        selectedTrendLineOverlayIds.add(overlay.id)
         chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed: false, pressed: false, pressedPointIndex: undefined, selected: true } })
         getMixedDrawingMoveState()?.horizontalEntries.forEach((entry) => {
           const horizontalOverlay = chart.getOverlayById(entry.id)
@@ -211,24 +210,9 @@ export function createTrendLineOverlayFactory({
       },
       onPressedMoveStart: (event) => {
         const { overlay } = event
-        const figureKey = typeof event.figureKey === 'string' ? event.figureKey : ''
-        const endpointPressed = figureKey.includes('point_')
-        const preserveSelection = !endpointPressed
-          && getSelectedTrendLineOverlayId() === overlay.id
-          && getSelectedTrendLineIds().includes(overlay.id)
-          && getSelectedDrawingCount() > 1
-        const extendData = selectTrendLineForInteraction(overlay, getAdditiveSelectionActive(), preserveSelection)
-        const pointKeyMatch = /point_(\d+)/.exec(figureKey)
-        const pressedPointIndex = endpointPressed
-          ? Number.isInteger(event.figureIndex)
-            ? event.figureIndex
-            : pointKeyMatch
-              ? Number(pointKeyMatch[1])
-              : undefined
-          : undefined
-        setPendingTrendLineEndpointPress(endpointPressed && typeof pressedPointIndex === 'number' && Number.isInteger(pressedPointIndex)
-          ? { overlayId: overlay.id, pointIndex: pressedPointIndex, x: Number(event.x), y: Number(event.y) }
-          : null)
+        const endpointPressed = isTwoPointEndpointFigureKey(event.figureKey)
+        const extendData = selectTrendLineForInteraction(overlay, false)
+        setPendingTrendLineEndpointPress(resolveTwoPointEndpointPressStart(event))
         chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed: false, pressed: true, pressedPointIndex: undefined, selected: true } })
         publishDrawingToolState({
           armed: false,
@@ -250,22 +234,19 @@ export function createTrendLineOverlayFactory({
         const { overlay } = event
         if (overlay.lock === true || (overlay.extendData as { locked?: boolean } | null)?.locked === true) return true
         const pending = getPendingTrendLineEndpointPress()
-        if (pending?.overlayId === overlay.id) {
-          const distance = Math.hypot(Number(event.x) - pending.x, Number(event.y) - pending.y)
-          if (Number.isFinite(distance) && distance >= trendLineEndpointDragThreshold) {
-            const extendData = overlay.extendData as TrendLineExtendData | undefined
-            chart.overrideOverlay({
-              id: overlay.id,
-              extendData: {
-                ...extendData,
-                endpointPressed: true,
-                pressed: true,
-                pressedPointIndex: pending.pointIndex,
-                selected: true,
-              },
-            })
-            setPendingTrendLineEndpointPress(null)
-          }
+        if (shouldActivateTwoPointEndpointDrag({ event, pending, threshold: trendLineEndpointDragThreshold })) {
+          const extendData = overlay.extendData as TrendLineExtendData | undefined
+          chart.overrideOverlay({
+            id: overlay.id,
+            extendData: {
+              ...extendData,
+              endpointPressed: true,
+              pressed: true,
+              pressedPointIndex: pending?.pointIndex,
+              selected: true,
+            },
+          })
+          setPendingTrendLineEndpointPress(null)
         }
         if (!getMixedDrawingMoveState()) return false
         return moveMixedDrawings(event as { x?: number; y?: number }, overlay.id)
@@ -277,10 +258,7 @@ export function createTrendLineOverlayFactory({
           updatePendingTrendStartHandle(overlay as { paneId?: string; points: Array<{ dataIndex?: number; timestamp?: number; value?: number }> })
           return false
         }
-        const preserveSelection = getSelectedTrendLineOverlayId() === overlay.id
-          && getSelectedTrendLineIds().includes(overlay.id)
-          && getSelectedDrawingCount() > 1
-        const extendData = selectTrendLineForInteraction(overlay, getAdditiveSelectionActive(), preserveSelection)
+        const extendData = selectTrendLineForInteraction(overlay, false)
         publishDrawingToolState({
           armed: false,
           lineStyle: normalizeLineStyle(extendData?.lineStyle),
@@ -308,6 +286,7 @@ export function createTrendLineOverlayFactory({
           return false
         }
         if (getSelectedTrendLineOverlayId() === overlay.id) setSelectedTrendLineOverlayId(null)
+        selectedTrendLineOverlayIds.delete(overlay.id)
         chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed: false, selected: false, pressed: false, pressedPointIndex: undefined } })
         publishDrawingToolState({
           armed: getPendingTrendLineOverlayId() != null,

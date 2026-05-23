@@ -1,5 +1,5 @@
-import { normalizeDrawingTextStyle } from '../rightDrawer/drawingPersistence'
 import type { DrawingTextStyle } from '../rightDrawer/drawingPersistence'
+import { normalizeDrawingTextBoxStyle, resolveDrawingTextBoxMetrics } from './drawingTextBoxCore'
 
 export type ScreenPointLike = { x: number; y: number }
 
@@ -11,7 +11,7 @@ const trendTextEndpointInset = 13
 const trendTextVerticalNudge = 1
 
 function normalizeTrendLineTextStyle(textStyle: DrawingTextStyle | undefined): DrawingTextStyle {
-  const normalized = normalizeDrawingTextStyle(textStyle)
+  const normalized = normalizeDrawingTextBoxStyle(textStyle)
   return textStyle?.alignH === 'left' || textStyle?.alignH === 'center' || textStyle?.alignH === 'right'
     ? normalized
     : { ...normalized, alignH: 'center' }
@@ -49,46 +49,31 @@ function resolveTrendTextCanvasAlign(text: DrawingTextStyle, start: ScreenPointL
   return localX >= 0 ? 'left' : 'right'
 }
 
-function resolveTrendTextFont(text: DrawingTextStyle) {
-  const fontStyle = text.italic ? 'italic ' : ''
-  const fontWeight = text.bold ? '700 ' : '400 '
-  return `${fontStyle}${fontWeight}${text.fontSize}px Arial, Tahoma, sans-serif`
-}
-
-function measureTrendTextWidth(lines: string[], fontSize: number, measure: (value: string) => number) {
-  return Math.ceil(lines.reduce((max, line) => {
-    const measured = Number(measure(line))
-    return Math.max(max, Number.isFinite(measured) && measured > 0 ? measured : line.length * fontSize * 0.55)
-  }, 0))
-}
-
 export function resolveTrendTextLayout(textStyle: DrawingTextStyle | undefined, start: ScreenPointLike, end: ScreenPointLike, measure: (value: string, font: string) => number) {
   const text = normalizeTrendLineTextStyle(textStyle)
-  const lines = text.body
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter((line) => line.trim())
-  if (lines.length === 0) return null
-  const lineHeight = Math.round(text.fontSize * 1.25)
-  const totalHeight = lines.length * lineHeight
+  const metrics = resolveDrawingTextBoxMetrics({
+    measure,
+    rowsMode: { dropBlank: true, trimEnd: true },
+    textStyle: text,
+  })
+  if (!metrics) return null
+  const totalHeight = metrics.rows.length * metrics.lineHeight
   const offsetY = text.alignV === 'bottom'
     ? trendTextBottomLineGap
     : text.alignV === 'middle'
       ? -totalHeight / 2 + trendTextMiddleVisualBias
       : -totalHeight - trendTextTopLineGap
-  const font = resolveTrendTextFont(text)
   const angle = resolveReadableTrendTextAngle(start, end)
-  const width = measureTrendTextWidth(lines, text.fontSize, (value) => measure(value, font))
   return {
     anchor: resolveTrendTextAnchor(text, start, end),
     angle,
     canvasAlign: resolveTrendTextCanvasAlign(text, start, end, angle),
-    font,
-    lineHeight,
-    lines,
+    font: metrics.font,
+    lineHeight: metrics.lineHeight,
+    lines: metrics.rows,
     offsetY: offsetY + trendTextVerticalNudge,
     text,
-    width,
+    width: metrics.width,
   }
 }
 

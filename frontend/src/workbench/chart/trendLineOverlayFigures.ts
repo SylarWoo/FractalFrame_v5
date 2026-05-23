@@ -1,13 +1,11 @@
 import { PolygonType } from 'klinecharts'
 import { normalizeDrawingTrendLineStyle } from '../rightDrawer/drawingPersistence'
-import type { DrawingTrendLineStyle } from '../rightDrawer/drawingPersistence'
-import { createPriceAxisLabelTextStyle } from './chartPriceLabelStyles'
-import { resolveTrendStatsAnchorPoint, trendLineHitFigureName, trendLineStatsBoxFigureName, trendLineTextFigureName } from './chartDrawingFigures'
+import { trendLineHitFigureName, trendLineStatsBoxFigureName, trendLineTextFigureName } from './chartDrawingFigures'
 import { colorWithAlpha, dashedValueForStyle, lineTypeForStyle, normalizeLineStyle } from './chartDrawingStyle'
 import type { HorizontalLineFigure, ScreenPoint, TrendLineExtendData } from './chartDrawingTypes'
 import { isScreenPoint } from './chartDrawingGeometry'
-import { formatOverlayPrice, resolveHorizontalLineLabelPrecision } from './drawingPriceLabelFormat'
 import { measureCanvasText } from './drawingTextMeasure'
+import { createTwoPointYAxisPriceFigures } from './drawingYAxisPriceLabels'
 import { horizontalLineHitSlop } from './horizontalLineOverlayFigures'
 import { resolveTrendTextLayout, resolveTrendTextLineExclusion, splitTrendLineSegments } from './trendLineTextLayout'
 import {
@@ -18,9 +16,7 @@ import {
   trendMiddleHandleLineWidth,
   trendMiddleHandleRadius,
 } from './trendLineFigures'
-
-const trendStatsPointMultiplier = 1000
-const trendYAxisSelectionWidth = 80
+import { buildTwoPointStatsRows, resolveTwoPointStatsAnchorPoint } from './twoPointDrawingStats'
 
 type TrendOverlayLike = {
   extendData?: unknown
@@ -128,13 +124,18 @@ export function createTrendLinePointFigures({
 
   const statsVisible = trendStyle.statsAlwaysVisible || selected || extendData?.pressed === true || endpointPressed || drawing
   if (statsVisible && trendStyle.statsData.length > 0) {
-    const rows = buildTrendStatsRows(overlay.points, trendStyle, start, end)
+    const rows = buildTwoPointStatsRows({
+      end,
+      options: { data: trendStyle.statsData },
+      points: overlay.points,
+      start,
+    })
     if (rows.length > 0) {
       figures.push({
         key: 'trend-stats-box',
         type: trendLineStatsBoxFigureName,
         attrs: {
-          anchor: resolveTrendStatsAnchorPoint(trendStyle, start, end),
+          anchor: resolveTwoPointStatsAnchorPoint(trendStyle.statsPosition, start, end),
           lineEnd: end,
           lineStart: start,
           right: bounding.width,
@@ -142,9 +143,6 @@ export function createTrendLinePointFigures({
         },
       })
     }
-  }
-  if (trendLineStatsBoxFigureName === '' && trendStyle.statsAlwaysVisible && trendStyle.statsData.length > 0) {
-    figures.push(...createLegacyTrendStatsTextFigures(overlay.points, trendStyle, start, end, color))
   }
   return figures
 }
@@ -164,163 +162,14 @@ export function createTrendLineYAxisFigures({
 }) {
   const extendData = overlay.extendData as TrendLineExtendData | undefined
   if (overlay.visible === false || extendData?.manualVisible === false || extendData?.periodVisible === false || extendData?.showPriceLabel === false) return []
-  const lineStyle = normalizeLineStyle(extendData?.lineStyle)
-  const labelPrecision = resolveHorizontalLineLabelPrecision(overlay.paneId, precision.price)
   const selected = extendData?.selected === true || extendData?.pressed === true
-  const figures: HorizontalLineFigure[] = []
-  const endpointYs = coordinates
-    .slice(0, 2)
-    .map((coordinate) => coordinate?.y)
-    .filter((y): y is number => Number.isFinite(y))
-  if (selected && endpointYs.length > 1) {
-    const topY = Math.min(...endpointYs)
-    const bottomY = Math.max(...endpointYs)
-    if (bottomY > topY) {
-      figures.push({
-        type: 'rect',
-        attrs: { height: bottomY - topY, width: Math.min(trendYAxisSelectionWidth, bounding.width), x: 0, y: topY },
-        ignoreEvent: true,
-        styles: { borderRadius: 0, color: 'rgba(41, 98, 255, 0.25)', style: PolygonType.Fill },
-      })
-    }
-  }
-  return figures.concat([0, 1].flatMap((index) => {
-    const y = Number(coordinates[index]?.y)
-    const value = Number(overlay.points[index]?.value)
-    if (!Number.isFinite(y) || !Number.isFinite(value)) return []
-    return [{
-      type: 'text',
-      attrs: {
-        align: 'left',
-        baseline: 'middle',
-        text: formatOverlayPrice(value, labelPrecision, thousandsSeparator),
-        x: 0,
-        y,
-      },
-      ignoreEvent: true,
-      styles: {
-        ...createPriceAxisLabelTextStyle(),
-        backgroundColor: colorWithAlpha(lineStyle.hex, lineStyle.opacity),
-        color: '#ffffff',
-      },
-    }]
-  }))
-}
-
-function formatTrendStatsNumber(value: number, digits = 6) {
-  if (!Number.isFinite(value)) return null
-  return value.toFixed(digits).replace(/\.?0+$/, '')
-}
-
-function formatTrendStatsInteger(value: number) {
-  if (!Number.isFinite(value)) return null
-  return Math.round(value).toLocaleString('en-US')
-}
-
-function formatTrendStatsDuration(seconds: number) {
-  const total = Math.round(Math.abs(seconds))
-  if (!Number.isFinite(total)) return null
-  const day = Math.floor(total / 86400)
-  const hour = Math.floor((total % 86400) / 3600)
-  const minute = Math.floor((total % 3600) / 60)
-  const parts: string[] = []
-  if (day) parts.push(`${day}\u5929`)
-  if (hour) parts.push(`${hour}\u5c0f\u65f6`)
-  if (minute || parts.length === 0) parts.push(`${minute}\u5206\u949f`)
-  return parts.join(' ')
-}
-
-function readTrendPointTimeSeconds(point: { timestamp?: number } | undefined) {
-  const timestamp = Number(point?.timestamp)
-  if (!Number.isFinite(timestamp)) return null
-  return timestamp > 100000000000 ? timestamp / 1000 : timestamp
-}
-
-function buildTrendStatsRows(points: Array<{ dataIndex?: number; timestamp?: number; value?: number }>, style: DrawingTrendLineStyle, start: ScreenPoint, end: ScreenPoint) {
-  const selected = style.statsData
-  if (!selected.length) return []
-  const pointA = points[0]
-  const pointB = points[1]
-  const priceA = Number(pointA?.value)
-  const priceB = Number(pointB?.value)
-  const dPrice = priceB - priceA
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  const rows: string[] = []
-  const row1: string[] = []
-
-  if (selected.includes('price-range')) {
-    const text = formatTrendStatsNumber(dPrice, 6)
-    if (text != null) row1.push(text)
-  }
-  if (selected.includes('percent-change') && Number.isFinite(priceA) && priceA !== 0) {
-    const text = formatTrendStatsNumber((dPrice / priceA) * 100, 2)
-    if (text != null) {
-      if (row1.length) row1[row1.length - 1] = `${row1[row1.length - 1]} (${text}%)`
-      else row1.push(`${text}%`)
-    }
-  }
-  if (selected.includes('point-change')) {
-    const text = formatTrendStatsInteger(dPrice * trendStatsPointMultiplier)
-    if (text != null) row1.push(text)
-  }
-  if (row1.length) rows.push(row1.join(', '))
-
-  const row2: string[] = []
-  if (selected.includes('bar-range')) {
-    const bars = Math.abs(Number(pointB?.dataIndex) - Number(pointA?.dataIndex))
-    const text = formatTrendStatsInteger(bars)
-    if (text != null) row2.push(`${text}\u6839K\u7ebf`)
-  }
-  if (selected.includes('date-time-range')) {
-    const timeA = readTrendPointTimeSeconds(pointA)
-    const timeB = readTrendPointTimeSeconds(pointB)
-    const text = timeA != null && timeB != null ? formatTrendStatsDuration(timeB - timeA) : null
-    if (text) {
-      if (row2.length) row2[row2.length - 1] = `${row2[row2.length - 1]} (${text})`
-      else row2.push(text)
-    }
-  }
-  if (selected.includes('distance')) {
-    const text = formatTrendStatsInteger(Math.sqrt(dx * dx + dy * dy))
-    if (text != null) row2.push(`\u8ddd\u79bb: ${text} px`)
-  }
-  if (row2.length) rows.push(row2.join(', '))
-
-  if (selected.includes('angle')) {
-    const text = formatTrendStatsNumber(Math.atan2(-dy, dx) * 180 / Math.PI, 2)
-    if (text != null) rows.push(`${text}\u00b0`)
-  }
-  return rows
-}
-
-function createLegacyTrendStatsTextFigures(points: Array<{ dataIndex?: number; value?: number }>, trendStyle: DrawingTrendLineStyle, start: ScreenPoint, end: ScreenPoint, color: string): HorizontalLineFigure[] {
-  const valueStart = Number(points[0]?.value)
-  const valueEnd = Number(points[1]?.value)
-  const valueDelta = Number.isFinite(valueStart) && Number.isFinite(valueEnd) ? valueEnd - valueStart : null
-  const statsText = trendStyle.statsData.map((item) => {
-    if (item === 'point-change' && valueDelta != null) return valueDelta.toFixed(4)
-    if (item === 'percent-change' && valueDelta != null && valueStart !== 0) return `${((valueDelta / valueStart) * 100).toFixed(2)}%`
-    if (item === 'price-range' && valueDelta != null) return `${Math.min(valueStart, valueEnd).toFixed(4)} - ${Math.max(valueStart, valueEnd).toFixed(4)}`
-    if (item === 'bar-range') return `${Math.abs(Number(points[1]?.dataIndex ?? 0) - Number(points[0]?.dataIndex ?? 0))}`
-    if (item === 'angle') return `${Math.round(Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI)}\u00b0`
-    return ''
-  }).filter(Boolean).join('  ')
-  if (!statsText) return []
-  const x = trendStyle.statsPosition === 'left'
-    ? Math.min(start.x, end.x)
-    : trendStyle.statsPosition === 'right'
-      ? Math.max(start.x, end.x)
-      : (start.x + end.x) / 2
-  return [{
-    type: 'text',
-    attrs: {
-      align: trendStyle.statsPosition === 'left' ? 'left' : trendStyle.statsPosition === 'right' ? 'right' : 'center',
-      baseline: 'bottom',
-      text: statsText,
-      x,
-      y: Math.min(start.y, end.y) - 8,
-    },
-    styles: { backgroundColor: 'rgba(255,255,255,0.82)', color, size: 12 },
-  }]
+  return createTwoPointYAxisPriceFigures({
+    bounding,
+    coordinates,
+    lineStyle: extendData?.lineStyle,
+    overlay,
+    precision,
+    selected,
+    thousandsSeparator,
+  })
 }

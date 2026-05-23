@@ -179,4 +179,32 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
   background: #f8fafc;
 }
 
+.ff-right-rail__button,
+.ff-right-rail__button *,
+.ff-right-drawer :is(
+  button:not(.ff-indicators-split-v1__handle),
+  label,
+  tbody tr,
+  input[type='checkbox'],
+  input[type='radio']
+) {
+  cursor: default !important;
+}
 
+.ff-right-drawer__resize-handle,
+.ff-right-drawer .ff-right-drawer__resize-handle {
+  cursor: ew-resize !important;
+}
+
+.ff-indicators-split-v1__handle,
+.ff-right-drawer .ff-mt5-pane-splitter,
+.ff-right-drawer .ff-indicators-split-v1__handle,
+.ff-right-drawer .ff-watchlist-table-splitter {
+  cursor: ns-resize !important;
+}
+
+.ff-right-drawer .ff-symbol-table__column-resizer,
+.ff-right-drawer .ff-watchlist-table__column-resizer,
+.ff-right-drawer .ff-indicators-table-v1__column-resizer {
+  cursor: col-resize !important;
+}

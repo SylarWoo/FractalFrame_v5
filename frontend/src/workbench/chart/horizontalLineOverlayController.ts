@@ -22,12 +22,10 @@ export type CreateHorizontalLineOverlayOptions = {
 export function createHorizontalLineOverlayFactory({
   beginPressedMove,
   chart,
-  getAdditiveSelectionActive,
   getHorizontalLineVisible,
   getMixedDrawingMoveState,
   getPendingHorizontalLineHandlePress,
   getPressedMoveState,
-  getSelectedDrawingCount,
   horizontalLineHandleDragThreshold,
   horizontalLineOverlayIds,
   moveMixedDrawings,
@@ -49,12 +47,10 @@ export function createHorizontalLineOverlayFactory({
 }: {
   beginPressedMove: (overlayId: string, event: { x?: number; y?: number }) => void
   chart: Chart
-  getAdditiveSelectionActive: () => boolean
   getHorizontalLineVisible: () => boolean
   getMixedDrawingMoveState: () => MixedDrawingMoveState | null
   getPendingHorizontalLineHandlePress: () => { overlayId: string; x: number; y: number } | null
   getPressedMoveState: () => PressedHorizontalLineMoveState | null
-  getSelectedDrawingCount: () => number
   horizontalLineHandleDragThreshold: number
   horizontalLineOverlayIds: Set<string>
   moveMixedDrawings: (event: { x?: number; y?: number }, activeId: string) => boolean
@@ -124,7 +120,6 @@ export function createHorizontalLineOverlayFactory({
         return false
       },
       onDeselected: ({ overlay }) => {
-        if (getAdditiveSelectionActive()) return false
         if (overlay.visible === false) return false
         updateOverlayState(overlay.id, { selected: false })
         clearDeselectedHorizontalLine(overlay.id)
@@ -187,11 +182,7 @@ export function createHorizontalLineOverlayFactory({
         return moveSelectedHorizontalLines(event as { x?: number; y?: number }, overlay.id)
       },
       onSelected: ({ overlay }) => {
-        if (selectedHorizontalLineOverlayIds.has(overlay.id) && getSelectedDrawingCount() > 1) {
-          setActiveHorizontalLine(overlay.id)
-        } else {
-          setSelectedHorizontalLine(overlay.id, getAdditiveSelectionActive())
-        }
+        setSelectedHorizontalLine(overlay.id, false)
         publishState({
           locked: Boolean((overlay.extendData as { locked?: boolean } | null)?.locked),
           selected: true,

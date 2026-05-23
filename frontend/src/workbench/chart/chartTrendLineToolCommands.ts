@@ -1,5 +1,6 @@
 import type { Chart } from 'klinecharts'
-import { clearStoredTrendLineDrawings, normalizeDrawingTextStyle, normalizeDrawingTrendLineStyle } from '../rightDrawer/drawingPersistence'
+import { normalizeDrawingTextStyle, normalizeDrawingTrendLineStyle } from '../rightDrawer/drawingPersistence'
+import { clearStoredTrendLineDrawings } from '../rightDrawer/drawingObjectPersistence'
 import type { DrawingTextStyle, DrawingTrendLineStyle } from '../rightDrawer/drawingPersistence'
 import type { DrawingToolCommand } from '../rightDrawer/drawingToolCommands'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'

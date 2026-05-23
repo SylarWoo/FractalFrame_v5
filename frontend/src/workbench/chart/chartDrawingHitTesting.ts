@@ -2,7 +2,7 @@ import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { distanceToSegment } from './chartDrawingGeometry'
 import { isCoordinate } from './chartDrawingTypes'
-import type { HorizontalLineExtendData, TrendLineExtendData } from './chartDrawingTypes'
+import type { HorizontalLineExtendData, RulerExtendData, TrendLineExtendData } from './chartDrawingTypes'
 import { horizontalLineHitSlop } from './horizontalLineOverlayFigures'
 
 type DrawingVisibilityState = {
@@ -25,18 +25,24 @@ export type ScreenPoint = {
 export function createChartDrawingHitTester({
   chart,
   fallbackPaneId,
+  getPendingRulerOverlayId,
   getPendingTrendLineOverlayId,
   horizontalLineOverlayIds,
   resolveHorizontalLineVisibility,
+  resolveRulerVisibility,
   resolveTrendLineVisibility,
+  rulerOverlayIds,
   trendLineOverlayIds,
 }: {
   chart: Chart
   fallbackPaneId: string
+  getPendingRulerOverlayId: () => string | null
   getPendingTrendLineOverlayId: () => string | null
   horizontalLineOverlayIds: Set<string>
   resolveHorizontalLineVisibility: (extendData: HorizontalLineExtendData | undefined) => DrawingVisibilityState
+  resolveRulerVisibility: (extendData: RulerExtendData | undefined) => DrawingVisibilityState
   resolveTrendLineVisibility: (extendData: TrendLineExtendData | undefined) => DrawingVisibilityState
+  rulerOverlayIds: Set<string>
   trendLineOverlayIds: Set<string>
 }) {
   const resolveOverlayPointPixel = (point: OverlayPoint, paneId: string): ScreenPoint | null => {
@@ -95,8 +101,35 @@ export function createChartDrawingHitTester({
     return false
   }
 
+  const eventHitsRuler = (event: MouseEvent, paneId: string, hitSlop = horizontalLineHitSlop) => {
+    const paneMain = chart.getDom(paneId, DomPosition.Main)
+    if (!paneMain) return false
+    const rect = paneMain.getBoundingClientRect()
+    const eventPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    if (!Number.isFinite(eventPoint.x) || !Number.isFinite(eventPoint.y)) return false
+    for (const id of rulerOverlayIds) {
+      if (id === getPendingRulerOverlayId()) continue
+      const overlay = chart.getOverlayById(id)
+      if (!overlay || (overlay.paneId || fallbackPaneId) !== paneId) continue
+      if (!resolveRulerVisibility(overlay.extendData as RulerExtendData | undefined).visible) continue
+      const start = resolveOverlayPointPixel(overlay.points[0] ?? {}, paneId)
+      const end = resolveOverlayPointPixel(overlay.points[1] ?? {}, paneId)
+      if (!start || !end) continue
+      const left = Math.min(start.x, end.x)
+      const right = Math.max(start.x, end.x)
+      const top = Math.min(start.y, end.y)
+      const bottom = Math.max(start.y, end.y)
+      const centerX = Math.round((start.x + end.x) / 2)
+      const centerY = Math.round((start.y + end.y) / 2)
+      if (distanceToSegment(eventPoint, { x: left, y: centerY }, { x: right, y: centerY }) <= hitSlop) return true
+      if (distanceToSegment(eventPoint, { x: centerX, y: top }, { x: centerX, y: bottom }) <= hitSlop) return true
+    }
+    return false
+  }
+
   return {
     eventHitsHorizontalLine,
+    eventHitsRuler,
     eventHitsTrendLine,
     resolveOverlayPointPixel,
   }

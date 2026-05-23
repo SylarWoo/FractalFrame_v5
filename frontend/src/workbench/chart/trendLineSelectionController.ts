@@ -13,6 +13,7 @@ export function createTrendLineSelectionController({
   setActiveTrendLine,
   setLastSelectedTrendLineOverlayId,
   setSelectedTrendLineOverlayId,
+  selectedTrendLineOverlayIds,
   trendLineOverlayIds,
 }: {
   chart: Chart
@@ -25,6 +26,7 @@ export function createTrendLineSelectionController({
   setActiveTrendLine: (id: string) => void
   setLastSelectedTrendLineOverlayId: (id: string | null) => void
   setSelectedTrendLineOverlayId: (id: string | null) => void
+  selectedTrendLineOverlayIds: Set<string>
   trendLineOverlayIds: Set<string>
 }) {
   const clearTrendLineSelection = () => {
@@ -36,8 +38,9 @@ export function createTrendLineSelectionController({
         return
       }
       const extendData = overlay.extendData as TrendLineExtendData | undefined
-      if (extendData?.selected !== true && extendData?.pressed !== true && extendData?.hovered !== true) return
+      if (!selectedTrendLineOverlayIds.has(id) && extendData?.selected !== true && extendData?.pressed !== true && extendData?.hovered !== true) return
       changed = true
+      selectedTrendLineOverlayIds.delete(id)
       chart.overrideOverlay({
         id,
         extendData: {
@@ -51,6 +54,7 @@ export function createTrendLineSelectionController({
       })
     })
     if (!changed && !getSelectedTrendLineOverlayId()) return
+    selectedTrendLineOverlayIds.clear()
     setSelectedTrendLineOverlayId(null)
     publishDrawingToolState({
       armed: getPendingTrendLineOverlayId() != null,
@@ -71,7 +75,8 @@ export function createTrendLineSelectionController({
         return
       }
       const extendData = overlay.extendData as TrendLineExtendData | undefined
-      if (extendData?.selected !== true && extendData?.pressed !== true && extendData?.endpointPressed !== true) return
+      if (!selectedTrendLineOverlayIds.has(id) && extendData?.selected !== true && extendData?.pressed !== true && extendData?.endpointPressed !== true) return
+      selectedTrendLineOverlayIds.delete(id)
       chart.overrideOverlay({
         id,
         extendData: {
@@ -91,6 +96,7 @@ export function createTrendLineSelectionController({
       clearOtherTrendLineSelections(overlay.id)
     }
     const extendData = overlay.extendData as TrendLineExtendData | undefined
+    selectedTrendLineOverlayIds.add(overlay.id)
     setActiveTrendLine(overlay.id)
     chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, selected: true } })
     return extendData
@@ -106,7 +112,7 @@ export function createTrendLineSelectionController({
         continue
       }
       const extendData = overlay.extendData as TrendLineExtendData | undefined
-      if (extendData?.selected === true || extendData?.pressed === true) return id
+      if (selectedTrendLineOverlayIds.has(id) || extendData?.selected === true || extendData?.pressed === true) return id
     }
     return null
   }
@@ -125,7 +131,13 @@ export function createTrendLineSelectionController({
     setLastSelectedTrendLineOverlayId(null)
   }
 
+  const clearDeselectedTrendLine = (id: string) => {
+    selectedTrendLineOverlayIds.delete(id)
+    if (getSelectedTrendLineOverlayId() === id) setSelectedTrendLineOverlayId(resolveSelectedTrendLineOverlayId())
+  }
+
   return {
+    clearDeselectedTrendLine,
     clearLastSelectedTrendLine,
     clearOtherTrendLineSelections,
     clearTrendLineSelection,

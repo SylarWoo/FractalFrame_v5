@@ -65,6 +65,44 @@ export function createChartDrawingMoveController({
     }
   }
 
+  const resolveDataIndexFromPixel = (pixel: ScreenPoint, paneId: string) => {
+    const point = chart.convertFromPixel([pixel], { paneId })
+    const coordinate = Array.isArray(point) ? point[0] : point
+    const dataIndex = Number(coordinate?.dataIndex)
+    return Number.isFinite(dataIndex) ? dataIndex : Number.NaN
+  }
+
+  const resolveTimestampByDataIndex = (dataIndex: number) => {
+    if (!Number.isFinite(dataIndex)) return undefined
+    const row = chart.getDataList()[Math.round(dataIndex)]
+    const timestamp = Number(row?.timestamp)
+    return Number.isFinite(timestamp) ? timestamp : undefined
+  }
+
+  const moveTrendPoint = (
+    point: TrendLineMoveEntry['points'][number],
+    dataIndexDelta: number,
+    dy: number,
+    paneId: string,
+  ) => {
+    const yMovedPoint = resolvePointFromPixel({ x: point.pixel.x, y: point.pixel.y + dy }, paneId)
+    const originalDataIndex = Number(point.point.dataIndex)
+    if (!Number.isFinite(originalDataIndex) || !Number.isFinite(dataIndexDelta)) {
+      return {
+        ...point.point,
+        ...resolvePointFromPixel({ x: point.pixel.x, y: point.pixel.y + dy }, paneId),
+      }
+    }
+    const dataIndex = originalDataIndex + dataIndexDelta
+    const timestamp = resolveTimestampByDataIndex(dataIndex)
+    return {
+      ...point.point,
+      dataIndex,
+      ...(timestamp != null ? { timestamp } : {}),
+      ...(typeof yMovedPoint.value === 'number' ? { value: yMovedPoint.value } : {}),
+    }
+  }
+
   const beginMixedDrawingMove = (activeId: string, paneId: string, event: { x?: number; y?: number }) => {
     const startX = Number(event.x)
     const startY = Number(event.y)
@@ -98,7 +136,8 @@ export function createChartDrawingMoveController({
       })
       .filter((entry): entry is TrendLineMoveEntry => entry != null)
     const entryCount = horizontalEntries.length + trendEntries.length
-    setMixedMoveState(entryCount > 1 ? { activeId, horizontalEntries, paneId, startX, startY, trendEntries } : null)
+    const mixedTypesSelected = horizontalEntries.length > 0 && trendEntries.length > 0
+    setMixedMoveState(entryCount > 1 && !mixedTypesSelected ? { activeId, horizontalEntries, paneId, startX, startY, trendEntries } : null)
   }
 
   const moveMixedDrawings = (event: { x?: number; y?: number }, activeId: string) => {
@@ -107,8 +146,10 @@ export function createChartDrawingMoveController({
     const x = Number(event.x)
     const y = Number(event.y)
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false
-    const dx = x - moveState.startX
     const dy = y - moveState.startY
+    const startDataIndex = resolveDataIndexFromPixel({ x: moveState.startX, y: moveState.startY }, moveState.paneId)
+    const currentDataIndex = resolveDataIndexFromPixel({ x, y: moveState.startY }, moveState.paneId)
+    const dataIndexDelta = currentDataIndex - startDataIndex
     moveState.horizontalEntries.forEach((entry) => {
       const overlay = chart.getOverlayById(entry.id)
       if (!overlay) return
@@ -125,10 +166,7 @@ export function createChartDrawingMoveController({
       if (!overlay) return
       chart.overrideOverlay({
         id: entry.id,
-        points: entry.points.map((point) => ({
-          ...point.point,
-          ...resolvePointFromPixel({ x: point.pixel.x + dx, y: point.pixel.y + dy }, moveState.paneId),
-        })),
+        points: entry.points.map((point) => moveTrendPoint(point, dataIndexDelta, dy, moveState.paneId)),
       })
     })
     return true

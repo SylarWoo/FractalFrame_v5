@@ -167,19 +167,23 @@ body[data-fractalframe-object-tree-splitting='true'] .ff-indicators-split-v1__ha
 
 .ff-object-tree-row[data-kind='group'],
 .ff-object-tree-row[data-kind='group'] button {
-  cursor: pointer !important;
+  cursor: default !important;
 }
 
 .ff-object-tree-row[data-kind='drawing'],
 .ff-object-tree-row[data-kind='drawing'] button {
-  cursor: pointer !important;
+  cursor: default !important;
 }
 
-.ff-object-tree-row:hover {
+.ff-object-tree-row:not([data-selected='true']):hover {
   background: #f3f4f6;
 }
 
 .ff-object-tree-row[data-selected='true'] {
+  background: #edf2ff;
+}
+
+.ff-object-tree-row[data-selected='true']:hover {
   background: #edf2ff;
 }
 
@@ -314,4 +318,14 @@ body[data-fractalframe-object-tree-splitting='true'] .ff-indicators-split-v1__ha
 .ff-object-tree-row__label-button:hover {
   background: #f3f4f6;
   color: #131722;
+}
+
+.ff-object-tree-row[data-selected='true'] .ff-object-tree-row__tool:hover,
+.ff-object-tree-row[data-selected='true'] .ff-object-tree-row__label-button:hover {
+  background: transparent;
+  color: #1d4ed8;
+}
+
+.ff-object-tree-row[data-selected='true'] .ff-object-tree-row__label-button:hover .ff-object-tree-row__id {
+  color: #1d4ed8;
 }

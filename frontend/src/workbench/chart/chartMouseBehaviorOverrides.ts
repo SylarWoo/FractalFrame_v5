@@ -1,7 +1,7 @@
 import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { knownDrawingPaneIds } from '../drawing/drawingPaneModel'
-import { drawingOverlayNames, horizontalLineOverlayName, trendLineOverlayName } from '../drawing/drawingOverlayModel'
+import { drawingOverlayNames, horizontalLineOverlayName, rulerOverlayName, trendLineOverlayName } from '../drawing/drawingOverlayModel'
 
 const dragCursorThreshold = 3
 
@@ -84,6 +84,18 @@ function applyCursor(root: HTMLElement, cursor: string) {
   }
 }
 
+function resolveOverlayHoverCursor({
+  isHorizontalLineHandle,
+  isTwoPointEndpointHandle,
+}: {
+  isHorizontalLineHandle: boolean
+  isTwoPointEndpointHandle: boolean
+}) {
+  if (isHorizontalLineHandle) return 'ns-resize'
+  if (isTwoPointEndpointHandle) return 'default'
+  return 'pointer'
+}
+
 function isCoordinate(value: Partial<{ x: number; y: number }> | Array<Partial<{ x: number; y: number }>>): value is Partial<{ x: number; y: number }> {
   return !Array.isArray(value)
 }
@@ -120,20 +132,21 @@ function resolveHoveredOverlayInfo(chart: Chart, event: MouseEvent | PointerEven
   const instanceName = hoverInfo?.instance?.name
   const paneId = hoverInfo?.paneId
   if (!instanceName || !paneId || !drawingOverlayNames.has(instanceName)) return null
-  if ((instanceName === 'ffHorizontalLine' || instanceName === 'ffTrendLine') && hoverInfo.instance?.isDrawing?.() === true) return null
+  if (hoverInfo.instance?.isDrawing?.() === true) return null
   const points = resolveOverlayPoints(chart, hoverInfo.instance)
   if (instanceName === horizontalLineOverlayName && !hasFiniteValue(points[0])) return null
   if (instanceName === trendLineOverlayName && (!hasFiniteValue(points[0]) || !hasFiniteValue(points[1]))) return null
+  if (instanceName === rulerOverlayName && (!hasFiniteValue(points[0]) || !hasFiniteValue(points[1]))) return null
   const paneMain = chart.getDom(paneId, DomPosition.Main)
   if (!paneMain) return null
 
   const isHorizontalLineHandle = instanceName === horizontalLineOverlayName && hoverInfo?.figureKey === 'handle'
-  const isTrendLineEndpointHandle = instanceName === trendLineOverlayName && (
+  const isTwoPointEndpointHandle = (instanceName === trendLineOverlayName || instanceName === rulerOverlayName) && (
     (typeof hoverInfo?.figureKey === 'string' && hoverInfo.figureKey.startsWith('point_')) ||
     eventHitsTrendLineEndpoint(chart, paneMain, paneId, points, event)
   )
   return {
-    cursor: isHorizontalLineHandle ? 'ns-resize' : isTrendLineEndpointHandle ? 'default' : 'pointer',
+    cursor: resolveOverlayHoverCursor({ isHorizontalLineHandle, isTwoPointEndpointHandle }),
     paneMain,
   } satisfies OverlayHoverInfo
 }
@@ -189,6 +202,7 @@ export function installChartMouseBehaviorOverrides(chart: Chart) {
 
   const scheduleHoverCursorUpdate = (event?: MouseEvent | PointerEvent) => {
     if (event) lastPointerEvent = event
+    activeHoverCursor?.force()
     if (hoverTimer !== 0) return
     hoverTimer = window.setTimeout(updateHoverCursor, 0)
   }

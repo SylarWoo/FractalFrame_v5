@@ -1,44 +1,59 @@
 import type { Chart } from 'klinecharts'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import {
-  readDrawingPersistence,
+  readDrawingObjectPersistence,
   readStoredHorizontalLineDrawings,
+  readStoredRulerDrawings,
   readStoredTrendLineDrawings,
   writeStoredHorizontalLineDrawings,
+  writeStoredRulerDrawings,
   writeStoredTrendLineDrawings,
-} from '../rightDrawer/drawingPersistence'
+} from '../rightDrawer/drawingObjectPersistence'
+import type {
+  StoredHorizontalLineDrawing,
+  StoredRulerDrawing,
+  StoredTrendLineDrawing,
+} from '../rightDrawer/drawingObjectPersistence'
 import type {
   DrawingTextStyle,
   DrawingTrendLineStyle,
-  StoredHorizontalLineDrawing,
-  StoredTrendLineDrawing,
 } from '../rightDrawer/drawingPersistence'
+import type { DrawingRulerStyle } from '../rightDrawer/rulerDrawingStyle'
 import {
   createHorizontalLineObjectId,
+  createRulerObjectId,
   createTrendLineObjectId,
   syncHorizontalLineObjectIdSeed,
+  syncRulerObjectIdSeed,
   syncTrendLineObjectIdSeed,
 } from './chartDrawingObjectIds'
-import { storedHorizontalLineFromOverlay, storedTrendLineFromOverlay } from './chartDrawingSerialization'
+import { storedHorizontalLineFromOverlay, storedRulerFromOverlay, storedTrendLineFromOverlay } from './chartDrawingSerialization'
 
 export type InitialStoredDrawingState = {
   horizontalLinePersistenceEnabled: boolean
   pendingHorizontalLineDrawings: StoredHorizontalLineDrawing[]
+  pendingRulerDrawings: StoredRulerDrawing[]
   pendingTrendLineDrawings: StoredTrendLineDrawing[]
+  rulerPersistenceEnabled: boolean
   trendLinePersistenceEnabled: boolean
 }
 
 export function readInitialStoredDrawingState(): InitialStoredDrawingState {
-  const horizontalLinePersistenceEnabled = readDrawingPersistence('horizontalLine')
-  const trendLinePersistenceEnabled = readDrawingPersistence('trendLine')
+  const horizontalLinePersistenceEnabled = readDrawingObjectPersistence('horizontalLine')
+  const rulerPersistenceEnabled = readDrawingObjectPersistence('ruler')
+  const trendLinePersistenceEnabled = readDrawingObjectPersistence('trendLine')
   const pendingHorizontalLineDrawings = horizontalLinePersistenceEnabled ? readStoredHorizontalLineDrawings() : []
+  const pendingRulerDrawings = rulerPersistenceEnabled ? readStoredRulerDrawings() : []
   const pendingTrendLineDrawings = trendLinePersistenceEnabled ? readStoredTrendLineDrawings() : []
   syncHorizontalLineObjectIdSeed(pendingHorizontalLineDrawings)
+  syncRulerObjectIdSeed(pendingRulerDrawings)
   syncTrendLineObjectIdSeed(pendingTrendLineDrawings)
   return {
     horizontalLinePersistenceEnabled,
     pendingHorizontalLineDrawings,
+    pendingRulerDrawings,
     pendingTrendLineDrawings,
+    rulerPersistenceEnabled,
     trendLinePersistenceEnabled,
   }
 }
@@ -47,15 +62,20 @@ export function createChartDrawingPersistenceController({
   canCreateOverlayOnPane,
   chart,
   createHorizontalLineOverlay,
+  createRulerOverlay,
   createTrendLineOverlay,
   fallbackPaneId,
   getDestroyed,
   getHorizontalLinePersistenceEnabled,
+  getPendingRulerOverlayId,
   getPendingTrendLineOverlayId,
+  getRulerPersistenceEnabled,
   getTrendLinePersistenceEnabled,
   horizontalLineOverlayIds,
   initialHorizontalLineDrawings,
+  initialRulerDrawings,
   initialTrendLineDrawings,
+  rulerOverlayIds,
   trendLineOverlayIds,
 }: {
   canCreateOverlayOnPane: (paneId: string) => boolean
@@ -83,17 +103,34 @@ export function createChartDrawingPersistenceController({
     textStyle?: DrawingTextStyle
     trendLineStyle: DrawingTrendLineStyle
   }) => unknown
+  createRulerOverlay: (options: {
+    lineStyle: SettingsLineSwatchValue
+    locked: boolean
+    manualVisible?: boolean
+    objectId?: string
+    paneId?: string
+    points?: Array<{ dataIndex?: number; timestamp?: number; value?: number }>
+    rulerStyle: DrawingRulerStyle
+    selected: boolean
+    showPriceLabel: boolean
+    textStyle?: DrawingTextStyle
+  }) => unknown
   fallbackPaneId: string
   getDestroyed: () => boolean
   getHorizontalLinePersistenceEnabled: () => boolean
+  getPendingRulerOverlayId: () => string | null
   getPendingTrendLineOverlayId: () => string | null
+  getRulerPersistenceEnabled: () => boolean
   getTrendLinePersistenceEnabled: () => boolean
   horizontalLineOverlayIds: Set<string>
   initialHorizontalLineDrawings: StoredHorizontalLineDrawing[]
+  initialRulerDrawings: StoredRulerDrawing[]
   initialTrendLineDrawings: StoredTrendLineDrawing[]
+  rulerOverlayIds: Set<string>
   trendLineOverlayIds: Set<string>
 }) {
   let pendingHorizontalLineDrawings = initialHorizontalLineDrawings
+  let pendingRulerDrawings = initialRulerDrawings
   let pendingTrendLineDrawings = initialTrendLineDrawings
 
   const persistCurrentHorizontalLines = () => {
@@ -127,6 +164,23 @@ export function createChartDrawingPersistenceController({
       if (drawing) drawings.push(drawing)
     })
     writeStoredTrendLineDrawings(drawings)
+  }
+
+  const persistCurrentRulers = () => {
+    if (getDestroyed()) return
+    if (!getRulerPersistenceEnabled()) return
+    const drawings: StoredRulerDrawing[] = []
+    rulerOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) {
+        rulerOverlayIds.delete(id)
+        return
+      }
+      if (overlay.id === getPendingRulerOverlayId() || overlay.points.length < 2) return
+      const drawing = storedRulerFromOverlay(overlay, createRulerObjectId, fallbackPaneId)
+      if (drawing) drawings.push(drawing)
+    })
+    writeStoredRulerDrawings(drawings)
   }
 
   const restorePendingStoredHorizontalLines = () => {
@@ -180,10 +234,38 @@ export function createChartDrawingPersistenceController({
     pendingTrendLineDrawings = remaining
   }
 
+  const restorePendingStoredRulers = () => {
+    if (!getRulerPersistenceEnabled() || pendingRulerDrawings.length === 0) return
+    const remaining: StoredRulerDrawing[] = []
+    pendingRulerDrawings.forEach((drawing) => {
+      const paneId = drawing.paneId || fallbackPaneId
+      if (!canCreateOverlayOnPane(paneId)) {
+        remaining.push(drawing)
+        return
+      }
+      const overlayId = createRulerOverlay({
+        lineStyle: drawing.lineStyle,
+        locked: drawing.locked,
+        manualVisible: drawing.manualVisible,
+        objectId: drawing.objectId || createRulerObjectId(),
+        paneId,
+        points: drawing.points.slice(0, 2),
+        rulerStyle: drawing.rulerStyle,
+        selected: false,
+        showPriceLabel: drawing.showPriceLabel,
+        textStyle: drawing.textStyle,
+      })
+      if (typeof overlayId === 'string') rulerOverlayIds.add(overlayId)
+    })
+    pendingRulerDrawings = remaining
+  }
+
   return {
     persistCurrentHorizontalLines,
+    persistCurrentRulers,
     persistCurrentTrendLines,
     restorePendingStoredHorizontalLines,
+    restorePendingStoredRulers,
     restorePendingStoredTrendLines,
   }
 }

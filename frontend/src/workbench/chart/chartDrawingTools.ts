@@ -3,6 +3,7 @@ import type { Chart } from 'klinecharts'
 import { drawingMainPaneId } from '../drawing/drawingPaneModel'
 import {
   horizontalLineOverlayName,
+  rulerOverlayName,
   trendLineOverlayName,
 } from '../drawing/drawingOverlayModel'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
@@ -11,6 +12,7 @@ import { isObjectTreeDrawingCommandEvent, publishObjectTreeDrawings } from '../r
 import {
   normalizeDrawingTextStyle,
 } from '../rightDrawer/drawingPersistence'
+import { readQuickMeasureEnabled } from '../rightDrawer/quickMeasurePersistence'
 import type { DrawingTextStyle, DrawingTrendLineStyle } from '../rightDrawer/drawingPersistence'
 import { collectDrawingObjectTreeState } from './chartDrawingObjectTreeState'
 import { createDrawingObjectTreeCommandHandler } from './chartDrawingObjectTreeCommands'
@@ -18,6 +20,7 @@ import { createChartDrawingMoveController, type PressedHorizontalLineMoveState }
 import { createHorizontalLineSelectionController } from './chartDrawingSelectionController'
 import {
   createHorizontalLineObjectId,
+  createRulerObjectId,
   createTrendLineObjectId,
 } from './chartDrawingObjectIds'
 import { createChartDrawingPersistenceController, readInitialStoredDrawingState } from './chartDrawingPersistenceController'
@@ -28,12 +31,12 @@ import { createTrendLineToolCommandHandler } from './chartTrendLineToolCommands'
 import { createTrendLineSelectionController } from './trendLineSelectionController'
 import { createHorizontalLineSelectionStateController } from './horizontalLineSelectionStateController'
 import {
-  getSelectedDrawingCount as getSelectedDrawingCountFromState,
   getSelectedHorizontalLineIds as getSelectedHorizontalLineIdsFromState,
   getSelectedTrendLineIds as getSelectedTrendLineIdsFromState,
 } from './chartDrawingSelectionQueries'
 import {
   ensureHorizontalLineTextFigure,
+  ensureRulerCenterTextFigure,
   ensureTrendLineHitFigure,
   ensureTrendLineStatsBoxFigure,
   ensureTrendLineTextFigure,
@@ -41,6 +44,7 @@ import {
 import type {
   HorizontalLineExtendData,
   MixedDrawingMoveState,
+  RulerExtendData,
   TrendLineExtendData,
 } from './chartDrawingTypes'
 import { normalizeLineStyle } from './chartDrawingStyle'
@@ -48,14 +52,18 @@ import { createHorizontalLinePointFigures, createHorizontalLineYAxisFigures } fr
 import { createHorizontalLineOverlayFactory } from './horizontalLineOverlayController'
 import { createTrendLineOverlayFactory } from './trendLineOverlayController'
 import { createTrendLinePointFigures, createTrendLineYAxisFigures } from './trendLineOverlayFigures'
+import { createRulerOverlayFactory, type PendingRulerOptions } from './rulerOverlayController'
+import { createRulerPointFigures, createRulerYAxisFigures } from './rulerOverlayFigures'
+import { createRulerToolCommandHandler } from './chartRulerToolCommands'
+import { createQuickMeasureController, ensureQuickMeasureOverlay } from './quickMeasureOverlay'
 import { createChartDrawingHitTester } from './chartDrawingHitTesting'
 import { createTrendLinePendingStartHandleController } from './trendLinePendingStartHandle'
-import { createChartDrawingModifierKeys } from './chartDrawingModifierKeys'
 import { installChartDrawingLifecycle } from './chartDrawingLifecycle'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingVisibilityEvents'
 
 let horizontalLineOverlayRegistered = false
 let trendLineOverlayRegistered = false
+let rulerOverlayRegistered = false
 const candlePaneId = drawingMainPaneId
 const trendLineOverlayZLevel = -1
 export { chartDrawingVisibilityRefreshEvent }
@@ -94,11 +102,31 @@ function ensureTrendLineOverlay() {
   })
 }
 
+function ensureRulerOverlay() {
+  if (rulerOverlayRegistered) return
+  ensureQuickMeasureOverlay()
+  ensureRulerCenterTextFigure()
+  ensureTrendLineHitFigure()
+  ensureTrendLineStatsBoxFigure()
+  rulerOverlayRegistered = true
+  registerOverlay({
+    name: rulerOverlayName,
+    totalStep: 3,
+    needDefaultPointFigure: true,
+    needDefaultXAxisFigure: false,
+    needDefaultYAxisFigure: false,
+    createPointFigures: createRulerPointFigures,
+    createYAxisFigures: createRulerYAxisFigures,
+  })
+}
+
 export function installChartDrawingTools(chart: Chart, getPeriod: () => string = () => '') {
   ensureHorizontalLineOverlay()
   ensureTrendLineOverlay()
+  ensureRulerOverlay()
   let pendingOverlayId: string | null = null
   let pendingTrendLineOverlayId: string | null = null
+  let pendingRulerOverlayId: string | null = null
   let pendingOverlayOptions: {
     lineStyle: SettingsLineSwatchValue
     locked: boolean
@@ -112,23 +140,28 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     textStyle?: DrawingTextStyle
     trendLineStyle: DrawingTrendLineStyle
   } | null = null
+  let pendingRulerOptions: PendingRulerOptions | null = null
   let selectedOverlayId: string | null = null
   let selectedTrendLineOverlayId: string | null = null
+  let selectedRulerOverlayId: string | null = null
   let activeObjectTreeOverlayId: string | null = null
   let lastSelectedOverlayId: string | null = null
   let lastSelectedTrendLineOverlayId: string | null = null
   let lastSelectedTrendLineAt = 0
   const horizontalLineOverlayIds = new Set<string>()
   const trendLineOverlayIds = new Set<string>()
+  const rulerOverlayIds = new Set<string>()
   const initialStoredDrawings = readInitialStoredDrawingState()
   let persistenceEnabled = initialStoredDrawings.horizontalLinePersistenceEnabled
+  let rulerPersistenceEnabled = initialStoredDrawings.rulerPersistenceEnabled
   let trendLinePersistenceEnabled = initialStoredDrawings.trendLinePersistenceEnabled
-  const modifierKeys = createChartDrawingModifierKeys()
   let pressedMoveState: PressedHorizontalLineMoveState | null = null
   let mixedDrawingMoveState: MixedDrawingMoveState | null = null
   let pendingHorizontalLineHandlePress: { overlayId: string; x: number; y: number } | null = null
   let pendingTrendLineEndpointPress: { overlayId: string; pointIndex: number; x: number; y: number } | null = null
   const selectedHorizontalLineOverlayIds = new Set<string>()
+  const selectedRulerOverlayIds = new Set<string>()
+  const selectedTrendLineOverlayIds = new Set<string>()
   let destroyed = false
 
   const publishState = (state?: Partial<{ armed: boolean; lineStyle: SettingsLineSwatchValue; locked: boolean; objectId: string; price: number; selected: boolean; showPriceLabel: boolean; textStyle: DrawingTextStyle }>) => {
@@ -156,15 +189,45 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
 
   let drawingPersistenceController: ReturnType<typeof createChartDrawingPersistenceController> | null = null
   const persistCurrentHorizontalLines = () => drawingPersistenceController?.persistCurrentHorizontalLines()
+  const persistCurrentRulers = () => drawingPersistenceController?.persistCurrentRulers()
   const persistCurrentTrendLines = () => drawingPersistenceController?.persistCurrentTrendLines()
   const restorePendingStoredHorizontalLines = () => drawingPersistenceController?.restorePendingStoredHorizontalLines()
+  const restorePendingStoredRulers = () => drawingPersistenceController?.restorePendingStoredRulers()
   const restorePendingStoredTrendLines = () => drawingPersistenceController?.restorePendingStoredTrendLines()
+  const createRulerStatsDataListSnapshot = () => chart.getDataList().map((row) => ({
+    real_volume: Number((row as { real_volume?: number }).real_volume),
+    tick_volume: Number((row as { tick_volume?: number }).tick_volume),
+    timestamp: Number(row.timestamp),
+    volume: Number(row.volume),
+  }))
+  const refreshRulerStatsDataList = () => {
+    const dataList = createRulerStatsDataListSnapshot()
+    if (dataList.length === 0) return
+    rulerOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) {
+        rulerOverlayIds.delete(id)
+        return
+      }
+      const extendData = overlay.extendData as RulerExtendData | undefined
+      chart.overrideOverlay({
+        id,
+        extendData: {
+          ...extendData,
+          dataList,
+        },
+        visible: overlay.visible,
+      })
+    })
+  }
 
   let drawingVisibilityController: ReturnType<typeof createChartDrawingVisibilityController> | null = null
   let paneInteractionController: ReturnType<typeof createChartDrawingPaneInteractionController> | null = null
+  let quickMeasureController: ReturnType<typeof createQuickMeasureController> | null = null
   const applyDrawingVisibility = () => drawingVisibilityController?.applyDrawingVisibility()
   const applyHorizontalLineVisibility = () => drawingVisibilityController?.applyHorizontalLineVisibility()
   const isHorizontalLineVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isHorizontalLineVisibleInCurrentPeriod(objectId) ?? true
+  const isRulerVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isRulerVisibleInCurrentPeriod(objectId) ?? true
   const isTrendLineVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isTrendLineVisibleInCurrentPeriod(objectId) ?? true
   const resolveHorizontalLineVisibility = (extendData: HorizontalLineExtendData | undefined) => drawingVisibilityController?.resolveHorizontalLineVisibility(extendData) ?? {
     manualVisible: extendData?.manualVisible !== false,
@@ -176,7 +239,12 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     periodVisible: true,
     visible: extendData?.manualVisible !== false,
   }
-  const restoreObjectCurrentPeriodVisibility = (kind: 'horizontalLine' | 'trendLine', objectId?: string) => {
+  const resolveRulerVisibility = (extendData: RulerExtendData | undefined) => drawingVisibilityController?.resolveRulerVisibility(extendData) ?? {
+    manualVisible: extendData?.manualVisible !== false,
+    periodVisible: true,
+    visible: extendData?.manualVisible !== false,
+  }
+  const restoreObjectCurrentPeriodVisibility = (kind: 'horizontalLine' | 'trendLine' | 'ruler', objectId?: string) => {
     drawingVisibilityController?.restoreObjectCurrentPeriodVisibility(kind, objectId)
   }
   const getHorizontalLineVisible = () => drawingVisibilityController?.getHorizontalLineVisible() ?? true
@@ -214,15 +282,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
 
   const getSelectedHorizontalLineIds = () => getSelectedHorizontalLineIdsFromState(horizontalLineOverlayIds, selectedHorizontalLineOverlayIds)
 
-  const getSelectedTrendLineIds = () => getSelectedTrendLineIdsFromState({ chart, pendingTrendLineOverlayId, trendLineOverlayIds })
-
-  const getSelectedDrawingCount = () => getSelectedDrawingCountFromState({
-    chart,
-    horizontalLineOverlayIds,
-    pendingTrendLineOverlayId,
-    selectedHorizontalLineOverlayIds,
-    trendLineOverlayIds,
-  })
+  const getSelectedTrendLineIds = () => getSelectedTrendLineIdsFromState({ chart, pendingTrendLineOverlayId, selectedTrendLineOverlayIds, trendLineOverlayIds })
 
   const publishObjectTreeState = () => {
     const state = collectDrawingObjectTreeState({
@@ -232,8 +292,12 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       horizontalLineOverlayIds,
       pendingTrendLineOverlayId,
       resolveHorizontalLineVisibility,
+      resolveRulerVisibility,
       resolveTrendLineVisibility,
+      rulerOverlayIds,
       selectedHorizontalLineOverlayIds,
+      selectedRulerOverlayIds,
+      selectedTrendLineOverlayIds,
       selectedTrendLineOverlayId,
       trendLineOverlayIds,
     })
@@ -259,15 +323,19 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
 
   const {
     eventHitsHorizontalLine,
+    eventHitsRuler,
     eventHitsTrendLine,
     resolveOverlayPointPixel,
   } = createChartDrawingHitTester({
     chart,
     fallbackPaneId: candlePaneId,
+    getPendingRulerOverlayId: () => pendingRulerOverlayId,
     getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
     horizontalLineOverlayIds,
     resolveHorizontalLineVisibility,
+    resolveRulerVisibility,
     resolveTrendLineVisibility,
+    rulerOverlayIds,
     trendLineOverlayIds,
   })
 
@@ -294,12 +362,14 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     publishObjectTreeState,
     setActiveTrendLine: (id) => {
       selectedTrendLineOverlayId = id
+      selectedTrendLineOverlayIds.add(id)
       lastSelectedTrendLineOverlayId = id
       lastSelectedTrendLineAt = Date.now()
       activeObjectTreeOverlayId = id
     },
     setLastSelectedTrendLineOverlayId: (id) => { lastSelectedTrendLineOverlayId = id },
     setSelectedTrendLineOverlayId: (id) => { selectedTrendLineOverlayId = id },
+    selectedTrendLineOverlayIds,
     trendLineOverlayIds,
   })
 
@@ -318,6 +388,44 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     },
     updateOverlayState,
   })
+
+  const clearRulerSelection = () => {
+    let changed = false
+    rulerOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) {
+        rulerOverlayIds.delete(id)
+        return
+      }
+      const extendData = overlay.extendData as RulerExtendData | undefined
+      if (!selectedRulerOverlayIds.has(id) && extendData?.selected !== true && extendData?.pressed !== true && extendData?.hovered !== true) return
+      changed = true
+      selectedRulerOverlayIds.delete(id)
+      chart.overrideOverlay({
+        id,
+        extendData: {
+          ...extendData,
+          endpointPressed: false,
+          hovered: false,
+          pressed: false,
+          pressedPointIndex: undefined,
+          selected: false,
+        },
+      })
+    })
+    if (!changed && !selectedRulerOverlayId) return
+    selectedRulerOverlayIds.clear()
+    selectedRulerOverlayId = null
+    if (activeObjectTreeOverlayId && rulerOverlayIds.has(activeObjectTreeOverlayId)) activeObjectTreeOverlayId = selectedOverlayId ?? selectedTrendLineOverlayId
+    publishDrawingToolState({
+      armed: pendingRulerOverlayId != null,
+      locked: false,
+      selected: false,
+      showPriceLabel: true,
+      tool: 'ruler',
+    })
+    publishObjectTreeState()
+  }
 
   const {
     beginMixedDrawingMove,
@@ -356,12 +464,10 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       if (selectedOverlayId === id) selectedOverlayId = null
       if (lastSelectedOverlayId === id) lastSelectedOverlayId = null
     },
-    getAdditiveSelectionActive: modifierKeys.getAdditiveSelectionActive,
     getHorizontalLineVisible,
     getMixedDrawingMoveState: () => mixedDrawingMoveState,
     getPendingHorizontalLineHandlePress: () => pendingHorizontalLineHandlePress,
     getPressedMoveState: () => pressedMoveState,
-    getSelectedDrawingCount,
     horizontalLineHandleDragThreshold,
     horizontalLineOverlayIds,
     moveMixedDrawings,
@@ -415,15 +521,13 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     clearRemovedTrendLine: (id) => {
       if (selectedTrendLineOverlayId === id) selectedTrendLineOverlayId = null
       if (lastSelectedTrendLineOverlayId === id) lastSelectedTrendLineOverlayId = null
+      selectedTrendLineOverlayIds.delete(id)
     },
-    getAdditiveSelectionActive: modifierKeys.getAdditiveSelectionActive,
     getLastSelectedTrendLineAt: () => lastSelectedTrendLineAt,
     getLastSelectedTrendLineOverlayId: () => lastSelectedTrendLineOverlayId,
     getMixedDrawingMoveState: () => mixedDrawingMoveState,
     getPendingTrendLineEndpointPress: () => pendingTrendLineEndpointPress,
     getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
-    getSelectedDrawingCount,
-    getSelectedTrendLineIds,
     getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
     hidePendingTrendStartHandle,
     moveMixedDrawings,
@@ -431,9 +535,11 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     persistCurrentTrendLines,
     publishObjectTreeState,
     resolveTrendPointPrices,
+    selectedTrendLineOverlayIds,
     selectTrendLineForInteraction,
     setActiveTrendLine: (id) => {
       selectedTrendLineOverlayId = id
+      selectedTrendLineOverlayIds.add(id)
       lastSelectedTrendLineOverlayId = id
       lastSelectedTrendLineAt = Date.now()
       activeObjectTreeOverlayId = id
@@ -477,17 +583,61 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     paneId: options.paneId ?? candlePaneId,
   })
 
+  const createRulerOverlayBase = createRulerOverlayFactory({
+    chart,
+    clearDeselectedRuler: (id) => {
+      if (selectedRulerOverlayId === id) selectedRulerOverlayId = null
+      if (activeObjectTreeOverlayId === id) activeObjectTreeOverlayId = selectedOverlayId ?? selectedTrendLineOverlayId
+    },
+    clearRemovedRuler: (id) => {
+      if (selectedRulerOverlayId === id) selectedRulerOverlayId = null
+      selectedRulerOverlayIds.delete(id)
+    },
+    persistCurrentRulers,
+    publishObjectTreeState,
+    selectedRulerOverlayIds,
+    setActiveRuler: (id) => {
+      selectedRulerOverlayId = id
+      selectedRulerOverlayIds.clear()
+      selectedRulerOverlayIds.add(id)
+      activeObjectTreeOverlayId = id
+    },
+    setPendingRulerOverlayId: (id) => {
+      pendingRulerOverlayId = id
+    },
+    setPendingRulerOptionsCleared: () => {
+      pendingRulerOptions = null
+    },
+    rulerOverlayIds,
+    rulerOverlayZLevel: trendLineOverlayZLevel,
+  })
+
+  const createRulerOverlay = (options: PendingRulerOptions & {
+    manualVisible?: boolean
+    objectId?: string
+    paneId?: string
+    points?: Array<{ dataIndex?: number; timestamp?: number; value?: number }>
+    selected: boolean
+  }) => createRulerOverlayBase({
+    ...options,
+    objectId: options.objectId ?? createRulerObjectId(),
+    paneId: options.paneId ?? candlePaneId,
+  })
+
   const canCreateOverlayOnPane = (paneId: string) => paneId === candlePaneId || chart.getDom(paneId, DomPosition.Main) != null
 
   drawingVisibilityController = createChartDrawingVisibilityController({
     chart,
     getPeriod,
     getSelectedOverlayId: () => selectedOverlayId,
+    getSelectedRulerOverlayId: () => selectedRulerOverlayId,
     getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
     horizontalLineOverlayIds,
     publishHorizontalLineState: publishState,
     publishObjectTreeState,
+    rulerOverlayIds,
     selectedHorizontalLineOverlayIds,
+    selectedRulerOverlayIds,
     trendLineOverlayIds,
     updateOverlayState,
   })
@@ -496,29 +646,38 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     canCreateOverlayOnPane,
     chart,
     createHorizontalLineOverlay,
+    createRulerOverlay,
     createTrendLineOverlay,
     fallbackPaneId: candlePaneId,
     getDestroyed: () => destroyed,
     getHorizontalLinePersistenceEnabled: () => persistenceEnabled,
+    getPendingRulerOverlayId: () => pendingRulerOverlayId,
     getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
+    getRulerPersistenceEnabled: () => rulerPersistenceEnabled,
     getTrendLinePersistenceEnabled: () => trendLinePersistenceEnabled,
     horizontalLineOverlayIds,
     initialHorizontalLineDrawings: initialStoredDrawings.pendingHorizontalLineDrawings,
+    initialRulerDrawings: initialStoredDrawings.pendingRulerDrawings,
     initialTrendLineDrawings: initialStoredDrawings.pendingTrendLineDrawings,
+    rulerOverlayIds,
     trendLineOverlayIds,
   })
 
   restorePendingStoredHorizontalLines()
+  restorePendingStoredRulers()
   restorePendingStoredTrendLines()
+  refreshRulerStatsDataList()
   applyDrawingVisibility()
   publishObjectTreeState()
 
   paneInteractionController = createChartDrawingPaneInteractionController({
     chart,
     clearHorizontalLineSelection,
+    clearRulerSelection,
     clearTrendLineSelection,
     createHorizontalLineOverlay,
     eventHitsHorizontalLine,
+    eventHitsRuler,
     eventHitsTrendLine,
     fallbackPaneId: candlePaneId,
     getDestroyed: () => destroyed,
@@ -527,9 +686,13 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     publishHorizontalLineState: publishState,
     setPendingOverlayId: (id) => { pendingOverlayId = id },
   })
+  quickMeasureController = createQuickMeasureController({
+    chart,
+    fallbackPaneId: candlePaneId,
+  })
+  quickMeasureController.setEnabled(readQuickMeasureEnabled())
 
   ensurePaneInteractionListeners()
-  modifierKeys.install()
 
   const handleHorizontalLineCommand = createHorizontalLineToolCommandHandler({
     applyHorizontalLineVisibility,
@@ -579,9 +742,32 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     trendLineOverlayIds,
   })
 
+  const handleRulerCommand = createRulerToolCommandHandler({
+    chart,
+    createRulerOverlay,
+    getLastPointerPaneId,
+    getPendingRulerOptions: () => pendingRulerOptions,
+    getPendingRulerOverlayId: () => pendingRulerOverlayId,
+    getRulerPersistenceEnabled: () => rulerPersistenceEnabled,
+    getSelectedRulerOverlayId: () => selectedRulerOverlayId,
+    persistCurrentRulers,
+    resolveTrendPointPrices,
+    setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
+    setPendingRulerOptions: (options) => { pendingRulerOptions = options },
+    setPendingRulerOverlayId: (id) => { pendingRulerOverlayId = id },
+    setRulerPersistenceEnabled: (enabled) => { rulerPersistenceEnabled = enabled },
+    setSelectedRulerOverlayId: (id) => { selectedRulerOverlayId = id },
+    rulerOverlayIds,
+  })
+
   const handleCommand = (event: Event) => {
     if (!isDrawingToolCommandEvent(event)) return
+    if (event.detail.tool === 'ruler' && event.detail.action === 'updateQuickMeasureEnabled') {
+      quickMeasureController?.setEnabled(event.detail.enabled === true)
+      return
+    }
     if (event.detail.tool === 'trendLine') handleTrendLineCommand(event.detail)
+    else if (event.detail.tool === 'ruler') handleRulerCommand(event.detail)
     else handleHorizontalLineCommand(event.detail)
   }
   const handleObjectTreeDrawingCommand = createDrawingObjectTreeCommandHandler({
@@ -590,17 +776,23 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     clearTrendLineSelection,
     getActiveObjectTreeOverlayId: () => activeObjectTreeOverlayId,
     getSelectedOverlayId: () => selectedOverlayId,
+    getSelectedRulerOverlayId: () => selectedRulerOverlayId,
     getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
     horizontalLineOverlayIds,
     isHorizontalLineVisibleInCurrentPeriod,
+    isRulerVisibleInCurrentPeriod,
     isTrendLineVisibleInCurrentPeriod,
     persistCurrentHorizontalLines,
+    persistCurrentRulers,
     persistCurrentTrendLines,
     publishHorizontalLineState: publishState,
     publishObjectTreeState,
     resolveTrendPointPrices,
     restoreObjectCurrentPeriodVisibility,
+    rulerOverlayIds,
     selectedHorizontalLineOverlayIds,
+    selectedRulerOverlayIds,
+    selectedTrendLineOverlayIds,
     setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
     setLastSelectedTrendLine: (id) => {
       lastSelectedTrendLineOverlayId = id
@@ -608,6 +800,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     },
     setSelectedHorizontalLine,
     setSelectedOverlayId: (id) => { selectedOverlayId = id },
+    setSelectedRulerOverlayId: (id) => { selectedRulerOverlayId = id },
     setSelectedTrendLineOverlayId: (id) => { selectedTrendLineOverlayId = id },
     toggleSelectedHorizontalLine,
     trendLineOverlayIds,
@@ -630,21 +823,27 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const handleDataReady = () => {
     ensurePaneInteractionListeners()
     restorePendingStoredHorizontalLines()
+    restorePendingStoredRulers()
     restorePendingStoredTrendLines()
+    refreshRulerStatsDataList()
     applyDrawingVisibility()
   }
 
   const handleVisibilityRefresh = () => {
     ensurePaneInteractionListeners()
     restorePendingStoredHorizontalLines()
+    restorePendingStoredRulers()
     restorePendingStoredTrendLines()
+    refreshRulerStatsDataList()
     applyDrawingVisibility()
   }
 
   const handleObjectTreeDrawingsRequest = () => {
     ensurePaneInteractionListeners()
     restorePendingStoredHorizontalLines()
+    restorePendingStoredRulers()
     restorePendingStoredTrendLines()
+    refreshRulerStatsDataList()
     publishObjectTreeState()
   }
 
@@ -662,9 +861,10 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     destroyed = true
     if (pendingOverlayId) chart.removeOverlay({ id: pendingOverlayId })
     if (pendingTrendLineOverlayId) chart.removeOverlay({ id: pendingTrendLineOverlayId })
+    if (pendingRulerOverlayId) chart.removeOverlay({ id: pendingRulerOverlayId })
     hidePendingTrendStartHandle()
     cleanupLifecycle()
-    modifierKeys.cleanup()
     paneInteractionController?.cleanup()
+    quickMeasureController?.cleanup()
   }
 }
