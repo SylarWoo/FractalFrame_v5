@@ -4,71 +4,16 @@ import {
   objectTreeDrawingsChangedEvent,
   publishObjectTreeDrawingCommand,
   requestObjectTreeDrawings,
-  type ObjectTreeDrawingItem,
-} from './objectTreeModel'
-import { readJson, writeJson } from '../persistence/jsonStorage'
+} from './objectTree/objectTreeModel'
+import { createObjectTreeGroup, pruneObjectTreeGroups, readObjectTreeGroups, writeObjectTreeGroups } from './objectTree/objectTreeGroups'
+import { objectTreeHiddenKind, objectTreeVisibilityStorageKey, shortObjectTreeId } from './objectTree/objectTreeVisibility'
+import { objectTreeMainPaneId, type ObjectTreeDrawingItem, type ObjectTreeGroup } from './objectTree/objectTreeTypes'
 import { VisibilityRangePanel } from '../visibilityRange/VisibilityRangePanel'
 import './ObjectTreeDrawer.css'
 
-type ObjectTreeGroup = {
-  collapsed: boolean
-  id: string
-  itemIds: string[]
-  name: string
-  paneId: string
-}
-
-const mainPaneId = 'candle_pane'
 const defaultTopHeight = 340
 const minTopHeight = 96
 const maxTopHeight = 520
-const objectTreeGroupsStorageKey = 'fractalframe.objectTree.groups.v1'
-
-function shortObjectId(id: string) {
-  const normalized = id.trim()
-  if (/^HL\d+$/i.test(normalized)) return normalized.toUpperCase()
-  if (normalized.length <= 6) return normalized
-  return normalized.slice(-6).toUpperCase()
-}
-
-function horizontalLineVisibilityStorageKey(id: string) {
-  return `drawing:horizontalLine:${id}`
-}
-
-function hiddenKind(item: Pick<ObjectTreeDrawingItem, 'manualVisible' | 'periodVisible' | 'visible'>) {
-  if (item.visible) return undefined
-  return item.manualVisible === false ? 'absolute' : item.periodVisible === false ? 'period' : undefined
-}
-
-function normalizeObjectTreeGroups(value: unknown): ObjectTreeGroup[] {
-  if (!Array.isArray(value)) return []
-  return value
-    .map((group): ObjectTreeGroup | null => {
-      if (group == null || typeof group !== 'object') return null
-      const itemIds = Array.isArray((group as Partial<ObjectTreeGroup>).itemIds)
-        ? (group as Partial<ObjectTreeGroup>).itemIds?.filter((id): id is string => typeof id === 'string' && id.trim().length > 0) ?? []
-        : []
-      const id = typeof (group as Partial<ObjectTreeGroup>).id === 'string' && (group as Partial<ObjectTreeGroup>).id?.trim()
-        ? (group as Partial<ObjectTreeGroup>).id as string
-        : `group-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-      const name = typeof (group as Partial<ObjectTreeGroup>).name === 'string' && (group as Partial<ObjectTreeGroup>).name?.trim()
-        ? (group as Partial<ObjectTreeGroup>).name as string
-        : '\u7ec4'
-      const paneId = typeof (group as Partial<ObjectTreeGroup>).paneId === 'string' && (group as Partial<ObjectTreeGroup>).paneId?.trim()
-        ? (group as Partial<ObjectTreeGroup>).paneId as string
-        : mainPaneId
-      return itemIds.length > 0 ? { collapsed: (group as Partial<ObjectTreeGroup>).collapsed === true, id, itemIds, name, paneId } : null
-    })
-    .filter((group): group is ObjectTreeGroup => group != null)
-}
-
-function readObjectTreeGroups() {
-  return normalizeObjectTreeGroups(readJson(objectTreeGroupsStorageKey, []))
-}
-
-function writeObjectTreeGroups(groups: ObjectTreeGroup[]) {
-  writeJson(objectTreeGroupsStorageKey, groups)
-}
 
 export function ObjectTreeDrawer() {
   const [drawingItems, setDrawingItems] = useState<ObjectTreeDrawingItem[]>([])
@@ -83,11 +28,7 @@ export function ObjectTreeDrawer() {
       const items = Array.isArray(event.detail?.items) ? event.detail.items as ObjectTreeDrawingItem[] : []
       setDrawingItems(items)
       setSelectedDrawingIds(items.filter((item) => item.selected).map((item) => item.id))
-      setGroups((current) => {
-        return current
-          .map((group) => ({ ...group, itemIds: group.itemIds.filter((id) => items.some((item) => item.id === id)) }))
-          .filter((group) => group.itemIds.length > 0)
-      })
+      setGroups((current) => pruneObjectTreeGroups(current, items))
     }
     window.addEventListener(objectTreeDrawingsChangedEvent, handleDrawingsChanged)
     requestObjectTreeDrawings()
@@ -98,14 +39,14 @@ export function ObjectTreeDrawer() {
     writeObjectTreeGroups(groups)
   }, [groups])
 
-  const mainDrawings = drawingItems.filter((item) => item.paneId === mainPaneId)
-  const subPaneDrawings = drawingItems.filter((item) => item.paneId !== mainPaneId)
+  const mainDrawings = drawingItems.filter((item) => item.paneId === objectTreeMainPaneId)
+  const subPaneDrawings = drawingItems.filter((item) => item.paneId !== objectTreeMainPaneId)
   const subPaneIds = useMemo(() => Array.from(new Set(subPaneDrawings.map((item) => item.paneId))), [subPaneDrawings])
   const selectedDrawings = drawingItems.filter((item) => selectedDrawingIds.includes(item.id))
   const selectedGroup = selectedGroupId ? groups.find((group) => group.id === selectedGroupId) ?? null : null
   const visibilityStorageKeys = (selectedGroup
-    ? selectedGroup.itemIds
-    : selectedDrawings.map((item) => item.id)).map(horizontalLineVisibilityStorageKey)
+    ? drawingItems.filter((item) => selectedGroup.itemIds.includes(item.id))
+    : selectedDrawings).map(objectTreeVisibilityStorageKey)
   const canGroup = selectedDrawings.length > 1 && selectedDrawings.every((item) => item.paneId === selectedDrawings[0]?.paneId)
 
   const selectDrawing = (id: string, additive: boolean) => {
@@ -136,15 +77,11 @@ export function ObjectTreeDrawer() {
   const groupSelectedDrawings = () => {
     if (!canGroup || !selectedDrawings[0]) return
     const itemIds = selectedDrawings.map((item) => item.id)
+    const nextGroup = createObjectTreeGroup(selectedDrawings, groups.length)
+    if (!nextGroup) return
     setGroups((current) => [
       ...current.filter((group) => !group.itemIds.some((id) => itemIds.includes(id))),
-      {
-        id: `group-${Date.now()}`,
-        collapsed: false,
-        itemIds,
-        name: `\u7ec4 ${current.length + 1}`,
-        paneId: selectedDrawings[0].paneId,
-      },
+      nextGroup,
     ])
     setSelectedDrawingIds([])
     setSelectedGroupId(null)
@@ -215,7 +152,7 @@ export function ObjectTreeDrawer() {
 
           <div className="ff-object-tree-list">
             <ObjectTreeSection title={'\u4e3b\u56fe'}>
-              <DrawingRows drawings={mainDrawings} groups={groups.filter((group) => group.paneId === mainPaneId)} selectedIds={selectedDrawingIds} onRenameGroup={renameGroup} onSelect={selectDrawing} onSelectGroup={selectGroup} onToggleGroupCollapsed={toggleGroupCollapsed} />
+              <DrawingRows drawings={mainDrawings} groups={groups.filter((group) => group.paneId === objectTreeMainPaneId)} selectedIds={selectedDrawingIds} onRenameGroup={renameGroup} onSelect={selectDrawing} onSelectGroup={selectGroup} onToggleGroupCollapsed={toggleGroupCollapsed} />
             </ObjectTreeSection>
 
             <div className="ff-object-tree-separator" />
@@ -245,7 +182,7 @@ export function ObjectTreeDrawer() {
               </span>
             ) : selectedDrawings.map((item, index) => (
               <span className="ff-object-tree-visibility-selected__chip" key={item.id} title={item.id}>
-                <span className="ff-object-tree-row__id">{shortObjectId(item.id)}</span>
+                <span className="ff-object-tree-row__id">{shortObjectTreeId(item.id)}</span>
                 <span className="ff-object-tree-visibility-selected__label">{item.label}</span>
                 {index < selectedDrawings.length - 1 ? <span className="ff-object-tree-visibility-selected__comma">,</span> : null}
               </span>
@@ -328,7 +265,7 @@ function GroupRow({
   const locked = items.length > 0 && items.every((item) => item.locked)
   const selected = itemIds.length > 0 && itemIds.every((id) => selectedIds.includes(id))
   const firstId = itemIds[0]
-  const groupHiddenKind = hiddenKind({ manualVisible, periodVisible, visible })
+  const groupHiddenKind = objectTreeHiddenKind({ manualVisible, periodVisible, visible })
   if (!firstId) return null
   return (
     <div
@@ -405,8 +342,8 @@ function DrawingRow({
   selectedIds?: string[]
 }) {
   const targetIds = selected && selectedIds && selectedIds.length > 1 ? selectedIds : [item.id]
-  const shortId = shortObjectId(item.id)
-  const rowHiddenKind = hiddenKind(item)
+  const shortId = shortObjectTreeId(item.id)
+  const rowHiddenKind = objectTreeHiddenKind(item)
   return (
     <div className="ff-object-tree-row" data-kind="drawing" data-selected={item.selected ? 'true' : undefined} onClick={(event) => event.stopPropagation()}>
       <button

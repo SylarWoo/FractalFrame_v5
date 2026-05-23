@@ -29,6 +29,8 @@ import { RightDrawer } from './rightDrawer/RightDrawer'
 import { readIndicatorPersistenceEnabled, readPersistedIndicatorsState, writePersistedIndicatorsState } from './rightDrawer/indicatorPersistence'
 import type { MacdIndicatorSettings, MaIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from './rightDrawer/indicatorPersistence'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
+import { objectTreeDrawingsChangedEvent } from './rightDrawer/objectTree/objectTreeModel'
+import type { ObjectTreeDrawingItem } from './rightDrawer/objectTree/objectTreeTypes'
 import type { IndicatorShortcutItem, RightDrawerId } from './rightDrawer/RightDrawerTypes'
 import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
 import { formatChartLoadStatus } from './mt5DataCenter/storeV5StatusFormat'
@@ -360,6 +362,17 @@ export function AppShell() {
   useEffect(() => {
     refreshLoadedIndicatorsVisibility()
   }, [chartTarget.period])
+
+  useEffect(() => {
+    const handleObjectTreeDrawingsChanged = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return
+      const items = Array.isArray(event.detail?.items) ? event.detail.items as ObjectTreeDrawingItem[] : []
+      const selectedCount = items.filter((item) => item.selected).length
+      if (selectedCount > 1) setActiveRightDrawer('objectTree')
+    }
+    window.addEventListener(objectTreeDrawingsChangedEvent, handleObjectTreeDrawingsChanged)
+    return () => window.removeEventListener(objectTreeDrawingsChangedEvent, handleObjectTreeDrawingsChanged)
+  }, [])
 
   useEffect(() => {
     const handleVisibilityRangeChanged = (event: Event) => {

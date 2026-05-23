@@ -2,23 +2,28 @@ import { ActionType, DomPosition, LineType, PolygonType, registerFigure, registe
 import type { Chart, DeepPartial, OverlayStyle } from 'klinecharts'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import { drawingToolCommandEvent, isDrawingToolCommandEvent, publishDrawingToolState } from '../rightDrawer/drawingToolCommands'
-import { isObjectTreeDrawingCommandEvent, objectTreeDrawingCommandEvent, objectTreeDrawingsRequestEvent, publishObjectTreeDrawings } from '../rightDrawer/objectTreeModel'
+import { isObjectTreeDrawingCommandEvent, objectTreeDrawingCommandEvent, objectTreeDrawingsRequestEvent, publishObjectTreeDrawings } from '../rightDrawer/objectTree/objectTreeModel'
 import {
   clearStoredHorizontalLineDrawings,
   normalizeDrawingLineStyle,
   normalizeDrawingTextStyle,
+  normalizeDrawingTrendLineStyle,
   readDrawingPersistence,
   readStoredHorizontalLineDrawings,
   writeStoredHorizontalLineDrawings,
 } from '../rightDrawer/drawingPersistence'
-import type { DrawingTextStyle, StoredHorizontalLineDrawing } from '../rightDrawer/drawingPersistence'
+import type { DrawingTextStyle, DrawingTrendLineStyle, StoredHorizontalLineDrawing } from '../rightDrawer/drawingPersistence'
 import { isStoredVisibilityRangePeriodVisible, visibilityRangeChangedEvent } from '../visibilityRange/visibilityRangeModel'
 import { createPriceAxisLabelTextStyle } from './chartPriceLabelStyles'
 
 const horizontalLineOverlayName = 'ffHorizontalLine'
 const horizontalLineTextFigureName = 'ffHorizontalLineText'
+const trendLineOverlayName = 'ffTrendLine'
+const trendLineHitFigureName = 'ffTrendLineHit'
 let horizontalLineOverlayRegistered = false
 let horizontalLineTextFigureRegistered = false
+let trendLineOverlayRegistered = false
+let trendLineHitFigureRegistered = false
 const candlePaneId = 'candle_pane'
 const knownDrawingPaneIds = [candlePaneId, 'rsi_pane', 'stoch_pane', 'macd_pane', 'tsi_pane', 'vi_pane']
 const selectedHandleColor = '#2962ff'
@@ -32,6 +37,13 @@ const horizontalLineHitSlop = 6
 const lockedHandleSize = 7
 const lockedHandleBorderSize = 1
 const lockedHandleGap = 2
+const trendHandleColor = '#2962ff'
+const trendHandleRadius = 5.5
+const trendHandleLineWidth = 2
+const trendLockedHandleRadius = 3
+const trendLockedHandleLineWidth = 1
+const trendMiddleHandleRadius = 3
+const trendMiddleHandleLineWidth = 1
 const horizontalLineVisibilityRangeKey = 'drawing:horizontalLine'
 const horizontalLineVisibilityRangeKeyPrefix = `${horizontalLineVisibilityRangeKey}:`
 export const chartDrawingVisibilityRefreshEvent = 'fractalframe:chart-drawing-visibility-refresh'
@@ -57,6 +69,20 @@ type HorizontalLineExtendData = {
   selected?: boolean
   showPriceLabel?: boolean
   textStyle?: DrawingTextStyle
+}
+
+type TrendLineExtendData = {
+  drawing?: boolean
+  endpointPressed?: boolean
+  pressedPointIndex?: number
+  hovered?: boolean
+  lineStyle?: SettingsLineSwatchValue
+  locked?: boolean
+  pressed?: boolean
+  selected?: boolean
+  showPriceLabel?: boolean
+  textStyle?: DrawingTextStyle
+  trendLineStyle?: DrawingTrendLineStyle
 }
 
 type HorizontalLineFigure = {
@@ -123,6 +149,145 @@ function overlayStylesFromLine(lineStyle: SettingsLineSwatchValue): DeepPartial<
       style: PolygonType.Fill,
     },
   }
+}
+
+function trendOverlayStylesFromLine(lineStyle: SettingsLineSwatchValue): DeepPartial<OverlayStyle> {
+  return {
+    ...overlayStylesFromLine(lineStyle),
+    point: {
+      activeBorderColor: 'rgba(0,0,0,0)',
+      activeBorderSize: 0,
+      activeColor: 'rgba(0,0,0,0)',
+      activeRadius: 10,
+      borderColor: 'rgba(0,0,0,0)',
+      borderSize: 0,
+      color: 'rgba(0,0,0,0)',
+      radius: 10,
+    },
+  }
+}
+
+type ScreenPoint = { x: number; y: number }
+
+function isScreenPoint(value: Partial<ScreenPoint> | undefined): value is ScreenPoint {
+  return Number.isFinite(value?.x) && Number.isFinite(value?.y)
+}
+
+function resolveTrendLineBoundsEndpoint(origin: ScreenPoint, through: ScreenPoint, bounding: { height: number; width: number }, reverse: boolean): ScreenPoint {
+  const dx = through.x - origin.x
+  const dy = through.y - origin.y
+  const candidates: Array<{ point: ScreenPoint; t: number }> = []
+  const pushCandidate = (t: number) => {
+    if (!Number.isFinite(t)) return
+    const x = origin.x + dx * t
+    const y = origin.y + dy * t
+    if (x >= 0 && x <= bounding.width && y >= 0 && y <= bounding.height) candidates.push({ point: { x, y }, t })
+  }
+  if (dx !== 0) {
+    pushCandidate((0 - origin.x) / dx)
+    pushCandidate((bounding.width - origin.x) / dx)
+  }
+  if (dy !== 0) {
+    pushCandidate((0 - origin.y) / dy)
+    pushCandidate((bounding.height - origin.y) / dy)
+  }
+  const directional = candidates
+    .filter(({ t }) => reverse ? t <= 0 : t >= 0)
+    .sort((a, b) => reverse ? a.t - b.t : b.t - a.t)
+  return directional[0]?.point ?? origin
+}
+
+function resolveTrendLineEndpoints(start: ScreenPoint, end: ScreenPoint, bounding: { height: number; width: number }, extendMode: DrawingTrendLineStyle['extendMode']) {
+  if (extendMode === 'none') return { end, start }
+  return {
+    end: extendMode === 'right' || extendMode === 'both'
+      ? resolveTrendLineBoundsEndpoint(start, end, bounding, false)
+      : end,
+    start: extendMode === 'left' || extendMode === 'both'
+      ? resolveTrendLineBoundsEndpoint(end, start, bounding, false)
+      : start,
+  }
+}
+
+function createTrendArrowFigures(tip: ScreenPoint, from: ScreenPoint, color: string, size: number): HorizontalLineFigure[] {
+  const angle = Math.atan2(tip.y - from.y, tip.x - from.x)
+  const length = 12
+  const spread = Math.PI / 7
+  const left = {
+    x: tip.x - Math.cos(angle - spread) * length,
+    y: tip.y - Math.sin(angle - spread) * length,
+  }
+  const right = {
+    x: tip.x - Math.cos(angle + spread) * length,
+    y: tip.y - Math.sin(angle + spread) * length,
+  }
+  return [{
+    type: 'line',
+    attrs: { coordinates: [left, tip, right] },
+    styles: {
+      color,
+      dashedValue: [],
+      size,
+      style: LineType.Solid,
+    },
+  }]
+}
+
+function createTrendHandleFigure(point: ScreenPoint, locked: boolean, selected: boolean, color = trendHandleColor): HorizontalLineFigure {
+  const borderSize = locked
+    ? trendLockedHandleLineWidth
+    : selected
+      ? trendHandleLineWidth
+      : 1
+  const outerRadius = trendHandleRadius + trendHandleLineWidth / 2
+  const radius = locked
+    ? trendLockedHandleRadius
+    : outerRadius - borderSize / 2
+  return {
+    type: 'circle',
+    attrs: {
+      r: radius,
+      x: point.x,
+      y: point.y,
+    },
+    styles: {
+      borderColor: color,
+      borderSize,
+      color: '#ffffff',
+      style: PolygonType.StrokeFill,
+    },
+  }
+}
+
+function distanceToSegment(point: ScreenPoint, start: ScreenPoint, end: ScreenPoint) {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const lengthSq = dx * dx + dy * dy
+  if (lengthSq <= 0) return Math.hypot(point.x - start.x, point.y - start.y)
+  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq))
+  const projected = {
+    x: start.x + t * dx,
+    y: start.y + t * dy,
+  }
+  return Math.hypot(point.x - projected.x, point.y - projected.y)
+}
+
+function ensureTrendLineHitFigure() {
+  if (trendLineHitFigureRegistered) return
+  trendLineHitFigureRegistered = true
+  registerFigure({
+    name: trendLineHitFigureName,
+    checkEventOn: (coordinate: unknown, attrs: unknown) => {
+      const point = coordinate as Partial<ScreenPoint>
+      const hitAttrs = attrs as { coordinates?: ScreenPoint[]; hitSlop?: number }
+      const start = hitAttrs.coordinates?.[0]
+      const end = hitAttrs.coordinates?.[1]
+      const hitSlop = Number(hitAttrs.hitSlop)
+      if (!isScreenPoint(point) || !isScreenPoint(start) || !isScreenPoint(end)) return false
+      return distanceToSegment(point, start, end) <= (Number.isFinite(hitSlop) ? hitSlop : 8)
+    },
+    draw: () => undefined,
+  })
 }
 
 function formatOverlayPrice(value: number, pricePrecision: number, thousandsSeparator: string) {
@@ -452,19 +617,141 @@ function ensureHorizontalLineOverlay() {
   })
 }
 
+function ensureTrendLineOverlay() {
+  if (trendLineOverlayRegistered) return
+  ensureTrendLineHitFigure()
+  trendLineOverlayRegistered = true
+  registerOverlay({
+    name: trendLineOverlayName,
+    totalStep: 3,
+    needDefaultPointFigure: true,
+    needDefaultXAxisFigure: true,
+    needDefaultYAxisFigure: false,
+    createPointFigures: ({ bounding, coordinates, overlay }) => {
+      const start = coordinates[0]
+      const end = coordinates[1]
+      const extendData = overlay.extendData as TrendLineExtendData | undefined
+      const locked = extendData?.locked === true
+      const drawing = extendData?.drawing === true
+      if (!isScreenPoint(start)) return []
+      if (!isScreenPoint(end)) return drawing ? [createTrendHandleFigure(start, locked, true)] : []
+      const lineStyle = normalizeLineStyle(extendData?.lineStyle)
+      const trendStyle = normalizeDrawingTrendLineStyle(extendData?.trendLineStyle)
+      const color = colorWithAlpha(lineStyle.hex, lineStyle.opacity)
+      const size = Math.max(1, Math.min(Math.round(lineStyle.thickness), 4))
+      const endpointPressed = extendData?.endpointPressed === true
+      const pressedPointIndex = Number(extendData?.pressedPointIndex)
+      const active = !endpointPressed && (extendData?.selected === true || extendData?.hovered === true || extendData?.pressed === true)
+      const selected = extendData?.selected === true || extendData?.pressed === true
+      const resolved = resolveTrendLineEndpoints(start, end, bounding, trendStyle.extendMode)
+      const figures: HorizontalLineFigure[] = [{
+        key: 'trend-hit-line',
+        type: trendLineHitFigureName,
+        attrs: {
+          coordinates: [resolved.start, resolved.end],
+          hitSlop: 12,
+        },
+      }, {
+        type: 'line',
+        attrs: {
+          coordinates: [resolved.start, resolved.end],
+        },
+        styles: {
+          color,
+          dashedValue: dashedValueForStyle(lineStyle.lineStyle),
+          size,
+          style: lineTypeForStyle(lineStyle.lineStyle),
+        },
+      }]
+      if (trendStyle.startMarker === 'arrow') figures.push(...createTrendArrowFigures(resolved.start, resolved.end, color, size))
+      if (trendStyle.endMarker === 'arrow') figures.push(...createTrendArrowFigures(resolved.end, resolved.start, color, size))
+      if (active || endpointPressed || drawing) {
+        if (!endpointPressed || pressedPointIndex !== 0) figures.push(createTrendHandleFigure(start, locked, selected))
+        if (!drawing && (!endpointPressed || pressedPointIndex !== 1)) figures.push(createTrendHandleFigure(end, locked, selected))
+      }
+      if (active && trendStyle.middleVisible) {
+        figures.push({
+          type: 'circle',
+          attrs: {
+            r: trendMiddleHandleRadius,
+            x: (start.x + end.x) / 2,
+            y: (start.y + end.y) / 2,
+          },
+          styles: {
+            borderColor: color,
+            borderSize: trendMiddleHandleLineWidth,
+            color: '#ffffff',
+            style: PolygonType.StrokeFill,
+          },
+        })
+      }
+      if (trendStyle.statsAlwaysVisible && trendStyle.statsData.length > 0) {
+        const valueStart = Number(overlay.points[0]?.value)
+        const valueEnd = Number(overlay.points[1]?.value)
+        const valueDelta = Number.isFinite(valueStart) && Number.isFinite(valueEnd) ? valueEnd - valueStart : null
+        const statsText = trendStyle.statsData.map((item) => {
+          if (item === 'point-change' && valueDelta != null) return valueDelta.toFixed(4)
+          if (item === 'percent-change' && valueDelta != null && valueStart !== 0) return `${((valueDelta / valueStart) * 100).toFixed(2)}%`
+          if (item === 'price-range' && valueDelta != null) return `${Math.min(valueStart, valueEnd).toFixed(4)} - ${Math.max(valueStart, valueEnd).toFixed(4)}`
+          if (item === 'bar-range') return `${Math.abs(Number(overlay.points[1]?.dataIndex ?? 0) - Number(overlay.points[0]?.dataIndex ?? 0))}`
+          if (item === 'angle') return `${Math.round(Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI)}°`
+          return ''
+        }).filter(Boolean).join('  ')
+        if (statsText) {
+          const x = trendStyle.statsPosition === 'left'
+            ? Math.min(start.x, end.x)
+            : trendStyle.statsPosition === 'right'
+              ? Math.max(start.x, end.x)
+              : (start.x + end.x) / 2
+          figures.push({
+            type: 'text',
+            attrs: {
+              align: trendStyle.statsPosition === 'left' ? 'left' : trendStyle.statsPosition === 'right' ? 'right' : 'center',
+              baseline: 'bottom',
+              text: statsText,
+              x,
+              y: Math.min(start.y, end.y) - 8,
+            },
+            styles: {
+              backgroundColor: 'rgba(255,255,255,0.82)',
+              color,
+              size: 12,
+            },
+          })
+        }
+      }
+      return figures
+    },
+  })
+}
+
 export function installChartDrawingTools(chart: Chart, getPeriod: () => string = () => '') {
   ensureHorizontalLineOverlay()
+  ensureTrendLineOverlay()
   let pendingOverlayId: string | null = null
+  let pendingTrendLineOverlayId: string | null = null
   let pendingOverlayOptions: {
     lineStyle: SettingsLineSwatchValue
     locked: boolean
     showPriceLabel: boolean
     textStyle?: DrawingTextStyle
   } | null = null
+  let pendingTrendLineOptions: {
+    lineStyle: SettingsLineSwatchValue
+    locked: boolean
+    showPriceLabel: boolean
+    textStyle?: DrawingTextStyle
+    trendLineStyle: DrawingTrendLineStyle
+  } | null = null
   let selectedOverlayId: string | null = null
+  let selectedTrendLineOverlayId: string | null = null
   let lastSelectedOverlayId: string | null = null
   let restoreHoverCursor: (() => void) | null = null
+  let trendForcedCursor: { cursor: string; elements: HTMLElement[] } | null = null
+  let pendingTrendStartHandle: HTMLDivElement | null = null
+  let pendingTrendFirstPointPlaced = false
   const horizontalLineOverlayIds = new Set<string>()
+  const trendLineOverlayIds = new Set<string>()
   const paneInteractionCleanups: Array<() => void> = []
   const registeredPaneInteractions = new Map<string, { cleanup: () => void; element: HTMLElement }>()
   let persistenceEnabled = readDrawingPersistence('horizontalLine')
@@ -487,6 +774,35 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const clearHoverCursor = () => {
     restoreHoverCursor?.()
     restoreHoverCursor = null
+  }
+
+  const applyTrendForcedCursor = (paneId = candlePaneId, cursor = 'default') => {
+    const paneMain = chart.getDom(paneId, DomPosition.Main)
+    if (!paneMain) return
+    const elements = collectCursorElements(paneMain)
+    trendForcedCursor = { cursor, elements }
+    const forceCursor = () => {
+      elements.forEach((element) => {
+        element.style.cursor = cursor
+      })
+    }
+    forceCursor()
+    window.setTimeout(forceCursor, 0)
+    window.requestAnimationFrame(forceCursor)
+  }
+
+  const clearTrendForcedCursor = () => {
+    const forced = trendForcedCursor
+    if (!forced) return
+    forced.elements.forEach((element) => {
+      if (element.style.cursor === forced.cursor) element.style.cursor = ''
+    })
+    trendForcedCursor = null
+  }
+
+  const hidePendingTrendStartHandle = () => {
+    pendingTrendStartHandle?.remove()
+    pendingTrendStartHandle = null
   }
 
   const publishState = (state?: Partial<{ armed: boolean; lineStyle: SettingsLineSwatchValue; locked: boolean; objectId: string; price: number; selected: boolean; showPriceLabel: boolean; textStyle: DrawingTextStyle }>) => {
@@ -738,6 +1054,97 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     return false
   }
 
+  const resolveOverlayPointPixel = (point: { dataIndex?: number; timestamp?: number; value?: number }, paneId: string) => {
+    const value = Number(point?.value)
+    if (!Number.isFinite(value)) return null
+    const dataIndex = Number(point?.dataIndex)
+    const timestamp = Number(point?.timestamp)
+    const pixel = chart.convertToPixel({
+      ...(Number.isFinite(dataIndex) ? { dataIndex } : {}),
+      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+      value,
+    }, { paneId })
+    const coordinate = isCoordinate(pixel) ? pixel : pixel[0]
+    const x = Number(coordinate?.x)
+    const y = Number(coordinate?.y)
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null
+  }
+
+  const updatePendingTrendStartHandle = (overlay: { paneId?: string; points: Array<{ dataIndex?: number; timestamp?: number; value?: number }> }) => {
+    const paneId = overlay.paneId || candlePaneId
+    const point = resolveOverlayPointPixel(overlay.points[0] ?? {}, paneId)
+    const paneMain = chart.getDom(paneId, DomPosition.Main)
+    if (!point || !paneMain) {
+      hidePendingTrendStartHandle()
+      return
+    }
+    const rect = paneMain.getBoundingClientRect()
+    if (!pendingTrendStartHandle) {
+      pendingTrendStartHandle = document.createElement('div')
+      pendingTrendStartHandle.style.position = 'fixed'
+      pendingTrendStartHandle.style.width = '13px'
+      pendingTrendStartHandle.style.height = '13px'
+      pendingTrendStartHandle.style.border = `${trendHandleLineWidth}px solid ${trendHandleColor}`
+      pendingTrendStartHandle.style.borderRadius = '50%'
+      pendingTrendStartHandle.style.background = '#ffffff'
+      pendingTrendStartHandle.style.boxSizing = 'border-box'
+      pendingTrendStartHandle.style.pointerEvents = 'none'
+      pendingTrendStartHandle.style.zIndex = '2147483647'
+      document.body.appendChild(pendingTrendStartHandle)
+    }
+    pendingTrendStartHandle.style.left = `${rect.left + point.x - 6.5}px`
+    pendingTrendStartHandle.style.top = `${rect.top + point.y - 6.5}px`
+  }
+
+  const schedulePendingTrendStartHandle = () => {
+    const overlayId = pendingTrendLineOverlayId
+    if (!overlayId) return
+    window.setTimeout(() => {
+      if (destroyed || pendingTrendLineOverlayId !== overlayId) return
+      const overlay = chart.getOverlayById(overlayId)
+      if (!overlay?.points?.[0]) return
+      pendingTrendFirstPointPlaced = true
+      updatePendingTrendStartHandle(overlay as { paneId?: string; points: Array<{ dataIndex?: number; timestamp?: number; value?: number }> })
+    }, 0)
+  }
+
+  const eventHitsTrendLine = (event: MouseEvent, paneId: string) => {
+    const paneMain = chart.getDom(paneId, DomPosition.Main)
+    if (!paneMain) return false
+    const rect = paneMain.getBoundingClientRect()
+    const eventPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    if (!Number.isFinite(eventPoint.x) || !Number.isFinite(eventPoint.y)) return false
+    for (const id of trendLineOverlayIds) {
+      if (id === pendingTrendLineOverlayId) continue
+      const overlay = chart.getOverlayById(id)
+      if (!overlay || (overlay.paneId || candlePaneId) !== paneId) continue
+      const start = resolveOverlayPointPixel(overlay.points[0] ?? {}, paneId)
+      const end = resolveOverlayPointPixel(overlay.points[1] ?? {}, paneId)
+      if (!start || !end) continue
+      if (distanceToSegment(eventPoint, start, end) <= horizontalLineHitSlop) return true
+    }
+    return false
+  }
+
+  const eventHitsTrendLineEndpoint = (event: MouseEvent, paneId: string) => {
+    const paneMain = chart.getDom(paneId, DomPosition.Main)
+    if (!paneMain) return false
+    const rect = paneMain.getBoundingClientRect()
+    const eventPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    if (!Number.isFinite(eventPoint.x) || !Number.isFinite(eventPoint.y)) return false
+    const endpointHitSlop = 12
+    for (const id of trendLineOverlayIds) {
+      if (id === pendingTrendLineOverlayId) continue
+      const overlay = chart.getOverlayById(id)
+      if (!overlay || (overlay.paneId || candlePaneId) !== paneId) continue
+      const start = resolveOverlayPointPixel(overlay.points[0] ?? {}, paneId)
+      const end = resolveOverlayPointPixel(overlay.points[1] ?? {}, paneId)
+      if ((start && Math.hypot(eventPoint.x - start.x, eventPoint.y - start.y) <= endpointHitSlop)
+        || (end && Math.hypot(eventPoint.x - end.x, eventPoint.y - end.y) <= endpointHitSlop)) return true
+    }
+    return false
+  }
+
   const clearHorizontalLineSelection = () => {
     let changed = false
     horizontalLineOverlayIds.forEach((id) => {
@@ -752,15 +1159,53 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     selectedOverlayId = null
     selectedHorizontalLineOverlayIds.clear()
     clearHoverCursor()
+    clearTrendForcedCursor()
     publishState({ selected: false })
     publishObjectTreeState()
+  }
+
+  const clearTrendLineSelection = () => {
+    let changed = false
+    trendLineOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) {
+        trendLineOverlayIds.delete(id)
+        return
+      }
+      const extendData = overlay.extendData as TrendLineExtendData | undefined
+      if (extendData?.selected !== true && extendData?.pressed !== true && extendData?.hovered !== true) return
+      changed = true
+      chart.overrideOverlay({
+        id,
+        extendData: {
+          ...extendData,
+          endpointPressed: false,
+          hovered: false,
+          pressed: false,
+          pressedPointIndex: undefined,
+          selected: false,
+        },
+      })
+    })
+    if (!changed && !selectedTrendLineOverlayId) return
+    selectedTrendLineOverlayId = null
+    clearHoverCursor()
+    publishDrawingToolState({
+      armed: pendingTrendLineOverlayId != null,
+      locked: false,
+      selected: false,
+      showPriceLabel: true,
+      tool: 'trendLine',
+    })
   }
 
   const handlePaneClick = (event: MouseEvent, paneId: string) => {
     window.setTimeout(() => {
       if (destroyed) return
       if (eventHitsHorizontalLine(event, paneId)) return
+      if (eventHitsTrendLine(event, paneId)) return
       clearHorizontalLineSelection()
+      clearTrendLineSelection()
     }, 0)
   }
 
@@ -787,6 +1232,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   }) => chart.createOverlay({
     name: horizontalLineOverlayName,
     extendData: {
+      drawing: true,
       hovered: false,
       lineStyle: normalizeLineStyle(lineStyle),
       locked,
@@ -878,6 +1324,156 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     },
   }, paneId)
 
+  const createTrendLineOverlay = ({
+    lineStyle,
+    locked,
+    paneId = candlePaneId,
+    selected,
+    showPriceLabel,
+    textStyle,
+    trendLineStyle,
+  }: {
+    lineStyle: SettingsLineSwatchValue
+    locked: boolean
+    paneId?: string
+    selected: boolean
+    showPriceLabel: boolean
+    textStyle?: DrawingTextStyle
+    trendLineStyle: DrawingTrendLineStyle
+  }) => chart.createOverlay({
+    name: trendLineOverlayName,
+    extendData: {
+      hovered: false,
+      lineStyle: normalizeLineStyle(lineStyle),
+      locked,
+      pressed: false,
+      selected,
+      showPriceLabel,
+      textStyle: normalizeDrawingTextStyle(textStyle),
+      trendLineStyle: normalizeDrawingTrendLineStyle(trendLineStyle),
+    },
+    lock: locked,
+    styles: trendOverlayStylesFromLine(lineStyle),
+    onDrawing: ({ overlay }) => {
+      if (pendingTrendLineOverlayId === overlay.id && pendingTrendFirstPointPlaced) {
+        updatePendingTrendStartHandle(overlay as { paneId?: string; points: Array<{ dataIndex?: number; timestamp?: number; value?: number }> })
+      }
+      return false
+    },
+    onDrawEnd: ({ overlay }) => {
+      hidePendingTrendStartHandle()
+      pendingTrendFirstPointPlaced = false
+      pendingTrendLineOverlayId = null
+      pendingTrendLineOptions = null
+      selectedTrendLineOverlayId = overlay.id
+      trendLineOverlayIds.add(overlay.id)
+      chart.overrideOverlay({
+        id: overlay.id,
+        extendData: {
+          ...(overlay.extendData as TrendLineExtendData | undefined),
+          drawing: false,
+          selected: true,
+        },
+      })
+      publishDrawingToolState({
+        armed: false,
+        lineStyle: normalizeLineStyle(lineStyle),
+        locked,
+        selected: true,
+        showPriceLabel,
+        textStyle: normalizeDrawingTextStyle(textStyle),
+        tool: 'trendLine',
+        trendLineStyle: normalizeDrawingTrendLineStyle(trendLineStyle),
+      })
+      return false
+    },
+    onRemoved: ({ overlay }) => {
+      if (pendingTrendLineOverlayId === overlay.id) hidePendingTrendStartHandle()
+      if (pendingTrendLineOverlayId === overlay.id) pendingTrendFirstPointPlaced = false
+      if (pendingTrendLineOverlayId === overlay.id) pendingTrendLineOverlayId = null
+      if (selectedTrendLineOverlayId === overlay.id) selectedTrendLineOverlayId = null
+      trendLineOverlayIds.delete(overlay.id)
+      return false
+    },
+    onMouseEnter: ({ overlay }) => {
+      const extendData = overlay.extendData as TrendLineExtendData | undefined
+      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, hovered: true } })
+      clearHoverCursor()
+      return false
+    },
+    onMouseLeave: ({ overlay }) => {
+      const extendData = overlay.extendData as TrendLineExtendData | undefined
+      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, hovered: false } })
+      clearTrendForcedCursor()
+      clearHoverCursor()
+      return false
+    },
+    onPressedMoveEnd: ({ overlay }) => {
+      const extendData = overlay.extendData as TrendLineExtendData | undefined
+      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed: false, pressed: false, pressedPointIndex: undefined } })
+      clearTrendForcedCursor()
+      return false
+    },
+    onPressedMoveStart: (event) => {
+      const { overlay } = event
+      const extendData = overlay.extendData as TrendLineExtendData | undefined
+      const paneId = overlay.paneId || candlePaneId
+      const figureKey = typeof event.figureKey === 'string' ? event.figureKey : ''
+      const endpointPressed = figureKey.includes('point_')
+      const pointKeyMatch = /point_(\d+)/.exec(figureKey)
+      const pressedPointIndex = endpointPressed
+        ? Number.isInteger(event.figureIndex)
+          ? event.figureIndex
+          : pointKeyMatch
+            ? Number(pointKeyMatch[1])
+            : undefined
+        : undefined
+      selectedTrendLineOverlayId = overlay.id
+      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed, pressed: true, pressedPointIndex, selected: true } })
+      applyTrendForcedCursor(paneId, endpointPressed ? 'default' : 'grabbing')
+      publishDrawingToolState({
+        armed: false,
+        lineStyle: normalizeLineStyle(extendData?.lineStyle),
+        locked: extendData?.locked === true,
+        selected: true,
+        showPriceLabel: extendData?.showPriceLabel !== false,
+        textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
+        tool: 'trendLine',
+        trendLineStyle: normalizeDrawingTrendLineStyle(extendData?.trendLineStyle),
+      })
+      return false
+    },
+    onSelected: ({ overlay }) => {
+      const extendData = overlay.extendData as TrendLineExtendData | undefined
+      selectedTrendLineOverlayId = overlay.id
+      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, selected: true } })
+      publishDrawingToolState({
+        armed: false,
+        lineStyle: normalizeLineStyle(extendData?.lineStyle),
+        locked: extendData?.locked === true,
+        selected: true,
+        showPriceLabel: extendData?.showPriceLabel !== false,
+        textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
+        tool: 'trendLine',
+        trendLineStyle: normalizeDrawingTrendLineStyle(extendData?.trendLineStyle),
+      })
+      return false
+    },
+    onDeselected: ({ overlay }) => {
+      const extendData = overlay.extendData as TrendLineExtendData | undefined
+      if (selectedTrendLineOverlayId === overlay.id) selectedTrendLineOverlayId = null
+      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed: false, selected: false, pressed: false, pressedPointIndex: undefined } })
+      publishDrawingToolState({
+        armed: pendingTrendLineOverlayId != null,
+        locked: false,
+        selected: false,
+        showPriceLabel: true,
+        tool: 'trendLine',
+      })
+      return false
+    },
+  }, paneId)
+
   const canCreateOverlayOnPane = (paneId: string) => paneId === candlePaneId || chart.getDom(paneId, DomPosition.Main) != null
 
   const restorePendingStoredHorizontalLines = () => {
@@ -942,7 +1538,22 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const handleRootPointer = (event: MouseEvent | PointerEvent) => {
     additiveSelectionActive = event.ctrlKey || event.metaKey
     const paneId = resolvePaneIdFromPointerEvent(event)
-    if (paneId) setPointerPane(paneId)
+    if (paneId) {
+      setPointerPane(paneId)
+      if (pendingTrendLineOverlayId) {
+        if (event.type === 'pointerdown') schedulePendingTrendStartHandle()
+        clearTrendForcedCursor()
+        return
+      }
+      const mouseEvent = event as MouseEvent
+      if (eventHitsTrendLineEndpoint(mouseEvent, paneId)) {
+        applyTrendForcedCursor(paneId, 'default')
+      } else if (eventHitsTrendLine(mouseEvent, paneId)) {
+        applyTrendForcedCursor(paneId, event.type === 'pointerdown' || event.buttons > 0 ? 'grabbing' : 'pointer')
+      } else {
+        clearTrendForcedCursor()
+      }
+    }
   }
 
   const handleKeyDown = (event: KeyboardEvent) => {
@@ -987,6 +1598,146 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
 
   const handleCommand = (event: Event) => {
     if (!isDrawingToolCommandEvent(event)) return
+
+    if (event.detail.tool === 'trendLine') {
+      if (event.detail.action === 'release') {
+        if (pendingTrendLineOverlayId) chart.removeOverlay({ id: pendingTrendLineOverlayId })
+        hidePendingTrendStartHandle()
+        pendingTrendFirstPointPlaced = false
+        pendingTrendLineOverlayId = null
+        pendingTrendLineOptions = null
+        publishDrawingToolState({
+          armed: false,
+          locked: false,
+          selected: false,
+          showPriceLabel: true,
+          tool: 'trendLine',
+        })
+        return
+      }
+
+      if (event.detail.action === 'updateSelectedTrendLineStyle') {
+        pendingTrendLineOptions = pendingTrendLineOptions && event.detail.trendLineStyle
+          ? { ...pendingTrendLineOptions, trendLineStyle: normalizeDrawingTrendLineStyle(event.detail.trendLineStyle) }
+          : pendingTrendLineOptions
+        if (pendingTrendLineOverlayId && event.detail.trendLineStyle) {
+          const overlay = chart.getOverlayById(pendingTrendLineOverlayId)
+          const extendData = overlay?.extendData as TrendLineExtendData | undefined
+          chart.overrideOverlay({
+            id: pendingTrendLineOverlayId,
+            extendData: {
+              ...extendData,
+              trendLineStyle: normalizeDrawingTrendLineStyle(event.detail.trendLineStyle),
+            },
+          })
+        }
+        if (selectedTrendLineOverlayId && event.detail.trendLineStyle) {
+          const overlay = chart.getOverlayById(selectedTrendLineOverlayId)
+          const extendData = overlay?.extendData as TrendLineExtendData | undefined
+          chart.overrideOverlay({
+            id: selectedTrendLineOverlayId,
+            extendData: {
+              ...extendData,
+              trendLineStyle: normalizeDrawingTrendLineStyle(event.detail.trendLineStyle),
+            },
+          })
+        }
+        return
+      }
+
+      if (event.detail.action === 'toggleSelectedLock') {
+        if (!selectedTrendLineOverlayId) return
+        const overlay = chart.getOverlayById(selectedTrendLineOverlayId)
+        if (!overlay) return
+        const extendData = overlay.extendData as TrendLineExtendData | undefined
+        const locked = extendData?.locked !== true
+        chart.overrideOverlay({
+          id: selectedTrendLineOverlayId,
+          extendData: {
+            ...extendData,
+            locked,
+            selected: true,
+          },
+          lock: locked,
+        })
+        publishDrawingToolState({
+          armed: false,
+          lineStyle: normalizeLineStyle(extendData?.lineStyle),
+          locked,
+          selected: true,
+          showPriceLabel: extendData?.showPriceLabel !== false,
+          textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
+          tool: 'trendLine',
+          trendLineStyle: normalizeDrawingTrendLineStyle(extendData?.trendLineStyle),
+        })
+        return
+      }
+
+      if (event.detail.action === 'updateSelectedLineStyle') {
+        pendingTrendLineOptions = pendingTrendLineOptions && event.detail.lineStyle
+          ? { ...pendingTrendLineOptions, lineStyle: normalizeLineStyle(event.detail.lineStyle) }
+          : pendingTrendLineOptions
+        if (pendingTrendLineOverlayId && event.detail.lineStyle) {
+          const lineStyle = normalizeLineStyle(event.detail.lineStyle)
+          const overlay = chart.getOverlayById(pendingTrendLineOverlayId)
+          const extendData = overlay?.extendData as TrendLineExtendData | undefined
+          chart.overrideOverlay({
+            id: pendingTrendLineOverlayId,
+            extendData: {
+              ...extendData,
+              lineStyle,
+            },
+            styles: trendOverlayStylesFromLine(lineStyle),
+          })
+        }
+        if (selectedTrendLineOverlayId && event.detail.lineStyle) {
+          const lineStyle = normalizeLineStyle(event.detail.lineStyle)
+          const overlay = chart.getOverlayById(selectedTrendLineOverlayId)
+          const extendData = overlay?.extendData as TrendLineExtendData | undefined
+          chart.overrideOverlay({
+            id: selectedTrendLineOverlayId,
+            extendData: {
+              ...extendData,
+              lineStyle,
+            },
+            styles: trendOverlayStylesFromLine(lineStyle),
+          })
+        }
+        return
+      }
+
+      if (event.detail.action !== 'start') return
+      const lineStyle = event.detail.lineStyle
+      if (!lineStyle) return
+      if (pendingTrendLineOverlayId) chart.removeOverlay({ id: pendingTrendLineOverlayId })
+      hidePendingTrendStartHandle()
+      pendingTrendFirstPointPlaced = false
+      pendingTrendLineOptions = {
+        lineStyle,
+        locked: event.detail.locked === true,
+        showPriceLabel: event.detail.showPriceLabel !== false,
+        textStyle: event.detail.textStyle,
+        trendLineStyle: normalizeDrawingTrendLineStyle(event.detail.trendLineStyle),
+      }
+      const overlayId = createTrendLineOverlay({
+        ...pendingTrendLineOptions,
+        paneId: lastPointerPaneId,
+        selected: false,
+      })
+      pendingTrendLineOverlayId = typeof overlayId === 'string' ? overlayId : null
+      if (pendingTrendLineOverlayId) trendLineOverlayIds.add(pendingTrendLineOverlayId)
+      publishDrawingToolState({
+        armed: pendingTrendLineOverlayId != null,
+        lineStyle: normalizeLineStyle(lineStyle),
+        locked: pendingTrendLineOptions.locked,
+        selected: false,
+        showPriceLabel: pendingTrendLineOptions.showPriceLabel,
+        textStyle: normalizeDrawingTextStyle(pendingTrendLineOptions.textStyle),
+        tool: 'trendLine',
+        trendLineStyle: pendingTrendLineOptions.trendLineStyle,
+      })
+      return
+    }
 
     if (event.detail.action === 'release') {
       if (pendingOverlayId) chart.removeOverlay({ id: pendingOverlayId })
@@ -1125,6 +1876,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     if (!isObjectTreeDrawingCommandEvent(event)) return
     if (event.detail.action === 'deselectAll') {
       clearHorizontalLineSelection()
+      clearTrendLineSelection()
       return
     }
     const command = event.detail
@@ -1256,7 +2008,11 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   return () => {
     destroyed = true
     clearHoverCursor()
+    clearTrendForcedCursor()
     if (pendingOverlayId) chart.removeOverlay({ id: pendingOverlayId })
+    if (pendingTrendLineOverlayId) chart.removeOverlay({ id: pendingTrendLineOverlayId })
+    hidePendingTrendStartHandle()
+    pendingTrendFirstPointPlaced = false
     window.removeEventListener(drawingToolCommandEvent, handleCommand)
     window.removeEventListener(objectTreeDrawingCommandEvent, handleObjectTreeCommand)
     window.removeEventListener(objectTreeDrawingsRequestEvent, handleObjectTreeDrawingsRequest)

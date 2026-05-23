@@ -1,8 +1,10 @@
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
-import type { DrawingTextStyle } from './drawingPersistence'
+import type { DrawingTextStyle, DrawingTrendLineStyle } from './drawingPersistence'
+
+export type DrawingCommandTool = 'horizontalLine' | 'trendLine'
 
 export type DrawingToolCommand = {
-  action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedTextStyle'
+  action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedTextStyle' | 'updateSelectedTrendLineStyle'
   id: number
   lineStyle?: SettingsLineSwatchValue
   locked?: boolean
@@ -10,7 +12,8 @@ export type DrawingToolCommand = {
   price?: number
   showPriceLabel?: boolean
   textStyle?: DrawingTextStyle
-  tool: 'horizontalLine'
+  tool: DrawingCommandTool
+  trendLineStyle?: DrawingTrendLineStyle
 }
 
 export type DrawingToolState = {
@@ -22,7 +25,8 @@ export type DrawingToolState = {
   selected: boolean
   showPriceLabel: boolean
   textStyle?: DrawingTextStyle
-  tool: 'horizontalLine'
+  tool: DrawingCommandTool
+  trendLineStyle?: DrawingTrendLineStyle
 }
 
 export const drawingToolCommandEvent = 'fractalframe:drawing-tool-command'
@@ -38,7 +42,9 @@ export function publishDrawingToolCommand(command: Omit<DrawingToolCommand, 'id'
 }
 
 export function isDrawingToolCommandEvent(event: Event): event is CustomEvent<DrawingToolCommand> {
-  return event instanceof CustomEvent && event.type === drawingToolCommandEvent && event.detail?.tool === 'horizontalLine'
+  return event instanceof CustomEvent
+    && event.type === drawingToolCommandEvent
+    && (event.detail?.tool === 'horizontalLine' || event.detail?.tool === 'trendLine')
 }
 
 export function publishDrawingToolState(state: DrawingToolState) {
@@ -46,5 +52,7 @@ export function publishDrawingToolState(state: DrawingToolState) {
 }
 
 export function isDrawingToolStateEvent(event: Event): event is CustomEvent<DrawingToolState> {
-  return event instanceof CustomEvent && event.type === drawingToolStateEvent && event.detail?.tool === 'horizontalLine'
+  return event instanceof CustomEvent
+    && event.type === drawingToolStateEvent
+    && (event.detail?.tool === 'horizontalLine' || event.detail?.tool === 'trendLine')
 }

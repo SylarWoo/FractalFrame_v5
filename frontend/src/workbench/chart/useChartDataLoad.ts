@@ -18,11 +18,11 @@ import {
 import { applyPriceVolumePrecision, resetYAxisAutoScale } from './chartStyleAppliers'
 import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 import {
+  captureChartViewportSnapshot,
   markChartViewportPersistenceReady,
-  readChartYAxisRange,
   restoreChartViewportState,
-  restoreChartYAxisRange,
-  type AxisRangeSnapshot,
+  restoreChartViewportSnapshot,
+  type ChartViewportSnapshot,
 } from './chartViewportPersistence'
 
 export type ChartLoadStateCore = {
@@ -77,8 +77,8 @@ export function useChartDataLoad({
     if (!chart) return
 
     const previousContext = previousContextRef.current
-    const inheritedYAxisRange = previousContext?.symbol === symbol && previousContext.period !== period
-      ? readChartYAxisRange(chart)
+    const inheritedViewport = previousContext?.symbol === symbol && previousContext.period !== period
+      ? captureChartViewportSnapshot(chart)
       : null
     previousContextRef.current = { period, symbol }
 
@@ -164,9 +164,9 @@ export function useChartDataLoad({
 
     const setFallbackTimer = (timer: number) => { fallbackTimer = timer }
     if (jump?.timestamp != null) {
-      loadJumpWindow(chart, { inheritedYAxisRange, jumpTimestamp: jump.timestamp, period, setFallbackTimer, setLoadState, shouldIgnore, symbol })
+      loadJumpWindow(chart, { inheritedViewport, jumpTimestamp: jump.timestamp, period, setFallbackTimer, setLoadState, shouldIgnore, symbol })
     } else {
-      loadInitialWindow(chart, { inheritedYAxisRange, period, requestedRows, setFallbackTimer, setLoadState, shouldIgnore, symbol, totalRows })
+      loadInitialWindow(chart, { inheritedViewport, period, requestedRows, setFallbackTimer, setLoadState, shouldIgnore, symbol, totalRows })
     }
 
     return () => {
@@ -181,7 +181,7 @@ export function useChartDataLoad({
 }
 
 type LoadOptions = {
-  inheritedYAxisRange?: AxisRangeSnapshot | null
+  inheritedViewport?: ChartViewportSnapshot | null
   period: string
   setFallbackTimer: (timer: number) => void
   setLoadState: Dispatch<SetStateAction<ChartLoadStateCore>>
@@ -223,8 +223,8 @@ function restorePersistedViewport(chart: Chart, symbol: string, period: string) 
 }
 
 function restoreViewportAfterLoad(chart: Chart, options: LoadOptions) {
-  if (options.inheritedYAxisRange) {
-    restoreChartYAxisRange(chart, options.inheritedYAxisRange)
+  if (options.inheritedViewport) {
+    restoreChartViewportSnapshot(chart, options.inheritedViewport)
     markChartViewportPersistenceReady(chart, options.symbol, options.period)
     return
   }

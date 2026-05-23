@@ -67,7 +67,7 @@
 .ff-drawing-tline-tv-style-v1 {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   padding: 20px 0 0;
   color: #131722;
   font: 13px/1.25 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -91,6 +91,148 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.ff-drawing-tline-tv-openable-select-v1 {
+  width: 180px;
+  max-width: 100%;
+}
+
+.ff-drawing-tline-tv-openable-select-v1--endpoint {
+  width: 76px;
+}
+
+.ff-drawing-tline-tv-openable-select-v1--template {
+  width: 100px;
+}
+
+.ff-drawing-tline-tv-openable-select-v1 .ff-openable-select__button {
+  height: 34px;
+}
+
+.ff-drawing-tline-tv-stats-select-v1 .ff-openable-select__button,
+.ff-drawing-tline-tv-check-select-v1 .ff-openable-select__button {
+  font: 13px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
+}
+
+.ff-drawing-tline-tv-stats-select-v1__value,
+.ff-drawing-tline-tv-check-select-v1__value {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: #131722;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ff-drawing-tline-tv-stats-select-v1__menu,
+.ff-drawing-tline-tv-check-select-v1__menu {
+  min-width: 0;
+  width: 100%;
+}
+
+.ff-drawing-tline-tv-stats-select-v1__option,
+.ff-drawing-tline-tv-check-select-v1__option {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: #131722;
+  padding: 0 10px;
+  text-align: left;
+  font: 13px/1.25 Arial, Tahoma, 'Segoe UI', sans-serif;
+}
+
+.ff-drawing-tline-tv-stats-select-v1__option:hover,
+.ff-drawing-tline-tv-check-select-v1__option:hover {
+  background: #f3f4f6;
+}
+
+.ff-drawing-tline-tv-stats-select-v1__box,
+.ff-drawing-tline-tv-check-select-v1__box {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #6b7280;
+  border-radius: 2px;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.ff-drawing-tline-tv-stats-select-v1__box[data-checked='true'],
+.ff-drawing-tline-tv-check-select-v1__box[data-checked='true'] {
+  border-color: #2a2e39;
+  background: #2a2e39;
+}
+
+.ff-drawing-tline-tv-stats-select-v1__box[data-checked='true']::after,
+.ff-drawing-tline-tv-check-select-v1__box[data-checked='true']::after {
+  width: 7px;
+  height: 4px;
+  border-bottom: 2px solid #ffffff;
+  border-left: 2px solid #ffffff;
+  content: '';
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+
+.ff-drawing-tline-tv-openable-select-v1--endpoint .ff-openable-select__button {
+  height: 34px;
+  padding: 0 8px;
+}
+
+.ff-drawing-tline-tv-endpoints-v1 {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.ff-drawing-tline-tv-endpoints-v1__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ff-drawing-tline-tv-endpoints-v1__row {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.ff-drawing-tline-tv-endpoints-v1__side {
+  color: #64748b;
+  font: 12px/1 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  white-space: nowrap;
+}
+
+.ff-drawing-tline-tv-check-line-v1 {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 28px;
+  align-items: center;
+  gap: 8px;
+  color: #131722;
+  cursor: default;
+  font: 13px/1.25 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  user-select: none;
+}
+
+.ff-drawing-tline-tv-subhead-v1 {
+  margin: 6px 0 -2px;
+  color: #64748b;
+  font: 13px/1.25 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.ff-drawing-tline-tv-divider-v1 {
+  height: 1px;
+  margin: 22px 0 4px;
+  background: #d9dee8;
 }
 
 .ff-drawing-tline-tv-select-v1,
@@ -303,7 +445,7 @@
 
 .ff-drawing-hline-coords-tab-v1__row {
   display: grid;
-  grid-template-columns: auto 100px;
+  grid-template-columns: auto 130px;
   align-items: center;
   justify-content: start;
   gap: 14px;
@@ -317,7 +459,7 @@
 }
 
 .ff-drawing-hline-coords-tab-v1__input {
-  width: 100px;
+  width: 130px;
   height: 34px;
   padding: 0 10px;
   border: 1px solid #d1d4dc;

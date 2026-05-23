@@ -18,6 +18,7 @@ function renderPart(part: PaneTitlePart) {
     const chunkSpan = document.createElement('span')
     chunkSpan.className = 'ff-pane-title-overlay__chunk'
     chunkSpan.textContent = chunk.text
+    if (chunk.alignSelf) chunkSpan.style.alignSelf = chunk.alignSelf
     if (chunk.backgroundColor) chunkSpan.style.backgroundColor = chunk.backgroundColor
     if (chunk.borderRadius) chunkSpan.style.borderRadius = chunk.borderRadius
     if (chunk.color) chunkSpan.style.color = chunk.color

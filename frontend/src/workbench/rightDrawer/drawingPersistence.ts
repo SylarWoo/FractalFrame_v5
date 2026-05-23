@@ -13,6 +13,18 @@ export type DrawingTextStyle = {
   textColor: string
 }
 
+export type DrawingTrendLineStatsData = 'angle' | 'bar-range' | 'date-time-range' | 'distance' | 'percent-change' | 'point-change' | 'price-range'
+
+export type DrawingTrendLineStyle = {
+  endMarker: 'arrow' | 'normal'
+  extendMode: 'both' | 'left' | 'none' | 'right'
+  middleVisible: boolean
+  statsAlwaysVisible: boolean
+  statsData: DrawingTrendLineStatsData[]
+  statsPosition: 'center' | 'left' | 'right'
+  startMarker: 'arrow' | 'normal'
+}
+
 export type StoredHorizontalLineDrawing = {
   lineStyle: SettingsLineSwatchValue
   locked: boolean
@@ -28,6 +40,7 @@ export const drawingPersistenceStoragePrefix = 'fractalframe.drawingsDrawer.pers
 export const drawingPriceLabelStoragePrefix = 'fractalframe.drawingsDrawer.priceLabel'
 export const drawingLineStyleStoragePrefix = 'fractalframe.drawingsDrawer.lineStyle'
 export const drawingTextStyleStoragePrefix = 'fractalframe.drawingsDrawer.textStyle'
+export const drawingTrendLineStyleStorageKey = 'fractalframe.drawingsDrawer.trendLineStyle'
 export const horizontalLineDrawingsStorageKey = 'fractalframe.drawings.horizontalLine.items'
 
 export function createDefaultDrawingLineStyle(color = '#2962ff'): SettingsLineSwatchValue {
@@ -60,6 +73,18 @@ export function createDefaultDrawingTextStyle(): DrawingTextStyle {
   }
 }
 
+export function createDefaultDrawingTrendLineStyle(): DrawingTrendLineStyle {
+  return {
+    endMarker: 'normal',
+    extendMode: 'none',
+    middleVisible: false,
+    statsAlwaysVisible: false,
+    statsData: [],
+    statsPosition: 'center',
+    startMarker: 'normal',
+  }
+}
+
 function normalizeTextBody(value: unknown) {
   if (typeof value !== 'string') return ''
   const trimmed = value.trim()
@@ -85,6 +110,40 @@ export function normalizeDrawingTextStyle(textStyle: Partial<DrawingTextStyle> |
     fontSize: Number.isFinite(fontSize) ? Math.max(8, Math.min(48, Math.round(fontSize))) : fallback.fontSize,
     italic: textStyle?.italic === true,
     textColor: typeof textStyle?.textColor === 'string' && textStyle.textColor.trim() ? textStyle.textColor.trim() : fallback.textColor,
+  }
+}
+
+export function normalizeDrawingTrendLineStyle(value: Partial<DrawingTrendLineStyle> | null | undefined): DrawingTrendLineStyle {
+  const fallback = createDefaultDrawingTrendLineStyle()
+  const normalizeStatsData = (input: unknown): DrawingTrendLineStatsData[] => {
+    const allowed = new Set<DrawingTrendLineStatsData>(['price-range', 'percent-change', 'point-change', 'bar-range', 'date-time-range', 'distance', 'angle'])
+    const source = Array.isArray(input)
+      ? input
+      : input === 'price-and-bars'
+        ? ['price-range', 'bar-range']
+        : typeof input === 'string' && input !== 'none'
+          ? [input]
+          : []
+    return source.filter((item): item is DrawingTrendLineStatsData => typeof item === 'string' && allowed.has(item as DrawingTrendLineStatsData))
+      .filter((item, index, array) => array.indexOf(item) === index)
+  }
+  const extendMode = value?.extendMode === 'left' || value?.extendMode === 'right' || value?.extendMode === 'both' || value?.extendMode === 'none'
+    ? value.extendMode
+    : fallback.extendMode
+  const startMarker = value?.startMarker === 'arrow' || value?.startMarker === 'normal' ? value.startMarker : fallback.startMarker
+  const endMarker = value?.endMarker === 'arrow' || value?.endMarker === 'normal' ? value.endMarker : fallback.endMarker
+  const statsData = normalizeStatsData(value?.statsData)
+  const statsPosition = value?.statsPosition === 'left' || value?.statsPosition === 'right' || value?.statsPosition === 'center'
+    ? value.statsPosition
+    : fallback.statsPosition
+  return {
+    endMarker,
+    extendMode,
+    middleVisible: value?.middleVisible === true,
+    statsAlwaysVisible: value?.statsAlwaysVisible === true,
+    statsData,
+    statsPosition,
+    startMarker,
   }
 }
 
@@ -118,6 +177,14 @@ export function readDrawingTextStyle(tool: DrawingToolKey) {
 
 export function writeDrawingTextStyle(tool: DrawingToolKey, value: DrawingTextStyle) {
   return writeJson(`${drawingTextStyleStoragePrefix}.${tool}`, normalizeDrawingTextStyle(value))
+}
+
+export function readDrawingTrendLineStyle() {
+  return normalizeDrawingTrendLineStyle(readJson<Partial<DrawingTrendLineStyle> | null>(drawingTrendLineStyleStorageKey, null))
+}
+
+export function writeDrawingTrendLineStyle(value: DrawingTrendLineStyle) {
+  return writeJson(drawingTrendLineStyleStorageKey, normalizeDrawingTrendLineStyle(value))
 }
 
 export function readStoredHorizontalLineDrawings() {

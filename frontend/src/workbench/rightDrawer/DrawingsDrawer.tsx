@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
+import { formatGlobalPrice } from '../chart/globalPricePrecision'
 import { readString, writeString } from '../persistence/jsonStorage'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../settings/SettingsSwatches'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
@@ -8,16 +9,19 @@ import {
   createDefaultDrawingLineStyle,
   createDefaultDrawingTextStyle,
   normalizeDrawingTextStyle,
+  normalizeDrawingTrendLineStyle,
   readDrawingLineStyle,
   readDrawingPersistence,
   readDrawingPriceLabel,
   readDrawingTextStyle,
+  readDrawingTrendLineStyle,
   writeDrawingLineStyle,
   writeDrawingPersistence,
   writeDrawingPriceLabel,
   writeDrawingTextStyle,
+  writeDrawingTrendLineStyle,
 } from './drawingPersistence'
-import type { DrawingTextStyle } from './drawingPersistence'
+import type { DrawingTextStyle, DrawingTrendLineStatsData, DrawingTrendLineStyle } from './drawingPersistence'
 import { drawingToolStateEvent, isDrawingToolStateEvent, publishDrawingToolCommand } from './drawingToolCommands'
 import './DrawingsDrawer.css'
 
@@ -87,6 +91,7 @@ export function DrawingsDrawer() {
     ruler: createDefaultDrawingTextStyle(),
     trendLine: createDefaultDrawingTextStyle(),
   }))
+  const [trendLineStyle, setTrendLineStyle] = useState<DrawingTrendLineStyle>(readDrawingTrendLineStyle)
   const [cursorMode, setCursorMode] = useState<CursorMode>(readCursorMode)
   const [topHeight, setTopHeight] = useState(defaultTopHeight)
   const selectedTool = drawingTools.find((tool) => tool.key === selectedKey) ?? drawingTools[0]
@@ -154,6 +159,18 @@ export function DrawingsDrawer() {
 
   function armSelectedTool() {
     setArmedKey(selectedKey)
+    if (selectedKey === 'trendLine') {
+      publishDrawingToolCommand({
+        action: 'start',
+        lineStyle: lineStyles.trendLine ?? createDefaultDrawingLineStyle('#2962ff'),
+        locked: selectedLocked,
+        showPriceLabel: selectedPriceLabel,
+        textStyle: selectedTextStyle,
+        tool: 'trendLine',
+        trendLineStyle,
+      })
+      return
+    }
     if (selectedKey !== 'horizontalLine') return
     publishDrawingToolCommand({
       action: 'start',
@@ -167,10 +184,10 @@ export function DrawingsDrawer() {
 
   function releaseSelectedTool() {
     setArmedKey(null)
-    if (selectedKey !== 'horizontalLine') return
+    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine') return
     publishDrawingToolCommand({
       action: 'release',
-      tool: 'horizontalLine',
+      tool: selectedKey,
     })
   }
 
@@ -178,7 +195,7 @@ export function DrawingsDrawer() {
     if (selectedDrawing?.tool === selectedKey) {
       publishDrawingToolCommand({
         action: 'toggleSelectedLock',
-        tool: 'horizontalLine',
+        tool: selectedKey === 'trendLine' ? 'trendLine' : 'horizontalLine',
       })
       return
     }
@@ -207,11 +224,11 @@ export function DrawingsDrawer() {
   function setSelectedLineStyle(value: SettingsLineSwatchValue) {
     setLineStyles((current) => ({ ...current, [selectedTool.key]: value }))
     writeDrawingLineStyle(selectedTool.key, value)
-    if (selectedKey !== 'horizontalLine') return
+    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine') return
     publishDrawingToolCommand({
       action: 'updateSelectedLineStyle',
       lineStyle: value,
-      tool: 'horizontalLine',
+      tool: selectedKey,
     })
   }
 
@@ -224,6 +241,17 @@ export function DrawingsDrawer() {
       action: 'updateSelectedTextStyle',
       textStyle: normalized,
       tool: 'horizontalLine',
+    })
+  }
+
+  function setSelectedTrendLineStyle(value: DrawingTrendLineStyle) {
+    const normalized = normalizeDrawingTrendLineStyle(value)
+    setTrendLineStyle(normalized)
+    writeDrawingTrendLineStyle(normalized)
+    publishDrawingToolCommand({
+      action: 'updateSelectedTrendLineStyle',
+      tool: 'trendLine',
+      trendLineStyle: normalized,
     })
   }
 
@@ -379,11 +407,13 @@ export function DrawingsDrawer() {
                         onLineStyleChange={setSelectedLineStyle}
                         onPriceLabelChange={setSelectedPriceLabel}
                         onTextStyleChange={setSelectedTextStyle}
+                        onTrendLineStyleChange={setSelectedTrendLineStyle}
                         priceLabelVisible={selectedPriceLabel}
                         selectedDrawing={selectedDrawing}
                         onPriceChange={setSelectedPrice}
                         tab={tab}
                         textStyle={selectedTextStyle}
+                        trendLineStyle={trendLineStyle}
                         tool={selectedTool}
                       />
                     </div>
@@ -450,10 +480,12 @@ function DrawingTabPanel({
   onPriceLabelChange,
   onPriceChange,
   onTextStyleChange,
+  onTrendLineStyleChange,
   priceLabelVisible,
   selectedDrawing,
   tab,
   textStyle,
+  trendLineStyle,
   tool,
 }: {
   lineStyle: SettingsLineSwatchValue
@@ -461,10 +493,12 @@ function DrawingTabPanel({
   onPriceLabelChange: (enabled: boolean) => void
   onPriceChange: (price: number) => void
   onTextStyleChange: (value: DrawingTextStyle) => void
+  onTrendLineStyleChange: (value: DrawingTrendLineStyle) => void
   priceLabelVisible: boolean
   selectedDrawing: { locked: boolean; objectId?: string; price?: number; tool: DrawingToolKey } | null
   tab: DrawingTab
   textStyle: DrawingTextStyle
+  trendLineStyle: DrawingTrendLineStyle
   tool: DrawingTool
 }) {
   if (tab === 'style') {
@@ -473,7 +507,9 @@ function DrawingTabPanel({
         lineStyle={lineStyle}
         onLineStyleChange={onLineStyleChange}
         onPriceLabelChange={onPriceLabelChange}
+        onTrendLineStyleChange={onTrendLineStyleChange}
         priceLabelVisible={priceLabelVisible}
+        trendLineStyle={trendLineStyle}
         tool={tool}
       />
     )
@@ -486,15 +522,23 @@ function DrawingStylePanel({
   lineStyle,
   onLineStyleChange,
   onPriceLabelChange,
+  onTrendLineStyleChange,
   priceLabelVisible,
+  trendLineStyle,
   tool,
 }: {
   lineStyle: SettingsLineSwatchValue
   onLineStyleChange: (value: SettingsLineSwatchValue) => void
   onPriceLabelChange: (enabled: boolean) => void
+  onTrendLineStyleChange: (value: DrawingTrendLineStyle) => void
   priceLabelVisible: boolean
+  trendLineStyle: DrawingTrendLineStyle
   tool: DrawingTool
 }) {
+  const updateTrendLineStyle = (patch: Partial<DrawingTrendLineStyle>) => {
+    onTrendLineStyleChange(normalizeDrawingTrendLineStyle({ ...trendLineStyle, ...patch }))
+  }
+
   return (
     <div className="ff-drawing-tline-tv-style-v1">
       <div className="ff-drawing-tline-tv-row-v1">
@@ -509,25 +553,322 @@ function DrawingStylePanel({
           />
         </div>
       </div>
-      <div className="ff-drawing-tline-tv-row-v1">
+      {tool.key === 'trendLine' ? null : (
+        <div className="ff-drawing-tline-tv-row-v1">
         <span className="ff-drawing-tline-tv-label-v1">{'\u4ef7\u683c\u6807\u7b7e'}</span>
         <label className="ff-drawing-tline-tv-check-row-v1">
           <input checked={priceLabelVisible} onChange={(event) => onPriceLabelChange(event.target.checked)} type="checkbox" />
           <span className="ff-drawing-tline-tv-check-box-v1" />
         </label>
-      </div>
-      {tool.key === 'trendLine' || tool.key === 'fibRetracement' ? (
-        <div className="ff-drawing-tline-tv-row-v1">
-          <span className="ff-drawing-tline-tv-label-v1">{'\u5ef6\u4f38'}</span>
-          <select className="ff-drawing-tline-tv-select-v1" defaultValue="none" aria-label="Extend">
-            <option value="none">{'\u65e0'}</option>
-            <option value="left">{'\u5411\u5de6'}</option>
-            <option value="right">{'\u5411\u53f3'}</option>
-            <option value="both">{'\u53cc\u5411'}</option>
-          </select>
         </div>
+      )}
+      {tool.key === 'trendLine' ? (
+        <TrendLineV4StyleOptions
+          onChange={updateTrendLineStyle}
+          onPriceLabelChange={onPriceLabelChange}
+          priceLabelVisible={priceLabelVisible}
+          settings={trendLineStyle}
+        />
+      ) : tool.key === 'fibRetracement' ? (
+        <DrawingOpenableSelectRow
+          label={'\u5ef6\u4f38'}
+          onChange={() => undefined}
+          options={drawingExtendModeOptions}
+          value="none"
+        />
       ) : null}
     </div>
+  )
+}
+
+const drawingExtendModeOptions = [
+  { label: '\u65e0', value: 'none' },
+  { label: '\u5411\u5de6', value: 'left' },
+  { label: '\u5411\u53f3', value: 'right' },
+  { label: '\u53cc\u5411', value: 'both' },
+]
+
+const drawingMarkerOptions = [
+  { label: '\u666e\u901a', value: 'normal' },
+  { label: '\u7bad\u5934', value: 'arrow' },
+]
+
+const drawingStatsDataOptions = [
+  { label: '\u4ef7\u683c\u8303\u56f4', value: 'price-range' },
+  { label: '\u6da8\u8dcc\u5e45', value: 'percent-change' },
+  { label: '\u70b9\u6570\u53d8\u5316', value: 'point-change' },
+  { label: 'K \u7ebf\u6570', value: 'bar-range' },
+  { label: '\u65e5\u671f/\u65f6\u95f4\u8303\u56f4', value: 'date-time-range' },
+  { label: '\u8ddd\u79bb', value: 'distance' },
+  { label: '\u89d2\u5ea6', value: 'angle' },
+]
+
+const drawingStatsPositionOptions = [
+  { label: '\u5de6', value: 'left' },
+  { label: '\u4e2d', value: 'center' },
+  { label: '\u53f3', value: 'right' },
+]
+
+function DrawingOpenableSelectRow({
+  className = '',
+  label,
+  onChange,
+  options,
+  value,
+}: {
+  className?: string
+  label: string
+  onChange: (value: string) => void
+  options: Array<{ label: string; value: string }>
+  value: string
+}) {
+  return (
+    <div className="ff-drawing-tline-tv-row-v1">
+      <span className="ff-drawing-tline-tv-label-v1">{label}</span>
+      <OpenableSelect
+        ariaLabel={label}
+        className={`ff-drawing-tline-tv-openable-select-v1 ${className}`.trim()}
+        onChange={onChange}
+        options={options}
+        value={value}
+      />
+    </div>
+  )
+}
+
+function TrendStatsDataSelect({
+  onChange,
+  value,
+}: {
+  onChange: (value: DrawingTrendLineStatsData[]) => void
+  value: DrawingTrendLineStatsData[]
+}) {
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [open, setOpen] = useState(false)
+  const selected = new Set(value)
+  const selectedLabels = drawingStatsDataOptions
+    .filter((option) => selected.has(option.value as DrawingTrendLineStatsData))
+    .map((option) => option.label)
+  const display = selectedLabels.length > 0 ? selectedLabels.join(', ') : '\u9690\u85cf'
+
+  useEffect(() => {
+    if (!open) return
+    const close = (event: MouseEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', close, true)
+    document.addEventListener('keydown', closeOnEscape, true)
+    return () => {
+      document.removeEventListener('mousedown', close, true)
+      document.removeEventListener('keydown', closeOnEscape, true)
+    }
+  }, [open])
+
+  const toggle = (key: DrawingTrendLineStatsData) => {
+    const next = selected.has(key)
+      ? value.filter((item) => item !== key)
+      : [...value, key]
+    onChange(next)
+  }
+
+  return (
+    <div className="ff-openable-select ff-drawing-tline-tv-openable-select-v1 ff-drawing-tline-tv-stats-select-v1" data-open={open} ref={rootRef}>
+      <button
+        aria-expanded={open}
+        aria-label="\u7edf\u8ba1\u6570\u636e"
+        className="ff-openable-select__button ff-openable-control"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span className="ff-drawing-tline-tv-stats-select-v1__value">{display}</span>
+        <span aria-hidden="true" className="ff-openable-select__chevron">v</span>
+      </button>
+      {open && (
+        <div className="ff-openable-select__menu ff-drawing-tline-tv-stats-select-v1__menu" role="listbox">
+          {drawingStatsDataOptions.map((option) => {
+            const key = option.value as DrawingTrendLineStatsData
+            return (
+              <button
+                className="ff-drawing-tline-tv-stats-select-v1__option"
+                data-active={selected.has(key) ? 'true' : undefined}
+                key={option.value}
+                onClick={() => toggle(key)}
+                role="option"
+                type="button"
+              >
+                <span className="ff-drawing-tline-tv-stats-select-v1__box" data-checked={selected.has(key) ? 'true' : undefined} />
+                <span>{option.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TrendExtendModeSelect({
+  onChange,
+  value,
+}: {
+  onChange: (value: DrawingTrendLineStyle['extendMode']) => void
+  value: DrawingTrendLineStyle['extendMode']
+}) {
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [open, setOpen] = useState(false)
+  const leftChecked = value === 'left' || value === 'both'
+  const rightChecked = value === 'right' || value === 'both'
+  const display = leftChecked && rightChecked
+    ? '\u53cc\u5411'
+    : leftChecked
+      ? '\u5411\u5de6'
+      : rightChecked
+        ? '\u5411\u53f3'
+        : '\u4e0d\u8981\u6269\u5927'
+
+  useEffect(() => {
+    if (!open) return
+    const close = (event: MouseEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', close, true)
+    document.addEventListener('keydown', closeOnEscape, true)
+    return () => {
+      document.removeEventListener('mousedown', close, true)
+      document.removeEventListener('keydown', closeOnEscape, true)
+    }
+  }, [open])
+
+  const commit = (nextLeft: boolean, nextRight: boolean) => {
+    onChange(nextLeft && nextRight ? 'both' : nextLeft ? 'left' : nextRight ? 'right' : 'none')
+  }
+
+  return (
+    <div className="ff-openable-select ff-drawing-tline-tv-openable-select-v1 ff-drawing-tline-tv-check-select-v1" data-open={open} ref={rootRef}>
+      <button
+        aria-expanded={open}
+        aria-label="\u5ef6\u4f38"
+        className="ff-openable-select__button ff-openable-control"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        <span className="ff-drawing-tline-tv-check-select-v1__value">{display}</span>
+        <span aria-hidden="true" className="ff-openable-select__chevron">v</span>
+      </button>
+      {open && (
+        <div className="ff-openable-select__menu ff-drawing-tline-tv-check-select-v1__menu" role="listbox">
+          <button
+            className="ff-drawing-tline-tv-check-select-v1__option"
+            data-active={leftChecked ? 'true' : undefined}
+            onClick={() => commit(!leftChecked, rightChecked)}
+            role="option"
+            type="button"
+          >
+            <span className="ff-drawing-tline-tv-check-select-v1__box" data-checked={leftChecked ? 'true' : undefined} />
+            <span>{'\u5411\u5de6\u6269\u5927'}</span>
+          </button>
+          <button
+            className="ff-drawing-tline-tv-check-select-v1__option"
+            data-active={rightChecked ? 'true' : undefined}
+            onClick={() => commit(leftChecked, !rightChecked)}
+            role="option"
+            type="button"
+          >
+            <span className="ff-drawing-tline-tv-check-select-v1__box" data-checked={rightChecked ? 'true' : undefined} />
+            <span>{'\u5411\u53f3\u6269\u5927'}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TrendLineV4StyleOptions({
+  onChange,
+  onPriceLabelChange,
+  priceLabelVisible,
+  settings,
+}: {
+  onChange: (patch: Partial<DrawingTrendLineStyle>) => void
+  onPriceLabelChange: (enabled: boolean) => void
+  priceLabelVisible: boolean
+  settings: DrawingTrendLineStyle
+}) {
+  return (
+    <>
+      <div className="ff-drawing-tline-tv-endpoints-v1">
+        <span className="ff-drawing-tline-tv-label-v1 ff-drawing-tline-tv-endpoints-v1__label">{'\u7aef\u70b9'}</span>
+        <div className="ff-drawing-tline-tv-endpoints-v1__controls">
+          <div className="ff-drawing-tline-tv-endpoints-v1__row">
+            <OpenableSelect
+              ariaLabel="\u8d77\u70b9"
+              className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-tline-tv-openable-select-v1--endpoint"
+              onChange={(value) => onChange({ startMarker: value as DrawingTrendLineStyle['startMarker'] })}
+              options={drawingMarkerOptions}
+              value={settings.startMarker}
+            />
+            <span className="ff-drawing-tline-tv-endpoints-v1__side">{'\u8d77\u70b9'}</span>
+          </div>
+          <div className="ff-drawing-tline-tv-endpoints-v1__row">
+            <OpenableSelect
+              ariaLabel="\u7ec8\u70b9"
+              className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-tline-tv-openable-select-v1--endpoint"
+              onChange={(value) => onChange({ endMarker: value as DrawingTrendLineStyle['endMarker'] })}
+              options={drawingMarkerOptions}
+              value={settings.endMarker}
+            />
+            <span className="ff-drawing-tline-tv-endpoints-v1__side">{'\u7ec8\u70b9'}</span>
+          </div>
+        </div>
+      </div>
+      <div className="ff-drawing-tline-tv-row-v1">
+        <span className="ff-drawing-tline-tv-label-v1">{'\u5ef6\u4f38'}</span>
+        <TrendExtendModeSelect onChange={(value) => onChange({ extendMode: value })} value={settings.extendMode} />
+      </div>
+      <div className="ff-drawing-tline-tv-check-line-v1">
+        <label className="ff-drawing-tline-tv-check-row-v1">
+          <input checked={settings.middleVisible} onChange={(event) => onChange({ middleVisible: event.target.checked })} type="checkbox" />
+          <span className="ff-drawing-tline-tv-check-box-v1" />
+        </label>
+        <span>{'\u4e2d\u70b9'}</span>
+      </div>
+      <div className="ff-drawing-tline-tv-check-line-v1">
+        <label className="ff-drawing-tline-tv-check-row-v1">
+          <input checked={priceLabelVisible} onChange={(event) => onPriceLabelChange(event.target.checked)} type="checkbox" />
+          <span className="ff-drawing-tline-tv-check-box-v1" />
+        </label>
+        <span>{'\u4ef7\u683c\u6807\u7b7e'}</span>
+      </div>
+      <h3 className="ff-drawing-tline-tv-subhead-v1">{'\u4fe1\u606f'}</h3>
+      <div className="ff-drawing-tline-tv-row-v1">
+        <span className="ff-drawing-tline-tv-label-v1">{'\u7edf\u8ba1\u6570\u636e'}</span>
+        <TrendStatsDataSelect onChange={(value) => onChange({ statsData: value })} value={settings.statsData} />
+      </div>
+      <DrawingOpenableSelectRow label={'\u7edf\u8ba1\u4f4d\u7f6e'} onChange={(value) => onChange({ statsPosition: value as DrawingTrendLineStyle['statsPosition'] })} options={drawingStatsPositionOptions} value={settings.statsPosition} />
+      <div className="ff-drawing-tline-tv-check-line-v1">
+        <label className="ff-drawing-tline-tv-check-row-v1">
+          <input checked={settings.statsAlwaysVisible} onChange={(event) => onChange({ statsAlwaysVisible: event.target.checked })} type="checkbox" />
+          <span className="ff-drawing-tline-tv-check-box-v1" />
+        </label>
+        <span>{'\u59cb\u7ec8\u663e\u793a\u7edf\u8ba1\u4fe1\u606f'}</span>
+      </div>
+      <div className="ff-drawing-tline-tv-divider-v1" />
+      <OpenableSelect
+        ariaLabel="\u6a21\u677f"
+        className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-tline-tv-openable-select-v1--template"
+        onChange={() => undefined}
+        options={[{ label: '\u6a21\u677f', value: 'template' }]}
+        value="template"
+      />
+    </>
   )
 }
 
@@ -668,10 +1009,12 @@ function HorizontalLineCoordsPanel({
   selected: boolean
 }) {
   const [draft, setDraft] = useState('')
+  const [editing, setEditing] = useState(false)
 
   useEffect(() => {
-    setDraft(Number.isFinite(price) ? String(Number(price)) : '')
-  }, [price])
+    if (editing) return
+    setDraft(Number.isFinite(price) ? formatGlobalPrice(price, '') : '')
+  }, [editing, price])
 
   if (!selected) {
     return <p className="ff-drawing-hline-coords-tab-v1__hint">{'\u672a\u9009\u4e2d\u6c34\u5e73\u7ebf\uff1a\u8bf7\u5148\u5728\u56fe\u4e0a\u9009\u4e2d\u4e00\u6761\u6c34\u5e73\u7ebf\uff0c\u518d\u5728\u6b64\u4fee\u6539\u4ef7\u683c\u5750\u6807\u3002'}</p>
@@ -683,8 +1026,14 @@ function HorizontalLineCoordsPanel({
 
   const commit = () => {
     const nextPrice = Number(draft.trim().replace(/,/g, ''))
-    if (!Number.isFinite(nextPrice)) return
+    if (!Number.isFinite(nextPrice)) {
+      setDraft(Number.isFinite(price) ? formatGlobalPrice(price, '') : '')
+      setEditing(false)
+      return
+    }
     onPriceChange(nextPrice)
+    setDraft(formatGlobalPrice(nextPrice, ''))
+    setEditing(false)
   }
 
   return (
@@ -700,6 +1049,10 @@ function HorizontalLineCoordsPanel({
           inputMode="decimal"
           onBlur={commit}
           onChange={(event) => setDraft(event.target.value)}
+          onFocus={() => {
+            setEditing(true)
+            setDraft(Number.isFinite(price) ? formatGlobalPrice(price, '') : '')
+          }}
           onKeyDown={(event) => {
             if (event.key !== 'Enter') return
             event.preventDefault()

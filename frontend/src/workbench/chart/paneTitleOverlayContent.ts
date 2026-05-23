@@ -24,6 +24,7 @@ export type PaneTitleContext = {
 }
 
 export type PaneTitleChunk = {
+  alignSelf?: string
   backgroundColor?: string
   borderRadius?: string
   color?: string
@@ -176,7 +177,7 @@ function readMarketStatusTitleChunks(symbol: string): PaneTitleChunk[] {
   }
   if (status.status === 'closed') {
     return [
-      { color: '#111827', fontSize: '16px', gapBefore: 8, text: '━', translateY: '-1px' },
+      { alignSelf: 'center', backgroundColor: '#111827', gapBefore: 8, height: '3px', text: '', translateY: '-2px', width: '10px' },
       { color: '#111827', fontSize: '12px', gapBefore: 3, text: '休市', translateX: '1px', translateY: '-1.5px' },
     ]
   }
