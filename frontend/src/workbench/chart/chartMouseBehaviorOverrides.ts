@@ -1,8 +1,8 @@
 import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
+import { knownDrawingPaneIds } from '../drawing/drawingPaneModel'
+import { drawingOverlayNames, horizontalLineOverlayName, trendLineOverlayName } from '../drawing/drawingOverlayModel'
 
-const paneIds = ['candle_pane', 'rsi_pane', 'stoch_pane', 'macd_pane', 'tsi_pane', 'vi_pane']
-const drawingOverlayNames = new Set(['ffHorizontalLine', 'ffTrendLine'])
 const dragCursorThreshold = 3
 
 type CursorRestore = {
@@ -53,7 +53,7 @@ function resolveMainPaneFromEvent(chart: Chart, event: MouseEvent | PointerEvent
   const target = event.target
   if (!(target instanceof Node)) return null
 
-  for (const paneId of paneIds) {
+  for (const paneId of knownDrawingPaneIds) {
     const paneMain = chart.getDom(paneId, DomPosition.Main)
     if (paneMain?.contains(target)) return paneMain
   }
@@ -122,13 +122,13 @@ function resolveHoveredOverlayInfo(chart: Chart, event: MouseEvent | PointerEven
   if (!instanceName || !paneId || !drawingOverlayNames.has(instanceName)) return null
   if ((instanceName === 'ffHorizontalLine' || instanceName === 'ffTrendLine') && hoverInfo.instance?.isDrawing?.() === true) return null
   const points = resolveOverlayPoints(chart, hoverInfo.instance)
-  if (instanceName === 'ffHorizontalLine' && !hasFiniteValue(points[0])) return null
-  if (instanceName === 'ffTrendLine' && (!hasFiniteValue(points[0]) || !hasFiniteValue(points[1]))) return null
+  if (instanceName === horizontalLineOverlayName && !hasFiniteValue(points[0])) return null
+  if (instanceName === trendLineOverlayName && (!hasFiniteValue(points[0]) || !hasFiniteValue(points[1]))) return null
   const paneMain = chart.getDom(paneId, DomPosition.Main)
   if (!paneMain) return null
 
-  const isHorizontalLineHandle = instanceName === 'ffHorizontalLine' && hoverInfo?.figureKey === 'handle'
-  const isTrendLineEndpointHandle = instanceName === 'ffTrendLine' && (
+  const isHorizontalLineHandle = instanceName === horizontalLineOverlayName && hoverInfo?.figureKey === 'handle'
+  const isTrendLineEndpointHandle = instanceName === trendLineOverlayName && (
     (typeof hoverInfo?.figureKey === 'string' && hoverInfo.figureKey.startsWith('point_')) ||
     eventHitsTrendLineEndpoint(chart, paneMain, paneId, points, event)
   )

@@ -5,6 +5,7 @@ import {
   normalizeVisibilityRangeRows,
   parseChartPeriodForVisibilityRange,
   readVisibilityRangeRows,
+  restoreVisibilityRangeCurrentPeriod,
   visibilityRangeStorageKey,
   writeVisibilityRangeRows,
 } from './visibilityRangeModel'
@@ -76,5 +77,22 @@ describe('visibilityRangeModel', () => {
     expect(writeVisibilityRangeRows(key, rows)).toBe(true)
     expect(readVisibilityRangeRows(key)[0]).toMatchObject({ enabled: false, key: 'minutes' })
     expect(isStoredVisibilityRangePeriodVisible(key, 'M5')).toBe(false)
+  })
+
+  it('restores only the current period unit row when a hidden drawing is shown', () => {
+    const key = 'drawing:trendLine:TL0001'
+    const rows = normalizeVisibilityRangeRows([
+      { enabled: false, from: 5, key: 'minutes', to: 30 },
+      { enabled: false, from: 2, key: 'hours', to: 4 },
+      { enabled: false, from: 1, key: 'days', to: 1 },
+    ])
+
+    expect(writeVisibilityRangeRows(key, rows)).toBe(true)
+    expect(restoreVisibilityRangeCurrentPeriod(key, 'H1')).toBe(true)
+
+    const restored = readVisibilityRangeRows(key)
+    expect(restored.find((row) => row.key === 'hours')).toMatchObject({ enabled: true, from: 1, to: 4 })
+    expect(restored.find((row) => row.key === 'minutes')).toMatchObject({ enabled: false, from: 5, to: 30 })
+    expect(restored.find((row) => row.key === 'days')).toMatchObject({ enabled: false, from: 1, to: 1 })
   })
 })

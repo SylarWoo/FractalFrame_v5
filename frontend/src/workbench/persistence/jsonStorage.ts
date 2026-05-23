@@ -25,8 +25,10 @@ function writeDevState(key: string, value: unknown) {
   devStateCache.set(key, value)
   devStateLoadedKeys.add(key)
   if (typeof window === 'undefined' || typeof fetch === 'undefined') return
+  const endpoint = resolvePersistentStateEndpoint()
+  if (!endpoint) return
   try {
-    void fetch(persistentStateEndpoint, {
+    void fetch(endpoint, {
       body: JSON.stringify({ key, value }),
       headers: { 'Content-Type': 'application/json' },
       keepalive: true,
@@ -41,8 +43,10 @@ function removeDevState(key: string) {
   devStateCache.delete(key)
   devStateLoadedKeys.add(key)
   if (typeof window === 'undefined' || typeof fetch === 'undefined') return
+  const endpoint = resolvePersistentStateEndpoint()
+  if (!endpoint) return
   try {
-    void fetch(persistentStateEndpoint, {
+    void fetch(endpoint, {
       body: JSON.stringify({ key, remove: true }),
       headers: { 'Content-Type': 'application/json' },
       keepalive: true,
@@ -53,9 +57,18 @@ function removeDevState(key: string) {
   }
 }
 
+function resolvePersistentStateEndpoint() {
+  try {
+    const origin = window.location?.origin
+    return origin ? new URL(persistentStateEndpoint, origin).toString() : null
+  } catch {
+    return null
+  }
+}
+
 export function readJson<T>(key: string, fallback: T): T {
   const devValue = readDevState(key)
-  if (devValue !== undefined) {
+  if (devValue !== undefined && typeof devValue !== 'string') {
     try {
       window.localStorage.setItem(key, JSON.stringify(devValue))
     } catch {

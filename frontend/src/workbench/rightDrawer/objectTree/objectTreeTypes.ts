@@ -1,3 +1,5 @@
+import { drawingMainPaneId } from '../../drawing/drawingPaneModel'
+
 export type ObjectTreeDrawingKind = 'horizontalLine' | 'trendLine'
 
 export type ObjectTreeDrawingItem = {
@@ -29,4 +31,4 @@ export type ObjectTreeGroup = {
   paneId: string
 }
 
-export const objectTreeMainPaneId = 'candle_pane'
+export const objectTreeMainPaneId = drawingMainPaneId

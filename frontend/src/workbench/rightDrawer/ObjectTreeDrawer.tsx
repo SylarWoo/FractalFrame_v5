@@ -9,34 +9,12 @@ import { createObjectTreeGroup, pruneObjectTreeGroups, readObjectTreeGroups, wri
 import { objectTreeHiddenKind, objectTreeVisibilityStorageKey, shortObjectTreeId } from './objectTree/objectTreeVisibility'
 import { objectTreeMainPaneId, type ObjectTreeDrawingItem, type ObjectTreeGroup } from './objectTree/objectTreeTypes'
 import { VisibilityRangePanel } from '../visibilityRange/VisibilityRangePanel'
+import { compareDrawingSubPaneIds, drawingSubPaneTitle } from '../drawing/drawingPaneModel'
 import './ObjectTreeDrawer.css'
 
 const defaultTopHeight = 340
 const minTopHeight = 96
 const maxTopHeight = 520
-const objectTreeSubPaneNames: Record<string, string> = {
-  macd_pane: 'MACD',
-  rsi_pane: 'RSI',
-  stoch_pane: 'Stoch',
-  tsi_pane: 'TSI',
-  vi_pane: 'VI',
-}
-const objectTreeSubPaneOrder = ['rsi_pane', 'stoch_pane', 'macd_pane', 'tsi_pane', 'vi_pane']
-
-function objectTreeSubPaneTitle(paneId: string) {
-  const name = objectTreeSubPaneNames[paneId]
-  return name ? `\u526f\u56fe ${name}` : '\u526f\u56fe'
-}
-
-function compareObjectTreeSubPaneIds(left: string, right: string) {
-  const leftIndex = objectTreeSubPaneOrder.indexOf(left)
-  const rightIndex = objectTreeSubPaneOrder.indexOf(right)
-  if (leftIndex === -1 && rightIndex === -1) return left.localeCompare(right)
-  if (leftIndex === -1) return 1
-  if (rightIndex === -1) return -1
-  return leftIndex - rightIndex
-}
-
 export function ObjectTreeDrawer() {
   const [drawingItems, setDrawingItems] = useState<ObjectTreeDrawingItem[]>([])
   const [selectedDrawingIds, setSelectedDrawingIds] = useState<string[]>([])
@@ -65,7 +43,7 @@ export function ObjectTreeDrawer() {
   const mainDrawings = drawingItems.filter((item) => item.paneId === objectTreeMainPaneId)
   const subPaneDrawings = drawingItems.filter((item) => item.paneId !== objectTreeMainPaneId)
   const subPaneIds = useMemo(
-    () => Array.from(new Set(subPaneDrawings.map((item) => item.paneId))).sort(compareObjectTreeSubPaneIds),
+    () => Array.from(new Set(subPaneDrawings.map((item) => item.paneId))).sort(compareDrawingSubPaneIds),
     [subPaneDrawings],
   )
   const selectedDrawings = drawingItems.filter((item) => selectedDrawingIds.includes(item.id))
@@ -189,7 +167,7 @@ export function ObjectTreeDrawer() {
             <div className="ff-object-tree-separator" />
 
             {subPaneIds.map((paneId) => (
-              <ObjectTreeSection key={paneId} title={objectTreeSubPaneTitle(paneId)}>
+              <ObjectTreeSection key={paneId} title={drawingSubPaneTitle(paneId)}>
                 <DrawingRows drawings={subPaneDrawings.filter((item) => item.paneId === paneId)} groups={groups.filter((group) => group.paneId === paneId)} selectedIds={selectedDrawingIds} onRenameGroup={renameGroup} onSelect={selectDrawing} onSelectGroup={selectGroup} onSetVisible={setDrawingVisible} onToggleGroupCollapsed={toggleGroupCollapsed} />
               </ObjectTreeSection>
             ))}

@@ -113,6 +113,22 @@ export function isStoredVisibilityRangePeriodVisible(key: string | undefined, pe
   return isPeriodVisibleByVisibilityRange(readVisibilityRangeRows(key), period)
 }
 
+export function restoreVisibilityRangeCurrentPeriod(key: string | undefined, period: string) {
+  const parsed = parseChartPeriodForVisibilityRange(period)
+  if (!key || !parsed) return false
+  const rows = readVisibilityRangeRows(key)
+  const nextRows = rows.map((row) => {
+    if (row.key !== parsed.unit) return row
+    return {
+      ...row,
+      enabled: true,
+      from: Math.min(row.from, parsed.value),
+      to: Math.max(row.to, parsed.value),
+    }
+  })
+  return writeVisibilityRangeRows(key, nextRows)
+}
+
 function positivePeriod(unit: VisibilityRangeUnitKey, value: number): VisibilityRangePeriod | null {
   return Number.isFinite(value) && value > 0 ? { unit, value } : null
 }

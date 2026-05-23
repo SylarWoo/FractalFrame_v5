@@ -1,5 +1,5 @@
 import { readJson, writeJson } from '../persistence/jsonStorage'
-import type { AxisRangeSnapshot } from './chartViewportPersistence'
+import type { AxisRangeSnapshot } from './chartViewportAxisRange'
 
 const viewportStoragePrefix = 'fractalframe:chartViewport:v3'
 const latestViewportStorageKey = `${viewportStoragePrefix}:latest`
