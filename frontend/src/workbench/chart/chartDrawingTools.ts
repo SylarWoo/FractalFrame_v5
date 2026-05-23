@@ -2,13 +2,8 @@ import { ActionType, DomPosition, registerOverlay } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { drawingMainPaneId, knownDrawingPaneIds } from '../drawing/drawingPaneModel'
 import {
-  horizontalLineObjectVisibilityRangeKey,
   horizontalLineOverlayName,
-  horizontalLineVisibilityRangeKey,
-  isDrawingVisibilityRangeKey,
-  trendLineObjectVisibilityRangeKey,
   trendLineOverlayName,
-  trendLineVisibilityRangeKey,
 } from '../drawing/drawingOverlayModel'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import { drawingToolCommandEvent, isDrawingToolCommandEvent, publishDrawingToolState } from '../rightDrawer/drawingToolCommands'
@@ -18,22 +13,24 @@ import {
   clearStoredTrendLineDrawings,
   normalizeDrawingTextStyle,
   normalizeDrawingTrendLineStyle,
-  readDrawingPersistence,
-  readStoredHorizontalLineDrawings,
-  readStoredTrendLineDrawings,
-  writeStoredHorizontalLineDrawings,
-  writeStoredTrendLineDrawings,
 } from '../rightDrawer/drawingPersistence'
-import type { DrawingTextStyle, DrawingTrendLineStyle, StoredHorizontalLineDrawing, StoredTrendLineDrawing } from '../rightDrawer/drawingPersistence'
-import { isStoredVisibilityRangePeriodVisible, restoreVisibilityRangeCurrentPeriod, visibilityRangeChangedEvent } from '../visibilityRange/visibilityRangeModel'
-import { collectDrawingObjectTreeState, resolveDrawingObjectTreeTarget } from './chartDrawingObjectTreeState'
+import type { DrawingTextStyle, DrawingTrendLineStyle } from '../rightDrawer/drawingPersistence'
+import { visibilityRangeChangedEvent } from '../visibilityRange/visibilityRangeModel'
+import { collectDrawingObjectTreeState } from './chartDrawingObjectTreeState'
+import { createDrawingObjectTreeCommandHandler } from './chartDrawingObjectTreeCommands'
+import { createChartDrawingMoveController, type PressedHorizontalLineMoveState } from './chartDrawingMoveController'
+import { createHorizontalLineSelectionController } from './chartDrawingSelectionController'
 import {
   createHorizontalLineObjectId,
   createTrendLineObjectId,
-  syncHorizontalLineObjectIdSeed,
-  syncTrendLineObjectIdSeed,
 } from './chartDrawingObjectIds'
-import { storedHorizontalLineFromOverlay, storedTrendLineFromOverlay } from './chartDrawingSerialization'
+import { createChartDrawingPersistenceController, readInitialStoredDrawingState } from './chartDrawingPersistenceController'
+import { createChartDrawingVisibilityController } from './chartDrawingVisibilityController'
+import {
+  getSelectedDrawingCount as getSelectedDrawingCountFromState,
+  getSelectedHorizontalLineIds as getSelectedHorizontalLineIdsFromState,
+  getSelectedTrendLineIds as getSelectedTrendLineIdsFromState,
+} from './chartDrawingSelectionQueries'
 import {
   ensureHorizontalLineTextFigure,
   ensureTrendLineHitFigure,
@@ -42,16 +39,15 @@ import {
 } from './chartDrawingFigures'
 import type {
   HorizontalLineExtendData,
-  HorizontalLineMoveEntry,
   MixedDrawingMoveState,
-  ScreenPoint,
   TrendLineExtendData,
-  TrendLineMoveEntry,
 } from './chartDrawingTypes'
 import { isCoordinate } from './chartDrawingTypes'
 import { distanceToSegment } from './chartDrawingGeometry'
 import { normalizeLineStyle, overlayStylesFromLine, trendOverlayStylesFromLine } from './chartDrawingStyle'
 import { createHorizontalLinePointFigures, createHorizontalLineYAxisFigures, horizontalLineHitSlop } from './horizontalLineOverlayFigures'
+import { createHorizontalLineOverlayFactory } from './horizontalLineOverlayController'
+import { createTrendLineOverlayFactory } from './trendLineOverlayController'
 import { createTrendLinePointFigures, createTrendLineYAxisFigures } from './trendLineOverlayFigures'
 import { trendHandleColor, trendHandleLineWidth } from './trendLineFigures'
 
@@ -120,21 +116,16 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   let lastSelectedTrendLineOverlayId: string | null = null
   let lastSelectedTrendLineAt = 0
   let pendingTrendStartHandle: HTMLDivElement | null = null
-  let pendingTrendFirstPointPlaced = false
   const horizontalLineOverlayIds = new Set<string>()
   const trendLineOverlayIds = new Set<string>()
   const paneInteractionCleanups: Array<() => void> = []
   const registeredPaneInteractions = new Map<string, { cleanup: () => void; element: HTMLElement }>()
-  let persistenceEnabled = readDrawingPersistence('horizontalLine')
-  let trendLinePersistenceEnabled = readDrawingPersistence('trendLine')
-  let pendingStoredHorizontalLineDrawings = persistenceEnabled ? readStoredHorizontalLineDrawings() : []
-  let pendingStoredTrendLineDrawings = trendLinePersistenceEnabled ? readStoredTrendLineDrawings() : []
-  syncHorizontalLineObjectIdSeed(pendingStoredHorizontalLineDrawings)
-  syncTrendLineObjectIdSeed(pendingStoredTrendLineDrawings)
-  let horizontalLineVisible = true
+  const initialStoredDrawings = readInitialStoredDrawingState()
+  let persistenceEnabled = initialStoredDrawings.horizontalLinePersistenceEnabled
+  let trendLinePersistenceEnabled = initialStoredDrawings.trendLinePersistenceEnabled
   let lastPointerPaneId = candlePaneId
   let additiveSelectionActive = false
-  let pressedMoveState: { activeId: string; activeStartValue: number; entries: HorizontalLineMoveEntry[]; paneId: string } | null = null
+  let pressedMoveState: PressedHorizontalLineMoveState | null = null
   let mixedDrawingMoveState: MixedDrawingMoveState | null = null
   let pendingHorizontalLineHandlePress: { overlayId: string; x: number; y: number } | null = null
   let pendingTrendLineEndpointPress: { overlayId: string; pointIndex: number; x: number; y: number } | null = null
@@ -169,38 +160,31 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     })
   }
 
-  const persistCurrentHorizontalLines = () => {
-    if (destroyed) return
-    if (!persistenceEnabled) return
-    const drawings: StoredHorizontalLineDrawing[] = []
-    horizontalLineOverlayIds.forEach((id) => {
-      const overlay = chart.getOverlayById(id)
-      if (!overlay) {
-        horizontalLineOverlayIds.delete(id)
-        return
-      }
-      const drawing = storedHorizontalLineFromOverlay(overlay, createHorizontalLineObjectId, candlePaneId)
-      if (drawing) drawings.push(drawing)
-    })
-    writeStoredHorizontalLineDrawings(drawings)
-  }
+  let drawingPersistenceController: ReturnType<typeof createChartDrawingPersistenceController> | null = null
+  const persistCurrentHorizontalLines = () => drawingPersistenceController?.persistCurrentHorizontalLines()
+  const persistCurrentTrendLines = () => drawingPersistenceController?.persistCurrentTrendLines()
+  const restorePendingStoredHorizontalLines = () => drawingPersistenceController?.restorePendingStoredHorizontalLines()
+  const restorePendingStoredTrendLines = () => drawingPersistenceController?.restorePendingStoredTrendLines()
 
-  const persistCurrentTrendLines = () => {
-    if (destroyed) return
-    if (!trendLinePersistenceEnabled) return
-    const drawings: StoredTrendLineDrawing[] = []
-    trendLineOverlayIds.forEach((id) => {
-      const overlay = chart.getOverlayById(id)
-      if (!overlay) {
-        trendLineOverlayIds.delete(id)
-        return
-      }
-      if (overlay.id === pendingTrendLineOverlayId || overlay.points.length < 2) return
-      const drawing = storedTrendLineFromOverlay(overlay, createTrendLineObjectId, candlePaneId)
-      if (drawing) drawings.push(drawing)
-    })
-    writeStoredTrendLineDrawings(drawings)
+  let drawingVisibilityController: ReturnType<typeof createChartDrawingVisibilityController> | null = null
+  const applyDrawingVisibility = () => drawingVisibilityController?.applyDrawingVisibility()
+  const applyHorizontalLineVisibility = () => drawingVisibilityController?.applyHorizontalLineVisibility()
+  const isHorizontalLineVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isHorizontalLineVisibleInCurrentPeriod(objectId) ?? true
+  const isTrendLineVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isTrendLineVisibleInCurrentPeriod(objectId) ?? true
+  const resolveHorizontalLineVisibility = (extendData: HorizontalLineExtendData | undefined) => drawingVisibilityController?.resolveHorizontalLineVisibility(extendData) ?? {
+    manualVisible: extendData?.manualVisible !== false,
+    periodVisible: true,
+    visible: extendData?.manualVisible !== false,
   }
+  const resolveTrendLineVisibility = (extendData: TrendLineExtendData | undefined) => drawingVisibilityController?.resolveTrendLineVisibility(extendData) ?? {
+    manualVisible: extendData?.manualVisible !== false,
+    periodVisible: true,
+    visible: extendData?.manualVisible !== false,
+  }
+  const restoreObjectCurrentPeriodVisibility = (kind: 'horizontalLine' | 'trendLine', objectId?: string) => {
+    drawingVisibilityController?.restoreObjectCurrentPeriodVisibility(kind, objectId)
+  }
+  const getHorizontalLineVisible = () => drawingVisibilityController?.getHorizontalLineVisible() ?? true
 
   const resolveTrendPointPrices = (overlay: { points?: Array<{ value?: number }> } | null | undefined): [number | undefined, number | undefined] => {
     const first = Number(overlay?.points?.[0]?.value)
@@ -231,184 +215,17 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     })
   }
 
-  const getSelectedHorizontalLineIds = () => Array.from(horizontalLineOverlayIds).filter((id) => {
-    return selectedHorizontalLineOverlayIds.has(id)
+  const getSelectedHorizontalLineIds = () => getSelectedHorizontalLineIdsFromState(horizontalLineOverlayIds, selectedHorizontalLineOverlayIds)
+
+  const getSelectedTrendLineIds = () => getSelectedTrendLineIdsFromState({ chart, pendingTrendLineOverlayId, trendLineOverlayIds })
+
+  const getSelectedDrawingCount = () => getSelectedDrawingCountFromState({
+    chart,
+    horizontalLineOverlayIds,
+    pendingTrendLineOverlayId,
+    selectedHorizontalLineOverlayIds,
+    trendLineOverlayIds,
   })
-
-  const getSelectedTrendLineIds = () => Array.from(trendLineOverlayIds).filter((id) => {
-    const overlay = chart.getOverlayById(id)
-    const extendData = overlay?.extendData as TrendLineExtendData | undefined
-    return overlay != null && overlay.id !== pendingTrendLineOverlayId && (extendData?.selected === true || extendData?.pressed === true)
-  })
-
-  const getSelectedDrawingCount = () => getSelectedHorizontalLineIds().length + getSelectedTrendLineIds().length
-
-  const setSelectedHorizontalLine = (id: string, additive: boolean) => {
-    if (!additive) clearTrendLineSelection()
-    horizontalLineOverlayIds.forEach((overlayId) => {
-      if (additive && overlayId !== id) return
-      updateOverlayState(overlayId, { selected: overlayId === id })
-    })
-    selectedOverlayId = id
-    lastSelectedOverlayId = id
-    activeObjectTreeOverlayId = id
-  }
-
-  const toggleSelectedHorizontalLine = (id: string) => {
-    const selected = selectedHorizontalLineOverlayIds.has(id)
-    updateOverlayState(id, { selected: !selected })
-    selectedOverlayId = selected ? resolveSelectedOverlayId() : id
-    lastSelectedOverlayId = selected ? selectedOverlayId : id
-    activeObjectTreeOverlayId = selected ? selectedOverlayId : id
-  }
-
-  const resolvePointValueFromMoveEvent = (event: { x?: number; y?: number }, paneId: string) => {
-    const y = Number(event.y)
-    if (!Number.isFinite(y)) return Number.NaN
-    const point = chart.convertFromPixel([{ y }], { paneId })
-    const coordinate = Array.isArray(point) ? point[0] : point
-    const value = Number(coordinate?.value)
-    return Number.isFinite(value) ? value : Number.NaN
-  }
-
-  const resolvePointFromPixel = (pixel: ScreenPoint, paneId: string) => {
-    const point = chart.convertFromPixel([pixel], { paneId })
-    const coordinate = Array.isArray(point) ? point[0] : point
-    const dataIndex = Number(coordinate?.dataIndex)
-    const timestamp = Number(coordinate?.timestamp)
-    const value = Number(coordinate?.value)
-    return {
-      ...(Number.isFinite(dataIndex) ? { dataIndex } : {}),
-      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
-      ...(Number.isFinite(value) ? { value } : {}),
-    }
-  }
-
-  const beginMixedDrawingMove = (activeId: string, paneId: string, event: { x?: number; y?: number }) => {
-    const startX = Number(event.x)
-    const startY = Number(event.y)
-    if (!Number.isFinite(startX) || !Number.isFinite(startY)) {
-      mixedDrawingMoveState = null
-      return
-    }
-    const horizontalEntries = getSelectedHorizontalLineIds()
-      .map((id) => {
-        const overlay = chart.getOverlayById(id)
-        const extendData = overlay?.extendData as HorizontalLineExtendData | undefined
-        const value = Number(overlay?.points[0]?.value)
-        if (!overlay || (overlay.paneId || candlePaneId) !== paneId || extendData?.locked === true || overlay.lock === true || !Number.isFinite(value)) return null
-        const pixel = chart.convertToPixel({ value }, { paneId })
-        const y = Number(isCoordinate(pixel) ? pixel.y : undefined)
-        return Number.isFinite(y) ? { id, startValue: value, startY: y } : null
-      })
-      .filter((entry): entry is HorizontalLineMoveEntry & { startY: number } => entry != null)
-    const trendEntries = getSelectedTrendLineIds()
-      .map((id) => {
-        const overlay = chart.getOverlayById(id)
-        const extendData = overlay?.extendData as TrendLineExtendData | undefined
-        if (!overlay || (overlay.paneId || candlePaneId) !== paneId || extendData?.locked === true || overlay.lock === true) return null
-        const points = overlay.points.slice(0, 2)
-          .map((point) => {
-            const pixel = resolveOverlayPointPixel(point, paneId)
-            return pixel ? { point: { ...point }, pixel } : null
-          })
-          .filter((point): point is TrendLineMoveEntry['points'][number] => point != null)
-        return points.length >= 2 ? { id, points } : null
-      })
-      .filter((entry): entry is TrendLineMoveEntry => entry != null)
-    const entryCount = horizontalEntries.length + trendEntries.length
-    mixedDrawingMoveState = entryCount > 1 ? { activeId, horizontalEntries, paneId, startX, startY, trendEntries } : null
-  }
-
-  const moveMixedDrawings = (event: { x?: number; y?: number }, activeId: string) => {
-    const moveState = mixedDrawingMoveState
-    if (!moveState || moveState.activeId !== activeId) return false
-    const x = Number(event.x)
-    const y = Number(event.y)
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return false
-    const dx = x - moveState.startX
-    const dy = y - moveState.startY
-    moveState.horizontalEntries.forEach((entry) => {
-      const overlay = chart.getOverlayById(entry.id)
-      if (!overlay) return
-      const coordinate = chart.convertFromPixel([{ y: entry.startY + dy }], { paneId: moveState.paneId })
-      const value = Number((Array.isArray(coordinate) ? coordinate[0] : coordinate)?.value)
-      if (!Number.isFinite(value)) return
-      chart.overrideOverlay({
-        id: entry.id,
-        points: [{
-          ...(overlay.points[0] ?? {}),
-          value,
-        }],
-      })
-    })
-    moveState.trendEntries.forEach((entry) => {
-      const overlay = chart.getOverlayById(entry.id)
-      if (!overlay) return
-      chart.overrideOverlay({
-        id: entry.id,
-        points: entry.points.map((point) => ({
-          ...point.point,
-          ...resolvePointFromPixel({ x: point.pixel.x + dx, y: point.pixel.y + dy }, moveState.paneId),
-        })),
-      })
-    })
-    return true
-  }
-
-  const beginPressedMove = (overlayId: string, event: { x?: number; y?: number }) => {
-    const overlay = chart.getOverlayById(overlayId)
-    if (!overlay) {
-      pressedMoveState = null
-      mixedDrawingMoveState = null
-      return
-    }
-    const paneId = overlay.paneId || candlePaneId
-    const selectedIds = getSelectedHorizontalLineIds()
-    const selectedTrendIds = getSelectedTrendLineIds()
-    const activeIsAlreadySelected = selectedIds.includes(overlayId)
-    if (activeIsAlreadySelected && selectedIds.length + selectedTrendIds.length > 1) {
-      selectedOverlayId = overlayId
-      lastSelectedOverlayId = overlayId
-      activeObjectTreeOverlayId = overlayId
-    } else {
-      setSelectedHorizontalLine(overlayId, false)
-    }
-
-    const moveIds = getSelectedHorizontalLineIds()
-    const entries = moveIds
-      .map((id) => {
-        const selectedOverlay = chart.getOverlayById(id)
-        const extendData = selectedOverlay?.extendData as HorizontalLineExtendData | undefined
-        if (!selectedOverlay || (selectedOverlay.paneId || candlePaneId) !== paneId || extendData?.locked === true || selectedOverlay.lock === true) return null
-        const startValue = Number(selectedOverlay.points[0]?.value)
-        return Number.isFinite(startValue) ? { id, startValue } : null
-      })
-      .filter((entry): entry is HorizontalLineMoveEntry => entry != null)
-    const activeEntry = entries.find((entry) => entry.id === overlayId)
-    pressedMoveState = activeEntry ? { activeId: overlayId, activeStartValue: activeEntry.startValue, entries, paneId } : null
-    beginMixedDrawingMove(overlayId, paneId, event)
-  }
-
-  const moveSelectedHorizontalLines = (event: { x?: number; y?: number }, overlayId: string) => {
-    const moveState = pressedMoveState
-    if (!moveState || moveState.activeId !== overlayId || moveState.entries.length <= 1) return false
-    const value = resolvePointValueFromMoveEvent(event, moveState.paneId)
-    if (!Number.isFinite(value)) return false
-    const delta = value - moveState.activeStartValue
-    moveState.entries.forEach((entry) => {
-      const overlay = chart.getOverlayById(entry.id)
-      if (!overlay) return
-      chart.overrideOverlay({
-        id: entry.id,
-        points: [{
-          ...(overlay.points[0] ?? {}),
-          value: entry.startValue + delta,
-        }],
-      })
-    })
-    return true
-  }
 
   const publishObjectTreeState = () => {
     const state = collectDrawingObjectTreeState({
@@ -442,95 +259,6 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   }
 
   const resolveEditableOverlayId = () => resolveSelectedOverlayId()
-
-  const isHorizontalLineVisibleInCurrentPeriod = (objectId?: string) => isStoredVisibilityRangePeriodVisible(horizontalLineObjectVisibilityRangeKey(objectId), getPeriod())
-  const isTrendLineVisibleInCurrentPeriod = (objectId?: string) => isStoredVisibilityRangePeriodVisible(trendLineObjectVisibilityRangeKey(objectId), getPeriod())
-
-  const restoreCurrentPeriodVisibility = (key: string | undefined) => {
-    restoreVisibilityRangeCurrentPeriod(key, getPeriod())
-  }
-
-  const resolveHorizontalLineVisibility = (extendData: HorizontalLineExtendData | undefined) => {
-    const manualVisible = extendData?.manualVisible !== false
-    const periodVisible = isHorizontalLineVisibleInCurrentPeriod(extendData?.objectId)
-    return {
-      manualVisible,
-      periodVisible,
-      visible: manualVisible && periodVisible,
-    }
-  }
-
-  const resolveTrendLineVisibility = (extendData: TrendLineExtendData | undefined) => {
-    const manualVisible = extendData?.manualVisible !== false
-    const periodVisible = isTrendLineVisibleInCurrentPeriod(extendData?.objectId)
-    return {
-      manualVisible,
-      periodVisible,
-      visible: manualVisible && periodVisible,
-    }
-  }
-
-  const applyHorizontalLineVisibility = () => {
-    horizontalLineVisible = true
-    horizontalLineOverlayIds.forEach((id) => {
-      const overlay = chart.getOverlayById(id)
-      if (!overlay) return
-      const extendData = overlay.extendData as HorizontalLineExtendData | undefined
-      const { manualVisible, periodVisible, visible } = resolveHorizontalLineVisibility(extendData)
-      const selected = selectedHorizontalLineOverlayIds.has(id)
-      if (overlay.visible !== manualVisible || extendData?.manualVisible !== manualVisible || extendData?.periodVisible !== periodVisible || extendData?.selected !== selected) {
-        chart.overrideOverlay({
-          id,
-          extendData: {
-            ...(overlay.extendData ?? {}),
-            manualVisible,
-            periodVisible,
-            selected,
-          },
-          visible: manualVisible,
-        })
-      }
-      if (!visible) updateOverlayState(id, { handlePressed: false, hovered: false, pressed: false })
-    })
-    if (!selectedOverlayId) publishState({ selected: false })
-    publishObjectTreeState()
-  }
-
-  const applyTrendLineVisibility = () => {
-    trendLineOverlayIds.forEach((id) => {
-      const overlay = chart.getOverlayById(id)
-      if (!overlay) return
-      const extendData = overlay.extendData as TrendLineExtendData | undefined
-      const { manualVisible, periodVisible, visible } = resolveTrendLineVisibility(extendData)
-      const selected = selectedTrendLineOverlayId === id || extendData?.selected === true
-      if (overlay.visible !== manualVisible || extendData?.manualVisible !== manualVisible || extendData?.periodVisible !== periodVisible || extendData?.selected !== selected) {
-        chart.overrideOverlay({
-          id,
-          extendData: {
-            ...(overlay.extendData ?? {}),
-            manualVisible,
-            periodVisible,
-            selected,
-          },
-          visible: manualVisible,
-        })
-      }
-      if (!visible) {
-        chart.overrideOverlay({
-          id,
-          extendData: {
-            ...(overlay.extendData ?? {}),
-            endpointPressed: false,
-            hovered: false,
-            pressed: false,
-            pressedPointIndex: undefined,
-            selected,
-          },
-        })
-      }
-    })
-    publishObjectTreeState()
-  }
 
   const eventHitsHorizontalLine = (event: MouseEvent, paneId: string, hitSlop = horizontalLineHitSlop) => {
     const paneMain = chart.getDom(paneId, DomPosition.Main)
@@ -726,6 +454,49 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     return null
   }
 
+  const {
+    setSelectedHorizontalLine,
+    toggleSelectedHorizontalLine,
+  } = createHorizontalLineSelectionController({
+    clearTrendLineSelection,
+    horizontalLineOverlayIds,
+    resolveSelectedOverlayId,
+    selectedHorizontalLineOverlayIds,
+    setActiveHorizontalLine: (id) => {
+      selectedOverlayId = id
+      lastSelectedOverlayId = id
+      activeObjectTreeOverlayId = id
+    },
+    updateOverlayState,
+  })
+
+  const {
+    beginMixedDrawingMove,
+    beginPressedMove,
+    moveMixedDrawings,
+    moveSelectedHorizontalLines,
+  } = createChartDrawingMoveController({
+    chart,
+    fallbackPaneId: candlePaneId,
+    getMixedMoveState: () => mixedDrawingMoveState,
+    getPressedMoveState: () => pressedMoveState,
+    getSelectedHorizontalLineIds,
+    getSelectedTrendLineIds,
+    markActiveHorizontalLine: (id) => {
+      selectedOverlayId = id
+      lastSelectedOverlayId = id
+      activeObjectTreeOverlayId = id
+    },
+    resolveOverlayPointPixel,
+    setMixedMoveState: (state) => {
+      mixedDrawingMoveState = state
+    },
+    setPressedMoveState: (state) => {
+      pressedMoveState = state
+    },
+    setSelectedHorizontalLine,
+  })
+
   const handlePaneClick = (event: MouseEvent, paneId: string) => {
     window.setTimeout(() => {
       if (destroyed) return
@@ -736,17 +507,54 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     }, 0)
   }
 
-  const createHorizontalLineOverlay = ({
-    lineStyle,
-    locked,
-    manualVisible = true,
-    objectId = createHorizontalLineObjectId(),
-    paneId = candlePaneId,
-    points,
-    selected,
-    showPriceLabel,
-    textStyle,
-  }: {
+  const createHorizontalLineOverlayBase = createHorizontalLineOverlayFactory({
+    beginPressedMove,
+    chart,
+    clearDeselectedHorizontalLine: (id) => {
+      if (selectedOverlayId === id) selectedOverlayId = null
+    },
+    clearRemovedHorizontalLine: (id) => {
+      if (selectedOverlayId === id) selectedOverlayId = null
+      if (lastSelectedOverlayId === id) lastSelectedOverlayId = null
+    },
+    getAdditiveSelectionActive: () => additiveSelectionActive,
+    getHorizontalLineVisible,
+    getMixedDrawingMoveState: () => mixedDrawingMoveState,
+    getPendingHorizontalLineHandlePress: () => pendingHorizontalLineHandlePress,
+    getPressedMoveState: () => pressedMoveState,
+    getSelectedDrawingCount,
+    horizontalLineHandleDragThreshold,
+    horizontalLineOverlayIds,
+    moveMixedDrawings,
+    moveSelectedHorizontalLines,
+    persistCurrentHorizontalLines,
+    persistCurrentTrendLines,
+    publishObjectTreeState,
+    publishState,
+    selectedHorizontalLineOverlayIds,
+    setActiveHorizontalLine: (id) => {
+      selectedOverlayId = id
+      lastSelectedOverlayId = id
+      activeObjectTreeOverlayId = id
+    },
+    setMixedDrawingMoveState: (state) => {
+      mixedDrawingMoveState = state
+    },
+    setPendingHorizontalLineHandlePress: (state) => {
+      pendingHorizontalLineHandlePress = state
+    },
+    setPendingOverlayCleared: () => {
+      pendingOverlayId = null
+      pendingOverlayOptions = null
+    },
+    setPressedMoveState: (state) => {
+      pressedMoveState = state
+    },
+    setSelectedHorizontalLine,
+    updateOverlayState,
+  })
+
+  const createHorizontalLineOverlay = (options: {
     lineStyle: SettingsLineSwatchValue
     locked: boolean
     manualVisible?: boolean
@@ -756,138 +564,64 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     selected: boolean
     showPriceLabel: boolean
     textStyle?: DrawingTextStyle
-  }) => chart.createOverlay({
-    name: horizontalLineOverlayName,
-    extendData: {
-      drawing: true,
-      hovered: false,
-      lineStyle: normalizeLineStyle(lineStyle),
-      locked,
-      manualVisible,
-      objectId,
-      periodVisible: true,
-      pressed: false,
-      selected,
-      showPriceLabel,
-      textStyle: normalizeDrawingTextStyle(textStyle),
-    },
-    lock: locked,
-    points,
-    styles: overlayStylesFromLine(lineStyle),
-    visible: horizontalLineVisible && manualVisible,
-    onDrawEnd: ({ overlay }) => {
-      pendingOverlayId = null
-      pendingOverlayOptions = null
-      selectedOverlayId = overlay.id
-      lastSelectedOverlayId = overlay.id
-      horizontalLineOverlayIds.add(overlay.id)
-      setSelectedHorizontalLine(overlay.id, false)
-      persistCurrentHorizontalLines()
-      publishState({ armed: false, locked, selected: true })
-      publishObjectTreeState()
-      return false
-    },
-    onRemoved: ({ overlay }) => {
-      horizontalLineOverlayIds.delete(overlay.id)
-      selectedHorizontalLineOverlayIds.delete(overlay.id)
-      if (selectedOverlayId === overlay.id) selectedOverlayId = null
-      if (lastSelectedOverlayId === overlay.id) lastSelectedOverlayId = null
-      persistCurrentHorizontalLines()
-      publishState({ selected: false })
-      publishObjectTreeState()
-      return false
-    },
-    onDeselected: ({ overlay }) => {
-      if (additiveSelectionActive) return false
-      if (overlay.visible === false) return false
-      updateOverlayState(overlay.id, { selected: false })
-      if (selectedOverlayId === overlay.id) selectedOverlayId = null
-      publishState({ selected: false })
-      publishObjectTreeState()
-      return false
-    },
-    onMouseEnter: ({ overlay }) => {
-      updateOverlayState(overlay.id, { hovered: true })
-      return false
-    },
-    onMouseLeave: ({ overlay }) => {
-      updateOverlayState(overlay.id, { hovered: false })
-      return false
-    },
-    onPressedMoveEnd: ({ overlay }) => {
-      const movedIds = mixedDrawingMoveState?.horizontalEntries.map((entry) => entry.id) ?? pressedMoveState?.entries.map((entry) => entry.id) ?? [overlay.id]
-      movedIds.forEach((id) => updateOverlayState(id, { handlePressed: false, pressed: false }))
-      mixedDrawingMoveState?.trendEntries.forEach((entry) => {
-        const trendOverlay = chart.getOverlayById(entry.id)
-        const trendExtendData = trendOverlay?.extendData as TrendLineExtendData | undefined
-        if (trendOverlay) chart.overrideOverlay({ id: entry.id, extendData: { ...trendExtendData, endpointPressed: false, pressed: false, pressedPointIndex: undefined } })
-      })
-      pressedMoveState = null
-      mixedDrawingMoveState = null
-      pendingHorizontalLineHandlePress = null
-      persistCurrentHorizontalLines()
-      persistCurrentTrendLines()
-      publishState({ selected: true })
-      publishObjectTreeState()
-      return false
-    },
-    onPressedMoveStart: (event) => {
-      const { overlay } = event
-      const handlePressed = event.figureKey === 'handle'
-      beginPressedMove(overlay.id, event as { x?: number; y?: number })
-      pendingHorizontalLineHandlePress = handlePressed
-        ? { overlayId: overlay.id, x: Number(event.x), y: Number(event.y) }
-        : null
-      updateOverlayState(overlay.id, { handlePressed: false, pressed: true, selected: true })
-      publishState({
-        locked: Boolean((overlay.extendData as { locked?: boolean } | null)?.locked),
-        selected: true,
-      })
-      publishObjectTreeState()
-      return false
-    },
-    onPressedMoving: (event) => {
-      const { overlay } = event
-      if (overlay.lock === true || (overlay.extendData as { locked?: boolean } | null)?.locked === true) return true
-      if (pendingHorizontalLineHandlePress?.overlayId === overlay.id) {
-        const distance = Math.hypot(Number(event.x) - pendingHorizontalLineHandlePress.x, Number(event.y) - pendingHorizontalLineHandlePress.y)
-        if (Number.isFinite(distance) && distance >= horizontalLineHandleDragThreshold) {
-          updateOverlayState(overlay.id, { handlePressed: true })
-          pendingHorizontalLineHandlePress = null
-        }
-      }
-      if (moveMixedDrawings(event as { x?: number; y?: number }, overlay.id)) return true
-      return moveSelectedHorizontalLines(event as { x?: number; y?: number }, overlay.id)
-    },
-    onSelected: ({ overlay }) => {
-      if (selectedHorizontalLineOverlayIds.has(overlay.id) && getSelectedDrawingCount() > 1) {
-        selectedOverlayId = overlay.id
-        lastSelectedOverlayId = overlay.id
-        activeObjectTreeOverlayId = overlay.id
-      } else {
-        setSelectedHorizontalLine(overlay.id, additiveSelectionActive)
-      }
-      publishState({
-        locked: Boolean((overlay.extendData as { locked?: boolean } | null)?.locked),
-        selected: true,
-      })
-      publishObjectTreeState()
-      return false
-    },
-  }, paneId)
+  }) => createHorizontalLineOverlayBase({
+    ...options,
+    objectId: options.objectId ?? createHorizontalLineObjectId(),
+    paneId: options.paneId ?? candlePaneId,
+  })
 
-  const createTrendLineOverlay = ({
-    lineStyle,
-    locked,
-    manualVisible = true,
-    objectId = createTrendLineObjectId(),
-    paneId = candlePaneId,
-    points,
-    selected,
-    showPriceLabel,
-    textStyle,
-    trendLineStyle,
-  }: {
+  const createTrendLineOverlayBase = createTrendLineOverlayFactory({
+    beginMixedDrawingMove,
+    chart,
+    clearRemovedTrendLine: (id) => {
+      if (selectedTrendLineOverlayId === id) selectedTrendLineOverlayId = null
+      if (lastSelectedTrendLineOverlayId === id) lastSelectedTrendLineOverlayId = null
+    },
+    getAdditiveSelectionActive: () => additiveSelectionActive,
+    getLastSelectedTrendLineAt: () => lastSelectedTrendLineAt,
+    getLastSelectedTrendLineOverlayId: () => lastSelectedTrendLineOverlayId,
+    getMixedDrawingMoveState: () => mixedDrawingMoveState,
+    getPendingTrendLineEndpointPress: () => pendingTrendLineEndpointPress,
+    getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
+    getSelectedDrawingCount,
+    getSelectedTrendLineIds,
+    getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
+    hidePendingTrendStartHandle,
+    moveMixedDrawings,
+    persistCurrentHorizontalLines,
+    persistCurrentTrendLines,
+    publishObjectTreeState,
+    resolveTrendPointPrices,
+    selectTrendLineForInteraction,
+    setActiveTrendLine: (id) => {
+      selectedTrendLineOverlayId = id
+      lastSelectedTrendLineOverlayId = id
+      lastSelectedTrendLineAt = Date.now()
+      activeObjectTreeOverlayId = id
+    },
+    setMixedDrawingMoveState: (state) => {
+      mixedDrawingMoveState = state
+    },
+    setPendingTrendFirstPointPlaced: () => undefined,
+    setPendingTrendLineEndpointPress: (state) => {
+      pendingTrendLineEndpointPress = state
+    },
+    setPendingTrendLineOverlayId: (id) => {
+      pendingTrendLineOverlayId = id
+    },
+    setPendingTrendLineOptionsCleared: () => {
+      pendingTrendLineOptions = null
+    },
+    setSelectedTrendLineOverlayId: (id) => {
+      selectedTrendLineOverlayId = id
+    },
+    trendLineEndpointDragThreshold,
+    trendLineOverlayIds,
+    trendLineOverlayZLevel,
+    updatePendingTrendStartHandle,
+  })
+
+  const createTrendLineOverlay = (options: {
     lineStyle: SettingsLineSwatchValue
     locked: boolean
     manualVisible?: boolean
@@ -898,291 +632,46 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     showPriceLabel: boolean
     textStyle?: DrawingTextStyle
     trendLineStyle: DrawingTrendLineStyle
-  }) => chart.createOverlay({
-    name: trendLineOverlayName,
-    extendData: {
-      hovered: false,
-      lineStyle: normalizeLineStyle(lineStyle),
-      locked,
-      manualVisible,
-      objectId,
-      periodVisible: true,
-      pressed: false,
-      selected,
-      showPriceLabel,
-      textStyle: normalizeDrawingTextStyle(textStyle),
-      trendLineStyle: normalizeDrawingTrendLineStyle(trendLineStyle),
-    },
-    lock: locked,
-    points,
-    styles: trendOverlayStylesFromLine(lineStyle),
-    visible: manualVisible,
-    zLevel: trendLineOverlayZLevel,
-    onDrawing: ({ overlay }) => {
-      const startPoint = overlay.points[0]
-      const currentStep = Number((overlay as { currentStep?: number }).currentStep)
-      if (pendingTrendLineOverlayId === overlay.id && currentStep > 1 && Number.isFinite(Number(startPoint?.value))) {
-        if (!pendingTrendFirstPointPlaced) pendingTrendFirstPointPlaced = true
-        updatePendingTrendStartHandle(overlay as { paneId?: string; points: Array<{ dataIndex?: number; timestamp?: number; value?: number }> })
-      }
-      return false
-    },
-    onDrawEnd: ({ overlay }) => {
-      hidePendingTrendStartHandle()
-      pendingTrendFirstPointPlaced = false
-      pendingTrendLineOverlayId = null
-      pendingTrendLineOptions = null
-      selectedTrendLineOverlayId = overlay.id
-      lastSelectedTrendLineOverlayId = overlay.id
-      lastSelectedTrendLineAt = Date.now()
-      activeObjectTreeOverlayId = overlay.id
-      trendLineOverlayIds.add(overlay.id)
-      chart.overrideOverlay({
-        id: overlay.id,
-        extendData: {
-          ...(overlay.extendData as TrendLineExtendData | undefined),
-          drawing: false,
-          selected: true,
-        },
-      })
-      publishDrawingToolState({
-        armed: false,
-        lineStyle: normalizeLineStyle(lineStyle),
-        locked,
-        objectId,
-        selected: true,
-        showPriceLabel,
-        textStyle: normalizeDrawingTextStyle(textStyle),
-        tool: 'trendLine',
-        trendPointPrices: resolveTrendPointPrices(overlay),
-        trendLineStyle: normalizeDrawingTrendLineStyle(trendLineStyle),
-      })
-      persistCurrentTrendLines()
-      publishObjectTreeState()
-      return false
-    },
-    onRemoved: ({ overlay }) => {
-      if (pendingTrendLineOverlayId === overlay.id) hidePendingTrendStartHandle()
-      if (pendingTrendLineOverlayId === overlay.id) pendingTrendFirstPointPlaced = false
-      if (pendingTrendLineOverlayId === overlay.id) pendingTrendLineOverlayId = null
-      if (selectedTrendLineOverlayId === overlay.id) selectedTrendLineOverlayId = null
-      if (lastSelectedTrendLineOverlayId === overlay.id) lastSelectedTrendLineOverlayId = null
-      trendLineOverlayIds.delete(overlay.id)
-      persistCurrentTrendLines()
-      publishObjectTreeState()
-      return false
-    },
-    onMouseEnter: ({ overlay }) => {
-      const extendData = overlay.extendData as TrendLineExtendData | undefined
-      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, hovered: true } })
-      return false
-    },
-    onMouseLeave: ({ overlay }) => {
-      const extendData = overlay.extendData as TrendLineExtendData | undefined
-      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, hovered: false } })
-      return false
-    },
-    onPressedMoveEnd: ({ overlay }) => {
-      const extendData = overlay.extendData as TrendLineExtendData | undefined
-      selectedTrendLineOverlayId = overlay.id
-      lastSelectedTrendLineOverlayId = overlay.id
-      lastSelectedTrendLineAt = Date.now()
-      activeObjectTreeOverlayId = overlay.id
-      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed: false, pressed: false, pressedPointIndex: undefined, selected: true } })
-      mixedDrawingMoveState?.horizontalEntries.forEach((entry) => updateOverlayState(entry.id, { handlePressed: false, pressed: false }))
-      mixedDrawingMoveState?.trendEntries.forEach((entry) => {
-        if (entry.id === overlay.id) return
-        const trendOverlay = chart.getOverlayById(entry.id)
-        const trendExtendData = trendOverlay?.extendData as TrendLineExtendData | undefined
-        if (trendOverlay) chart.overrideOverlay({ id: entry.id, extendData: { ...trendExtendData, endpointPressed: false, pressed: false, pressedPointIndex: undefined } })
-      })
-      mixedDrawingMoveState = null
-      pendingTrendLineEndpointPress = null
-      publishDrawingToolState({
-        armed: false,
-        lineStyle: normalizeLineStyle(extendData?.lineStyle),
-        locked: extendData?.locked === true,
-        objectId: extendData?.objectId,
-        selected: true,
-        showPriceLabel: extendData?.showPriceLabel !== false,
-        textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-        tool: 'trendLine',
-        trendPointPrices: resolveTrendPointPrices(overlay),
-        trendLineStyle: normalizeDrawingTrendLineStyle(extendData?.trendLineStyle),
-      })
-      persistCurrentHorizontalLines()
-      persistCurrentTrendLines()
-      publishObjectTreeState()
-      return false
-    },
-    onPressedMoveStart: (event) => {
-      const { overlay } = event
-      const figureKey = typeof event.figureKey === 'string' ? event.figureKey : ''
-      const endpointPressed = figureKey.includes('point_')
-      const preserveSelection = !endpointPressed
-        && selectedTrendLineOverlayId === overlay.id
-        && getSelectedTrendLineIds().includes(overlay.id)
-        && getSelectedDrawingCount() > 1
-      const extendData = selectTrendLineForInteraction(overlay, additiveSelectionActive, preserveSelection)
-      const pointKeyMatch = /point_(\d+)/.exec(figureKey)
-      const pressedPointIndex = endpointPressed
-        ? Number.isInteger(event.figureIndex)
-          ? event.figureIndex
-          : pointKeyMatch
-            ? Number(pointKeyMatch[1])
-            : undefined
-        : undefined
-      pendingTrendLineEndpointPress = endpointPressed && typeof pressedPointIndex === 'number' && Number.isInteger(pressedPointIndex)
-        ? { overlayId: overlay.id, pointIndex: pressedPointIndex, x: Number(event.x), y: Number(event.y) }
-        : null
-      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed: false, pressed: true, pressedPointIndex: undefined, selected: true } })
-      publishDrawingToolState({
-        armed: false,
-        lineStyle: normalizeLineStyle(extendData?.lineStyle),
-        locked: extendData?.locked === true,
-        objectId: extendData?.objectId,
-        selected: true,
-        showPriceLabel: extendData?.showPriceLabel !== false,
-        textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-        tool: 'trendLine',
-        trendPointPrices: resolveTrendPointPrices(overlay),
-        trendLineStyle: normalizeDrawingTrendLineStyle(extendData?.trendLineStyle),
-      })
-      if (!endpointPressed) beginMixedDrawingMove(overlay.id, overlay.paneId || candlePaneId, event as { x?: number; y?: number })
-      publishObjectTreeState()
-      return false
-    },
-    onPressedMoving: (event) => {
-      const { overlay } = event
-      if (overlay.lock === true || (overlay.extendData as { locked?: boolean } | null)?.locked === true) return true
-      if (pendingTrendLineEndpointPress?.overlayId === overlay.id) {
-        const distance = Math.hypot(Number(event.x) - pendingTrendLineEndpointPress.x, Number(event.y) - pendingTrendLineEndpointPress.y)
-        if (Number.isFinite(distance) && distance >= trendLineEndpointDragThreshold) {
-          const extendData = overlay.extendData as TrendLineExtendData | undefined
-          chart.overrideOverlay({
-            id: overlay.id,
-            extendData: {
-              ...extendData,
-              endpointPressed: true,
-              pressed: true,
-              pressedPointIndex: pendingTrendLineEndpointPress.pointIndex,
-              selected: true,
-            },
-          })
-          pendingTrendLineEndpointPress = null
-        }
-      }
-      if (!mixedDrawingMoveState) return false
-      return moveMixedDrawings(event as { x?: number; y?: number }, overlay.id)
-    },
-    onSelected: ({ overlay }) => {
-      const currentStep = Number((overlay as { currentStep?: number }).currentStep)
-      if (pendingTrendLineOverlayId === overlay.id && currentStep > 1 && Number.isFinite(Number(overlay.points[0]?.value))) {
-        if (!pendingTrendFirstPointPlaced) pendingTrendFirstPointPlaced = true
-        updatePendingTrendStartHandle(overlay as { paneId?: string; points: Array<{ dataIndex?: number; timestamp?: number; value?: number }> })
-        return false
-      }
-      const preserveSelection = selectedTrendLineOverlayId === overlay.id
-        && getSelectedTrendLineIds().includes(overlay.id)
-        && getSelectedDrawingCount() > 1
-      const extendData = selectTrendLineForInteraction(overlay, additiveSelectionActive, preserveSelection)
-      publishDrawingToolState({
-        armed: false,
-        lineStyle: normalizeLineStyle(extendData?.lineStyle),
-        locked: extendData?.locked === true,
-        objectId: extendData?.objectId,
-        selected: true,
-        showPriceLabel: extendData?.showPriceLabel !== false,
-        textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-        tool: 'trendLine',
-        trendPointPrices: resolveTrendPointPrices(overlay),
-        trendLineStyle: normalizeDrawingTrendLineStyle(extendData?.trendLineStyle),
-      })
-      publishObjectTreeState()
-      return false
-    },
-    onDeselected: ({ overlay }) => {
-      const extendData = overlay.extendData as TrendLineExtendData | undefined
-      if (overlay.visible === false || extendData?.manualVisible === false || extendData?.periodVisible === false) return false
-      if (
-        selectedTrendLineOverlayId === overlay.id &&
-        lastSelectedTrendLineOverlayId === overlay.id &&
-        Date.now() - lastSelectedTrendLineAt < 160
-      ) {
-        chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, selected: true } })
-        return false
-      }
-      if (selectedTrendLineOverlayId === overlay.id) selectedTrendLineOverlayId = null
-      chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed: false, selected: false, pressed: false, pressedPointIndex: undefined } })
-      publishDrawingToolState({
-        armed: pendingTrendLineOverlayId != null,
-        locked: false,
-        selected: false,
-        showPriceLabel: true,
-        tool: 'trendLine',
-      })
-      publishObjectTreeState()
-      return false
-    },
-  }, paneId)
+  }) => createTrendLineOverlayBase({
+    ...options,
+    objectId: options.objectId ?? createTrendLineObjectId(),
+    paneId: options.paneId ?? candlePaneId,
+  })
 
   const canCreateOverlayOnPane = (paneId: string) => paneId === candlePaneId || chart.getDom(paneId, DomPosition.Main) != null
 
-  const restorePendingStoredHorizontalLines = () => {
-    if (!persistenceEnabled || pendingStoredHorizontalLineDrawings.length === 0) return
-    const remaining: StoredHorizontalLineDrawing[] = []
-    pendingStoredHorizontalLineDrawings.forEach((drawing) => {
-      const paneId = drawing.paneId || candlePaneId
-      if (!canCreateOverlayOnPane(paneId)) {
-        remaining.push(drawing)
-        return
-      }
-      const overlayId = createHorizontalLineOverlay({
-        lineStyle: drawing.lineStyle,
-        locked: drawing.locked,
-        manualVisible: drawing.manualVisible,
-        objectId: drawing.objectId || createHorizontalLineObjectId(),
-        paneId,
-        points: [{ value: drawing.value }],
-        selected: false,
-        showPriceLabel: drawing.showPriceLabel,
-        textStyle: drawing.textStyle,
-      })
-      if (typeof overlayId === 'string') horizontalLineOverlayIds.add(overlayId)
-    })
-    pendingStoredHorizontalLineDrawings = remaining
-  }
+  drawingVisibilityController = createChartDrawingVisibilityController({
+    chart,
+    getPeriod,
+    getSelectedOverlayId: () => selectedOverlayId,
+    getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
+    horizontalLineOverlayIds,
+    publishHorizontalLineState: publishState,
+    publishObjectTreeState,
+    selectedHorizontalLineOverlayIds,
+    trendLineOverlayIds,
+    updateOverlayState,
+  })
 
-  const restorePendingStoredTrendLines = () => {
-    if (!trendLinePersistenceEnabled || pendingStoredTrendLineDrawings.length === 0) return
-    const remaining: StoredTrendLineDrawing[] = []
-    pendingStoredTrendLineDrawings.forEach((drawing) => {
-      const paneId = drawing.paneId || candlePaneId
-      if (!canCreateOverlayOnPane(paneId)) {
-        remaining.push(drawing)
-        return
-      }
-      const overlayId = createTrendLineOverlay({
-        lineStyle: drawing.lineStyle,
-        locked: drawing.locked,
-        manualVisible: drawing.manualVisible,
-        objectId: drawing.objectId || createTrendLineObjectId(),
-        paneId,
-        points: drawing.points.slice(0, 2),
-        selected: false,
-        showPriceLabel: drawing.showPriceLabel,
-        textStyle: drawing.textStyle,
-        trendLineStyle: drawing.trendLineStyle,
-      })
-      if (typeof overlayId === 'string') trendLineOverlayIds.add(overlayId)
-    })
-    pendingStoredTrendLineDrawings = remaining
-  }
+  drawingPersistenceController = createChartDrawingPersistenceController({
+    canCreateOverlayOnPane,
+    chart,
+    createHorizontalLineOverlay,
+    createTrendLineOverlay,
+    fallbackPaneId: candlePaneId,
+    getDestroyed: () => destroyed,
+    getHorizontalLinePersistenceEnabled: () => persistenceEnabled,
+    getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
+    getTrendLinePersistenceEnabled: () => trendLinePersistenceEnabled,
+    horizontalLineOverlayIds,
+    initialHorizontalLineDrawings: initialStoredDrawings.pendingHorizontalLineDrawings,
+    initialTrendLineDrawings: initialStoredDrawings.pendingTrendLineDrawings,
+    trendLineOverlayIds,
+  })
 
   restorePendingStoredHorizontalLines()
   restorePendingStoredTrendLines()
-  applyHorizontalLineVisibility()
-  applyTrendLineVisibility()
+  applyDrawingVisibility()
   publishObjectTreeState()
 
   const recreatePendingOverlayForPane = (paneId: string) => {
@@ -1248,7 +737,6 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       if (event.detail.action === 'release') {
         if (pendingTrendLineOverlayId) chart.removeOverlay({ id: pendingTrendLineOverlayId })
         hidePendingTrendStartHandle()
-        pendingTrendFirstPointPlaced = false
         pendingTrendLineOverlayId = null
         pendingTrendLineOptions = null
         publishDrawingToolState({
@@ -1552,7 +1040,6 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       if (!lineStyle) return
       if (pendingTrendLineOverlayId) chart.removeOverlay({ id: pendingTrendLineOverlayId })
       hidePendingTrendStartHandle()
-      pendingTrendFirstPointPlaced = false
       pendingTrendLineOptions = {
         lineStyle,
         locked: event.detail.locked === true,
@@ -1713,201 +1200,61 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     publishObjectTreeState()
   }
 
+  const handleObjectTreeDrawingCommand = createDrawingObjectTreeCommandHandler({
+    chart,
+    clearHorizontalLineSelection,
+    clearTrendLineSelection,
+    getActiveObjectTreeOverlayId: () => activeObjectTreeOverlayId,
+    getSelectedOverlayId: () => selectedOverlayId,
+    getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
+    horizontalLineOverlayIds,
+    isHorizontalLineVisibleInCurrentPeriod,
+    isTrendLineVisibleInCurrentPeriod,
+    persistCurrentHorizontalLines,
+    persistCurrentTrendLines,
+    publishHorizontalLineState: publishState,
+    publishObjectTreeState,
+    resolveTrendPointPrices,
+    restoreObjectCurrentPeriodVisibility,
+    selectedHorizontalLineOverlayIds,
+    setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
+    setLastSelectedTrendLine: (id) => {
+      lastSelectedTrendLineOverlayId = id
+      lastSelectedTrendLineAt = Date.now()
+    },
+    setSelectedHorizontalLine,
+    setSelectedOverlayId: (id) => { selectedOverlayId = id },
+    setSelectedTrendLineOverlayId: (id) => { selectedTrendLineOverlayId = id },
+    toggleSelectedHorizontalLine,
+    trendLineOverlayIds,
+    updateOverlayState,
+  })
+
   const handleObjectTreeCommand = (event: Event) => {
     if (!isObjectTreeDrawingCommandEvent(event)) return
-    if (event.detail.action === 'deselectAll') {
-      clearHorizontalLineSelection()
-      clearTrendLineSelection()
-      return
-    }
-    const command = event.detail
-    const resolveObjectTreeOverlayTarget = (treeId: string) => resolveDrawingObjectTreeTarget({
-      chart,
-      horizontalLineOverlayIds,
-      treeId,
-      trendLineOverlayIds,
-    })
-    const target = resolveObjectTreeOverlayTarget(command.id)
-    if (!target) return
-    const overlay = chart.getOverlayById(target.id)
-    if (!overlay) return
-    const resolveTargets = (ids: string[] | undefined) => (Array.isArray(ids) ? ids : [command.id])
-      .map((targetId) => resolveObjectTreeOverlayTarget(targetId))
-      .filter((row): row is { id: string; kind: 'horizontalLine' | 'trendLine' } => Boolean(row))
-
-    if (event.detail.action === 'delete') {
-      resolveTargets(event.detail.ids).forEach((row) => chart.removeOverlay({ id: row.id }))
-      return
-    }
-
-    if (event.detail.action === 'setVisible') {
-      const manualVisible = event.detail.visible
-      resolveTargets(event.detail.ids).forEach((row) => {
-        const targetOverlay = chart.getOverlayById(row.id)
-        if (!targetOverlay) return
-        const targetExtendData = targetOverlay.extendData as HorizontalLineExtendData | TrendLineExtendData | undefined
-        let periodVisible = row.kind === 'horizontalLine'
-          ? isHorizontalLineVisibleInCurrentPeriod(targetExtendData?.objectId)
-          : isTrendLineVisibleInCurrentPeriod(targetExtendData?.objectId)
-        if (manualVisible && !periodVisible) {
-          restoreCurrentPeriodVisibility(row.kind === 'horizontalLine'
-            ? horizontalLineObjectVisibilityRangeKey(targetExtendData?.objectId)
-            : trendLineObjectVisibilityRangeKey(targetExtendData?.objectId))
-          periodVisible = true
-        }
-        const visible = manualVisible && periodVisible
-        chart.overrideOverlay({
-          id: row.id,
-          extendData: {
-            ...(targetOverlay.extendData ?? {}),
-            manualVisible,
-            periodVisible,
-            selected: row.kind === 'horizontalLine'
-              ? selectedHorizontalLineOverlayIds.has(row.id)
-              : selectedTrendLineOverlayId === row.id || (targetExtendData as TrendLineExtendData | undefined)?.selected === true,
-          },
-          visible: manualVisible,
-        })
-        if (!visible && row.kind === 'horizontalLine') updateOverlayState(row.id, { handlePressed: false, hovered: false, pressed: false })
-        if (!visible && row.kind === 'trendLine') {
-          chart.overrideOverlay({
-            id: row.id,
-            extendData: {
-              ...(targetOverlay.extendData ?? {}),
-              endpointPressed: false,
-              hovered: false,
-              manualVisible,
-              periodVisible,
-              pressed: false,
-              pressedPointIndex: undefined,
-              selected: selectedTrendLineOverlayId === row.id || (targetExtendData as TrendLineExtendData | undefined)?.selected === true,
-            },
-          })
-        }
-      })
-      persistCurrentHorizontalLines()
-      persistCurrentTrendLines()
-      publishObjectTreeState()
-      return
-    }
-
-    if (event.detail.action === 'setLocked') {
-      const locked = event.detail.locked
-      resolveTargets(event.detail.ids).forEach((row) => {
-        const targetOverlay = chart.getOverlayById(row.id)
-        if (!targetOverlay) return
-        chart.overrideOverlay({
-          id: row.id,
-          extendData: {
-            ...(targetOverlay.extendData ?? {}),
-            locked,
-          },
-          lock: locked,
-        })
-      })
-      persistCurrentHorizontalLines()
-      persistCurrentTrendLines()
-      publishObjectTreeState()
-      return
-    }
-
-    if (event.detail.action === 'select') {
-      if (target.kind === 'horizontalLine') {
-        if (event.detail.additive === true) {
-          toggleSelectedHorizontalLine(target.id)
-        } else {
-          clearTrendLineSelection()
-          setSelectedHorizontalLine(target.id, false)
-        }
-        publishState({ selected: true })
-      } else {
-        if (event.detail.additive !== true) clearHorizontalLineSelection()
-        if (event.detail.additive !== true) {
-          trendLineOverlayIds.forEach((overlayId) => {
-            if (overlayId === target.id) return
-            const rowOverlay = chart.getOverlayById(overlayId)
-            const rowExtendData = rowOverlay?.extendData as TrendLineExtendData | undefined
-            if (!rowOverlay || rowExtendData?.selected !== true) return
-            chart.overrideOverlay({ id: overlayId, extendData: { ...rowExtendData, endpointPressed: false, selected: false, pressed: false, pressedPointIndex: undefined } })
-          })
-        }
-        const targetExtendData = overlay.extendData as TrendLineExtendData | undefined
-        const nextSelected = event.detail.additive === true && targetExtendData?.selected === true ? false : true
-        selectedTrendLineOverlayId = nextSelected ? target.id : null
-        if (nextSelected) {
-          lastSelectedTrendLineOverlayId = target.id
-          lastSelectedTrendLineAt = Date.now()
-          activeObjectTreeOverlayId = target.id
-        } else if (activeObjectTreeOverlayId === target.id) {
-          activeObjectTreeOverlayId = selectedOverlayId ?? null
-        }
-        chart.overrideOverlay({
-          id: target.id,
-          extendData: {
-            ...targetExtendData,
-            selected: nextSelected,
-          },
-        })
-        publishDrawingToolState({
-          armed: false,
-          lineStyle: normalizeLineStyle(targetExtendData?.lineStyle),
-          locked: targetExtendData?.locked === true,
-          objectId: targetExtendData?.objectId,
-          selected: nextSelected,
-          showPriceLabel: targetExtendData?.showPriceLabel !== false,
-          textStyle: normalizeDrawingTextStyle(targetExtendData?.textStyle),
-          tool: 'trendLine',
-          trendPointPrices: resolveTrendPointPrices(overlay),
-          trendLineStyle: normalizeDrawingTrendLineStyle(targetExtendData?.trendLineStyle),
-        })
-      }
-      publishObjectTreeState()
-      return
-    }
-
-    if (event.detail.action === 'deselect') {
-      if (target.kind === 'horizontalLine') {
-        updateOverlayState(target.id, { handlePressed: false, hovered: false, pressed: false, selected: false })
-        if (selectedOverlayId === target.id) selectedOverlayId = null
-        if (activeObjectTreeOverlayId === target.id) activeObjectTreeOverlayId = selectedTrendLineOverlayId ?? null
-        publishState({ selected: false })
-      } else {
-        const extendData = overlay.extendData as TrendLineExtendData | undefined
-        chart.overrideOverlay({ id: target.id, extendData: { ...extendData, endpointPressed: false, selected: false, pressed: false, pressedPointIndex: undefined } })
-        if (selectedTrendLineOverlayId === target.id) selectedTrendLineOverlayId = null
-        if (activeObjectTreeOverlayId === target.id) activeObjectTreeOverlayId = selectedOverlayId ?? null
-      }
-      publishObjectTreeState()
-    }
+    handleObjectTreeDrawingCommand(event.detail)
   }
 
   const handleVisibilityRangeChanged = (event: Event) => {
-    const detail = event instanceof CustomEvent ? event.detail as { key?: string } : {}
-    if (detail.key && !isDrawingVisibilityRangeKey(detail.key)) return
-    applyHorizontalLineVisibility()
-    applyTrendLineVisibility()
+    drawingVisibilityController?.handleVisibilityRangeChanged(event)
   }
 
   const handleStorage = (event: StorageEvent) => {
-    if (!event.key || (!event.key.includes(horizontalLineVisibilityRangeKey) && !event.key.includes(trendLineVisibilityRangeKey))) return
-    applyHorizontalLineVisibility()
-    applyTrendLineVisibility()
+    drawingVisibilityController?.handleStorage(event)
   }
 
   const handleDataReady = () => {
     ensurePaneInteractionListeners()
     restorePendingStoredHorizontalLines()
     restorePendingStoredTrendLines()
-    applyHorizontalLineVisibility()
-    applyTrendLineVisibility()
+    applyDrawingVisibility()
   }
 
   const handleVisibilityRefresh = () => {
     ensurePaneInteractionListeners()
     restorePendingStoredHorizontalLines()
     restorePendingStoredTrendLines()
-    applyHorizontalLineVisibility()
-    applyTrendLineVisibility()
+    applyDrawingVisibility()
   }
 
   const handleObjectTreeDrawingsRequest = () => {
@@ -1929,7 +1276,6 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     if (pendingOverlayId) chart.removeOverlay({ id: pendingOverlayId })
     if (pendingTrendLineOverlayId) chart.removeOverlay({ id: pendingTrendLineOverlayId })
     hidePendingTrendStartHandle()
-    pendingTrendFirstPointPlaced = false
     window.removeEventListener(drawingToolCommandEvent, handleCommand)
     window.removeEventListener(objectTreeDrawingCommandEvent, handleObjectTreeCommand)
     window.removeEventListener(objectTreeDrawingsRequestEvent, handleObjectTreeDrawingsRequest)
