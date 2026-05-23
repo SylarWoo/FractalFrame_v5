@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType, DomPosition } from 'klinecharts'
 import type { Chart, Coordinate } from 'klinecharts'
-import { readSettingsBooleanValue, settingsSymbolChangedEvent } from '../settingsSymbolState'
-import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
-import { readWatchlistRealtimeEnabled, realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
+import { settingsSymbolChangedEvent } from '../settingsSymbolState'
+import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
+import { marketStatusTitleChangedEvent } from '../mt5DataCenter/marketStatusTitleState'
 import { readCandleBarStyle, resolveCandleValueColor } from './chartStyleReaders'
 import { formatGlobalPrice } from './globalPricePrecision'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { lastRealKLine } from './chartFuturePlaceholders'
+import { readCurrentCandleCountdownActive } from './currentCandleCountdownVisibility'
 
 type UseCurrentCandleCountdownOptions = {
   chartInstanceRef: MutableRefObject<Chart | null>
@@ -36,33 +37,28 @@ function formatCountdown(ms: number) {
   return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
-function readCountdownVisible() {
-  return readSettingsBooleanValue(
-    chartSettingKeys.currentCandleCountdownVisible,
-    chartSettingDefaults.currentCandleCountdownVisible,
-  ) && readWatchlistRealtimeEnabled()
-}
-
 function isCoordinate(value: Partial<Coordinate> | Partial<Coordinate>[]): value is Partial<Coordinate> {
   return !Array.isArray(value)
 }
 
 export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, period, symbol }: UseCurrentCandleCountdownOptions) {
-  const [settingVisible, setSettingVisible] = useState(readCountdownVisible)
+  const [settingVisible, setSettingVisible] = useState(() => readCurrentCandleCountdownActive(symbol))
   const [state, setState] = useState<CurrentCandleCountdownState>({ axisWidth: 70, color: '#26a69a', price: '', text: '', top: 0, visible: false })
 
   useEffect(() => {
-    const syncVisible = () => setSettingVisible(readCountdownVisible())
+    const syncVisible = () => setSettingVisible(readCurrentCandleCountdownActive(symbol))
     window.addEventListener(settingsSymbolChangedEvent, syncVisible)
     window.addEventListener(realtimeEnabledChangedEvent, syncVisible)
+    window.addEventListener(marketStatusTitleChangedEvent, syncVisible)
     window.addEventListener('storage', syncVisible)
     syncVisible()
     return () => {
       window.removeEventListener(settingsSymbolChangedEvent, syncVisible)
       window.removeEventListener(realtimeEnabledChangedEvent, syncVisible)
+      window.removeEventListener(marketStatusTitleChangedEvent, syncVisible)
       window.removeEventListener('storage', syncVisible)
     }
-  }, [])
+  }, [symbol])
 
   useEffect(() => {
     if (!settingVisible || !dataReady) {

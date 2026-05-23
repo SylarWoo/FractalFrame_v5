@@ -36,12 +36,27 @@ export type StoredHorizontalLineDrawing = {
   value: number
 }
 
+export type StoredTrendLineDrawing = {
+  lineStyle: SettingsLineSwatchValue
+  locked: boolean
+  paneId: string
+  points: Array<{
+    dataIndex?: number
+    timestamp?: number
+    value?: number
+  }>
+  showPriceLabel: boolean
+  textStyle: DrawingTextStyle
+  trendLineStyle: DrawingTrendLineStyle
+}
+
 export const drawingPersistenceStoragePrefix = 'fractalframe.drawingsDrawer.persist'
 export const drawingPriceLabelStoragePrefix = 'fractalframe.drawingsDrawer.priceLabel'
 export const drawingLineStyleStoragePrefix = 'fractalframe.drawingsDrawer.lineStyle'
 export const drawingTextStyleStoragePrefix = 'fractalframe.drawingsDrawer.textStyle'
 export const drawingTrendLineStyleStorageKey = 'fractalframe.drawingsDrawer.trendLineStyle'
 export const horizontalLineDrawingsStorageKey = 'fractalframe.drawings.horizontalLine.items'
+export const trendLineDrawingsStorageKey = 'fractalframe.drawings.trendLine.items'
 
 export function createDefaultDrawingLineStyle(color = '#2962ff'): SettingsLineSwatchValue {
   return {
@@ -218,4 +233,46 @@ export function writeStoredHorizontalLineDrawings(drawings: StoredHorizontalLine
 
 export function clearStoredHorizontalLineDrawings() {
   return removeStorageItem(horizontalLineDrawingsStorageKey)
+}
+
+function normalizeTrendLinePoint(point: StoredTrendLineDrawing['points'][number]) {
+  const dataIndex = Number(point?.dataIndex)
+  const timestamp = Number(point?.timestamp)
+  const value = Number(point?.value)
+  return {
+    ...(Number.isFinite(dataIndex) ? { dataIndex } : {}),
+    ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+    ...(Number.isFinite(value) ? { value } : {}),
+  }
+}
+
+export function readStoredTrendLineDrawings() {
+  const stored = readJson<StoredTrendLineDrawing[]>(trendLineDrawingsStorageKey, [])
+  return stored
+    .map((drawing) => ({
+      lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#2962ff'),
+      locked: drawing.locked === true,
+      paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
+      points: Array.isArray(drawing.points) ? drawing.points.map(normalizeTrendLinePoint) : [],
+      showPriceLabel: drawing.showPriceLabel !== false,
+      textStyle: normalizeDrawingTextStyle(drawing.textStyle),
+      trendLineStyle: normalizeDrawingTrendLineStyle(drawing.trendLineStyle),
+    }))
+    .filter((drawing) => drawing.points.length >= 2 && drawing.points.slice(0, 2).every((point) => typeof point.value === 'number'))
+}
+
+export function writeStoredTrendLineDrawings(drawings: StoredTrendLineDrawing[]) {
+  return writeJson(trendLineDrawingsStorageKey, drawings.map((drawing) => ({
+    lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#2962ff'),
+    locked: drawing.locked === true,
+    paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
+    points: drawing.points.slice(0, 2).map(normalizeTrendLinePoint),
+    showPriceLabel: drawing.showPriceLabel !== false,
+    textStyle: normalizeDrawingTextStyle(drawing.textStyle),
+    trendLineStyle: normalizeDrawingTrendLineStyle(drawing.trendLineStyle),
+  })))
+}
+
+export function clearStoredTrendLineDrawings() {
+  return removeStorageItem(trendLineDrawingsStorageKey)
 }

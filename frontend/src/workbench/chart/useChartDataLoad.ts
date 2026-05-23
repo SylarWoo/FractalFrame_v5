@@ -77,9 +77,14 @@ export function useChartDataLoad({
     if (!chart) return
 
     const previousContext = previousContextRef.current
-    const inheritedViewport = previousContext?.symbol === symbol && previousContext.period !== period
-      ? captureChartViewportSnapshot(chart)
-      : null
+    const contextChanged = previousContext != null && (
+      previousContext.symbol !== symbol ||
+      previousContext.period !== period
+    )
+    const capturedViewport = contextChanged ? captureChartViewportSnapshot(chart) : null
+    const inheritedViewport = capturedViewport && previousContext?.symbol !== symbol
+      ? { ...capturedViewport, yAxisRange: null }
+      : capturedViewport
     previousContextRef.current = { period, symbol }
 
     const shouldIgnore = () => disposed || requestSeqRef.current !== requestSeq

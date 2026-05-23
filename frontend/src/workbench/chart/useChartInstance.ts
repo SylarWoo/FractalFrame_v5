@@ -3,6 +3,7 @@ import { dispose, init } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
 import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
+import { marketStatusTitleChangedEvent } from '../mt5DataCenter/marketStatusTitleState'
 import { formatChartDate, readChartTimezone } from './chartTimeFormatting'
 import { readRightPlaceholderVisible, refreshChartFuturePlaceholders } from './chartFuturePlaceholders'
 import { chartDrawingVisibilityRefreshEvent, installChartDrawingTools } from './chartDrawingTools'
@@ -43,7 +44,7 @@ function applyChartStyles(chart: Chart, symbol: string, period: string, displayN
   applyAxisLineStyle(chart)
   applyCandleBarStyle(chart)
   applyCandleTooltipStyle(chart, symbol, period, displayName)
-  applyLastPriceLineStyle(chart)
+  applyLastPriceLineStyle(chart, symbol)
   applySessionBreakIndicator(chart, symbol, period)
 }
 
@@ -130,10 +131,12 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     apply()
     window.addEventListener(settingsSymbolChangedEvent, apply)
     window.addEventListener(realtimeEnabledChangedEvent, apply)
+    window.addEventListener(marketStatusTitleChangedEvent, apply)
     window.addEventListener('storage', apply)
     return () => {
       window.removeEventListener(settingsSymbolChangedEvent, apply)
       window.removeEventListener(realtimeEnabledChangedEvent, apply)
+      window.removeEventListener(marketStatusTitleChangedEvent, apply)
       window.removeEventListener('storage', apply)
     }
   }, [displayName, period, symbol])

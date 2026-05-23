@@ -2,6 +2,7 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { useShortcutMenuState } from './useShortcutMenuState'
 import type { OpenChartOptions } from './useShortcutMenuState'
+import { readString, writeString } from '../persistence/jsonStorage'
 import './TopBar.css'
 
 type TopBarProps = {
@@ -19,7 +20,7 @@ const shortcutMenuMinWidth = 116
 const calendarWeekdays = ['一', '二', '三', '四', '五', '六', '日']
 
 function readShortcutMenuWidth() {
-  const raw = window.localStorage.getItem(shortcutMenuWidthKey)
+  const raw = readString(shortcutMenuWidthKey)
   const parsed = Number(raw)
   return Number.isFinite(parsed) && parsed >= shortcutMenuMinWidth ? parsed : shortcutMenuDefaultWidth
 }
@@ -140,7 +141,7 @@ export function TopBar({ indicatorShortcuts = [], onIndicatorShortcutToggle, onJ
     const applyWidth = (clientX: number) => {
       const next = Math.round(Math.min(maxWidth, Math.max(shortcutMenuMinWidth, clientX - startRect.left)))
       setShortcutMenuWidth(next)
-      window.localStorage.setItem(shortcutMenuWidthKey, String(next))
+      writeString(shortcutMenuWidthKey, String(next))
     }
     const handleMove = (moveEvent: PointerEvent) => applyWidth(moveEvent.clientX)
     const handleUp = () => {

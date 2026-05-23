@@ -1,8 +1,10 @@
 import { readJson, writeJson } from '../persistence/jsonStorage'
 import type { AxisRangeSnapshot } from './chartViewportPersistence'
 
-const viewportStoragePrefix = 'fractalframe:chartViewport:v1'
+const viewportStoragePrefix = 'fractalframe:chartViewport:v3'
 const latestViewportStorageKey = `${viewportStoragePrefix}:latest`
+const cookieMaxAgeSeconds = 60 * 60 * 24 * 365
+const devViewportStateEndpoint = '/__fractalframe_chart_viewport_state'
 
 export type ChartViewportSnapshot = {
   barSpace: number
@@ -24,6 +26,79 @@ function viewportStorageKey(period: string) {
   return `${viewportStoragePrefix}:global:${period.toUpperCase()}`
 }
 
+function cookieNameForStorageKey(key: string) {
+  return key.replace(/[^a-zA-Z0-9_-]/g, '_')
+}
+
+function readCookieJson<T>(key: string): T | null {
+  if (typeof document === 'undefined') return null
+  const cookieName = `${cookieNameForStorageKey(key)}=`
+  const cookie = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(cookieName))
+  if (!cookie) return null
+  try {
+    return JSON.parse(decodeURIComponent(cookie.slice(cookieName.length))) as T
+  } catch {
+    return null
+  }
+}
+
+function writeCookieJson(key: string, value: unknown) {
+  if (typeof document === 'undefined') return
+  const payload = encodeURIComponent(JSON.stringify(value))
+  document.cookie = `${cookieNameForStorageKey(key)}=${payload}; max-age=${cookieMaxAgeSeconds}; path=/; SameSite=Lax`
+}
+
+function readDevServerJson<T>(key: string): T | null {
+  if (typeof window === 'undefined' || typeof XMLHttpRequest === 'undefined') return null
+  try {
+    const xhr = new XMLHttpRequest()
+    xhr.open('GET', `${devViewportStateEndpoint}?key=${encodeURIComponent(key)}`, false)
+    xhr.send()
+    if (xhr.status !== 200) return null
+    const response = JSON.parse(xhr.responseText) as { value?: T | null }
+    return response.value ?? null
+  } catch {
+    return null
+  }
+}
+
+function writeDevServerJson(key: string, value: unknown) {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') return
+  try {
+    void fetch(devViewportStateEndpoint, {
+      body: JSON.stringify({ key, value }),
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      method: 'POST',
+    })
+  } catch {
+    // Production preview does not provide the dev endpoint; localStorage still handles it.
+  }
+}
+
+function readViewportJson(key: string) {
+  const serverSnapshot = readDevServerJson<Partial<ChartViewportSnapshot>>(key)
+  if (serverSnapshot) {
+    writeJson(key, serverSnapshot)
+    writeCookieJson(key, serverSnapshot)
+    return serverSnapshot
+  }
+
+  const snapshot = readCookieJson<Partial<ChartViewportSnapshot>>(key)
+    ?? readJson<Partial<ChartViewportSnapshot> | null>(key, null)
+  if (snapshot) writeDevServerJson(key, snapshot)
+  return snapshot
+}
+
+function writeViewportJson(key: string, snapshot: ChartViewportSnapshot) {
+  writeJson(key, snapshot)
+  writeCookieJson(key, snapshot)
+  writeDevServerJson(key, snapshot)
+}
+
 function normalizeAxisRange(range: Partial<AxisRangeSnapshot> | null | undefined): AxisRangeSnapshot | null {
   if (!range) return null
   if (!finiteNumber(range.from) || !finiteNumber(range.to) || !finiteNumber(range.range)) return null
@@ -40,12 +115,12 @@ function normalizeAxisRange(range: Partial<AxisRangeSnapshot> | null | undefined
 }
 
 export function readGlobalChartViewportSnapshot(period: string): ChartViewportSnapshot | null {
-  const snapshot = readJson<Partial<ChartViewportSnapshot> | null>(viewportStorageKey(period), null)
+  const snapshot = readViewportJson(viewportStorageKey(period))
   return normalizeChartViewportSnapshot(snapshot)
 }
 
 export function readLatestChartViewportSnapshot(): ChartViewportSnapshot | null {
-  const snapshot = readJson<Partial<ChartViewportSnapshot> | null>(latestViewportStorageKey, null)
+  const snapshot = readViewportJson(latestViewportStorageKey)
   return normalizeChartViewportSnapshot(snapshot)
 }
 
@@ -66,6 +141,6 @@ function normalizeChartViewportSnapshot(snapshot: Partial<ChartViewportSnapshot>
 
 export function writeGlobalChartViewportSnapshot(period: string, snapshot: ChartViewportSnapshot) {
   const nextSnapshot = { ...snapshot, period: period.toUpperCase() }
-  writeJson(viewportStorageKey(period), nextSnapshot)
-  writeJson(latestViewportStorageKey, nextSnapshot)
+  writeViewportJson(viewportStorageKey(period), nextSnapshot)
+  writeViewportJson(latestViewportStorageKey, nextSnapshot)
 }

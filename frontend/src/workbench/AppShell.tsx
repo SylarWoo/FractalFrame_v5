@@ -256,6 +256,7 @@ export function AppShell() {
     return null
   })
   const restoredPersistedIndicatorsRef = useRef(false)
+  const restoredLoadedIndicatorsContextRef = useRef('')
   const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
   const [symbolDisplayVersion, setSymbolDisplayVersion] = useState(0)
   const [clockNow, setClockNow] = useState(() => Date.now())
@@ -300,6 +301,24 @@ export function AppShell() {
       window.setTimeout(() => setChartIndicatorCommand({ ...command, id: Date.now() }), index * 30)
     })
   }, [])
+
+  useEffect(() => {
+    if (!chartLoadState || chartLoadState.loading || chartLoadState.rows <= 0) return
+    if (!readIndicatorPersistenceEnabled()) return
+    const contextKey = [
+      chartLoadState.loadedSymbol ?? chartTarget.symbol,
+      chartLoadState.loadedPeriod ?? chartTarget.period,
+      loadedIndicatorKeys.join(','),
+    ].join(':')
+    if (restoredLoadedIndicatorsContextRef.current === contextKey) return
+    restoredLoadedIndicatorsContextRef.current = contextKey
+    loadedIndicatorKeys.forEach((key, index) => {
+      if (key !== 'MA' && key !== 'MACD' && key !== 'RSI' && key !== 'Stoch' && key !== 'TSI' && key !== 'VI' && key !== 'VWAP' && key !== 'Vol') return
+      window.setTimeout(() => {
+        setChartIndicatorCommand({ ...createLoadIndicatorCommand(key), id: Date.now() })
+      }, index * 45)
+    })
+  }, [chartLoadState, chartTarget.period, chartTarget.symbol, loadedIndicatorKeys])
 
   useEffect(() => {
     const resize = () => window.dispatchEvent(new Event('resize'))
@@ -361,7 +380,7 @@ export function AppShell() {
 
   useEffect(() => {
     refreshLoadedIndicatorsVisibility()
-  }, [chartTarget.period])
+  }, [chartTarget.period, chartTarget.symbol])
 
   useEffect(() => {
     const handleObjectTreeDrawingsChanged = (event: Event) => {

@@ -1,8 +1,7 @@
 import { LineType, TooltipShowRule } from 'klinecharts'
 import type { CandleTooltipCustomCallbackData, Chart } from 'klinecharts'
-import { readSettingsBooleanValue, readSettingsSymbolState } from '../settingsSymbolState'
-import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
-import { readWatchlistRealtimeEnabled } from '../mt5DataCenter/storeV5Persistence'
+import { readSettingsSymbolState } from '../settingsSymbolState'
+import { chartSettingKeys } from '../settings/chartSettingsSchema'
 import {
   chartNumberFontFamily,
   chartNumberFontWeight,
@@ -16,6 +15,7 @@ import {
 import { lastRealKLine } from './chartFuturePlaceholders'
 import { createPriceAxisLabelTextStyle } from './chartPriceLabelStyles'
 import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
+import { readCurrentCandleCountdownActive } from './currentCandleCountdownVisibility'
 
 export function applyCandleBarStyle(chart: Chart) {
   chart.setStyles({ candle: { bar: readCandleBarStyle() } })
@@ -28,13 +28,10 @@ export function applyPriceVolumePrecision(chart: Chart, symbol?: string) {
   chart.setPriceVolumePrecision(readPricePrecision(close, { symbol }), 0)
 }
 
-export function applyLastPriceLineStyle(chart: Chart) {
+export function applyLastPriceLineStyle(chart: Chart, symbol = '') {
   const selectedParts = readSymbolLabelVisibleParts()
   const barStyle = readCandleBarStyle()
-  const countdownVisible = readSettingsBooleanValue(
-    chartSettingKeys.currentCandleCountdownVisible,
-    chartSettingDefaults.currentCandleCountdownVisible,
-  ) && readWatchlistRealtimeEnabled()
+  const countdownVisible = readCurrentCandleCountdownActive(symbol)
   const highLowParts = readSettingsSymbolState()['coordinates.highLow.visibleParts']
   const selectedHighLowParts = Array.isArray(highLowParts)
     ? highLowParts.filter((value): value is string => typeof value === 'string')

@@ -4,12 +4,13 @@ import type { DrawingTextStyle, DrawingTrendLineStyle } from './drawingPersisten
 export type DrawingCommandTool = 'horizontalLine' | 'trendLine'
 
 export type DrawingToolCommand = {
-  action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedTextStyle' | 'updateSelectedTrendLineStyle'
+  action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedTextStyle' | 'updateSelectedTrendLinePointPrice' | 'updateSelectedTrendLineStyle'
   id: number
   lineStyle?: SettingsLineSwatchValue
   locked?: boolean
   persisted?: boolean
   price?: number
+  pointIndex?: number
   showPriceLabel?: boolean
   textStyle?: DrawingTextStyle
   tool: DrawingCommandTool
@@ -26,6 +27,7 @@ export type DrawingToolState = {
   showPriceLabel: boolean
   textStyle?: DrawingTextStyle
   tool: DrawingCommandTool
+  trendPointPrices?: [number | undefined, number | undefined]
   trendLineStyle?: DrawingTrendLineStyle
 }
 

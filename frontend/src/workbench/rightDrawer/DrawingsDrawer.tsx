@@ -78,7 +78,7 @@ export function DrawingsDrawer() {
   const [priceLabelTools, setPriceLabelTools] = useState<Record<string, boolean>>(() => Object.fromEntries(
     drawingTools.map((tool) => [tool.key, readDrawingPriceLabel(tool.key)]),
   ))
-  const [selectedDrawing, setSelectedDrawing] = useState<{ lineStyle?: SettingsLineSwatchValue; locked: boolean; objectId?: string; price?: number; showPriceLabel: boolean; textStyle?: DrawingTextStyle; tool: DrawingToolKey } | null>(null)
+  const [selectedDrawing, setSelectedDrawing] = useState<{ lineStyle?: SettingsLineSwatchValue; locked: boolean; objectId?: string; price?: number; showPriceLabel: boolean; textStyle?: DrawingTextStyle; tool: DrawingToolKey; trendPointPrices?: [number | undefined, number | undefined] } | null>(null)
   const [lineStyles, setLineStyles] = useState<Record<string, SettingsLineSwatchValue>>(() => ({
     fibRetracement: readDrawingLineStyle('fibRetracement', createDefaultDrawingLineStyle('#787b86')),
     horizontalLine: readDrawingLineStyle('horizontalLine', createDefaultDrawingLineStyle('#0f766e')),
@@ -116,11 +116,11 @@ export function DrawingsDrawer() {
   function setPersistence(enabled: boolean) {
     setPersistedTools((current) => ({ ...current, [selectedKey]: enabled }))
     writeDrawingPersistence(selectedKey, enabled)
-    if (selectedKey !== 'horizontalLine') return
+    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine') return
     publishDrawingToolCommand({
       action: 'updatePersistence',
       persisted: enabled,
-      tool: 'horizontalLine',
+      tool: selectedKey,
     })
   }
 
@@ -133,15 +133,25 @@ export function DrawingsDrawer() {
     const handleState = (event: Event) => {
       if (!isDrawingToolStateEvent(event)) return
       if (!event.detail.armed) setArmedKey((current) => current === event.detail.tool ? null : current)
-      setSelectedDrawing(event.detail.selected ? {
-        lineStyle: event.detail.lineStyle,
-        locked: event.detail.locked,
-        objectId: event.detail.objectId,
-        price: event.detail.price,
-        showPriceLabel: event.detail.showPriceLabel,
-        textStyle: event.detail.textStyle,
-        tool: event.detail.tool,
-      } : null)
+      if (event.detail.selected) {
+        setSelectedKey(event.detail.tool)
+        writeString(selectedToolStorageKey, event.detail.tool)
+      }
+      setSelectedDrawing((current) => {
+        if (!event.detail.selected) {
+          return current?.tool === event.detail.tool ? null : current
+        }
+        return {
+          lineStyle: event.detail.lineStyle,
+          locked: event.detail.locked,
+          objectId: event.detail.objectId,
+          price: event.detail.price,
+          showPriceLabel: event.detail.showPriceLabel,
+          textStyle: event.detail.textStyle,
+          tool: event.detail.tool,
+          trendPointPrices: event.detail.trendPointPrices,
+        }
+      })
     }
     window.addEventListener(drawingToolStateEvent, handleState)
     return () => {
@@ -150,10 +160,10 @@ export function DrawingsDrawer() {
   }, [])
 
   useEffect(() => {
-    if (selectedKey !== 'horizontalLine' || visibleTab !== 'coords') return
+    if ((selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine') || visibleTab !== 'coords') return
     publishDrawingToolCommand({
       action: 'refreshSelectedState',
-      tool: 'horizontalLine',
+      tool: selectedKey,
     })
   }, [selectedKey, visibleTab])
 
@@ -203,21 +213,30 @@ export function DrawingsDrawer() {
   }
 
   function deleteSelectedDrawing() {
-    if (selectedKey !== 'horizontalLine') return
+    const targetTool = selectedDrawing?.tool === 'horizontalLine' || selectedDrawing?.tool === 'trendLine'
+      ? selectedDrawing.tool
+      : selectedKey
+    if (targetTool !== 'horizontalLine' && targetTool !== 'trendLine') return
     publishDrawingToolCommand({
       action: 'deleteSelected',
-      tool: 'horizontalLine',
+      tool: targetTool,
     })
   }
 
   function setSelectedPriceLabel(enabled: boolean) {
     setPriceLabelTools((current) => ({ ...current, [selectedKey]: enabled }))
     writeDrawingPriceLabel(selectedKey, enabled)
-    if (selectedDrawing?.tool !== selectedKey || selectedKey !== 'horizontalLine') return
+    if (selectedDrawing?.tool === selectedKey) {
+      setSelectedDrawing((current) => current?.tool === selectedKey
+        ? { ...current, showPriceLabel: enabled }
+        : current)
+    }
+    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine') return
+    if (selectedDrawing?.tool !== selectedKey && selectedKey !== 'trendLine') return
     publishDrawingToolCommand({
       action: 'updateSelectedPriceLabel',
       showPriceLabel: enabled,
-      tool: 'horizontalLine',
+      tool: selectedKey,
     })
   }
 
@@ -264,6 +283,24 @@ export function DrawingsDrawer() {
       action: 'updateSelectedPrice',
       price,
       tool: 'horizontalLine',
+    })
+  }
+
+  function setSelectedTrendPointPrice(pointIndex: number, price: number) {
+    if (selectedKey !== 'trendLine') return
+    setSelectedDrawing((current) => current?.tool === 'trendLine'
+      ? {
+          ...current,
+          trendPointPrices: pointIndex === 0
+            ? [price, current.trendPointPrices?.[1]]
+            : [current.trendPointPrices?.[0], price],
+        }
+      : current)
+    publishDrawingToolCommand({
+      action: 'updateSelectedTrendLinePointPrice',
+      pointIndex,
+      price,
+      tool: 'trendLine',
     })
   }
 
@@ -372,7 +409,7 @@ export function DrawingsDrawer() {
                 ariaLabel={`${selectedTool.label} actions`}
                 className="ff-drawing-hline-actions-v1--segmented"
                 items={[
-                  { active: selectedDrawing?.tool === selectedKey, label: '\u9009\u4e2d', onClick: () => undefined },
+                  { active: selectedDrawing?.tool === selectedKey, label: '\u9009\u4e2d', statusOnly: true },
                   { active: selectedLocked, label: '\u9501\u5b9a', onClick: toggleSelectedLock },
                   { active: false, label: '\u5220\u9664', onClick: deleteSelectedDrawing },
                 ]}
@@ -411,6 +448,7 @@ export function DrawingsDrawer() {
                         priceLabelVisible={selectedPriceLabel}
                         selectedDrawing={selectedDrawing}
                         onPriceChange={setSelectedPrice}
+                        onTrendPointPriceChange={setSelectedTrendPointPrice}
                         tab={tab}
                         textStyle={selectedTextStyle}
                         trendLineStyle={trendLineStyle}
@@ -435,7 +473,7 @@ function SegmentedControl({
 }: {
   ariaLabel: string
   className?: string
-  items: Array<{ active: boolean; label: string; onClick: () => void }>
+  items: Array<{ active: boolean; label: string; onClick?: () => void; statusOnly?: boolean }>
 }) {
   return (
     <div className={`ff-indicators-style-persistence-v1 ${className}`.trim()} role="group" aria-label={ariaLabel}>
@@ -443,8 +481,9 @@ function SegmentedControl({
         <button
           className="ff-indicators-style-persistence-v1__button"
           data-active={item.active ? 'true' : undefined}
+          data-status-only={item.statusOnly ? 'true' : undefined}
           key={item.label}
-          onClick={item.onClick}
+          onClick={item.statusOnly ? undefined : item.onClick}
           type="button"
         >
           {item.label}
@@ -480,6 +519,7 @@ function DrawingTabPanel({
   onPriceLabelChange,
   onPriceChange,
   onTextStyleChange,
+  onTrendPointPriceChange,
   onTrendLineStyleChange,
   priceLabelVisible,
   selectedDrawing,
@@ -493,9 +533,10 @@ function DrawingTabPanel({
   onPriceLabelChange: (enabled: boolean) => void
   onPriceChange: (price: number) => void
   onTextStyleChange: (value: DrawingTextStyle) => void
+  onTrendPointPriceChange: (pointIndex: number, price: number) => void
   onTrendLineStyleChange: (value: DrawingTrendLineStyle) => void
   priceLabelVisible: boolean
-  selectedDrawing: { locked: boolean; objectId?: string; price?: number; tool: DrawingToolKey } | null
+  selectedDrawing: { locked: boolean; objectId?: string; price?: number; tool: DrawingToolKey; trendPointPrices?: [number | undefined, number | undefined] } | null
   tab: DrawingTab
   textStyle: DrawingTextStyle
   trendLineStyle: DrawingTrendLineStyle
@@ -515,7 +556,7 @@ function DrawingTabPanel({
     )
   }
   if (tab === 'text') return <DrawingTextPanel onTextStyleChange={onTextStyleChange} textStyle={textStyle} />
-  return <DrawingCoordsPanel onPriceChange={onPriceChange} selectedDrawing={selectedDrawing} tool={tool} />
+  return <DrawingCoordsPanel onPriceChange={onPriceChange} onTrendPointPriceChange={onTrendPointPriceChange} selectedDrawing={selectedDrawing} tool={tool} />
 }
 
 function DrawingStylePanel({
@@ -685,7 +726,7 @@ function TrendStatsDataSelect({
         type="button"
       >
         <span className="ff-drawing-tline-tv-stats-select-v1__value">{display}</span>
-        <span aria-hidden="true" className="ff-openable-select__chevron">v</span>
+        <span aria-hidden="true" className="ff-openable-select__chevron">{'\u2304'}</span>
       </button>
       {open && (
         <div className="ff-openable-select__menu ff-drawing-tline-tv-stats-select-v1__menu" role="listbox">
@@ -761,7 +802,7 @@ function TrendExtendModeSelect({
         type="button"
       >
         <span className="ff-drawing-tline-tv-check-select-v1__value">{display}</span>
-        <span aria-hidden="true" className="ff-openable-select__chevron">v</span>
+        <span aria-hidden="true" className="ff-openable-select__chevron">{'\u2304'}</span>
       </button>
       {open && (
         <div className="ff-openable-select__menu ff-drawing-tline-tv-check-select-v1__menu" role="listbox">
@@ -852,7 +893,7 @@ function TrendLineV4StyleOptions({
         <span className="ff-drawing-tline-tv-label-v1">{'\u7edf\u8ba1\u6570\u636e'}</span>
         <TrendStatsDataSelect onChange={(value) => onChange({ statsData: value })} value={settings.statsData} />
       </div>
-      <DrawingOpenableSelectRow label={'\u7edf\u8ba1\u4f4d\u7f6e'} onChange={(value) => onChange({ statsPosition: value as DrawingTrendLineStyle['statsPosition'] })} options={drawingStatsPositionOptions} value={settings.statsPosition} />
+      <DrawingOpenableSelectRow className="ff-drawing-tline-tv-openable-select-v1--stats-position" label={'\u7edf\u8ba1\u4f4d\u7f6e'} onChange={(value) => onChange({ statsPosition: value as DrawingTrendLineStyle['statsPosition'] })} options={drawingStatsPositionOptions} value={settings.statsPosition} />
       <div className="ff-drawing-tline-tv-check-line-v1">
         <label className="ff-drawing-tline-tv-check-row-v1">
           <input checked={settings.statsAlwaysVisible} onChange={(event) => onChange({ statsAlwaysVisible: event.target.checked })} type="checkbox" />
@@ -971,11 +1012,13 @@ function DrawingTextPanel({
 
 function DrawingCoordsPanel({
   onPriceChange,
+  onTrendPointPriceChange,
   selectedDrawing,
   tool,
 }: {
   onPriceChange: (price: number) => void
-  selectedDrawing: { locked: boolean; price?: number; tool: DrawingToolKey } | null
+  onTrendPointPriceChange: (pointIndex: number, price: number) => void
+  selectedDrawing: { locked: boolean; price?: number; tool: DrawingToolKey; trendPointPrices?: [number | undefined, number | undefined] } | null
   tool: DrawingTool
 }) {
   if (tool.key === 'horizontalLine') {
@@ -985,6 +1028,16 @@ function DrawingCoordsPanel({
         onPriceChange={onPriceChange}
         price={selectedDrawing?.tool === 'horizontalLine' ? selectedDrawing.price : undefined}
         selected={selectedDrawing?.tool === 'horizontalLine'}
+      />
+    )
+  }
+  if (tool.key === 'trendLine') {
+    return (
+      <TrendLineCoordsPanel
+        locked={selectedDrawing?.tool === 'trendLine' && selectedDrawing.locked}
+        onPointPriceChange={onTrendPointPriceChange}
+        pointPrices={selectedDrawing?.tool === 'trendLine' ? selectedDrawing.trendPointPrices : undefined}
+        selected={selectedDrawing?.tool === 'trendLine'}
       />
     )
   }
@@ -1073,6 +1126,81 @@ function CoordinateRow({ label }: { label: string }) {
       <span className="ff-drawing-tline-coords-v1__label">{label}</span>
       <input className="ff-drawing-tline-coords-v1__input" type="text" />
       <input className="ff-drawing-tline-coords-v1__input" type="text" />
+    </div>
+  )
+}
+
+function TrendLineCoordsPanel({
+  locked,
+  onPointPriceChange,
+  pointPrices,
+  selected,
+}: {
+  locked: boolean
+  onPointPriceChange: (pointIndex: number, price: number) => void
+  pointPrices?: [number | undefined, number | undefined]
+  selected: boolean
+}) {
+  if (!selected) {
+    return <p className="ff-drawing-hline-coords-tab-v1__hint">{'未选中趋势线：请先在图上选中一条趋势线。'}</p>
+  }
+  if (locked) {
+    return <p className="ff-drawing-hline-coords-tab-v1__hint">{'当前选中的趋势线已锁定，无法修改坐标。请先解锁。'}</p>
+  }
+  return (
+    <div className="ff-drawing-tline-price-coords-v1">
+      <TrendLinePriceCoordinateRow index={0} onChange={onPointPriceChange} price={pointPrices?.[0]} />
+      <TrendLinePriceCoordinateRow index={1} onChange={onPointPriceChange} price={pointPrices?.[1]} />
+    </div>
+  )
+}
+
+function TrendLinePriceCoordinateRow({ index, onChange, price }: { index: number; onChange: (pointIndex: number, price: number) => void; price?: number }) {
+  const [draft, setDraft] = useState('')
+  const [editing, setEditing] = useState(false)
+
+  useEffect(() => {
+    if (editing) return
+    setDraft(Number.isFinite(price) ? formatGlobalPrice(price, '') : '')
+  }, [editing, price])
+
+  const commit = () => {
+    const nextPrice = Number(draft.trim().replace(/,/g, ''))
+    if (!Number.isFinite(nextPrice)) {
+      setDraft(Number.isFinite(price) ? formatGlobalPrice(price, '') : '')
+      setEditing(false)
+      return
+    }
+    onChange(index, nextPrice)
+    setDraft(formatGlobalPrice(nextPrice, ''))
+    setEditing(false)
+  }
+
+  return (
+    <div className="ff-drawing-tline-price-coords-v1__row">
+      <label className="ff-drawing-tline-price-coords-v1__label" htmlFor={`ff-drawing-tline-price-${index + 1}-v1`}>
+        {`#${index + 1}（价格）`}
+      </label>
+      <input
+        autoComplete="off"
+        className="ff-drawing-tline-price-coords-v1__input"
+        id={`ff-drawing-tline-price-${index + 1}-v1`}
+        inputMode="decimal"
+        onBlur={commit}
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => {
+          setEditing(true)
+          setDraft(Number.isFinite(price) ? formatGlobalPrice(price, '') : '')
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter') return
+          event.preventDefault()
+          commit()
+        }}
+        step="any"
+        type="number"
+        value={draft}
+      />
     </div>
   )
 }

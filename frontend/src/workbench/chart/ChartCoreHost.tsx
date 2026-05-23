@@ -20,6 +20,7 @@ import { ensureTradingViewViIndicator } from './tradingViewViIndicator'
 import { ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
 import type { MacdIndicatorSettings, MaIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
+import { readString, writeString } from '../persistence/jsonStorage'
 import './ChartCoreHost.css'
 
 const rsiPaneId = 'rsi_pane'
@@ -90,13 +91,13 @@ function normalizeRsiPaneHeight(value: number) {
 
 function readStoredPaneHeight(storageKey: string) {
   if (typeof window === 'undefined') return defaultRsiPaneHeight
-  const stored = Number(window.localStorage.getItem(storageKey))
+  const stored = Number(readString(storageKey))
   return Number.isFinite(stored) ? normalizeRsiPaneHeight(stored) : defaultRsiPaneHeight
 }
 
 function writeStoredPaneHeight(storageKey: string, height: number) {
   if (typeof window === 'undefined' || !Number.isFinite(height)) return
-  window.localStorage.setItem(storageKey, String(normalizeRsiPaneHeight(height)))
+  writeString(storageKey, String(normalizeRsiPaneHeight(height)))
 }
 
 function refreshPane(chart: unknown, paneId: string) {
