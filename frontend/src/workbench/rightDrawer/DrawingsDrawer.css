@@ -149,7 +149,7 @@
 
 .ff-drawing-fib-top-row-v1 {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   min-height: 34px;
@@ -166,12 +166,12 @@
   padding-left: 28px;
 }
 
-.ff-drawing-fib-top-row-v1--horizontal > .ff-drawing-tline-tv-label-v1 {
-  padding-left: 0;
+.ff-drawing-fib-top-row-v1--horizontal {
+  grid-template-columns: 88px minmax(0, 1fr);
 }
 
-.ff-drawing-fib-top-row-v1--horizontal {
-  grid-template-columns: 64px minmax(0, 1fr);
+.ff-drawing-fib-top-row-v1--horizontal > .ff-drawing-tline-tv-label-v1 {
+  padding-left: 0;
 }
 
 .ff-drawing-fib-top-row-v1 > .ff-drawing-fib-horizontal-controls-v1,
@@ -179,19 +179,14 @@
   grid-column: 2;
 }
 
-.ff-drawing-fib-top-row-v1 > .ff-settings-line-swatch {
-  transform: translateX(-46px);
-}
-
 .ff-drawing-fib-extend-row-v1 {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .ff-drawing-fib-extend-select-v1 {
-  transform: translateX(10px);
   width: 180px;
 }
 
@@ -199,7 +194,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  transform: translateX(15px);
 }
 
 .ff-drawing-fib-line-preview-v1,
