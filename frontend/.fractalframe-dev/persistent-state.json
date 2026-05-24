@@ -2,14 +2,14 @@
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
     "lastTickAt": "15:38:54",
     "log": [
+      "22:40:37  Realtime stopped",
       "22:33:25  Realtime stopped",
       "22:30:27  Realtime stopped",
       "22:27:10  Realtime stopped",
       "22:26:41  Realtime stopped",
       "22:26:25  Realtime stopped",
       "22:22:16  Realtime stopped",
-      "22:21:33  Realtime stopped",
-      "22:16:36  Realtime stopped"
+      "22:21:33  Realtime stopped"
     ],
     "ticks": {
       "1INCHUSDm": {
@@ -1815,7 +1815,7 @@
         ]
       }
     ],
-    "savedAt": "2026-05-24T14:33:25.707Z"
+    "savedAt": "2026-05-24T14:40:37.744Z"
   },
   "fractalframe:mt5ImportCenterTopPaneHeightPx:v1": "180",
   "fractalframe.drawings.fibRetracement.items": [],
@@ -2110,37 +2110,37 @@
   },
   "fractalframe.drawingsDrawer.cursorMode": "crosshair",
   "fractalframe:chartViewport:v4:global:M5": {
-    "barSpace": 4.4979911405847615,
+    "barSpace": 2.3307123244801704,
     "dataLength": 3000,
-    "offsetRightDistance": 39.58650819124604,
+    "offsetRightDistance": 139.16918719685054,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T14:37:37.223Z",
+    "savedAt": "2026-05-24T14:40:41.900Z",
     "visibleTo": 3000,
     "yAxisRange": {
-      "from": 4418.891616445838,
+      "from": 4414.021722882063,
       "range": 156.76419281483777,
-      "realFrom": 4418.891616445838,
+      "realFrom": 4414.021722882063,
       "realRange": 156.76419281483777,
-      "realTo": 4575.655809260676,
-      "to": 4575.655809260676
+      "realTo": 4570.785915696901,
+      "to": 4570.785915696901
     },
     "symbol": "XAUUSDm",
     "period": "M5"
   },
   "fractalframe:chartViewport:v4:latest": {
-    "barSpace": 4.4979911405847615,
+    "barSpace": 2.3307123244801704,
     "dataLength": 3000,
-    "offsetRightDistance": 39.58650819124604,
+    "offsetRightDistance": 139.16918719685054,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T14:37:37.223Z",
+    "savedAt": "2026-05-24T14:40:41.900Z",
     "visibleTo": 3000,
     "yAxisRange": {
-      "from": 4418.891616445838,
+      "from": 4414.021722882063,
       "range": 156.76419281483777,
-      "realFrom": 4418.891616445838,
+      "realFrom": 4414.021722882063,
       "realRange": 156.76419281483777,
-      "realTo": 4575.655809260676,
-      "to": 4575.655809260676
+      "realTo": 4570.785915696901,
+      "to": 4570.785915696901
     },
     "symbol": "XAUUSDm",
     "period": "M5"
