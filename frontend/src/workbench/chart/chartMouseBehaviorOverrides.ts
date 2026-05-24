@@ -204,7 +204,6 @@ export function installChartMouseBehaviorOverrides(chart: Chart) {
       })
       paneMain.style.setProperty('cursor', cursor, 'important')
     })
-    chart.setStyles({ crosshair: { show: readChartCursorMode() === 'crosshair' } })
   }
 
   const finishPress = () => {

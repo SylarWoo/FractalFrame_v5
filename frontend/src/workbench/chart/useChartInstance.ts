@@ -8,6 +8,7 @@ import { formatChartDate, readChartTimezone } from './chartTimeFormatting'
 import { readRightPlaceholderVisible, refreshChartFuturePlaceholders } from './chartFuturePlaceholders'
 import { chartDrawingVisibilityRefreshEvent, installChartDrawingTools } from './chartDrawingTools'
 import { installChartMouseBehaviorOverrides } from './chartMouseBehaviorOverrides'
+import { installChartBarSpaceCompression } from './chartBarSpaceCompression'
 import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
 import { installPaneTitleOverlay } from './paneTitleOverlayManager'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
@@ -93,11 +94,13 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     scheduleResize()
     let cleanupDrawingTools: (() => void) | null = null
     let cleanupMouseBehaviorOverrides: (() => void) | null = null
+    let cleanupBarSpaceCompression: (() => void) | null = null
     let cleanupViewportPersistence: (() => void) | null = null
     let cleanupYAxisDragOptimization: (() => void) | null = null
     window.requestAnimationFrame(() => {
       if (chart) {
         cleanupYAxisDragOptimization = installYAxisDragOptimization(chart)
+        cleanupBarSpaceCompression = installChartBarSpaceCompression(chart)
         cleanupMouseBehaviorOverrides = installChartMouseBehaviorOverrides(chart)
         cleanupDrawingTools = installChartDrawingTools(chart, () => chartContextRef.current.period)
         cleanupViewportPersistence = installChartViewportPersistence(chart, () => chartContextRef.current)
@@ -113,6 +116,7 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
       cleanupViewportPersistence?.()
       cleanupDrawingTools?.()
       cleanupMouseBehaviorOverrides?.()
+      cleanupBarSpaceCompression?.()
       cleanupYAxisDragOptimization?.()
       if (resizeFrameId !== 0) window.cancelAnimationFrame(resizeFrameId)
       resizeObserver.disconnect()

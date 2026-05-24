@@ -7,6 +7,7 @@ import {
   type ChartViewportSnapshot,
 } from './chartViewportGlobalStore'
 import { isAxisRangeUsableForVisiblePrices, readChartYAxisRange, restoreChartYAxisRange } from './chartViewportAxisRange'
+import { setChartBarSpace } from './chartBarSpaceCompression'
 
 export type { ChartViewportSnapshot } from './chartViewportGlobalStore'
 export type { AxisRangeSnapshot } from './chartViewportAxisRange'
@@ -65,7 +66,7 @@ export function captureChartViewportSnapshot(chart: Chart, forceYAxisRange = fal
 
 export function restoreChartViewportSnapshot(chart: Chart, snapshot: ChartViewportSnapshot | null | undefined) {
   if (!snapshot) return false
-  chart.setBarSpace(snapshot.barSpace)
+  setChartBarSpace(chart, snapshot.barSpace)
   const restoreScroll = () => {
     const dataLength = chart.getDataList().length
     if (dataLength === 0) return

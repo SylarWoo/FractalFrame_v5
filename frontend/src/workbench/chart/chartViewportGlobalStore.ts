@@ -1,5 +1,6 @@
 import { readJson, writeJson } from '../persistence/jsonStorage'
 import type { AxisRangeSnapshot } from './chartViewportAxisRange'
+import { minCompressedBarSpace } from './chartBarSpaceCompression'
 
 const viewportStoragePrefix = 'fractalframe:chartViewport:v3'
 const latestViewportStorageKey = `${viewportStoragePrefix}:latest`
@@ -127,7 +128,7 @@ export function readLatestChartViewportSnapshot(): ChartViewportSnapshot | null 
 function normalizeChartViewportSnapshot(snapshot: Partial<ChartViewportSnapshot> | null) {
   if (!snapshot || !finiteNumber(snapshot.barSpace) || !finiteNumber(snapshot.visibleTo)) return null
   return {
-    barSpace: Math.max(1, Math.min(snapshot.barSpace, 80)),
+    barSpace: Math.max(minCompressedBarSpace, Math.min(snapshot.barSpace, 80)),
     dataLength: finiteNumber(snapshot.dataLength) ? snapshot.dataLength : 0,
     offsetRightDistance: finiteNumber(snapshot.offsetRightDistance) ? snapshot.offsetRightDistance : null,
     period: typeof snapshot.period === 'string' ? snapshot.period : undefined,
