@@ -39,6 +39,13 @@ def handle_store_v5_get(handler: Any, parsed: ParseResult, services: Any) -> boo
             _send_exception(handler, "store_v5_status_failed", exc)
         return True
 
+    if parsed.path == "/api/market-data/v1/store-v5/symbols":
+        try:
+            handler.send_json(200, services.list_store_v5_symbols(store_root=handler.store_root))
+        except Exception as exc:
+            _send_exception(handler, "store_v5_symbols_failed", exc)
+        return True
+
     if parsed.path == "/api/market-data/v1/store-v5/m1/repair-gaps":
         query = parse_qs(parsed.query)
         symbol = required_symbol(query)

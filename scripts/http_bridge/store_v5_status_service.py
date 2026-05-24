@@ -145,6 +145,54 @@ def check_store_v5(symbol: str, store_root: Path | None = None) -> dict[str, Any
     }
 
 
+def list_store_v5_symbols(store_root: Path | None = None) -> dict[str, Any]:
+    from python.data_warehouse.store_v5.manifest_v5 import load_manifest_v5
+    from python.data_warehouse.store_v5.store_v5_paths import resolve_store_root
+
+    root = resolve_store_root(store_root)
+    manifest = load_manifest_v5(root)
+    symbols: dict[str, dict[str, Any]] = {}
+    for cell in manifest.get("datasets", {}).values():
+      if cell.get("provider") != "mt5":
+          continue
+      symbol = str(cell.get("symbol") or "").strip()
+      if not symbol:
+          continue
+      entry = symbols.setdefault(symbol, {
+          "symbol": symbol,
+          "name": symbol,
+          "description": symbol,
+          "path": "StoreV5",
+          "category": "Local",
+          "source": "store_v5",
+          "market": "unknown",
+          "visible": True,
+          "periods": [],
+      })
+      timeframe = str(cell.get("timeframe") or "").strip().upper()
+      mode = str(cell.get("mode") or "").strip().lower()
+      rows_count = safe_int(cell.get("rowsCount"))
+      if timeframe:
+          entry["periods"].append({
+              "mode": mode,
+              "timeframe": timeframe,
+              "rowsCount": rows_count,
+              "lastTime": safe_int(cell.get("lastTrueM1Time") or cell.get("lastTime")),
+          })
+
+    rows = sorted(symbols.values(), key=lambda row: row["symbol"])
+    return {
+        "ok": True,
+        "status": "store_v5_symbols_ready",
+        "provider": "store_v5",
+        "storeVersion": "v5",
+        "count": len(rows),
+        "totalCount": len(rows),
+        "symbols": rows,
+        "publishedAt": utc_now_iso(),
+    }
+
+
 def delete_store_v5_symbol(symbol: str, store_root: Path | None = None) -> dict[str, Any]:
     from python.data_warehouse.store_v5.manifest_v5 import load_manifest_v5, save_manifest_v5
     from python.data_warehouse.store_v5.store_v5_paths import resolve_store_root

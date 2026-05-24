@@ -5,7 +5,6 @@ import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
 import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
-import { useChartRealtimeTicks } from './useChartRealtimeTicks'
 import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
 import { useChartStepLoad } from './useChartStepLoad'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
@@ -125,7 +124,6 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     onLoadStateChange?.({ ...loadState, period, symbol, totalRows })
   }, [loadState, onLoadStateChange, period, symbol, totalRows])
 
-  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol, totalRows })
   useChartStepLoad({ chartInstanceRef, period, setLoadState, stepLoad: stepLoad ?? null, symbol, totalRows })
 
   useEffect(() => {

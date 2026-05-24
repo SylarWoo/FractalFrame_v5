@@ -73,7 +73,7 @@ export function readStorePanelPersistenceEnabled() {
 }
 
 export function readWatchlistRealtimeEnabled() {
-  return readBooleanFlag(storageKeys.importCenterWatchlistRealtimeEnabled, true)
+  return readBooleanFlag(storageKeys.importCenterWatchlistRealtimeEnabled, false)
 }
 
 export function saveWatchlistRealtimeEnabled(enabled: boolean) {

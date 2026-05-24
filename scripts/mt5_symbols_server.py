@@ -52,6 +52,7 @@ from http_bridge.store_v5_status_service import (
     check_store_v5,
     delete_store_v5_aggregated_timeframes,
     delete_store_v5_symbol,
+    list_store_v5_symbols,
 )
 from http_bridge.store_v5_routes import handle_store_v5_get, handle_store_v5_post
 

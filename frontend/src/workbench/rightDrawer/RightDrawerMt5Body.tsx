@@ -4,11 +4,10 @@ import type { WatchlistTableColumnKey } from '../mt5DataCenter/WatchlistTable'
 import { SymbolTable } from '../mt5DataCenter/SymbolTable'
 import { StoreV5Panel } from '../mt5DataCenter/StoreV5Panel'
 import { WatchlistTable } from '../mt5DataCenter/WatchlistTable'
-import { queryMt5MarketStatus, type Mt5MarketStatus, type Mt5RealtimeTick, type Mt5SymbolRow, type StoreV5CheckPayload, type Mt5M1CheckJobPayload, type StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
+import type { Mt5RealtimeTick, Mt5SymbolRow, StoreV5CheckPayload, Mt5M1CheckJobPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
 import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
-import { formatDetailValue, selectedDetailRows } from '../mt5DataCenter/storeV5StatusFormat'
+import { formatDetailValue, resolveLocalM1LastTime, selectedDetailRows } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
-import { saveMarketStatusTitleSnapshot } from '../mt5DataCenter/marketStatusTitleState'
 import { readChartTimezone } from '../chart/chartTimeFormatting'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
 
@@ -16,7 +15,7 @@ type ColumnWidths = Record<SymbolTableColumnKey, number>
 type WatchlistColumnWidths = Record<WatchlistTableColumnKey, number>
 type Progress = { hasEstimate: boolean; width: number }
 type SymbolDisplay = { chineseName: string; assetType: string; description: string }
-type SelectedMarketStatus = { status: Mt5MarketStatus | null; loading: boolean; error: string; timezone: string }
+type SelectedMarketStatus = { lastTime?: number | null; timezone: string }
 
 const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
   { key: 'details', label: '细节' },
@@ -110,7 +109,7 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
     watchlistRealtimeReady, watchlistRows, watchlistColumnWidths, watchlistTableHeight,
     watchlistTableWrapRef, watchlistTicks,
   } = props
-  const selectedMarketStatus = useSelectedMarketStatus(selectedRow?.symbol ?? '')
+  const selectedMarketStatus = useSelectedMarketStatus(localStoreStatus)
 
   return (
     <div className="ff-right-drawer__body">
@@ -219,11 +218,9 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
   )
 }
 
-function useSelectedMarketStatus(symbol: string): SelectedMarketStatus {
+function useSelectedMarketStatus(localStoreStatus: StoreV5CheckPayload | null): SelectedMarketStatus {
   const [marketStatus, setMarketStatus] = useState<SelectedMarketStatus>(() => ({
-    error: '',
-    loading: false,
-    status: null,
+    lastTime: resolveLocalM1LastTime(localStoreStatus),
     timezone: readChartTimezone(),
   }))
 
@@ -240,62 +237,23 @@ function useSelectedMarketStatus(symbol: string): SelectedMarketStatus {
   }, [])
 
   useEffect(() => {
-    let cancelled = false
-    let requestId = 0
-
-    const load = async () => {
-      if (!symbol) {
-        setMarketStatus((current) => ({ ...current, error: '', loading: false, status: null }))
-        return
-      }
-      const currentRequestId = ++requestId
-      setMarketStatus((current) => ({ ...current, error: '', loading: true }))
-      try {
-        const payload = await queryMt5MarketStatus(symbol, 120)
-        if (cancelled || currentRequestId !== requestId) return
-        setMarketStatus((current) => ({
-          ...current,
-          error: '',
-          loading: false,
-          status: payload.marketStatus ?? null,
-        }))
-        saveMarketStatusTitleSnapshot(symbol, payload.marketStatus)
-      } catch (error) {
-        if (cancelled || currentRequestId !== requestId) return
-        setMarketStatus((current) => ({
-          ...current,
-          error: error instanceof Error ? error.message : String(error),
-          loading: false,
-        }))
-      }
-    }
-
-    void load()
-    const timer = window.setInterval(load, 30_000)
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-    }
-  }, [symbol])
+    setMarketStatus((current) => ({ ...current, lastTime: resolveLocalM1LastTime(localStoreStatus) }))
+  }, [localStoreStatus])
 
   return marketStatus
 }
 
 function MarketStatusLine({ marketStatus }: { marketStatus: SelectedMarketStatus }) {
-  const status = marketStatus.status?.status ?? (marketStatus.loading ? 'unknown' : 'closed')
-  const isOpen = status === 'open'
-  const lastUpdated = marketStatus.status?.lastM1TimeMsc ?? (
-    typeof marketStatus.status?.lastM1Time === 'number' ? marketStatus.status.lastM1Time * 1000 : null
-  )
+  const isOpen = false
+  const lastUpdated = typeof marketStatus.lastTime === 'number' ? marketStatus.lastTime * 1000 : null
   const formatted = lastUpdated ? formatMarketStatusTime(lastUpdated, marketStatus.timezone) : ''
   const timezoneText = formatMarketStatusTimezone(marketStatus.timezone)
-  const title = marketStatus.error || marketStatus.status?.reason || ''
 
   return (
-    <div className="ff-import-market-status" data-status={isOpen ? 'open' : 'closed'} title={title}>
-      <span className={isOpen ? 'ff-import-market-status__dot' : 'ff-import-market-status__bar'} />
+    <div className="ff-import-market-status" data-status="closed" title="Local StoreV5 data">
+      <span className="ff-import-market-status__bar" />
       <span className="ff-import-market-status__label">{isOpen ? '开市' : '休市'}</span>
-      {!isOpen && formatted && (
+      {formatted && (
         <span className="ff-import-market-status__muted">最后更新于{timezoneText} {formatted}</span>
       )}
     </div>

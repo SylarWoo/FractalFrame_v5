@@ -13,6 +13,7 @@ export {
   deleteStoreV5AggregatedTimeframes,
   deleteStoreV5Symbol,
   fetchStoreV5Status,
+  fetchStoreV5Symbols,
   pullStoreV5,
   queryMt5MarketStatus,
   queryMt5Rates,

@@ -17,7 +17,44 @@ function estimateTurnover(high: number, low: number, close: number, volume: numb
   return Number.isFinite(typicalPrice) && Number.isFinite(volume) ? typicalPrice * volume : 0
 }
 
+const inFlightLoads = new Map<string, Promise<KLineData[]>>()
+
+function createLoadKey(options: {
+  symbol: string
+  period: string
+  limit?: number
+  timeFrom?: number
+  timeTo?: number
+}) {
+  return [
+    options.symbol.trim().toUpperCase(),
+    normalizeTimeframe(options.period),
+    options.limit ?? 1000,
+    options.timeFrom ?? '',
+    options.timeTo ?? '',
+  ].join('|')
+}
+
 export async function loadStoreV5KLineData(options: {
+  symbol: string
+  period: string
+  limit?: number
+  timeFrom?: number
+  timeTo?: number
+}): Promise<KLineData[]> {
+  const loadKey = createLoadKey(options)
+  const existingLoad = inFlightLoads.get(loadKey)
+  if (existingLoad) return existingLoad
+
+  const load = queryStoreV5KLineData(options)
+  inFlightLoads.set(loadKey, load)
+  load.finally(() => {
+    if (inFlightLoads.get(loadKey) === load) inFlightLoads.delete(loadKey)
+  })
+  return load
+}
+
+async function queryStoreV5KLineData(options: {
   symbol: string
   period: string
   limit?: number

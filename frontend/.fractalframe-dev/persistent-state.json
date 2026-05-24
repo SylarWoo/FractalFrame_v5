@@ -1,15 +1,15 @@
 {
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
-    "lastTickAt": "15:33:45",
+    "lastTickAt": "15:38:54",
     "log": [
-      "15:32:11  Realtime feed connected",
-      "15:32:11  Realtime restored for 10 symbols",
-      "15:32:09  Realtime feed connected",
-      "15:32:04  Realtime reconnecting",
-      "15:32:04  Realtime disconnected",
-      "15:31:59  Realtime reconnecting",
-      "15:31:59  Realtime disconnected",
-      "15:31:54  Realtime reconnecting"
+      "15:49:30  Realtime stopped",
+      "15:49:18  Realtime stopped",
+      "15:45:42  Realtime stopped",
+      "15:43:22  Realtime stopped",
+      "15:40:31  Realtime stopped",
+      "15:40:03  Realtime stopped",
+      "15:40:03  Realtime stopped",
+      "15:39:55  Realtime stopped"
     ],
     "ticks": {
       "1INCHUSDm": {
@@ -36,20 +36,20 @@
         "dayOpen": 4535.491,
         "change": -27.52900000000045,
         "changePercent": -0.6069684627309468,
-        "publishedAt": "2026-05-24T07:33:45Z"
+        "publishedAt": "2026-05-24T07:38:54Z"
       },
       "BTCUSDm": {
         "symbol": "BTCUSDm",
-        "bid": 76772.67,
-        "ask": 76786.67,
-        "last": 76779.67,
+        "bid": 76782.17,
+        "ask": 76796.17,
+        "last": 76789.17,
         "volume": 0,
-        "time": 1779608022,
-        "timeMsc": 1779608022661,
+        "time": 1779608330,
+        "timeMsc": 1779608330651,
         "dayOpen": 76657.63,
-        "change": 122.0399999999936,
-        "changePercent": 0.15920137369234294,
-        "publishedAt": "2026-05-24T07:33:45Z"
+        "change": 131.5399999999936,
+        "changePercent": 0.17159413877000057,
+        "publishedAt": "2026-05-24T07:38:54Z"
       },
       "DXYm": {
         "symbol": "DXYm",
@@ -62,7 +62,7 @@
         "dayOpen": 99.195,
         "change": 0.13300000000000978,
         "changePercent": 0.13407933867635444,
-        "publishedAt": "2026-05-24T07:33:45Z"
+        "publishedAt": "2026-05-24T07:38:54Z"
       },
       "EURUSDm": {
         "symbol": "EURUSDm",
@@ -75,7 +75,7 @@
         "dayOpen": 1.16173,
         "change": -0.0014899999999999913,
         "changePercent": -0.12825699603177945,
-        "publishedAt": "2026-05-24T07:33:45Z"
+        "publishedAt": "2026-05-24T07:38:54Z"
       },
       "GBPUSDm": {
         "symbol": "GBPUSDm",
@@ -88,7 +88,7 @@
         "dayOpen": 1.3431600000000001,
         "change": 0.000009999999999843467,
         "changePercent": 0.0007445129396232367,
-        "publishedAt": "2026-05-24T07:33:45Z"
+        "publishedAt": "2026-05-24T07:38:54Z"
       },
       "USDJPYm": {
         "symbol": "USDJPYm",
@@ -101,20 +101,20 @@
         "dayOpen": 159.022,
         "change": 0.17900000000003047,
         "changePercent": 0.11256304159174861,
-        "publishedAt": "2026-05-24T07:33:45Z"
+        "publishedAt": "2026-05-24T07:38:54Z"
       },
       "ETHUSDm": {
         "symbol": "ETHUSDm",
-        "bid": 2119.37,
-        "ask": 2120.77,
-        "last": 2120.0699999999997,
+        "bid": 2119.56,
+        "ask": 2120.96,
+        "last": 2120.26,
         "volume": 0,
-        "time": 1779608012,
-        "timeMsc": 1779608012656,
+        "time": 1779608331,
+        "timeMsc": 1779608331800,
         "dayOpen": 2114.53,
-        "change": 5.539999999999509,
-        "changePercent": 0.2619967557802211,
-        "publishedAt": "2026-05-24T07:33:45Z"
+        "change": 5.730000000000018,
+        "changePercent": 0.2709822040831777,
+        "publishedAt": "2026-05-24T07:38:54Z"
       },
       "XAGUSDm": {
         "symbol": "XAGUSDm",
@@ -127,7 +127,7 @@
         "dayOpen": 76.62,
         "change": -1.1470000000000056,
         "changePercent": -1.4969981728008426,
-        "publishedAt": "2026-05-24T07:33:45Z"
+        "publishedAt": "2026-05-24T07:38:54Z"
       },
       "USTEC_x100m": {
         "symbol": "USTEC_x100m",
@@ -140,7 +140,7 @@
         "dayOpen": 29495.81,
         "change": -16.520000000000437,
         "changePercent": -0.056007955028190226,
-        "publishedAt": "2026-05-24T07:33:45Z"
+        "publishedAt": "2026-05-24T07:38:54Z"
       },
       "US30m": {
         "symbol": "US30m",
@@ -153,42 +153,42 @@
         "dayOpen": 50419.7,
         "change": 179.0500000000029,
         "changePercent": 0.35511913002259615,
-        "publishedAt": "2026-05-24T07:33:45Z"
+        "publishedAt": "2026-05-24T07:38:54Z"
       }
     }
   },
   "fractalframe:chartViewport:v3:global:M5": {
-    "barSpace": 4.64190798865764,
+    "barSpace": 4.734566339457652,
     "dataLength": 10000,
-    "offsetRightDistance": 29.747041069814724,
+    "offsetRightDistance": 276.88174881235153,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T07:33:45.395Z",
+    "savedAt": "2026-05-24T07:49:53.487Z",
     "visibleTo": 10000,
     "yAxisRange": {
-      "from": 4456.610517414813,
-      "range": 98.65906320279464,
-      "realFrom": 4456.610517414813,
-      "realRange": 98.65906320279464,
-      "realTo": 4555.269580617608,
-      "to": 4555.269580617608
+      "from": 4465.7877283305625,
+      "range": 88.27559538245623,
+      "realFrom": 4465.7877283305625,
+      "realRange": 88.27559538245623,
+      "realTo": 4554.063323713019,
+      "to": 4554.063323713019
     },
     "symbol": "XAUUSDm",
     "period": "M5"
   },
   "fractalframe:chartViewport:v3:latest": {
-    "barSpace": 4.64190798865764,
+    "barSpace": 4.734566339457652,
     "dataLength": 10000,
-    "offsetRightDistance": 29.747041069814724,
+    "offsetRightDistance": 276.88174881235153,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T07:33:45.395Z",
+    "savedAt": "2026-05-24T07:49:53.487Z",
     "visibleTo": 10000,
     "yAxisRange": {
-      "from": 4456.610517414813,
-      "range": 98.65906320279464,
-      "realFrom": 4456.610517414813,
-      "realRange": 98.65906320279464,
-      "realTo": 4555.269580617608,
-      "to": 4555.269580617608
+      "from": 4465.7877283305625,
+      "range": 88.27559538245623,
+      "realFrom": 4465.7877283305625,
+      "realRange": 88.27559538245623,
+      "realTo": 4554.063323713019,
+      "to": 4554.063323713019
     },
     "symbol": "XAUUSDm",
     "period": "M5"
@@ -239,10 +239,10 @@
       "rowsCount": 110
     }
   ],
-  "fractalframe:mt5ImportCenterWatchlistRealtimeEnabled:v1": "1",
+  "fractalframe:mt5ImportCenterWatchlistRealtimeEnabled:v1": "0",
   "fractalframe:mt5ImportCenterQuery:v1": "",
   "fractalframe:mt5ImportCenterSelectedTab:v1": "watchlist",
-  "fractalframe:rightWidgetDrawerWidthPx:v1": "373",
+  "fractalframe:rightWidgetDrawerWidthPx:v1": "382",
   "fractalframe:indicatorShortcutKeys:v1": [
     "RSI",
     "Stoch",
@@ -527,11 +527,1287 @@
   "fractalframe:rightWidgetActiveDrawer:v1": "drawings",
   "fractalframe:bottomDrawerOpen:v1": "0",
   "fractalframe:bottomDrawerHeightPx:v1": "300",
-  "fractalframe.chart.macdPaneHeight": "231",
-  "fractalframe.chart.viPaneHeight": "220",
+  "fractalframe.chart.macdPaneHeight": "219",
+  "fractalframe.chart.viPaneHeight": "240",
   "fractalframe.drawingsDrawer.selectedTool": "fibRetracement",
   "fractalframe.objectTree.groups.v1": [],
   "fractalframe.drawings.ruler.items": [],
   "fractalframe.drawings.trendLine.items": [],
-  "fractalframe.drawings.horizontalLine.items": []
+  "fractalframe.drawings.horizontalLine.items": [],
+  "fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1": "325",
+  "fractalframe:mt5ImportCenterSharedSelection:v1": {
+    "symbol": "XAUUSDm",
+    "period": "M5"
+  },
+  "fractalframe:marketStatusTitleSnapshots:v1": {
+    "1INCHUSDM": {
+      "savedAt": "2026-05-23T03:57:24.544Z",
+      "status": {
+        "status": "closed",
+        "label": "休市",
+        "lastM1Time": 1722898080,
+        "lastM1TimeMsc": 1722898080000,
+        "lastM1Iso": "2024-08-05T22:48:00Z",
+        "lastTickTime": 1722898103,
+        "lastTickTimeMsc": 1722898103651,
+        "serverTime": 1779508644,
+        "serverTimeIso": "2026-05-23T03:57:24Z",
+        "ageSeconds": 56610564,
+        "tickAgeSeconds": 56610541,
+        "staleSeconds": 120,
+        "tradeMode": 0,
+        "reason": "trade_mode_disabled"
+      },
+      "symbol": "1INCHUSDm"
+    },
+    "XAUUSDM": {
+      "savedAt": "2026-05-24T07:38:51.365Z",
+      "status": {
+        "status": "closed",
+        "label": "休市",
+        "lastM1Time": 1779483420,
+        "lastM1TimeMsc": 1779483420000,
+        "lastM1Iso": "2026-05-22T20:57:00Z",
+        "lastTickTime": 1779483478,
+        "lastTickTimeMsc": 1779483478190,
+        "serverTime": 1779608331,
+        "serverTimeIso": "2026-05-24T07:38:51Z",
+        "ageSeconds": 124911,
+        "tickAgeSeconds": 124853,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_and_tick_stale"
+      },
+      "symbol": "XAUUSDm"
+    },
+    "BTCUSDM": {
+      "savedAt": "2026-05-23T23:44:09.937Z",
+      "status": {
+        "status": "open",
+        "label": "开市",
+        "lastM1Time": 1779579840,
+        "lastM1TimeMsc": 1779579840000,
+        "lastM1Iso": "2026-05-23T23:44:00Z",
+        "lastTickTime": 1779579849,
+        "lastTickTimeMsc": 1779579849243,
+        "serverTime": 1779579849,
+        "serverTimeIso": "2026-05-23T23:44:09Z",
+        "ageSeconds": 9,
+        "tickAgeSeconds": 0,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_synced"
+      },
+      "symbol": "BTCUSDm"
+    },
+    "DXYM": {
+      "savedAt": "2026-05-23T05:32:22.553Z",
+      "status": {
+        "status": "closed",
+        "label": "休市",
+        "lastM1Time": 1779483480,
+        "lastM1TimeMsc": 1779483480000,
+        "lastM1Iso": "2026-05-22T20:58:00Z",
+        "lastTickTime": 1779483539,
+        "lastTickTimeMsc": 1779483539914,
+        "serverTime": 1779514342,
+        "serverTimeIso": "2026-05-23T05:32:22Z",
+        "ageSeconds": 30862,
+        "tickAgeSeconds": 30803,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_and_tick_stale"
+      },
+      "symbol": "DXYm"
+    },
+    "EURUSDM": {
+      "savedAt": "2026-05-23T05:32:26.831Z",
+      "status": {
+        "status": "closed",
+        "label": "休市",
+        "lastM1Time": 1779483480,
+        "lastM1TimeMsc": 1779483480000,
+        "lastM1Iso": "2026-05-22T20:58:00Z",
+        "lastTickTime": 1779483538,
+        "lastTickTimeMsc": 1779483538897,
+        "serverTime": 1779514346,
+        "serverTimeIso": "2026-05-23T05:32:26Z",
+        "ageSeconds": 30866,
+        "tickAgeSeconds": 30808,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_and_tick_stale"
+      },
+      "symbol": "EURUSDm"
+    },
+    "GBPUSDM": {
+      "savedAt": "2026-05-23T05:32:21.119Z",
+      "status": {
+        "status": "closed",
+        "label": "休市",
+        "lastM1Time": 1779483480,
+        "lastM1TimeMsc": 1779483480000,
+        "lastM1Iso": "2026-05-22T20:58:00Z",
+        "lastTickTime": 1779483534,
+        "lastTickTimeMsc": 1779483534670,
+        "serverTime": 1779514341,
+        "serverTimeIso": "2026-05-23T05:32:21Z",
+        "ageSeconds": 30861,
+        "tickAgeSeconds": 30807,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_and_tick_stale"
+      },
+      "symbol": "GBPUSDm"
+    },
+    "USDJPYM": {
+      "savedAt": "2026-05-23T05:31:52.886Z",
+      "status": {
+        "status": "closed",
+        "label": "休市",
+        "lastM1Time": 1779483480,
+        "lastM1TimeMsc": 1779483480000,
+        "lastM1Iso": "2026-05-22T20:58:00Z",
+        "lastTickTime": 1779483539,
+        "lastTickTimeMsc": 1779483539674,
+        "serverTime": 1779514312,
+        "serverTimeIso": "2026-05-23T05:31:52Z",
+        "ageSeconds": 30832,
+        "tickAgeSeconds": 30773,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_and_tick_stale"
+      },
+      "symbol": "USDJPYm"
+    },
+    "ETHUSDM": {
+      "savedAt": "2026-05-23T05:31:51.375Z",
+      "status": {
+        "status": "open",
+        "label": "开市",
+        "lastM1Time": 1779514260,
+        "lastM1TimeMsc": 1779514260000,
+        "lastM1Iso": "2026-05-23T05:31:00Z",
+        "lastTickTime": 1779514304,
+        "lastTickTimeMsc": 1779514304780,
+        "serverTime": 1779514311,
+        "serverTimeIso": "2026-05-23T05:31:51Z",
+        "ageSeconds": 51,
+        "tickAgeSeconds": 7,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_synced"
+      },
+      "symbol": "ETHUSDm"
+    },
+    "XAGUSDM": {
+      "savedAt": "2026-05-23T05:31:49.837Z",
+      "status": {
+        "status": "closed",
+        "label": "休市",
+        "lastM1Time": 1779483420,
+        "lastM1TimeMsc": 1779483420000,
+        "lastM1Iso": "2026-05-22T20:57:00Z",
+        "lastTickTime": 1779483455,
+        "lastTickTimeMsc": 1779483455652,
+        "serverTime": 1779514309,
+        "serverTimeIso": "2026-05-23T05:31:49Z",
+        "ageSeconds": 30889,
+        "tickAgeSeconds": 30854,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_and_tick_stale"
+      },
+      "symbol": "XAGUSDm"
+    },
+    "USTEC_X100M": {
+      "savedAt": "2026-05-23T05:27:11.519Z",
+      "status": {
+        "status": "closed",
+        "label": "休市",
+        "lastM1Time": 1779483240,
+        "lastM1TimeMsc": 1779483240000,
+        "lastM1Iso": "2026-05-22T20:54:00Z",
+        "lastTickTime": 1779483299,
+        "lastTickTimeMsc": 1779483299276,
+        "serverTime": 1779514031,
+        "serverTimeIso": "2026-05-23T05:27:11Z",
+        "ageSeconds": 30791,
+        "tickAgeSeconds": 30732,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_and_tick_stale"
+      },
+      "symbol": "USTEC_x100m"
+    },
+    "US30_X10M": {
+      "savedAt": "2026-05-23T05:22:00.546Z",
+      "status": {
+        "status": "closed",
+        "label": "休市",
+        "lastM1Time": 1779483240,
+        "lastM1TimeMsc": 1779483240000,
+        "lastM1Iso": "2026-05-22T20:54:00Z",
+        "lastTickTime": 1779483299,
+        "lastTickTimeMsc": 1779483299275,
+        "serverTime": 1779513720,
+        "serverTimeIso": "2026-05-23T05:22:00Z",
+        "ageSeconds": 30480,
+        "tickAgeSeconds": 30421,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_and_tick_stale"
+      },
+      "symbol": "US30_x10m"
+    },
+    "US30M": {
+      "savedAt": "2026-05-23T05:30:51.937Z",
+      "status": {
+        "status": "closed",
+        "label": "休市",
+        "lastM1Time": 1779483240,
+        "lastM1TimeMsc": 1779483240000,
+        "lastM1Iso": "2026-05-22T20:54:00Z",
+        "lastTickTime": 1779483299,
+        "lastTickTimeMsc": 1779483299275,
+        "serverTime": 1779514251,
+        "serverTimeIso": "2026-05-23T05:30:51Z",
+        "ageSeconds": 31011,
+        "tickAgeSeconds": 30952,
+        "staleSeconds": 120,
+        "tradeMode": 4,
+        "reason": "m1_and_tick_stale"
+      },
+      "symbol": "US30m"
+    }
+  },
+  "fractalframe:mt5ImportCenterStoreV5ListSymbols:v1": [
+    "BTCUSDm",
+    "DXYm",
+    "ETHUSDm",
+    "EURUSDm",
+    "GBPUSDm",
+    "US30_x10m",
+    "US30m",
+    "USDJPYm",
+    "USTEC_x100m",
+    "USTECm",
+    "XAGUSDm",
+    "XAUUSDm"
+  ],
+  "fractalframe:mt5ImportCenterSymbolSnapshot:v1": {
+    "selectedSymbol": "XAUUSDm",
+    "status": "本地 StoreV5 已载入 12 个品种。",
+    "symbols": [
+      {
+        "symbol": "BTCUSDm",
+        "name": "BTCUSDm",
+        "description": "BTCUSDm",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 3020,
+            "lastTime": 1779487200
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 72401,
+            "lastTime": 1779508800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 36219,
+            "lastTime": 1779508800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 24148,
+            "lastTime": 1779508800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 18110,
+            "lastTime": 1779501600
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 289554,
+            "lastTime": 1779511500
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 144787,
+            "lastTime": 1779510600
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 868531,
+            "lastTime": 1779512100
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 100,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 432,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 4341738,
+            "lastTime": 1779512220
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 4342080,
+            "lastTime": 1779512220
+          }
+        ]
+      },
+      {
+        "symbol": "DXYm",
+        "name": "DXYm",
+        "description": "DXYm",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 1416,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 30441,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 15381,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 10307,
+            "lastTime": 1779476400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 7768,
+            "lastTime": 1779472800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 121700,
+            "lastTime": 1779482700
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 60867,
+            "lastTime": 1779481800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 364667,
+            "lastTime": 1779483300
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 59,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 256,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 1814529,
+            "lastTime": 1779483480
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 1815258,
+            "lastTime": 1779483480
+          }
+        ]
+      },
+      {
+        "symbol": "ETHUSDm",
+        "name": "ETHUSDm",
+        "description": "ETHUSDm",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 1787,
+            "lastTime": 1779487200
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 42851,
+            "lastTime": 1779512400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 21426,
+            "lastTime": 1779508800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 14285,
+            "lastTime": 1779508800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 10714,
+            "lastTime": 1779501600
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 171383,
+            "lastTime": 1779512400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 85697,
+            "lastTime": 1779512400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 514058,
+            "lastTime": 1779513000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 59,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 256,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 2569640,
+            "lastTime": 1779513180
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 2570557,
+            "lastTime": 1779513180
+          }
+        ]
+      },
+      {
+        "symbol": "EURUSDm",
+        "name": "EURUSDm",
+        "description": "EURUSDm",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 1435,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 30463,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 15401,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 10326,
+            "lastTime": 1779476400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 7787,
+            "lastTime": 1779472800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 121819,
+            "lastTime": 1779482700
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 60916,
+            "lastTime": 1779481800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 364928,
+            "lastTime": 1779483300
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 59,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 256,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 1802689,
+            "lastTime": 1779483480
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 1803623,
+            "lastTime": 1779483480
+          }
+        ]
+      },
+      {
+        "symbol": "GBPUSDm",
+        "name": "GBPUSDm",
+        "description": "GBPUSDm",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 1435,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 30463,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 15401,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 10326,
+            "lastTime": 1779476400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 7788,
+            "lastTime": 1779472800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 121814,
+            "lastTime": 1779482700
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 60916,
+            "lastTime": 1779481800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 364976,
+            "lastTime": 1779483300
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 59,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 256,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 1808085,
+            "lastTime": 1779483480
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 1809019,
+            "lastTime": 1779483480
+          }
+        ]
+      },
+      {
+        "symbol": "US30_x10m",
+        "name": "US30_x10m",
+        "description": "US30_x10m",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 238,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 5426,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 2833,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 1891,
+            "lastTime": 1779476400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 1419,
+            "lastTime": 1779472800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 21686,
+            "lastTime": 1779482700
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 10846,
+            "lastTime": 1779481800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 65011,
+            "lastTime": 1779483000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 12,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 49,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 324793,
+            "lastTime": 1779483240
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 324793,
+            "lastTime": 1779483240
+          }
+        ]
+      },
+      {
+        "symbol": "US30m",
+        "name": "US30m",
+        "description": "US30m",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 1270,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 28285,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 14691,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 10060,
+            "lastTime": 1779476400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 7544,
+            "lastTime": 1779472800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 112055,
+            "lastTime": 1779482700
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 56042,
+            "lastTime": 1779481800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 335954,
+            "lastTime": 1779483000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 59,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 256,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 1673939,
+            "lastTime": 1779483240
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 1674873,
+            "lastTime": 1779483240
+          }
+        ]
+      },
+      {
+        "symbol": "USDJPYm",
+        "name": "USDJPYm",
+        "description": "USDJPYm",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 1435,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 30463,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 15401,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 10326,
+            "lastTime": 1779476400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 7788,
+            "lastTime": 1779472800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 121814,
+            "lastTime": 1779482700
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 60915,
+            "lastTime": 1779481800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 364939,
+            "lastTime": 1779483300
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 59,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 256,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 1808437,
+            "lastTime": 1779483480
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 1809371,
+            "lastTime": 1779483480
+          }
+        ]
+      },
+      {
+        "symbol": "USTEC_x100m",
+        "name": "USTEC_x100m",
+        "description": "USTEC_x100m",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 238,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 5426,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 2833,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 1891,
+            "lastTime": 1779476400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 1419,
+            "lastTime": 1779472800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 21686,
+            "lastTime": 1779482700
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 10846,
+            "lastTime": 1779481800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 65012,
+            "lastTime": 1779483000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 12,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 49,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 325050,
+            "lastTime": 1779483240
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 325050,
+            "lastTime": 1779483240
+          }
+        ]
+      },
+      {
+        "symbol": "USTECm",
+        "name": "USTECm",
+        "description": "USTECm",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 1270,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 28265,
+            "lastTime": 1779408000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 14681,
+            "lastTime": 1779408000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 10053,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 7539,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 111974,
+            "lastTime": 1779409800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 56002,
+            "lastTime": 1779409800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 335711,
+            "lastTime": 1779410100
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 59,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 256,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 1677355,
+            "lastTime": 1779410220
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 1678289,
+            "lastTime": 1779410220
+          }
+        ]
+      },
+      {
+        "symbol": "XAGUSDm",
+        "name": "XAGUSDm",
+        "description": "XAGUSDm",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 1269,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 28897,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 15083,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 10067,
+            "lastTime": 1779476400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 7558,
+            "lastTime": 1779472800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 115455,
+            "lastTime": 1779482700
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 57747,
+            "lastTime": 1779481800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 345975,
+            "lastTime": 1779483300
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 59,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 256,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 1708196,
+            "lastTime": 1779483420
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 1709130,
+            "lastTime": 1779483420
+          }
+        ]
+      },
+      {
+        "symbol": "XAUUSDm",
+        "name": "XAUUSDm",
+        "description": "XAUUSDm",
+        "path": "StoreV5",
+        "category": "Local",
+        "source": "store_v5",
+        "market": "unknown",
+        "visible": true,
+        "periods": [
+          {
+            "mode": "aggregated",
+            "timeframe": "D1",
+            "rowsCount": 2505,
+            "lastTime": 1779400800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H1",
+            "rowsCount": 53590,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H2",
+            "rowsCount": 28058,
+            "lastTime": 1779480000
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H3",
+            "rowsCount": 18805,
+            "lastTime": 1779476400
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "H4",
+            "rowsCount": 14149,
+            "lastTime": 1779472800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M15",
+            "rowsCount": 213694,
+            "lastTime": 1779482700
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M30",
+            "rowsCount": 106960,
+            "lastTime": 1779481800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "M5",
+            "rowsCount": 640285,
+            "lastTime": 1779483300
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "MN1",
+            "rowsCount": 110,
+            "lastTime": 1777672800
+          },
+          {
+            "mode": "aggregated",
+            "timeframe": "W1",
+            "rowsCount": 474,
+            "lastTime": 1779141600
+          },
+          {
+            "mode": "direct",
+            "timeframe": "M1",
+            "rowsCount": 3195259,
+            "lastTime": 1779483420
+          },
+          {
+            "mode": "raw_direct",
+            "timeframe": "M1",
+            "rowsCount": 4038,
+            "lastTime": 1779483420
+          }
+        ]
+      }
+    ],
+    "savedAt": "2026-05-24T07:49:31.124Z"
+  }
 }

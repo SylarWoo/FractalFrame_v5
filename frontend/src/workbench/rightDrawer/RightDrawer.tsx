@@ -5,7 +5,7 @@ import '../mt5DataCenter/Mt5DataCenterPanel.css'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
 import { formatSymbolStatus, normalizeStoredStatus, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
-import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
+import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
 import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
 import { storeTableAggregatePeriods } from './rightDrawerStoreTables'
 import { useRightDrawerResize } from './useRightDrawerResize'
@@ -20,6 +20,8 @@ import { RightDrawerMt5Body } from './RightDrawerMt5Body'
 import { RightDrawerSettingsHost } from './RightDrawerSettingsHost'
 import type { RightDrawerProps } from './RightDrawerTypes'
 import {
+  fetchStoreV5Status,
+  fetchStoreV5Symbols,
   fetchMt5Symbols,
 } from '../../services/mt5/mt5SymbolsApi'
 import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
@@ -166,6 +168,56 @@ export function RightDrawer({
   useEffect(() => {
     saveImportCenterSelectedTab(selectedPanelTab)
   }, [selectedPanelTab])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadLocalSymbols = async () => {
+      try {
+        setLoading(true)
+        setError('')
+        setStatus('正在读取本地 StoreV5...')
+        const payload = await fetchStoreV5Symbols()
+        if (cancelled) return
+        const rows = Array.isArray(payload.symbols) ? payload.symbols : []
+        const nextSelectedSymbol =
+          selectedSymbol && rows.some((row) => row.symbol === selectedSymbol)
+            ? selectedSymbol
+            : rows[0]?.symbol ?? ''
+        setSymbols(rows)
+        setSelectedSymbol(nextSelectedSymbol)
+        saveStoreV5ListSymbols(rows.map((row) => row.symbol), storePanelPersistenceEnabled)
+        const nextStatus = rows.length
+          ? `本地 StoreV5 已载入 ${rows.length} 个品种。`
+          : '本地 StoreV5 暂无品种。需要导入时点击 Scan MT5。'
+        setStatus(nextStatus)
+        if (nextSelectedSymbol) {
+          const localStatus = await fetchStoreV5Status(nextSelectedSymbol)
+          if (cancelled) return
+          setLocalStoreStatus(localStatus)
+          setSelectedStoreTableKey(readPersistedStoreTableSelection(nextSelectedSymbol, storePanelPersistenceEnabled))
+        } else {
+          setLocalStoreStatus(null)
+          setSelectedStoreTableKey('')
+        }
+        saveSymbolSnapshot({
+          selectedSymbol: nextSelectedSymbol,
+          status: nextStatus,
+          symbols: rows,
+        })
+      } catch (err) {
+        if (cancelled) return
+        const message = err instanceof Error ? err.message : String(err)
+        setError(message)
+        setStatus(`本地 StoreV5 读取失败：${message}`)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void loadLocalSymbols()
+    return () => { cancelled = true }
+  }, [])
 
   function handleToggleStorePanelPersistence(enabled: boolean) {
     setStorePanelPersistenceEnabled(enabled)

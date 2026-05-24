@@ -21,6 +21,30 @@ export async function fetchStoreV5Status(symbol: string): Promise<StoreV5CheckPa
   )
 }
 
+export async function fetchStoreV5Symbols(): Promise<{
+  ok: boolean
+  status: string
+  count: number
+  totalCount?: number
+  symbols: Array<{
+    symbol: string
+    name?: string
+    description?: string
+    path?: string
+    category?: string
+    source?: string
+    market?: string
+    visible?: boolean
+  }>
+  error?: string
+}> {
+  return getMt5Json(
+    '/api/market-data/v1/store-v5/symbols',
+    undefined,
+    { requirePayloadOk: true },
+  )
+}
+
 export async function deleteStoreV5Symbol(symbol: string): Promise<StoreV5DeletePayload> {
   const params = new URLSearchParams()
   params.set('symbol', symbol)
