@@ -112,7 +112,7 @@ export function DrawingsDrawer() {
   const [armedKey, setArmedKey] = useState<DrawingToolKey | null>(null)
   const [activeTab, setActiveTab] = useState<DrawingTab>('style')
   const [persistedTools, setPersistedTools] = useState<Record<string, boolean>>(() => Object.fromEntries(
-    drawingTools.map((tool) => [tool.key, tool.key === 'horizontalLine' || tool.key === 'trendLine' || tool.key === 'ruler' ? readDrawingObjectPersistence(tool.key) : false]),
+    drawingTools.map((tool) => [tool.key, tool.key === 'horizontalLine' || tool.key === 'trendLine' || tool.key === 'ruler' || tool.key === 'fibRetracement' ? readDrawingObjectPersistence(tool.key) : false]),
   ))
   const [lockedTools, setLockedTools] = useState<Record<string, boolean>>({})
   const [priceLabelTools, setPriceLabelTools] = useState<Record<string, boolean>>(() => Object.fromEntries(
@@ -170,7 +170,7 @@ export function DrawingsDrawer() {
   }
 
   function setPersistence(enabled: boolean) {
-    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler') return
+    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler' && selectedKey !== 'fibRetracement') return
     setPersistedTools((current) => ({ ...current, [selectedKey]: enabled }))
     writeDrawingObjectPersistence(selectedKey, enabled)
     publishDrawingToolCommand({
@@ -545,7 +545,7 @@ export function DrawingsDrawer() {
                 onDelete={deleteSelectedDrawing}
                 onRelease={releaseSelectedTool}
                 onToggleLock={toggleSelectedLock}
-                persistenceControls={selectedKey === 'horizontalLine' || selectedKey === 'trendLine' || selectedKey === 'ruler' ? (
+                persistenceControls={selectedKey === 'horizontalLine' || selectedKey === 'trendLine' || selectedKey === 'ruler' || selectedKey === 'fibRetracement' ? (
                   <DrawingToolPersistenceControls
                     onSave={() => setPersistence(true)}
                     onUnsave={() => setPersistence(false)}

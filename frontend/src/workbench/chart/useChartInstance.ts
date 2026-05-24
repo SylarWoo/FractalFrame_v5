@@ -25,6 +25,7 @@ import {
   applyPriceVolumePrecision,
   createChartBaseStyles,
 } from './chartStyleAppliers'
+import { installYAxisDragOptimization } from './chartAxisInteraction'
 
 type UseChartInstanceOptions = {
   displayName?: string
@@ -93,8 +94,10 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
     let cleanupDrawingTools: (() => void) | null = null
     let cleanupMouseBehaviorOverrides: (() => void) | null = null
     let cleanupViewportPersistence: (() => void) | null = null
+    let cleanupYAxisDragOptimization: (() => void) | null = null
     window.requestAnimationFrame(() => {
       if (chart) {
+        cleanupYAxisDragOptimization = installYAxisDragOptimization(chart)
         cleanupMouseBehaviorOverrides = installChartMouseBehaviorOverrides(chart)
         cleanupDrawingTools = installChartDrawingTools(chart, () => chartContextRef.current.period)
         cleanupViewportPersistence = installChartViewportPersistence(chart, () => chartContextRef.current)
@@ -110,6 +113,7 @@ export function useChartInstance({ displayName, period, symbol }: UseChartInstan
       cleanupViewportPersistence?.()
       cleanupDrawingTools?.()
       cleanupMouseBehaviorOverrides?.()
+      cleanupYAxisDragOptimization?.()
       if (resizeFrameId !== 0) window.cancelAnimationFrame(resizeFrameId)
       resizeObserver.disconnect()
       window.removeEventListener('resize', scheduleResize)

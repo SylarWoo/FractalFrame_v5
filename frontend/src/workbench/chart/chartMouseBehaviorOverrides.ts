@@ -1,7 +1,7 @@
 import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { knownDrawingPaneIds } from '../drawing/drawingPaneModel'
-import { drawingOverlayNames, horizontalLineOverlayName, rulerOverlayName, trendLineOverlayName } from '../drawing/drawingOverlayModel'
+import { drawingOverlayNames, fibRetracementOverlayName, horizontalLineOverlayName, rulerOverlayName, trendLineOverlayName } from '../drawing/drawingOverlayModel'
 
 const dragCursorThreshold = 3
 
@@ -58,6 +58,17 @@ function resolveMainPaneFromEvent(chart: Chart, event: MouseEvent | PointerEvent
     if (paneMain?.contains(target)) return paneMain
   }
   return null
+}
+
+function eventHitsYAxis(chart: Chart, event: MouseEvent | PointerEvent) {
+  const target = event.target
+  if (!(target instanceof Node)) return false
+
+  for (const paneId of knownDrawingPaneIds) {
+    const yAxis = chart.getDom(paneId, DomPosition.YAxis)
+    if (yAxis?.contains(target)) return true
+  }
+  return false
 }
 
 function applyCursor(root: HTMLElement, cursor: string) {
@@ -137,11 +148,12 @@ function resolveHoveredOverlayInfo(chart: Chart, event: MouseEvent | PointerEven
   if (instanceName === horizontalLineOverlayName && !hasFiniteValue(points[0])) return null
   if (instanceName === trendLineOverlayName && (!hasFiniteValue(points[0]) || !hasFiniteValue(points[1]))) return null
   if (instanceName === rulerOverlayName && (!hasFiniteValue(points[0]) || !hasFiniteValue(points[1]))) return null
+  if (instanceName === fibRetracementOverlayName && (!hasFiniteValue(points[0]) || !hasFiniteValue(points[1]))) return null
   const paneMain = chart.getDom(paneId, DomPosition.Main)
   if (!paneMain) return null
 
   const isHorizontalLineHandle = instanceName === horizontalLineOverlayName && hoverInfo?.figureKey === 'handle'
-  const isTwoPointEndpointHandle = (instanceName === trendLineOverlayName || instanceName === rulerOverlayName) && (
+  const isTwoPointEndpointHandle = (instanceName === trendLineOverlayName || instanceName === rulerOverlayName || instanceName === fibRetracementOverlayName) && (
     (typeof hoverInfo?.figureKey === 'string' && hoverInfo.figureKey.startsWith('point_')) ||
     eventHitsTrendLineEndpoint(chart, paneMain, paneId, points, event)
   )
@@ -162,11 +174,13 @@ export function installChartMouseBehaviorOverrides(chart: Chart) {
   let hoverTimer = 0
   let lastPointerEvent: MouseEvent | PointerEvent | null = null
   let pendingPanePress: { paneMain: HTMLElement; x: number; y: number } | null = null
+  let yAxisPressActive = false
 
   const finishPress = () => {
     activePressCursor?.restore()
     activePressCursor = null
     pendingPanePress = null
+    yAxisPressActive = false
     window.removeEventListener('pointerup', finishPress, true)
     window.removeEventListener('pointercancel', finishPress, true)
     window.removeEventListener('blur', finishPress, true)
@@ -181,7 +195,7 @@ export function installChartMouseBehaviorOverrides(chart: Chart) {
 
   const updateHoverCursor = () => {
     hoverTimer = 0
-    if (activePressCursor) return
+    if (activePressCursor || yAxisPressActive) return
 
     const hoverInfo = resolveHoveredOverlayInfo(chart, lastPointerEvent)
     if (!hoverInfo) {
@@ -202,6 +216,10 @@ export function installChartMouseBehaviorOverrides(chart: Chart) {
 
   const scheduleHoverCursorUpdate = (event?: MouseEvent | PointerEvent) => {
     if (event) lastPointerEvent = event
+    if (yAxisPressActive || (event && eventHitsYAxis(chart, event))) {
+      clearHoverCursor()
+      return
+    }
     activeHoverCursor?.force()
     if (hoverTimer !== 0) return
     hoverTimer = window.setTimeout(updateHoverCursor, 0)
@@ -209,6 +227,18 @@ export function installChartMouseBehaviorOverrides(chart: Chart) {
 
   const handlePointerDown = (event: PointerEvent) => {
     if (event.button !== 0) return
+
+    if (eventHitsYAxis(chart, event)) {
+      clearHoverCursor()
+      activePressCursor?.restore()
+      activePressCursor = null
+      pendingPanePress = null
+      yAxisPressActive = true
+      window.addEventListener('pointerup', finishPress, true)
+      window.addEventListener('pointercancel', finishPress, true)
+      window.addEventListener('blur', finishPress, true)
+      return
+    }
 
     const paneMain = resolveMainPaneFromEvent(chart, event)
     if (!paneMain) return
@@ -233,6 +263,10 @@ export function installChartMouseBehaviorOverrides(chart: Chart) {
 
   const handlePointerMove = (event: PointerEvent) => {
     lastPointerEvent = event
+    if (yAxisPressActive || eventHitsYAxis(chart, event)) {
+      clearHoverCursor()
+      return
+    }
     if (pendingPanePress) {
       const distance = Math.hypot(event.clientX - pendingPanePress.x, event.clientY - pendingPanePress.y)
       if (distance >= dragCursorThreshold) {

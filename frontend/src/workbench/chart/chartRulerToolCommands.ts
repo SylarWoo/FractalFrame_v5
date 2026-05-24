@@ -11,6 +11,7 @@ import type { PendingRulerOptions } from './rulerOverlayController'
 
 export function createRulerToolCommandHandler({
   chart,
+  clearStoredDrawings = clearStoredRulerDrawings,
   createRulerOverlay,
   getLastPointerPaneId,
   getPendingRulerOptions,
@@ -28,6 +29,7 @@ export function createRulerToolCommandHandler({
   tool = 'ruler',
 }: {
   chart: Chart
+  clearStoredDrawings?: () => void
   createRulerOverlay: (options: PendingRulerOptions & { paneId?: string; selected: boolean }) => unknown
   getLastPointerPaneId: () => string
   getPendingRulerOptions: () => PendingRulerOptions | null
@@ -168,7 +170,7 @@ export function createRulerToolCommandHandler({
     if (command.action === 'updatePersistence') {
       setRulerPersistenceEnabled(command.persisted !== false)
       if (getRulerPersistenceEnabled()) persistCurrentRulers()
-      else clearStoredRulerDrawings()
+      else clearStoredDrawings()
       return
     }
 

@@ -8,6 +8,7 @@ import {
   trendLineOverlayName,
 } from '../drawing/drawingOverlayModel'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
+import { clearStoredFibRetracementDrawings } from '../rightDrawer/drawingObjectPersistence'
 import { isDrawingToolCommandEvent, publishDrawingToolState } from '../rightDrawer/drawingToolCommands'
 import { isObjectTreeDrawingCommandEvent, publishObjectTreeDrawings } from '../rightDrawer/objectTree/objectTreeModel'
 import {
@@ -21,6 +22,7 @@ import { createChartDrawingMoveController, type PressedHorizontalLineMoveState }
 import { createHorizontalLineSelectionController } from './chartDrawingSelectionController'
 import {
   createHorizontalLineObjectId,
+  createFibRetracementObjectId,
   createRulerObjectId,
   createTrendLineObjectId,
 } from './chartDrawingObjectIds'
@@ -55,6 +57,7 @@ import { createTrendLineOverlayFactory } from './trendLineOverlayController'
 import { createTrendLinePointFigures, createTrendLineYAxisFigures } from './trendLineOverlayFigures'
 import { createRulerOverlayFactory, type PendingRulerOptions } from './rulerOverlayController'
 import { createRulerPointFigures, createRulerYAxisFigures } from './rulerOverlayFigures'
+import { createFibRetracementPointFigures, createFibRetracementYAxisFigures } from './fibRetracementOverlayFigures'
 import { createRulerToolCommandHandler } from './chartRulerToolCommands'
 import { createQuickMeasureController, ensureQuickMeasureOverlay } from './quickMeasureOverlay'
 import { createChartDrawingHitTester } from './chartDrawingHitTesting'
@@ -132,8 +135,8 @@ function ensureFibRetracementOverlay() {
     needDefaultPointFigure: true,
     needDefaultXAxisFigure: false,
     needDefaultYAxisFigure: false,
-    createPointFigures: createRulerPointFigures,
-    createYAxisFigures: createRulerYAxisFigures,
+    createPointFigures: createFibRetracementPointFigures,
+    createYAxisFigures: createFibRetracementYAxisFigures,
   })
 }
 
@@ -174,6 +177,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const rulerOverlayIds = new Set<string>()
   const fibOverlayIds = new Set<string>()
   const initialStoredDrawings = readInitialStoredDrawingState()
+  let fibRetracementPersistenceEnabled = initialStoredDrawings.fibRetracementPersistenceEnabled
   let persistenceEnabled = initialStoredDrawings.horizontalLinePersistenceEnabled
   let rulerPersistenceEnabled = initialStoredDrawings.rulerPersistenceEnabled
   let trendLinePersistenceEnabled = initialStoredDrawings.trendLinePersistenceEnabled
@@ -211,9 +215,11 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   }
 
   let drawingPersistenceController: ReturnType<typeof createChartDrawingPersistenceController> | null = null
+  const persistCurrentFibRetracements = () => drawingPersistenceController?.persistCurrentFibRetracements()
   const persistCurrentHorizontalLines = () => drawingPersistenceController?.persistCurrentHorizontalLines()
   const persistCurrentRulers = () => drawingPersistenceController?.persistCurrentRulers()
   const persistCurrentTrendLines = () => drawingPersistenceController?.persistCurrentTrendLines()
+  const restorePendingStoredFibRetracements = () => drawingPersistenceController?.restorePendingStoredFibRetracements()
   const restorePendingStoredHorizontalLines = () => drawingPersistenceController?.restorePendingStoredHorizontalLines()
   const restorePendingStoredRulers = () => drawingPersistenceController?.restorePendingStoredRulers()
   const restorePendingStoredTrendLines = () => drawingPersistenceController?.restorePendingStoredTrendLines()
@@ -702,7 +708,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       selectedFibOverlayIds.delete(id)
     },
     overlayName: fibRetracementOverlayName,
-    persistCurrentRulers: () => undefined,
+    persistCurrentRulers: persistCurrentFibRetracements,
     publishObjectTreeState,
     selectedRulerOverlayIds: selectedFibOverlayIds,
     setActiveRuler: (id) => {
@@ -730,7 +736,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     selected: boolean
   }) => createFibOverlayBase({
     ...options,
-    objectId: options.objectId ?? `fib-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    objectId: options.objectId ?? createFibRetracementObjectId(),
     paneId: options.paneId ?? candlePaneId,
   })
 
@@ -755,17 +761,22 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   drawingPersistenceController = createChartDrawingPersistenceController({
     canCreateOverlayOnPane,
     chart,
+    createFibRetracementOverlay: createFibOverlay,
     createHorizontalLineOverlay,
     createRulerOverlay,
     createTrendLineOverlay,
     fallbackPaneId: candlePaneId,
     getDestroyed: () => destroyed,
+    getFibRetracementPersistenceEnabled: () => fibRetracementPersistenceEnabled,
     getHorizontalLinePersistenceEnabled: () => persistenceEnabled,
+    getPendingFibRetracementOverlayId: () => pendingFibOverlayId,
     getPendingRulerOverlayId: () => pendingRulerOverlayId,
     getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
     getRulerPersistenceEnabled: () => rulerPersistenceEnabled,
     getTrendLinePersistenceEnabled: () => trendLinePersistenceEnabled,
+    fibRetracementOverlayIds: fibOverlayIds,
     horizontalLineOverlayIds,
+    initialFibRetracementDrawings: initialStoredDrawings.pendingFibRetracementDrawings,
     initialHorizontalLineDrawings: initialStoredDrawings.pendingHorizontalLineDrawings,
     initialRulerDrawings: initialStoredDrawings.pendingRulerDrawings,
     initialTrendLineDrawings: initialStoredDrawings.pendingTrendLineDrawings,
@@ -774,6 +785,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   })
 
   restorePendingStoredHorizontalLines()
+  restorePendingStoredFibRetracements()
   restorePendingStoredRulers()
   restorePendingStoredTrendLines()
   refreshRulerStatsDataList()
@@ -878,16 +890,17 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     getLastPointerPaneId,
     getPendingRulerOptions: () => pendingFibOptions,
     getPendingRulerOverlayId: () => pendingFibOverlayId,
-    getRulerPersistenceEnabled: () => false,
+    getRulerPersistenceEnabled: () => fibRetracementPersistenceEnabled,
     getSelectedRulerOverlayId: () => selectedFibOverlayId,
-    persistCurrentRulers: () => undefined,
+    persistCurrentRulers: persistCurrentFibRetracements,
     resolveTrendPointPrices,
     setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
     setPendingRulerOptions: (options) => { pendingFibOptions = options },
     setPendingRulerOverlayId: (id) => { pendingFibOverlayId = id },
-    setRulerPersistenceEnabled: () => undefined,
+    setRulerPersistenceEnabled: (enabled) => { fibRetracementPersistenceEnabled = enabled },
     setSelectedRulerOverlayId: (id) => { selectedFibOverlayId = id },
     rulerOverlayIds: fibOverlayIds,
+    clearStoredDrawings: clearStoredFibRetracementDrawings,
     tool: 'fibRetracement',
   })
 
@@ -916,6 +929,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     isHorizontalLineVisibleInCurrentPeriod,
     isRulerVisibleInCurrentPeriod,
     isTrendLineVisibleInCurrentPeriod,
+    persistCurrentFibRetracements,
     persistCurrentHorizontalLines,
     persistCurrentRulers,
     persistCurrentTrendLines,
@@ -959,6 +973,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const handleDataReady = () => {
     ensurePaneInteractionListeners()
     restorePendingStoredHorizontalLines()
+    restorePendingStoredFibRetracements()
     restorePendingStoredRulers()
     restorePendingStoredTrendLines()
     refreshRulerStatsDataList()
@@ -968,6 +983,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const handleVisibilityRefresh = () => {
     ensurePaneInteractionListeners()
     restorePendingStoredHorizontalLines()
+    restorePendingStoredFibRetracements()
     restorePendingStoredRulers()
     restorePendingStoredTrendLines()
     refreshRulerStatsDataList()
@@ -977,6 +993,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const handleObjectTreeDrawingsRequest = () => {
     ensurePaneInteractionListeners()
     restorePendingStoredHorizontalLines()
+    restorePendingStoredFibRetracements()
     restorePendingStoredRulers()
     restorePendingStoredTrendLines()
     refreshRulerStatsDataList()

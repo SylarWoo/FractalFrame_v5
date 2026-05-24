@@ -5,7 +5,7 @@ import { normalizeDrawingLineStyle, normalizeDrawingTextStyle, normalizeDrawingT
 import type { DrawingRulerStyle } from './rulerDrawingStyle'
 import { normalizeDrawingRulerStyle } from './rulerDrawingStyle'
 
-export type PersistableDrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler'
+export type PersistableDrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement'
 
 export type StoredHorizontalLineDrawing = {
   lineStyle: SettingsLineSwatchValue
@@ -54,6 +54,7 @@ export const drawingObjectPersistenceStoragePrefix = 'fractalframe.drawingsDrawe
 export const horizontalLineDrawingsStorageKey = 'fractalframe.drawings.horizontalLine.items'
 export const trendLineDrawingsStorageKey = 'fractalframe.drawings.trendLine.items'
 export const rulerDrawingsStorageKey = 'fractalframe.drawings.ruler.items'
+export const fibRetracementDrawingsStorageKey = 'fractalframe.drawings.fibRetracement.items'
 
 export function readDrawingObjectPersistence(tool: PersistableDrawingToolKey) {
   return readBooleanFlag(`${drawingObjectPersistenceStoragePrefix}.${tool}`, true)
@@ -175,4 +176,39 @@ export function writeStoredRulerDrawings(drawings: StoredRulerDrawing[]) {
 
 export function clearStoredRulerDrawings() {
   return removeStorageItem(rulerDrawingsStorageKey)
+}
+
+export function readStoredFibRetracementDrawings() {
+  const stored = readJson<StoredRulerDrawing[]>(fibRetracementDrawingsStorageKey, [])
+  return stored
+    .map((drawing) => ({
+      lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#787b86'),
+      locked: drawing.locked === true,
+      manualVisible: drawing.manualVisible !== false,
+      objectId: typeof drawing.objectId === 'string' && drawing.objectId.trim() ? drawing.objectId.trim() : '',
+      paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
+      points: Array.isArray(drawing.points) ? drawing.points.map(normalizeTrendLinePoint) : [],
+      rulerStyle: normalizeDrawingRulerStyle(drawing.rulerStyle),
+      showPriceLabel: drawing.showPriceLabel !== false,
+      textStyle: normalizeDrawingTextStyle(drawing.textStyle),
+    }))
+    .filter((drawing) => drawing.points.length >= 2 && drawing.points.slice(0, 2).every((point) => typeof point.value === 'number'))
+}
+
+export function writeStoredFibRetracementDrawings(drawings: StoredRulerDrawing[]) {
+  return writeJson(fibRetracementDrawingsStorageKey, drawings.map((drawing) => ({
+    lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#787b86'),
+    locked: drawing.locked === true,
+    manualVisible: drawing.manualVisible !== false,
+    objectId: typeof drawing.objectId === 'string' && drawing.objectId.trim() ? drawing.objectId.trim() : '',
+    paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
+    points: drawing.points.slice(0, 2).map(normalizeTrendLinePoint),
+    rulerStyle: normalizeDrawingRulerStyle(drawing.rulerStyle),
+    showPriceLabel: drawing.showPriceLabel !== false,
+    textStyle: normalizeDrawingTextStyle(drawing.textStyle),
+  })))
+}
+
+export function clearStoredFibRetracementDrawings() {
+  return removeStorageItem(fibRetracementDrawingsStorageKey)
 }

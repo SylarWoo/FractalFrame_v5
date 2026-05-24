@@ -81,6 +81,18 @@ export function createRulerPointFigures({
     y: centerLineY - (centerTextMetrics.rows.length * centerTextMetrics.lineHeight) / 2,
   } : null
   const figures: HorizontalLineFigure[] = [
+    ...(!active ? [
+      {
+        key: 'point_0',
+        type: trendLineHitFigureName,
+        attrs: { coordinates: [start, start], hitSlop: 12 },
+      },
+      {
+        key: 'point_1',
+        type: trendLineHitFigureName,
+        attrs: { coordinates: [end, end], hitSlop: 12 },
+      },
+    ] : []),
     {
       key: 'ruler-hit-horizontal',
       type: trendLineHitFigureName,

@@ -2,9 +2,11 @@ import type { Chart } from 'klinecharts'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import {
   readDrawingObjectPersistence,
+  readStoredFibRetracementDrawings,
   readStoredHorizontalLineDrawings,
   readStoredRulerDrawings,
   readStoredTrendLineDrawings,
+  writeStoredFibRetracementDrawings,
   writeStoredHorizontalLineDrawings,
   writeStoredRulerDrawings,
   writeStoredTrendLineDrawings,
@@ -21,8 +23,10 @@ import type {
 import type { DrawingRulerStyle } from '../rightDrawer/rulerDrawingStyle'
 import {
   createHorizontalLineObjectId,
+  createFibRetracementObjectId,
   createRulerObjectId,
   createTrendLineObjectId,
+  syncFibRetracementObjectIdSeed,
   syncHorizontalLineObjectIdSeed,
   syncRulerObjectIdSeed,
   syncTrendLineObjectIdSeed,
@@ -30,7 +34,9 @@ import {
 import { storedHorizontalLineFromOverlay, storedRulerFromOverlay, storedTrendLineFromOverlay } from './chartDrawingSerialization'
 
 export type InitialStoredDrawingState = {
+  fibRetracementPersistenceEnabled: boolean
   horizontalLinePersistenceEnabled: boolean
+  pendingFibRetracementDrawings: StoredRulerDrawing[]
   pendingHorizontalLineDrawings: StoredHorizontalLineDrawing[]
   pendingRulerDrawings: StoredRulerDrawing[]
   pendingTrendLineDrawings: StoredTrendLineDrawing[]
@@ -40,16 +46,21 @@ export type InitialStoredDrawingState = {
 
 export function readInitialStoredDrawingState(): InitialStoredDrawingState {
   const horizontalLinePersistenceEnabled = readDrawingObjectPersistence('horizontalLine')
+  const fibRetracementPersistenceEnabled = readDrawingObjectPersistence('fibRetracement')
   const rulerPersistenceEnabled = readDrawingObjectPersistence('ruler')
   const trendLinePersistenceEnabled = readDrawingObjectPersistence('trendLine')
+  const pendingFibRetracementDrawings = fibRetracementPersistenceEnabled ? readStoredFibRetracementDrawings() : []
   const pendingHorizontalLineDrawings = horizontalLinePersistenceEnabled ? readStoredHorizontalLineDrawings() : []
   const pendingRulerDrawings = rulerPersistenceEnabled ? readStoredRulerDrawings() : []
   const pendingTrendLineDrawings = trendLinePersistenceEnabled ? readStoredTrendLineDrawings() : []
+  syncFibRetracementObjectIdSeed(pendingFibRetracementDrawings)
   syncHorizontalLineObjectIdSeed(pendingHorizontalLineDrawings)
   syncRulerObjectIdSeed(pendingRulerDrawings)
   syncTrendLineObjectIdSeed(pendingTrendLineDrawings)
   return {
+    fibRetracementPersistenceEnabled,
     horizontalLinePersistenceEnabled,
+    pendingFibRetracementDrawings,
     pendingHorizontalLineDrawings,
     pendingRulerDrawings,
     pendingTrendLineDrawings,
@@ -62,17 +73,22 @@ export function createChartDrawingPersistenceController({
   canCreateOverlayOnPane,
   chart,
   createHorizontalLineOverlay,
+  createFibRetracementOverlay,
   createRulerOverlay,
   createTrendLineOverlay,
   fallbackPaneId,
   getDestroyed,
   getHorizontalLinePersistenceEnabled,
+  getFibRetracementPersistenceEnabled,
   getPendingRulerOverlayId,
+  getPendingFibRetracementOverlayId,
   getPendingTrendLineOverlayId,
   getRulerPersistenceEnabled,
   getTrendLinePersistenceEnabled,
   horizontalLineOverlayIds,
+  fibRetracementOverlayIds,
   initialHorizontalLineDrawings,
+  initialFibRetracementDrawings,
   initialRulerDrawings,
   initialTrendLineDrawings,
   rulerOverlayIds,
@@ -87,6 +103,18 @@ export function createChartDrawingPersistenceController({
     objectId?: string
     paneId?: string
     points?: Array<{ value: number }>
+    selected: boolean
+    showPriceLabel: boolean
+    textStyle?: DrawingTextStyle
+  }) => unknown
+  createFibRetracementOverlay: (options: {
+    lineStyle: SettingsLineSwatchValue
+    locked: boolean
+    manualVisible?: boolean
+    objectId?: string
+    paneId?: string
+    points?: Array<{ dataIndex?: number; timestamp?: number; value?: number }>
+    rulerStyle: DrawingRulerStyle
     selected: boolean
     showPriceLabel: boolean
     textStyle?: DrawingTextStyle
@@ -118,17 +146,22 @@ export function createChartDrawingPersistenceController({
   fallbackPaneId: string
   getDestroyed: () => boolean
   getHorizontalLinePersistenceEnabled: () => boolean
+  getFibRetracementPersistenceEnabled: () => boolean
+  getPendingFibRetracementOverlayId: () => string | null
   getPendingRulerOverlayId: () => string | null
   getPendingTrendLineOverlayId: () => string | null
   getRulerPersistenceEnabled: () => boolean
   getTrendLinePersistenceEnabled: () => boolean
   horizontalLineOverlayIds: Set<string>
+  fibRetracementOverlayIds: Set<string>
+  initialFibRetracementDrawings: StoredRulerDrawing[]
   initialHorizontalLineDrawings: StoredHorizontalLineDrawing[]
   initialRulerDrawings: StoredRulerDrawing[]
   initialTrendLineDrawings: StoredTrendLineDrawing[]
   rulerOverlayIds: Set<string>
   trendLineOverlayIds: Set<string>
 }) {
+  let pendingFibRetracementDrawings = initialFibRetracementDrawings
   let pendingHorizontalLineDrawings = initialHorizontalLineDrawings
   let pendingRulerDrawings = initialRulerDrawings
   let pendingTrendLineDrawings = initialTrendLineDrawings
@@ -181,6 +214,23 @@ export function createChartDrawingPersistenceController({
       if (drawing) drawings.push(drawing)
     })
     writeStoredRulerDrawings(drawings)
+  }
+
+  const persistCurrentFibRetracements = () => {
+    if (getDestroyed()) return
+    if (!getFibRetracementPersistenceEnabled()) return
+    const drawings: StoredRulerDrawing[] = []
+    fibRetracementOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) {
+        fibRetracementOverlayIds.delete(id)
+        return
+      }
+      if (overlay.id === getPendingFibRetracementOverlayId() || overlay.points.length < 2) return
+      const drawing = storedRulerFromOverlay(overlay, createFibRetracementObjectId, fallbackPaneId)
+      if (drawing) drawings.push(drawing)
+    })
+    writeStoredFibRetracementDrawings(drawings)
   }
 
   const restorePendingStoredHorizontalLines = () => {
@@ -260,10 +310,38 @@ export function createChartDrawingPersistenceController({
     pendingRulerDrawings = remaining
   }
 
+  const restorePendingStoredFibRetracements = () => {
+    if (!getFibRetracementPersistenceEnabled() || pendingFibRetracementDrawings.length === 0) return
+    const remaining: StoredRulerDrawing[] = []
+    pendingFibRetracementDrawings.forEach((drawing) => {
+      const paneId = drawing.paneId || fallbackPaneId
+      if (!canCreateOverlayOnPane(paneId)) {
+        remaining.push(drawing)
+        return
+      }
+      const overlayId = createFibRetracementOverlay({
+        lineStyle: drawing.lineStyle,
+        locked: drawing.locked,
+        manualVisible: drawing.manualVisible,
+        objectId: drawing.objectId || createFibRetracementObjectId(),
+        paneId,
+        points: drawing.points.slice(0, 2),
+        rulerStyle: drawing.rulerStyle,
+        selected: false,
+        showPriceLabel: drawing.showPriceLabel,
+        textStyle: drawing.textStyle,
+      })
+      if (typeof overlayId === 'string') fibRetracementOverlayIds.add(overlayId)
+    })
+    pendingFibRetracementDrawings = remaining
+  }
+
   return {
+    persistCurrentFibRetracements,
     persistCurrentHorizontalLines,
     persistCurrentRulers,
     persistCurrentTrendLines,
+    restorePendingStoredFibRetracements,
     restorePendingStoredHorizontalLines,
     restorePendingStoredRulers,
     restorePendingStoredTrendLines,

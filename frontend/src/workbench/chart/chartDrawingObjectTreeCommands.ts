@@ -36,6 +36,7 @@ export function createDrawingObjectTreeCommandHandler({
   isRulerVisibleInCurrentPeriod,
   isTrendLineVisibleInCurrentPeriod,
   persistCurrentHorizontalLines,
+  persistCurrentFibRetracements = () => undefined,
   persistCurrentRulers,
   persistCurrentTrendLines,
   publishHorizontalLineState,
@@ -72,6 +73,7 @@ export function createDrawingObjectTreeCommandHandler({
   isRulerVisibleInCurrentPeriod: (objectId?: string) => boolean
   isTrendLineVisibleInCurrentPeriod: (objectId?: string) => boolean
   persistCurrentHorizontalLines: () => void
+  persistCurrentFibRetracements?: () => void
   persistCurrentRulers: () => void
   persistCurrentTrendLines: () => void
   publishHorizontalLineState: (state?: Partial<{ armed: boolean; lineStyle: SettingsLineSwatchValue; locked: boolean; objectId: string; price: number; selected: boolean; showPriceLabel: boolean; textStyle: DrawingTextStyle }>) => void
@@ -299,7 +301,7 @@ export function createDrawingObjectTreeCommandHandler({
       },
       isVisibleInCurrentPeriod: isRulerVisibleInCurrentPeriod,
       kind: 'fibRetracement',
-      persist: () => undefined,
+      persist: persistCurrentFibRetracements,
       selectedForVisible: (id, extendData) => selectedFibOverlayIds.has(id) || (extendData as RulerExtendData | undefined)?.selected === true,
       select: (command, target, overlay) => {
         if (command.additive !== true) {

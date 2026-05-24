@@ -2,14 +2,14 @@
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
     "lastTickAt": "15:38:54",
     "log": [
-      "15:57:00  Realtime stopped",
-      "15:52:45  Realtime stopped",
-      "15:52:26  Realtime stopped",
-      "15:51:07  Realtime stopped",
-      "15:49:30  Realtime stopped",
-      "15:49:18  Realtime stopped",
-      "15:45:42  Realtime stopped",
-      "15:43:22  Realtime stopped"
+      "16:50:29  Realtime stopped",
+      "16:40:47  Realtime stopped",
+      "16:29:02  Realtime stopped",
+      "16:24:44  Realtime stopped",
+      "16:22:18  Realtime stopped",
+      "16:22:04  Realtime stopped",
+      "16:20:18  Realtime stopped",
+      "16:19:32  Realtime stopped"
     ],
     "ticks": {
       "1INCHUSDm": {
@@ -158,37 +158,37 @@
     }
   },
   "fractalframe:chartViewport:v3:global:M5": {
-    "barSpace": 4.734566339457652,
+    "barSpace": 4.802447030484284,
     "dataLength": 3000,
-    "offsetRightDistance": 113.88174881235157,
+    "offsetRightDistance": 156.61181109339407,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T08:00:05.356Z",
+    "savedAt": "2026-05-24T08:51:49.821Z",
     "visibleTo": 3000,
     "yAxisRange": {
-      "from": 4397.38000374343,
-      "range": 203.22809686973233,
-      "realFrom": 4397.38000374343,
-      "realRange": 203.22809686973233,
-      "realTo": 4600.608100613163,
-      "to": 4600.608100613163
+      "from": 4448.3777612397025,
+      "range": 158.9884999109363,
+      "realFrom": 4448.3777612397025,
+      "realRange": 158.9884999109363,
+      "realTo": 4607.366261150639,
+      "to": 4607.366261150639
     },
     "symbol": "XAUUSDm",
     "period": "M5"
   },
   "fractalframe:chartViewport:v3:latest": {
-    "barSpace": 4.734566339457652,
+    "barSpace": 4.802447030484284,
     "dataLength": 3000,
-    "offsetRightDistance": 113.88174881235157,
+    "offsetRightDistance": 156.61181109339407,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T08:00:05.356Z",
+    "savedAt": "2026-05-24T08:51:49.821Z",
     "visibleTo": 3000,
     "yAxisRange": {
-      "from": 4397.38000374343,
-      "range": 203.22809686973233,
-      "realFrom": 4397.38000374343,
-      "realRange": 203.22809686973233,
-      "realTo": 4600.608100613163,
-      "to": 4600.608100613163
+      "from": 4448.3777612397025,
+      "range": 158.9884999109363,
+      "realFrom": 4448.3777612397025,
+      "realRange": 158.9884999109363,
+      "realTo": 4607.366261150639,
+      "to": 4607.366261150639
     },
     "symbol": "XAUUSDm",
     "period": "M5"
@@ -524,12 +524,12 @@
       "selectedKey": "MA"
     }
   },
-  "fractalframe:rightWidgetActiveDrawer:v1": "mt5",
+  "fractalframe:rightWidgetActiveDrawer:v1": "drawings",
   "fractalframe:bottomDrawerOpen:v1": "0",
   "fractalframe:bottomDrawerHeightPx:v1": "300",
-  "fractalframe.chart.macdPaneHeight": "283",
+  "fractalframe.chart.macdPaneHeight": "201",
   "fractalframe.chart.viPaneHeight": "217",
-  "fractalframe.drawingsDrawer.selectedTool": "fibRetracement",
+  "fractalframe.drawingsDrawer.selectedTool": "trendLine",
   "fractalframe.objectTree.groups.v1": [],
   "fractalframe.drawings.ruler.items": [],
   "fractalframe.drawings.trendLine.items": [],
@@ -1808,7 +1808,69 @@
         ]
       }
     ],
-    "savedAt": "2026-05-24T07:57:00.272Z"
+    "savedAt": "2026-05-24T08:50:29.491Z"
   },
-  "fractalframe:mt5ImportCenterTopPaneHeightPx:v1": "180"
+  "fractalframe:mt5ImportCenterTopPaneHeightPx:v1": "180",
+  "fractalframe.drawings.fibRetracement.items": [
+    {
+      "lineStyle": {
+        "hex": "#787b86",
+        "lineStyle": "solid",
+        "opacity": 1,
+        "thickness": 1
+      },
+      "locked": false,
+      "manualVisible": true,
+      "objectId": "FB0002",
+      "paneId": "candle_pane",
+      "points": [
+        {
+          "dataIndex": 2930,
+          "timestamp": 1779462600000,
+          "value": 4470.49969815839
+        },
+        {
+          "dataIndex": 2981,
+          "timestamp": 1779477900000,
+          "value": 4554.23226313099
+        }
+      ],
+      "rulerStyle": {
+        "background": {
+          "hex": "#5286e0",
+          "opacity": 0.14
+        },
+        "backgroundVisible": true,
+        "borderLineStyle": {
+          "hex": "#8aa8f8",
+          "lineStyle": "solid",
+          "opacity": 1,
+          "thickness": 1
+        },
+        "borderVisible": false,
+        "labelBackground": {
+          "hex": "#ffffff",
+          "opacity": 1
+        },
+        "labelBackgroundVisible": true,
+        "labelColor": {
+          "hex": "#000000",
+          "opacity": 1
+        },
+        "labelFontSize": 12,
+        "statsAlwaysVisible": false,
+        "statsData": []
+      },
+      "showPriceLabel": true,
+      "textStyle": {
+        "alignH": "right",
+        "alignV": "top",
+        "body": "",
+        "bold": false,
+        "fontSize": 14,
+        "italic": false,
+        "textColor": "#131722"
+      }
+    }
+  ]
 }

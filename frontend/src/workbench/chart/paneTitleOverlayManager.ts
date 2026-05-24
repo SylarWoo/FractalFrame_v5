@@ -9,6 +9,7 @@ import {
   titlePaneSpecs,
 } from './paneTitleOverlayContent'
 import type { PaneTitleContext, PaneTitleLine, PaneTitlePart } from './paneTitleOverlayContent'
+import { chartManualYAxisRangeChangeEvent } from './chartAxisInteraction'
 import './paneTitleOverlay.css'
 
 function renderPart(part: PaneTitlePart) {
@@ -118,10 +119,12 @@ export function installPaneTitleOverlay(chart: Chart, container: HTMLElement, co
 
   chart.subscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
   chart.subscribeAction(ActionType.OnDataReady, handleChartChange)
+  chart.subscribeAction(ActionType.OnPaneDrag, handleChartChange)
   chart.subscribeAction(ActionType.OnScroll, handleChartChange)
   chart.subscribeAction(ActionType.OnVisibleRangeChange, handleChartChange)
   chart.subscribeAction(ActionType.OnZoom, handleChartChange)
   window.addEventListener('resize', handleChartChange)
+  window.addEventListener(chartManualYAxisRangeChangeEvent, handleChartChange)
   window.addEventListener('storage', handleSettingsChange)
   window.addEventListener(settingsSymbolChangedEvent, handleSettingsChange)
   window.addEventListener(marketStatusTitleChangedEvent, handleSettingsChange)
@@ -132,10 +135,12 @@ export function installPaneTitleOverlay(chart: Chart, container: HTMLElement, co
       if (frameId !== 0) window.cancelAnimationFrame(frameId)
       chart.unsubscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
       chart.unsubscribeAction(ActionType.OnDataReady, handleChartChange)
+      chart.unsubscribeAction(ActionType.OnPaneDrag, handleChartChange)
       chart.unsubscribeAction(ActionType.OnScroll, handleChartChange)
       chart.unsubscribeAction(ActionType.OnVisibleRangeChange, handleChartChange)
       chart.unsubscribeAction(ActionType.OnZoom, handleChartChange)
       window.removeEventListener('resize', handleChartChange)
+      window.removeEventListener(chartManualYAxisRangeChangeEvent, handleChartChange)
       window.removeEventListener('storage', handleSettingsChange)
       window.removeEventListener(settingsSymbolChangedEvent, handleSettingsChange)
       window.removeEventListener(marketStatusTitleChangedEvent, handleSettingsChange)
