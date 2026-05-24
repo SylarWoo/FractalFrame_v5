@@ -13,6 +13,7 @@ export type HorizontalLineExtendData = {
   pressed?: boolean
   selected?: boolean
   showPriceLabel?: boolean
+  staticRender?: boolean
   textStyle?: DrawingTextStyle
 }
 
@@ -52,6 +53,7 @@ export type RulerExtendData = {
   pressedPointIndex?: number
   selected?: boolean
   showPriceLabel?: boolean
+  staticRender?: boolean
   textStyle?: DrawingTextStyle
   rulerStyle?: DrawingRulerStyle
   fibBackgroundOpacity?: number

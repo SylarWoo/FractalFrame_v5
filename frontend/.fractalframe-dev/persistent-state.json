@@ -2,14 +2,14 @@
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
     "lastTickAt": "15:38:54",
     "log": [
+      "20:54:35  Realtime stopped",
+      "20:54:04  Realtime stopped",
+      "20:53:43  Realtime stopped",
+      "20:52:36  Realtime stopped",
       "20:24:51  Realtime stopped",
       "20:14:35  Realtime stopped",
       "20:14:35  Realtime stopped",
-      "20:14:15  Realtime stopped",
-      "20:07:59  Realtime stopped",
-      "19:51:08  Realtime stopped",
-      "19:45:12  Realtime stopped",
-      "19:42:53  Realtime stopped"
+      "20:14:15  Realtime stopped"
     ],
     "ticks": {
       "1INCHUSDm": {
@@ -158,37 +158,37 @@
     }
   },
   "fractalframe:chartViewport:v3:global:M5": {
-    "barSpace": 1.0588006327680706,
+    "barSpace": 1.0743418702363368,
     "dataLength": 3000,
     "offsetRightDistance": 0,
-    "rightTimestamp": 1779438600000,
-    "savedAt": "2026-05-24T12:28:33.581Z",
-    "visibleTo": 2850,
+    "rightTimestamp": 1779061200000,
+    "savedAt": "2026-05-24T12:57:05.850Z",
+    "visibleTo": 1640,
     "yAxisRange": {
-      "from": 4322.690769406709,
-      "range": 351.3082653433248,
-      "realFrom": 4322.690769406709,
-      "realRange": 351.3082653433248,
-      "realTo": 4673.999034750033,
-      "to": 4673.999034750033
+      "from": 4262.137093683049,
+      "range": 557.4435899163154,
+      "realFrom": 4262.137093683049,
+      "realRange": 557.4435899163154,
+      "realTo": 4819.580683599364,
+      "to": 4819.580683599364
     },
     "symbol": "XAUUSDm",
     "period": "M5"
   },
   "fractalframe:chartViewport:v3:latest": {
-    "barSpace": 1.0588006327680706,
+    "barSpace": 1.0743418702363368,
     "dataLength": 3000,
     "offsetRightDistance": 0,
-    "rightTimestamp": 1779438600000,
-    "savedAt": "2026-05-24T12:28:33.581Z",
-    "visibleTo": 2850,
+    "rightTimestamp": 1779061200000,
+    "savedAt": "2026-05-24T12:57:05.850Z",
+    "visibleTo": 1640,
     "yAxisRange": {
-      "from": 4322.690769406709,
-      "range": 351.3082653433248,
-      "realFrom": 4322.690769406709,
-      "realRange": 351.3082653433248,
-      "realTo": 4673.999034750033,
-      "to": 4673.999034750033
+      "from": 4262.137093683049,
+      "range": 557.4435899163154,
+      "realFrom": 4262.137093683049,
+      "realRange": 557.4435899163154,
+      "realTo": 4819.580683599364,
+      "to": 4819.580683599364
     },
     "symbol": "XAUUSDm",
     "period": "M5"
@@ -528,58 +528,11 @@
   "fractalframe:bottomDrawerHeightPx:v1": "300",
   "fractalframe.chart.macdPaneHeight": "251",
   "fractalframe.chart.viPaneHeight": "217",
-  "fractalframe.drawingsDrawer.selectedTool": "fibRetracement",
+  "fractalframe.drawingsDrawer.selectedTool": "cursor",
   "fractalframe.objectTree.groups.v1": [],
   "fractalframe.drawings.ruler.items": [],
   "fractalframe.drawings.trendLine.items": [],
-  "fractalframe.drawings.horizontalLine.items": [
-    {
-      "lineStyle": {
-        "hex": "#0f766e",
-        "lineStyle": "solid",
-        "opacity": 1,
-        "thickness": 1
-      },
-      "locked": false,
-      "manualVisible": true,
-      "objectId": "HL0002",
-      "paneId": "candle_pane",
-      "showPriceLabel": false,
-      "textStyle": {
-        "alignH": "right",
-        "alignV": "top",
-        "body": "",
-        "bold": false,
-        "fontSize": 14,
-        "italic": false,
-        "textColor": "#131722"
-      },
-      "value": 4398.5159112444135
-    },
-    {
-      "lineStyle": {
-        "hex": "#0f766e",
-        "lineStyle": "solid",
-        "opacity": 1,
-        "thickness": 1
-      },
-      "locked": false,
-      "manualVisible": true,
-      "objectId": "HL0004",
-      "paneId": "candle_pane",
-      "showPriceLabel": false,
-      "textStyle": {
-        "alignH": "right",
-        "alignV": "top",
-        "body": "",
-        "bold": false,
-        "fontSize": 14,
-        "italic": false,
-        "textColor": "#131722"
-      },
-      "value": 4556.342852071323
-    }
-  ],
+  "fractalframe.drawings.horizontalLine.items": [],
   "fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1": "325",
   "fractalframe:mt5ImportCenterSharedSelection:v1": {
     "symbol": "XAUUSDm",
@@ -1854,164 +1807,10 @@
         ]
       }
     ],
-    "savedAt": "2026-05-24T12:24:51.644Z"
+    "savedAt": "2026-05-24T12:54:35.495Z"
   },
   "fractalframe:mt5ImportCenterTopPaneHeightPx:v1": "180",
-  "fractalframe.drawings.fibRetracement.items": [
-    {
-      "fibTrendLineStyle": {
-        "hex": "#2a2e39",
-        "lineStyle": "dashed",
-        "opacity": 1,
-        "thickness": 1
-      },
-      "fibTrendLineVisible": false,
-      "fibBackgroundOpacity": 0.24,
-      "fibBackgroundVisible": true,
-      "fibHorizontalLineStyle": {
-        "hex": "#787b86",
-        "lineStyle": "solid",
-        "opacity": 1,
-        "thickness": 1
-      },
-      "fibLabelAlign": "center",
-      "fibLabelFontSize": "12",
-      "fibLabelVAlign": "bottom",
-      "fibLevelDisplay": "value",
-      "fibLevelVisible": true,
-      "fibLevels": [
-        {
-          "color": "#787b86",
-          "enabled": true,
-          "opacity": 1,
-          "value": "0"
-        },
-        {
-          "color": "#f23645",
-          "enabled": true,
-          "opacity": 1,
-          "value": "0.236"
-        },
-        {
-          "color": "#81c784",
-          "enabled": true,
-          "opacity": 1,
-          "value": "0.382"
-        },
-        {
-          "color": "#4caf50",
-          "enabled": true,
-          "opacity": 1,
-          "value": "0.5"
-        },
-        {
-          "color": "#009688",
-          "enabled": true,
-          "opacity": 1,
-          "value": "0.618"
-        },
-        {
-          "color": "#64b5f6",
-          "enabled": true,
-          "opacity": 1,
-          "value": "0.786"
-        },
-        {
-          "color": "#787b86",
-          "enabled": true,
-          "opacity": 1,
-          "value": "1"
-        },
-        {
-          "color": "#90caf9",
-          "enabled": false,
-          "opacity": 1,
-          "value": "1.618"
-        }
-      ],
-      "fibPriceVisible": false,
-      "fibQuarterLineStyles": [
-        {
-          "hex": "#4caf50",
-          "lineStyle": "solid",
-          "opacity": 1,
-          "thickness": 1
-        },
-        {
-          "hex": "#64b5f6",
-          "lineStyle": "solid",
-          "opacity": 1,
-          "thickness": 1
-        },
-        {
-          "hex": "#ff8a12",
-          "lineStyle": "solid",
-          "opacity": 1,
-          "thickness": 1
-        }
-      ],
-      "fibQuarterSplitVisible": false,
-      "fibReverse": false,
-      "lineStyle": {
-        "hex": "#787b86",
-        "lineStyle": "solid",
-        "opacity": 1,
-        "thickness": 1
-      },
-      "locked": false,
-      "manualVisible": true,
-      "objectId": "FB0012",
-      "paneId": "candle_pane",
-      "points": [
-        {
-          "dataIndex": 2449,
-          "timestamp": 1779314700000,
-          "value": 4398.171635197272
-        },
-        {
-          "dataIndex": 2724,
-          "timestamp": 1779400800000,
-          "value": 4650.716285849357
-        }
-      ],
-      "rulerStyle": {
-        "background": {
-          "hex": "#5286e0",
-          "opacity": 0.14
-        },
-        "backgroundVisible": true,
-        "borderLineStyle": {
-          "hex": "#8aa8f8",
-          "lineStyle": "solid",
-          "opacity": 1,
-          "thickness": 1
-        },
-        "borderVisible": false,
-        "labelBackground": {
-          "hex": "#ffffff",
-          "opacity": 1
-        },
-        "labelBackgroundVisible": false,
-        "labelColor": {
-          "hex": "#000000",
-          "opacity": 1
-        },
-        "labelFontSize": 12,
-        "statsAlwaysVisible": false,
-        "statsData": []
-      },
-      "showPriceLabel": true,
-      "textStyle": {
-        "alignH": "right",
-        "alignV": "top",
-        "body": "",
-        "bold": false,
-        "fontSize": 14,
-        "italic": false,
-        "textColor": "#131722"
-      }
-    }
-  ],
+  "fractalframe.drawings.fibRetracement.items": [],
   "fractalframe.drawingsDrawer.fibRetracementStyle": {
     "background": {
       "hex": "#2962ff",
@@ -2101,7 +1900,7 @@
     "reverse": false,
     "textAlign": "center",
     "textVAlign": "middle",
-    "textVisible": false,
+    "textVisible": true,
     "trendLineStyle": {
       "hex": "#2a2e39",
       "lineStyle": "dashed",
@@ -2146,7 +1945,7 @@
   "fractalframe.drawingsDrawer.priceLabel.trendLine": "1",
   "fractalframe.drawingsDrawer.priceLabel.horizontalLine": "0",
   "fractalframe.drawingsDrawer.priceLabel.ruler": "1",
-  "fractalframe:rightWidgetActiveDrawer:v1": "drawings",
+  "fractalframe:rightWidgetActiveDrawer:v1": "indicators",
   "fractalframe:visibilityRange:drawing:fibRetracement:FB0012:v1": [
     {
       "enabled": true,

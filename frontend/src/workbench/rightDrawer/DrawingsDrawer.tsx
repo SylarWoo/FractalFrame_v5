@@ -2,6 +2,7 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { readJson, readString, writeJson, writeString } from '../persistence/jsonStorage'
+import { readChartCursorMode, writeChartCursorMode, type ChartCursorMode } from '../chart/chartCursorMode'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../settings/SettingsSwatches'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import {
@@ -33,9 +34,9 @@ import { normalizeDrawingRulerStyle, readDrawingRulerStyle, writeDrawingRulerSty
 import { readQuickMeasureEnabled, writeQuickMeasureEnabled } from './quickMeasurePersistence'
 import './DrawingsDrawer.css'
 
-type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'cursor'
+type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange' | 'cursor'
 type DrawingTab = 'style' | 'text' | 'coords'
-type CursorMode = 'cursor' | 'crosshair'
+type CursorMode = ChartCursorMode
 
 type DrawingTool = {
   key: DrawingToolKey
@@ -71,7 +72,6 @@ type SelectedDrawingState = {
 }
 
 const selectedToolStorageKey = 'fractalframe.drawingsDrawer.selectedTool'
-const cursorModeStorageKey = 'fractalframe.drawingsDrawer.cursorMode'
 const defaultTopHeight = 254
 const minTopHeight = 96
 const maxTopHeight = 420
@@ -81,6 +81,7 @@ const drawingTools: DrawingTool[] = [
   { key: 'trendLine', label: '\u8d8b\u52bf\u7ebf', tabs: ['style', 'text', 'coords'] },
   { key: 'ruler', label: '\u6807\u5c3a', tabs: ['style', 'text', 'coords'] },
   { key: 'fibRetracement', label: '\u6590\u6ce2\u90a3\u5951\u56de\u64a4', tabs: ['style', 'coords'] },
+  { key: 'morganRange', label: '\u6469\u6839\u533a\u95f4' },
   { key: 'cursor', label: '\u5149\u6807' },
 ]
 
@@ -96,10 +97,6 @@ function normalizeToolKey(value: string): DrawingToolKey {
 
 function readInitialSelectedTool() {
   return normalizeToolKey(readString(selectedToolStorageKey, 'horizontalLine'))
-}
-
-function readCursorMode() {
-  return readString(cursorModeStorageKey, 'cursor') === 'crosshair' ? 'crosshair' : 'cursor'
 }
 
 function createDefaultTrendLineTextStyle(): DrawingTextStyle {
@@ -173,7 +170,7 @@ export function DrawingsDrawer() {
     }
   })
   const [quickMeasureEnabled, setQuickMeasureEnabled] = useState(readQuickMeasureEnabled)
-  const [cursorMode, setCursorMode] = useState<CursorMode>(readCursorMode)
+  const [cursorMode, setCursorMode] = useState<CursorMode>(readChartCursorMode)
   const [topHeight, setTopHeight] = useState(defaultTopHeight)
   const selectedTool = drawingTools.find((tool) => tool.key === selectedKey) ?? drawingTools[0]
   const selectedPersisted = persistedTools[selectedKey] !== false
@@ -269,7 +266,7 @@ export function DrawingsDrawer() {
 
   function setCursor(next: CursorMode) {
     setCursorMode(next)
-    writeString(cursorModeStorageKey, next)
+    writeChartCursorMode(next)
   }
 
   useEffect(() => {
@@ -428,6 +425,13 @@ export function DrawingsDrawer() {
       })
       return
     }
+    if (selectedKey === 'morganRange') {
+      publishDrawingToolCommand({
+        action: 'start',
+        tool: 'morganRange',
+      })
+      return
+    }
     if (selectedKey !== 'horizontalLine') return
     publishDrawingToolCommand({
       action: 'start',
@@ -505,7 +509,7 @@ export function DrawingsDrawer() {
 
   function releaseSelectedTool() {
     setArmedKey(null)
-    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler' && selectedKey !== 'fibRetracement') return
+    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler' && selectedKey !== 'fibRetracement' && selectedKey !== 'morganRange') return
     publishDrawingToolCommand({
       action: 'release',
       tool: selectedKey,
@@ -724,6 +728,18 @@ export function DrawingsDrawer() {
 
           {selectedKey === 'cursor' ? (
             <CursorToolPanel cursorMode={cursorMode} onCursorModeChange={setCursor} />
+          ) : selectedKey === 'morganRange' ? (
+            <div className="ff-drawing-hline-settings-v1">
+              <div className="ff-drawing-hline-top-actions-v1">
+                <SegmentedControl
+                  ariaLabel={`${selectedTool.label} draw mode`}
+                  items={[
+                    { active: armedKey === selectedKey, label: '\u753b\u7ebf', onClick: armSelectedTool },
+                    { active: armedKey !== selectedKey, label: '\u91ca\u653e', onClick: releaseSelectedTool },
+                  ]}
+                />
+              </div>
+            </div>
           ) : (
             <>
               <DrawingToolActionControls

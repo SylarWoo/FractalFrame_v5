@@ -2,7 +2,7 @@ import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import type { DrawingTextStyle, DrawingTrendLineStyle } from './drawingPersistence'
 import type { DrawingRulerStyle } from './rulerDrawingStyle'
 
-export type DrawingCommandTool = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement'
+export type DrawingCommandTool = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange'
 
 export type DrawingToolCommand = {
   action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateQuickMeasureEnabled' | 'updateSelectedFibRetracementStyle' | 'updateSelectedFibTrendLine' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedRulerStyle' | 'updateSelectedTextStyle' | 'updateSelectedTrendLinePointPrice' | 'updateSelectedTrendLineStyle'
@@ -80,7 +80,7 @@ export function publishDrawingToolCommand(command: Omit<DrawingToolCommand, 'id'
 export function isDrawingToolCommandEvent(event: Event): event is CustomEvent<DrawingToolCommand> {
   return event instanceof CustomEvent
     && event.type === drawingToolCommandEvent
-    && (event.detail?.tool === 'horizontalLine' || event.detail?.tool === 'trendLine' || event.detail?.tool === 'ruler' || event.detail?.tool === 'fibRetracement')
+    && (event.detail?.tool === 'horizontalLine' || event.detail?.tool === 'trendLine' || event.detail?.tool === 'ruler' || event.detail?.tool === 'fibRetracement' || event.detail?.tool === 'morganRange')
 }
 
 export function publishDrawingToolState(state: DrawingToolState) {
@@ -90,5 +90,5 @@ export function publishDrawingToolState(state: DrawingToolState) {
 export function isDrawingToolStateEvent(event: Event): event is CustomEvent<DrawingToolState> {
   return event instanceof CustomEvent
     && event.type === drawingToolStateEvent
-    && (event.detail?.tool === 'horizontalLine' || event.detail?.tool === 'trendLine' || event.detail?.tool === 'ruler' || event.detail?.tool === 'fibRetracement')
+    && (event.detail?.tool === 'horizontalLine' || event.detail?.tool === 'trendLine' || event.detail?.tool === 'ruler' || event.detail?.tool === 'fibRetracement' || event.detail?.tool === 'morganRange')
 }

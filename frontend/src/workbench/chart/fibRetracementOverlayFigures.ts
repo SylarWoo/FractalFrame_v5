@@ -42,6 +42,7 @@ export function createFibRetracementPointFigures({
   const endpointPressed = extendData?.endpointPressed === true
   const pressedPointIndex = Number(extendData?.pressedPointIndex)
   const selected = extendData?.selected === true || extendData?.pressed === true
+  const staticRender = extendData?.staticRender === true
   const active = selected || endpointPressed || extendData?.hovered === true || drawing
   const left = Math.min(start.x, end.x)
   const right = Math.max(start.x, end.x)
@@ -50,7 +51,7 @@ export function createFibRetracementPointFigures({
   const width = right - left
   const height = bottom - top
   const figures: HorizontalLineFigure[] = [
-    ...(!active ? [
+    ...(!active && !staticRender ? [
       {
         key: 'point_0',
         type: trendLineHitFigureName,

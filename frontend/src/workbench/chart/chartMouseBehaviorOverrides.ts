@@ -2,6 +2,7 @@ import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { knownDrawingPaneIds } from '../drawing/drawingPaneModel'
 import { drawingOverlayNames, fibRetracementOverlayName, horizontalLineOverlayName, rulerOverlayName, trendLineOverlayName } from '../drawing/drawingOverlayModel'
+import { chartCursorModeChangedEvent, readChartCursorMode } from './chartCursorMode'
 
 const dragCursorThreshold = 3
 
@@ -32,6 +33,12 @@ type OverlayHoverInfo = {
   cursor: string
   paneMain: HTMLElement
 } | null
+
+type BaseCursorRestore = {
+  cursor: string
+  element: HTMLElement
+  priority: string
+}
 
 function hasFiniteValue(point: { value?: number } | undefined) {
   return Number.isFinite(Number(point?.value))
@@ -167,6 +174,7 @@ export function installChartMouseBehaviorOverrides(chart: Chart) {
   const chartRoot = chart.getDom()
   if (!chartRoot) return () => {}
 
+  let baseCursorRestore: BaseCursorRestore[] = []
   let activeHoverCursor: ReturnType<typeof applyCursor> | null = null
   let activeHoverName = ''
   let activeHoverRoot: HTMLElement | null = null
@@ -175,6 +183,29 @@ export function installChartMouseBehaviorOverrides(chart: Chart) {
   let lastPointerEvent: MouseEvent | PointerEvent | null = null
   let pendingPanePress: { paneMain: HTMLElement; x: number; y: number } | null = null
   let yAxisPressActive = false
+
+  const restoreBaseCursor = () => {
+    baseCursorRestore.forEach(({ cursor, element, priority }) => {
+      element.style.setProperty('cursor', cursor, priority)
+    })
+    baseCursorRestore = []
+  }
+
+  const applyBaseCursorMode = () => {
+    restoreBaseCursor()
+    const cursor = readChartCursorMode() === 'crosshair' ? 'crosshair' : 'default'
+    knownDrawingPaneIds.forEach((paneId) => {
+      const paneMain = chart.getDom(paneId, DomPosition.Main)
+      if (!paneMain) return
+      baseCursorRestore.push({
+        cursor: paneMain.style.getPropertyValue('cursor'),
+        element: paneMain,
+        priority: paneMain.style.getPropertyPriority('cursor'),
+      })
+      paneMain.style.setProperty('cursor', cursor, 'important')
+    })
+    chart.setStyles({ crosshair: { show: readChartCursorMode() === 'crosshair' } })
+  }
 
   const finishPress = () => {
     activePressCursor?.restore()
@@ -288,14 +319,20 @@ export function installChartMouseBehaviorOverrides(chart: Chart) {
   chartRoot.addEventListener('pointermove', handlePointerMove, true)
   chartRoot.addEventListener('mousemove', scheduleHoverCursorUpdate)
   chartRoot.addEventListener('mouseleave', clearHoverCursor)
+  window.addEventListener(chartCursorModeChangedEvent, applyBaseCursorMode)
+  window.addEventListener('storage', applyBaseCursorMode)
+  applyBaseCursorMode()
 
   return () => {
     if (hoverTimer !== 0) window.clearTimeout(hoverTimer)
     clearHoverCursor()
     finishPress()
+    restoreBaseCursor()
     chartRoot.removeEventListener('pointerdown', handlePointerDown, true)
     chartRoot.removeEventListener('pointermove', handlePointerMove, true)
     chartRoot.removeEventListener('mousemove', scheduleHoverCursorUpdate)
     chartRoot.removeEventListener('mouseleave', clearHoverCursor)
+    window.removeEventListener(chartCursorModeChangedEvent, applyBaseCursorMode)
+    window.removeEventListener('storage', applyBaseCursorMode)
   }
 }

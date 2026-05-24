@@ -60,6 +60,7 @@ import { createRulerPointFigures, createRulerYAxisFigures } from './rulerOverlay
 import { createFibRetracementPointFigures, createFibRetracementYAxisFigures } from './fibRetracementOverlayFigures'
 import { createRulerToolCommandHandler } from './chartRulerToolCommands'
 import { createQuickMeasureController, ensureQuickMeasureOverlay } from './quickMeasureOverlay'
+import { createMorganRangeController, ensureMorganRangeOverlay } from './morganRangeOverlay'
 import { createChartDrawingHitTester } from './chartDrawingHitTesting'
 import { createTrendLinePendingStartHandleController } from './trendLinePendingStartHandle'
 import { installChartDrawingLifecycle } from './chartDrawingLifecycle'
@@ -145,6 +146,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   ensureTrendLineOverlay()
   ensureRulerOverlay()
   ensureFibRetracementOverlay()
+  ensureMorganRangeOverlay()
   let pendingOverlayId: string | null = null
   let pendingTrendLineOverlayId: string | null = null
   let pendingRulerOverlayId: string | null = null
@@ -253,6 +255,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   let drawingVisibilityController: ReturnType<typeof createChartDrawingVisibilityController> | null = null
   let paneInteractionController: ReturnType<typeof createChartDrawingPaneInteractionController> | null = null
   let quickMeasureController: ReturnType<typeof createQuickMeasureController> | null = null
+  let morganRangeController: ReturnType<typeof createMorganRangeController> | null = null
   const applyDrawingVisibility = () => drawingVisibilityController?.applyDrawingVisibility()
   const applyHorizontalLineVisibility = () => drawingVisibilityController?.applyHorizontalLineVisibility()
   const isHorizontalLineVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isHorizontalLineVisibleInCurrentPeriod(objectId) ?? true
@@ -825,6 +828,19 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     fallbackPaneId: candlePaneId,
   })
   quickMeasureController.setEnabled(readQuickMeasureEnabled())
+  morganRangeController = createMorganRangeController({
+    chart,
+    fallbackPaneId: candlePaneId,
+    onCompleted: () => {
+      publishDrawingToolState({
+        armed: false,
+        locked: true,
+        selected: false,
+        showPriceLabel: false,
+        tool: 'morganRange',
+      })
+    },
+  })
 
   ensurePaneInteractionListeners()
 
@@ -916,6 +932,18 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
 
   const handleCommand = (event: Event) => {
     if (!isDrawingToolCommandEvent(event)) return
+    if (event.detail.tool === 'morganRange') {
+      if (event.detail.action === 'start') morganRangeController?.start()
+      if (event.detail.action === 'release') morganRangeController?.release()
+      publishDrawingToolState({
+        armed: event.detail.action === 'start',
+        locked: true,
+        selected: false,
+        showPriceLabel: false,
+        tool: 'morganRange',
+      })
+      return
+    }
     if (event.detail.tool === 'ruler' && event.detail.action === 'updateQuickMeasureEnabled') {
       quickMeasureController?.setEnabled(event.detail.enabled === true)
       return
@@ -1028,6 +1056,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     if (pendingRulerOverlayId) chart.removeOverlay({ id: pendingRulerOverlayId })
     if (pendingFibOverlayId) chart.removeOverlay({ id: pendingFibOverlayId })
     hidePendingTrendStartHandle()
+    morganRangeController?.cleanup()
     cleanupLifecycle()
     paneInteractionController?.cleanup()
     quickMeasureController?.cleanup()
