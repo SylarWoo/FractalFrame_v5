@@ -103,6 +103,7 @@ function createEmptyTrendLineTextStyle(): DrawingTextStyle {
 function drawingToolKeyFromObjectTreeItem(item: ObjectTreeDrawingItem): DrawingToolKey {
   if (item.kind === 'trendLine') return 'trendLine'
   if (item.kind === 'ruler') return 'ruler'
+  if (item.kind === 'fibRetracement') return 'fibRetracement'
   return 'horizontalLine'
 }
 
@@ -159,7 +160,7 @@ export function DrawingsDrawer() {
     : ''
 
   function selectTool(key: DrawingToolKey) {
-    if (selectedDrawing?.tool !== key && selectedDrawing?.objectId && (key === 'horizontalLine' || key === 'trendLine' || key === 'ruler')) {
+    if (selectedDrawing?.tool !== key && selectedDrawing?.objectId && (key === 'horizontalLine' || key === 'trendLine' || key === 'ruler' || key === 'fibRetracement')) {
       publishObjectTreeDrawingCommand({ action: 'deselect', id: selectedDrawing.objectId })
       setSelectedDrawing(null)
     }
@@ -253,7 +254,7 @@ export function DrawingsDrawer() {
   }, [])
 
   useEffect(() => {
-    if ((selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler') || visibleTab !== 'coords') return
+    if ((selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler' && selectedKey !== 'fibRetracement') || visibleTab !== 'coords') return
     publishDrawingToolCommand({
       action: 'refreshSelectedState',
       tool: selectedKey,
@@ -294,6 +295,21 @@ export function DrawingsDrawer() {
       })
       return
     }
+    if (selectedKey === 'fibRetracement') {
+      publishDrawingToolCommand({
+        action: 'start',
+        lineStyle: lineStyles.fibRetracement ?? createDefaultDrawingLineStyle('#787b86'),
+        locked: selectedLocked,
+        rulerStyle: {
+          ...rulerStyle,
+          statsAlwaysVisible: false,
+          statsData: [],
+        },
+        showPriceLabel: selectedPriceLabel,
+        tool: 'fibRetracement',
+      })
+      return
+    }
     if (selectedKey !== 'horizontalLine') return
     publishDrawingToolCommand({
       action: 'start',
@@ -307,7 +323,7 @@ export function DrawingsDrawer() {
 
   function releaseSelectedTool() {
     setArmedKey(null)
-    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler') return
+    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler' && selectedKey !== 'fibRetracement') return
     publishDrawingToolCommand({
       action: 'release',
       tool: selectedKey,
@@ -316,7 +332,7 @@ export function DrawingsDrawer() {
 
   function toggleSelectedLock() {
     if (selectedDrawing?.tool === selectedKey) {
-      if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler') return
+      if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler' && selectedKey !== 'fibRetracement') return
       publishDrawingToolCommand({
         action: 'toggleSelectedLock',
         tool: selectedKey,
@@ -327,10 +343,10 @@ export function DrawingsDrawer() {
   }
 
   function deleteSelectedDrawing() {
-    const targetTool = selectedDrawing?.tool === 'horizontalLine' || selectedDrawing?.tool === 'trendLine' || selectedDrawing?.tool === 'ruler'
+    const targetTool = selectedDrawing?.tool === 'horizontalLine' || selectedDrawing?.tool === 'trendLine' || selectedDrawing?.tool === 'ruler' || selectedDrawing?.tool === 'fibRetracement'
       ? selectedDrawing.tool
       : selectedKey
-    if (targetTool !== 'horizontalLine' && targetTool !== 'trendLine' && targetTool !== 'ruler') return
+    if (targetTool !== 'horizontalLine' && targetTool !== 'trendLine' && targetTool !== 'ruler' && targetTool !== 'fibRetracement') return
     publishDrawingToolCommand({
       action: 'deleteSelected',
       tool: targetTool,
@@ -345,7 +361,7 @@ export function DrawingsDrawer() {
         ? { ...current, showPriceLabel: enabled }
         : current)
     }
-    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler') return
+    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler' && selectedKey !== 'fibRetracement') return
     if (selectedDrawing?.tool !== selectedKey && selectedKey !== 'trendLine' && selectedKey !== 'ruler') return
     publishDrawingToolCommand({
       action: 'updateSelectedPriceLabel',
@@ -425,7 +441,7 @@ export function DrawingsDrawer() {
   }
 
   function setSelectedTrendPointPrice(pointIndex: number, price: number) {
-    if (selectedKey !== 'trendLine' && selectedKey !== 'ruler') return
+    if (selectedKey !== 'trendLine' && selectedKey !== 'ruler' && selectedKey !== 'fibRetracement') return
     setSelectedDrawing((current) => current?.tool === selectedKey
       ? {
           ...current,
@@ -1377,15 +1393,16 @@ function DrawingCoordsPanel({
       />
     )
   }
-  if (tool.key === 'ruler') {
+  if (tool.key === 'ruler' || tool.key === 'fibRetracement') {
+    const isFib = tool.key === 'fibRetracement'
     return (
       <TwoPointPriceCoordsPanel
-        locked={selectedDrawing?.tool === 'ruler' && selectedDrawing.locked}
-        lockedMessage={'\u5f53\u524d\u9009\u4e2d\u7684\u6807\u5c3a\u5df2\u9501\u5b9a\uff0c\u65e0\u6cd5\u4fee\u6539\u5750\u6807\u3002\u8bf7\u5148\u89e3\u9501\u3002'}
-        notSelectedMessage={'\u672a\u9009\u4e2d\u6807\u5c3a\uff1a\u8bf7\u5148\u5728\u56fe\u4e0a\u9009\u4e2d\u4e00\u4e2a\u6807\u5c3a\u3002'}
+        locked={selectedDrawing?.tool === tool.key && selectedDrawing.locked}
+        lockedMessage={isFib ? '当前选中的斐波那契回撤已锁定，无法修改坐标。请先解锁。' : '当前选中的标尺已锁定，无法修改坐标。请先解锁。'}
+        notSelectedMessage={isFib ? '未选中斐波那契回撤：请先在图上选中一个斐波那契回撤。' : '未选中标尺：请先在图上选中一个标尺。'}
         onPointPriceChange={onTrendPointPriceChange}
-        pointPrices={selectedDrawing?.tool === 'ruler' ? selectedDrawing.trendPointPrices : undefined}
-        selected={selectedDrawing?.tool === 'ruler'}
+        pointPrices={selectedDrawing?.tool === tool.key ? selectedDrawing.trendPointPrices : undefined}
+        selected={selectedDrawing?.tool === tool.key}
       />
     )
   }

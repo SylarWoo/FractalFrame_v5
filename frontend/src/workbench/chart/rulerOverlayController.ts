@@ -23,6 +23,7 @@ export function createRulerOverlayFactory({
   chart,
   clearDeselectedRuler,
   clearRemovedRuler,
+  overlayName = rulerOverlayName,
   persistCurrentRulers,
   publishObjectTreeState,
   selectedRulerOverlayIds,
@@ -31,10 +32,12 @@ export function createRulerOverlayFactory({
   setPendingRulerOptionsCleared,
   rulerOverlayIds,
   rulerOverlayZLevel,
+  tool = 'ruler',
 }: {
   chart: Chart
   clearDeselectedRuler: (id: string) => void
   clearRemovedRuler: (id: string) => void
+  overlayName?: string
   persistCurrentRulers: () => void
   publishObjectTreeState: () => void
   selectedRulerOverlayIds: Set<string>
@@ -43,8 +46,10 @@ export function createRulerOverlayFactory({
   setPendingRulerOptionsCleared: () => void
   rulerOverlayIds: Set<string>
   rulerOverlayZLevel: number
+  tool?: 'ruler' | 'fibRetracement'
 }) {
   let pendingEndpointPress: { overlayId: string; pointIndex: number; x: number; y: number } | null = null
+  let protectSelectedAfterMove: { overlayId: string; time: number } | null = null
   let bodyMoveState: {
     overlayId: string
     paneId: string
@@ -121,7 +126,7 @@ export function createRulerOverlayFactory({
   }) {
     const completed = Array.isArray(points) && points.length >= 2
     return chart.createOverlay({
-      name: rulerOverlayName,
+      name: overlayName,
       extendData: {
         dataList: chart.getDataList().map((row) => ({
           real_volume: Number((row as { real_volume?: number }).real_volume),
@@ -169,7 +174,7 @@ export function createRulerOverlayFactory({
           selected: true,
           showPriceLabel,
           textStyle: normalizeDrawingTextStyle(textStyle),
-          tool: 'ruler',
+          tool,
           trendPointPrices: resolveRulerPointPrices(overlay),
         })
         persistCurrentRulers()
@@ -189,6 +194,7 @@ export function createRulerOverlayFactory({
       onPressedMoveEnd: ({ overlay }) => {
         const extendData = overlay.extendData as RulerExtendData | undefined
         setActiveRuler(overlay.id)
+        protectSelectedAfterMove = { overlayId: overlay.id, time: Date.now() }
         chart.overrideOverlay({
           id: overlay.id,
           extendData: {
@@ -210,7 +216,7 @@ export function createRulerOverlayFactory({
           selected: true,
           showPriceLabel: extendData?.showPriceLabel !== false,
           textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-          tool: 'ruler',
+          tool,
           trendPointPrices: resolveRulerPointPrices(overlay),
         })
         persistCurrentRulers()
@@ -244,7 +250,7 @@ export function createRulerOverlayFactory({
           selected: true,
           showPriceLabel: extendData?.showPriceLabel !== false,
           textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-          tool: 'ruler',
+          tool,
           trendPointPrices: resolveRulerPointPrices(overlay),
         })
         publishObjectTreeState()
@@ -307,7 +313,7 @@ export function createRulerOverlayFactory({
           selected: true,
           showPriceLabel: extendData?.showPriceLabel !== false,
           textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-          tool: 'ruler',
+          tool,
           trendPointPrices: resolveRulerPointPrices(overlay),
         })
         publishObjectTreeState()
@@ -315,6 +321,15 @@ export function createRulerOverlayFactory({
       },
       onDeselected: ({ overlay }) => {
         const extendData = overlay.extendData as RulerExtendData | undefined
+        if (overlay.visible === false || extendData?.manualVisible === false || extendData?.periodVisible === false) return false
+        if (
+          protectSelectedAfterMove?.overlayId === overlay.id
+          && Date.now() - protectSelectedAfterMove.time < 180
+          && (selectedRulerOverlayIds.has(overlay.id) || extendData?.selected === true)
+        ) {
+          chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed: false, pressed: false, pressedPointIndex: undefined, selected: true } })
+          return false
+        }
         selectedRulerOverlayIds.delete(overlay.id)
         clearDeselectedRuler(overlay.id)
         chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, selected: false, pressed: false } })
@@ -323,7 +338,7 @@ export function createRulerOverlayFactory({
           locked: false,
           selected: false,
           showPriceLabel: true,
-          tool: 'ruler',
+          tool,
         })
         publishObjectTreeState()
         return false

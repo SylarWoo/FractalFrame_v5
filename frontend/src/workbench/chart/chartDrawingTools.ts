@@ -2,6 +2,7 @@ import { DomPosition, registerOverlay } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { drawingMainPaneId } from '../drawing/drawingPaneModel'
 import {
+  fibRetracementOverlayName,
   horizontalLineOverlayName,
   rulerOverlayName,
   trendLineOverlayName,
@@ -64,6 +65,7 @@ import { chartDrawingVisibilityRefreshEvent } from './chartDrawingVisibilityEven
 let horizontalLineOverlayRegistered = false
 let trendLineOverlayRegistered = false
 let rulerOverlayRegistered = false
+let fibRetracementOverlayRegistered = false
 const candlePaneId = drawingMainPaneId
 const trendLineOverlayZLevel = -1
 export { chartDrawingVisibilityRefreshEvent }
@@ -120,13 +122,30 @@ function ensureRulerOverlay() {
   })
 }
 
+function ensureFibRetracementOverlay() {
+  if (fibRetracementOverlayRegistered) return
+  ensureTrendLineHitFigure()
+  fibRetracementOverlayRegistered = true
+  registerOverlay({
+    name: fibRetracementOverlayName,
+    totalStep: 3,
+    needDefaultPointFigure: true,
+    needDefaultXAxisFigure: false,
+    needDefaultYAxisFigure: false,
+    createPointFigures: createRulerPointFigures,
+    createYAxisFigures: createRulerYAxisFigures,
+  })
+}
+
 export function installChartDrawingTools(chart: Chart, getPeriod: () => string = () => '') {
   ensureHorizontalLineOverlay()
   ensureTrendLineOverlay()
   ensureRulerOverlay()
+  ensureFibRetracementOverlay()
   let pendingOverlayId: string | null = null
   let pendingTrendLineOverlayId: string | null = null
   let pendingRulerOverlayId: string | null = null
+  let pendingFibOverlayId: string | null = null
   let pendingOverlayOptions: {
     lineStyle: SettingsLineSwatchValue
     locked: boolean
@@ -141,9 +160,11 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     trendLineStyle: DrawingTrendLineStyle
   } | null = null
   let pendingRulerOptions: PendingRulerOptions | null = null
+  let pendingFibOptions: PendingRulerOptions | null = null
   let selectedOverlayId: string | null = null
   let selectedTrendLineOverlayId: string | null = null
   let selectedRulerOverlayId: string | null = null
+  let selectedFibOverlayId: string | null = null
   let activeObjectTreeOverlayId: string | null = null
   let lastSelectedOverlayId: string | null = null
   let lastSelectedTrendLineOverlayId: string | null = null
@@ -151,6 +172,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const horizontalLineOverlayIds = new Set<string>()
   const trendLineOverlayIds = new Set<string>()
   const rulerOverlayIds = new Set<string>()
+  const fibOverlayIds = new Set<string>()
   const initialStoredDrawings = readInitialStoredDrawingState()
   let persistenceEnabled = initialStoredDrawings.horizontalLinePersistenceEnabled
   let rulerPersistenceEnabled = initialStoredDrawings.rulerPersistenceEnabled
@@ -161,6 +183,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   let pendingTrendLineEndpointPress: { overlayId: string; pointIndex: number; x: number; y: number } | null = null
   const selectedHorizontalLineOverlayIds = new Set<string>()
   const selectedRulerOverlayIds = new Set<string>()
+  const selectedFibOverlayIds = new Set<string>()
   const selectedTrendLineOverlayIds = new Set<string>()
   let destroyed = false
 
@@ -244,7 +267,8 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     periodVisible: true,
     visible: extendData?.manualVisible !== false,
   }
-  const restoreObjectCurrentPeriodVisibility = (kind: 'horizontalLine' | 'trendLine' | 'ruler', objectId?: string) => {
+  const restoreObjectCurrentPeriodVisibility = (kind: 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement', objectId?: string) => {
+    if (kind === 'fibRetracement') return
     drawingVisibilityController?.restoreObjectCurrentPeriodVisibility(kind, objectId)
   }
   const getHorizontalLineVisible = () => drawingVisibilityController?.getHorizontalLineVisible() ?? true
@@ -288,6 +312,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     const state = collectDrawingObjectTreeState({
       activeObjectTreeOverlayId,
       chart,
+      fibOverlayIds,
       fallbackPaneId: candlePaneId,
       horizontalLineOverlayIds,
       pendingTrendLineOverlayId,
@@ -296,6 +321,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       resolveTrendLineVisibility,
       rulerOverlayIds,
       selectedHorizontalLineOverlayIds,
+      selectedFibOverlayIds,
       selectedRulerOverlayIds,
       selectedTrendLineOverlayIds,
       selectedTrendLineOverlayId,
@@ -322,6 +348,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   })
 
   const {
+    eventHitsFib,
     eventHitsHorizontalLine,
     eventHitsRuler,
     eventHitsTrendLine,
@@ -329,6 +356,8 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   } = createChartDrawingHitTester({
     chart,
     fallbackPaneId: candlePaneId,
+    fibOverlayIds,
+    getPendingFibOverlayId: () => pendingFibOverlayId,
     getPendingRulerOverlayId: () => pendingRulerOverlayId,
     getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
     horizontalLineOverlayIds,
@@ -423,6 +452,44 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       selected: false,
       showPriceLabel: true,
       tool: 'ruler',
+    })
+    publishObjectTreeState()
+  }
+
+  const clearFibSelection = () => {
+    let changed = false
+    fibOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) {
+        fibOverlayIds.delete(id)
+        return
+      }
+      const extendData = overlay.extendData as RulerExtendData | undefined
+      if (!selectedFibOverlayIds.has(id) && extendData?.selected !== true && extendData?.pressed !== true && extendData?.hovered !== true) return
+      changed = true
+      selectedFibOverlayIds.delete(id)
+      chart.overrideOverlay({
+        id,
+        extendData: {
+          ...extendData,
+          endpointPressed: false,
+          hovered: false,
+          pressed: false,
+          pressedPointIndex: undefined,
+          selected: false,
+        },
+      })
+    })
+    if (!changed && !selectedFibOverlayId) return
+    selectedFibOverlayIds.clear()
+    selectedFibOverlayId = null
+    if (activeObjectTreeOverlayId && fibOverlayIds.has(activeObjectTreeOverlayId)) activeObjectTreeOverlayId = selectedOverlayId ?? selectedTrendLineOverlayId ?? selectedRulerOverlayId
+    publishDrawingToolState({
+      armed: pendingFibOverlayId != null,
+      locked: false,
+      selected: false,
+      showPriceLabel: true,
+      tool: 'fibRetracement',
     })
     publishObjectTreeState()
   }
@@ -624,6 +691,49 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     paneId: options.paneId ?? candlePaneId,
   })
 
+  const createFibOverlayBase = createRulerOverlayFactory({
+    chart,
+    clearDeselectedRuler: (id) => {
+      if (selectedFibOverlayId === id) selectedFibOverlayId = null
+      if (activeObjectTreeOverlayId === id) activeObjectTreeOverlayId = selectedOverlayId ?? selectedTrendLineOverlayId ?? selectedRulerOverlayId
+    },
+    clearRemovedRuler: (id) => {
+      if (selectedFibOverlayId === id) selectedFibOverlayId = null
+      selectedFibOverlayIds.delete(id)
+    },
+    overlayName: fibRetracementOverlayName,
+    persistCurrentRulers: () => undefined,
+    publishObjectTreeState,
+    selectedRulerOverlayIds: selectedFibOverlayIds,
+    setActiveRuler: (id) => {
+      selectedFibOverlayId = id
+      selectedFibOverlayIds.clear()
+      selectedFibOverlayIds.add(id)
+      activeObjectTreeOverlayId = id
+    },
+    setPendingRulerOverlayId: (id) => {
+      pendingFibOverlayId = id
+    },
+    setPendingRulerOptionsCleared: () => {
+      pendingFibOptions = null
+    },
+    rulerOverlayIds: fibOverlayIds,
+    rulerOverlayZLevel: trendLineOverlayZLevel,
+    tool: 'fibRetracement',
+  })
+
+  const createFibOverlay = (options: PendingRulerOptions & {
+    manualVisible?: boolean
+    objectId?: string
+    paneId?: string
+    points?: Array<{ dataIndex?: number; timestamp?: number; value?: number }>
+    selected: boolean
+  }) => createFibOverlayBase({
+    ...options,
+    objectId: options.objectId ?? `fib-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    paneId: options.paneId ?? candlePaneId,
+  })
+
   const canCreateOverlayOnPane = (paneId: string) => paneId === candlePaneId || chart.getDom(paneId, DomPosition.Main) != null
 
   drawingVisibilityController = createChartDrawingVisibilityController({
@@ -672,10 +782,12 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
 
   paneInteractionController = createChartDrawingPaneInteractionController({
     chart,
+    clearFibSelection,
     clearHorizontalLineSelection,
     clearRulerSelection,
     clearTrendLineSelection,
     createHorizontalLineOverlay,
+    eventHitsFib,
     eventHitsHorizontalLine,
     eventHitsRuler,
     eventHitsTrendLine,
@@ -760,6 +872,25 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     rulerOverlayIds,
   })
 
+  const handleFibCommand = createRulerToolCommandHandler({
+    chart,
+    createRulerOverlay: createFibOverlay,
+    getLastPointerPaneId,
+    getPendingRulerOptions: () => pendingFibOptions,
+    getPendingRulerOverlayId: () => pendingFibOverlayId,
+    getRulerPersistenceEnabled: () => false,
+    getSelectedRulerOverlayId: () => selectedFibOverlayId,
+    persistCurrentRulers: () => undefined,
+    resolveTrendPointPrices,
+    setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
+    setPendingRulerOptions: (options) => { pendingFibOptions = options },
+    setPendingRulerOverlayId: (id) => { pendingFibOverlayId = id },
+    setRulerPersistenceEnabled: () => undefined,
+    setSelectedRulerOverlayId: (id) => { selectedFibOverlayId = id },
+    rulerOverlayIds: fibOverlayIds,
+    tool: 'fibRetracement',
+  })
+
   const handleCommand = (event: Event) => {
     if (!isDrawingToolCommandEvent(event)) return
     if (event.detail.tool === 'ruler' && event.detail.action === 'updateQuickMeasureEnabled') {
@@ -768,12 +899,15 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     }
     if (event.detail.tool === 'trendLine') handleTrendLineCommand(event.detail)
     else if (event.detail.tool === 'ruler') handleRulerCommand(event.detail)
+    else if (event.detail.tool === 'fibRetracement') handleFibCommand(event.detail)
     else handleHorizontalLineCommand(event.detail)
   }
   const handleObjectTreeDrawingCommand = createDrawingObjectTreeCommandHandler({
     chart,
+    clearFibSelection,
     clearHorizontalLineSelection,
     clearTrendLineSelection,
+    fibOverlayIds,
     getActiveObjectTreeOverlayId: () => activeObjectTreeOverlayId,
     getSelectedOverlayId: () => selectedOverlayId,
     getSelectedRulerOverlayId: () => selectedRulerOverlayId,
@@ -791,6 +925,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     restoreObjectCurrentPeriodVisibility,
     rulerOverlayIds,
     selectedHorizontalLineOverlayIds,
+    selectedFibOverlayIds,
     selectedRulerOverlayIds,
     selectedTrendLineOverlayIds,
     setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
@@ -799,6 +934,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       lastSelectedTrendLineAt = Date.now()
     },
     setSelectedHorizontalLine,
+    setSelectedFibOverlayId: (id) => { selectedFibOverlayId = id },
     setSelectedOverlayId: (id) => { selectedOverlayId = id },
     setSelectedRulerOverlayId: (id) => { selectedRulerOverlayId = id },
     setSelectedTrendLineOverlayId: (id) => { selectedTrendLineOverlayId = id },
@@ -862,6 +998,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     if (pendingOverlayId) chart.removeOverlay({ id: pendingOverlayId })
     if (pendingTrendLineOverlayId) chart.removeOverlay({ id: pendingTrendLineOverlayId })
     if (pendingRulerOverlayId) chart.removeOverlay({ id: pendingRulerOverlayId })
+    if (pendingFibOverlayId) chart.removeOverlay({ id: pendingFibOverlayId })
     hidePendingTrendStartHandle()
     cleanupLifecycle()
     paneInteractionController?.cleanup()

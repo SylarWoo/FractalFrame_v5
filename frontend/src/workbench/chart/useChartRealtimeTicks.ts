@@ -106,6 +106,12 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       const normalizedSymbol = normalizeRealtimeSymbol(symbol)
       let latestTick: Partial<Mt5RealtimeTickEventDetail> | null = null
       let retryTimer = 0
+      let failureCount = 0
+      const schedulePoll = () => {
+        if (disposed) return
+        const delay = failureCount === 0 ? 1000 : Math.min(10_000, 1500 * failureCount)
+        pollTimer = window.setTimeout(pollTick, delay)
+      }
 
       const applyRealtimeTick = (detail: Partial<Mt5RealtimeTickEventDetail> | null) => {
         if (!detail || normalizeRealtimeSymbol(detail.symbol) !== normalizedSymbol) return
@@ -215,21 +221,24 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
         if (disposed || !symbol || inFlight) return
         inFlight = true
         queryMt5Tick(symbol)
-          .then((payload) => applyRealtimeTick(payload.tick ?? null))
+          .then((payload) => {
+            failureCount = 0
+            applyRealtimeTick(payload.tick ?? null)
+          })
           .catch(() => {
-            // Try again on the next interval.
+            failureCount += 1
           })
           .finally(() => {
             inFlight = false
+            schedulePoll()
           })
       }
 
       pollTick()
-      pollTimer = window.setInterval(pollTick, 200)
 
       cleanupListeners = () => {
         if (retryTimer !== 0) window.clearTimeout(retryTimer)
-        if (pollTimer !== 0) window.clearInterval(pollTimer)
+        if (pollTimer !== 0) window.clearTimeout(pollTimer)
       }
     }
 

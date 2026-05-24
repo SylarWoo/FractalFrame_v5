@@ -6,10 +6,12 @@ import type { DrawingTextStyle } from '../rightDrawer/drawingPersistence'
 
 export function createChartDrawingPaneInteractionController({
   chart,
+  clearFibSelection = () => undefined,
   clearHorizontalLineSelection,
   clearRulerSelection,
   clearTrendLineSelection,
   createHorizontalLineOverlay,
+  eventHitsFib = () => false,
   eventHitsHorizontalLine,
   eventHitsRuler,
   eventHitsTrendLine,
@@ -21,6 +23,7 @@ export function createChartDrawingPaneInteractionController({
   setPendingOverlayId,
 }: {
   chart: Chart
+  clearFibSelection?: () => void
   clearHorizontalLineSelection: () => void
   clearRulerSelection: () => void
   clearTrendLineSelection: () => void
@@ -35,6 +38,7 @@ export function createChartDrawingPaneInteractionController({
     showPriceLabel: boolean
     textStyle?: DrawingTextStyle
   }) => unknown
+  eventHitsFib?: (event: MouseEvent, paneId: string) => boolean
   eventHitsHorizontalLine: (event: MouseEvent, paneId: string) => boolean
   eventHitsRuler: (event: MouseEvent, paneId: string) => boolean
   eventHitsTrendLine: (event: MouseEvent, paneId: string) => boolean
@@ -60,9 +64,11 @@ export function createChartDrawingPaneInteractionController({
       if (eventHitsHorizontalLine(event, paneId)) return
       if (eventHitsTrendLine(event, paneId)) return
       if (eventHitsRuler(event, paneId)) return
+      if (eventHitsFib(event, paneId)) return
       clearHorizontalLineSelection()
       clearTrendLineSelection()
       clearRulerSelection()
+      clearFibSelection()
     }, 0)
   }
 

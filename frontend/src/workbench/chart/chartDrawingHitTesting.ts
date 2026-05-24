@@ -25,6 +25,8 @@ export type ScreenPoint = {
 export function createChartDrawingHitTester({
   chart,
   fallbackPaneId,
+  fibOverlayIds = new Set<string>(),
+  getPendingFibOverlayId = () => null,
   getPendingRulerOverlayId,
   getPendingTrendLineOverlayId,
   horizontalLineOverlayIds,
@@ -36,6 +38,8 @@ export function createChartDrawingHitTester({
 }: {
   chart: Chart
   fallbackPaneId: string
+  fibOverlayIds?: Set<string>
+  getPendingFibOverlayId?: () => string | null
   getPendingRulerOverlayId: () => string | null
   getPendingTrendLineOverlayId: () => string | null
   horizontalLineOverlayIds: Set<string>
@@ -101,20 +105,28 @@ export function createChartDrawingHitTester({
     return false
   }
 
-  const eventHitsRuler = (event: MouseEvent, paneId: string, hitSlop = horizontalLineHitSlop) => {
+  const eventHitsTwoPointBox = (
+    event: MouseEvent,
+    paneId: string,
+    overlayIds: Set<string>,
+    getPendingOverlayId: () => string | null,
+    hitSlop = horizontalLineHitSlop,
+  ) => {
     const paneMain = chart.getDom(paneId, DomPosition.Main)
     if (!paneMain) return false
     const rect = paneMain.getBoundingClientRect()
     const eventPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top }
     if (!Number.isFinite(eventPoint.x) || !Number.isFinite(eventPoint.y)) return false
-    for (const id of rulerOverlayIds) {
-      if (id === getPendingRulerOverlayId()) continue
+    for (const id of overlayIds) {
+      if (id === getPendingOverlayId()) continue
       const overlay = chart.getOverlayById(id)
       if (!overlay || (overlay.paneId || fallbackPaneId) !== paneId) continue
       if (!resolveRulerVisibility(overlay.extendData as RulerExtendData | undefined).visible) continue
       const start = resolveOverlayPointPixel(overlay.points[0] ?? {}, paneId)
       const end = resolveOverlayPointPixel(overlay.points[1] ?? {}, paneId)
       if (!start || !end) continue
+      if (Math.hypot(eventPoint.x - start.x, eventPoint.y - start.y) <= hitSlop) return true
+      if (Math.hypot(eventPoint.x - end.x, eventPoint.y - end.y) <= hitSlop) return true
       const left = Math.min(start.x, end.x)
       const right = Math.max(start.x, end.x)
       const top = Math.min(start.y, end.y)
@@ -127,7 +139,16 @@ export function createChartDrawingHitTester({
     return false
   }
 
+  const eventHitsRuler = (event: MouseEvent, paneId: string, hitSlop = horizontalLineHitSlop) => {
+    return eventHitsTwoPointBox(event, paneId, rulerOverlayIds, getPendingRulerOverlayId, hitSlop)
+  }
+
+  const eventHitsFib = (event: MouseEvent, paneId: string, hitSlop = horizontalLineHitSlop) => {
+    return eventHitsTwoPointBox(event, paneId, fibOverlayIds, getPendingFibOverlayId, hitSlop)
+  }
+
   return {
+    eventHitsFib,
     eventHitsHorizontalLine,
     eventHitsRuler,
     eventHitsTrendLine,

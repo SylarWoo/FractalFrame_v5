@@ -23,8 +23,10 @@ type DrawingObjectTreeCommandAdapter = {
 
 export function createDrawingObjectTreeCommandHandler({
   chart,
+  clearFibSelection = () => undefined,
   clearHorizontalLineSelection,
   clearTrendLineSelection,
+  fibOverlayIds = new Set<string>(),
   getActiveObjectTreeOverlayId,
   getSelectedOverlayId,
   getSelectedRulerOverlayId,
@@ -42,12 +44,14 @@ export function createDrawingObjectTreeCommandHandler({
   restoreObjectCurrentPeriodVisibility,
   rulerOverlayIds,
   selectedHorizontalLineOverlayIds,
+  selectedFibOverlayIds = new Set<string>(),
   selectedRulerOverlayIds,
   selectedTrendLineOverlayIds,
   setActiveObjectTreeOverlayId,
   setLastSelectedTrendLine,
   setSelectedOverlayId,
   setSelectedRulerOverlayId,
+  setSelectedFibOverlayId = () => undefined,
   setSelectedTrendLineOverlayId,
   setSelectedHorizontalLine,
   toggleSelectedHorizontalLine,
@@ -55,8 +59,10 @@ export function createDrawingObjectTreeCommandHandler({
   updateOverlayState,
 }: {
   chart: Chart
+  clearFibSelection?: () => void
   clearHorizontalLineSelection: () => void
   clearTrendLineSelection: () => void
+  fibOverlayIds?: Set<string>
   getActiveObjectTreeOverlayId: () => string | null
   getSelectedOverlayId: () => string | null
   getSelectedRulerOverlayId: () => string | null
@@ -74,6 +80,7 @@ export function createDrawingObjectTreeCommandHandler({
   restoreObjectCurrentPeriodVisibility: (kind: DrawingObjectTreeTarget['kind'], objectId?: string) => void
   rulerOverlayIds: Set<string>
   selectedHorizontalLineOverlayIds: Set<string>
+  selectedFibOverlayIds?: Set<string>
   selectedRulerOverlayIds: Set<string>
   selectedTrendLineOverlayIds: Set<string>
   setActiveObjectTreeOverlayId: (id: string | null) => void
@@ -81,6 +88,7 @@ export function createDrawingObjectTreeCommandHandler({
   setSelectedOverlayId: (id: string | null) => void
   setSelectedHorizontalLine: (id: string, additive: boolean) => void
   setSelectedRulerOverlayId: (id: string | null) => void
+  setSelectedFibOverlayId?: (id: string | null) => void
   setSelectedTrendLineOverlayId: (id: string | null) => void
   toggleSelectedHorizontalLine: (id: string) => void
   trendLineOverlayIds: Set<string>
@@ -281,10 +289,81 @@ export function createDrawingObjectTreeCommandHandler({
         })
       },
     },
+    {
+      deselect: (target, overlay) => {
+        const extendData = overlay.extendData as RulerExtendData | undefined
+        chart.overrideOverlay({ id: target.id, extendData: { ...extendData, endpointPressed: false, selected: false, pressed: false, pressedPointIndex: undefined } })
+        selectedFibOverlayIds.delete(target.id)
+        setSelectedFibOverlayId(null)
+        if (getActiveObjectTreeOverlayId() === target.id) setActiveObjectTreeOverlayId(getSelectedOverlayId() ?? getSelectedTrendLineOverlayId() ?? getSelectedRulerOverlayId())
+      },
+      isVisibleInCurrentPeriod: isRulerVisibleInCurrentPeriod,
+      kind: 'fibRetracement',
+      persist: () => undefined,
+      selectedForVisible: (id, extendData) => selectedFibOverlayIds.has(id) || (extendData as RulerExtendData | undefined)?.selected === true,
+      select: (command, target, overlay) => {
+        if (command.additive !== true) {
+          clearHorizontalLineSelection()
+          clearTrendLineSelection()
+          clearRulerSelection()
+          fibOverlayIds.forEach((overlayId) => {
+            if (overlayId === target.id) return
+            const rowOverlay = chart.getOverlayById(overlayId)
+            const rowExtendData = rowOverlay?.extendData as RulerExtendData | undefined
+            if (!rowOverlay || rowExtendData?.selected !== true) return
+            chart.overrideOverlay({ id: overlayId, extendData: { ...rowExtendData, endpointPressed: false, selected: false, pressed: false, pressedPointIndex: undefined } })
+            selectedFibOverlayIds.delete(overlayId)
+          })
+        }
+        const targetExtendData = overlay.extendData as RulerExtendData | undefined
+        const nextSelected = command.additive === true && (selectedFibOverlayIds.has(target.id) || targetExtendData?.selected === true) ? false : true
+        if (nextSelected) selectedFibOverlayIds.add(target.id)
+        else selectedFibOverlayIds.delete(target.id)
+        setSelectedFibOverlayId(nextSelected ? target.id : null)
+        if (nextSelected) setActiveObjectTreeOverlayId(target.id)
+        else if (getActiveObjectTreeOverlayId() === target.id) setActiveObjectTreeOverlayId(getSelectedOverlayId() ?? getSelectedTrendLineOverlayId() ?? getSelectedRulerOverlayId())
+        chart.overrideOverlay({
+          id: target.id,
+          extendData: {
+            ...targetExtendData,
+            selected: nextSelected,
+          },
+        })
+        publishDrawingToolState({
+          armed: false,
+          lineStyle: normalizeLineStyle(targetExtendData?.lineStyle),
+          locked: targetExtendData?.locked === true,
+          objectId: targetExtendData?.objectId,
+          rulerStyle: normalizeDrawingRulerStyle(targetExtendData?.rulerStyle),
+          selected: nextSelected,
+          showPriceLabel: targetExtendData?.showPriceLabel !== false,
+          textStyle: normalizeDrawingTextStyle(targetExtendData?.textStyle),
+          tool: 'fibRetracement',
+          trendPointPrices: resolveTrendPointPrices(overlay),
+        })
+      },
+      updateHiddenState: (id, overlay, manualVisible, periodVisible) => {
+        const extendData = overlay.extendData as RulerExtendData | undefined
+        chart.overrideOverlay({
+          id,
+          extendData: {
+            ...(overlay.extendData ?? {}),
+            endpointPressed: false,
+            hovered: false,
+            manualVisible,
+            periodVisible,
+            pressed: false,
+            pressedPointIndex: undefined,
+            selected: selectedFibOverlayIds.has(id) || extendData?.selected === true,
+          },
+        })
+      },
+    },
   ]
   const adapterFor = (kind: DrawingObjectTreeTarget['kind']) => adapters.find((adapter) => adapter.kind === kind)
   const resolveTarget = (treeId: string) => resolveDrawingObjectTreeTarget({
     chart,
+    fibOverlayIds,
     horizontalLineOverlayIds,
     rulerOverlayIds,
     treeId,
@@ -303,6 +382,7 @@ export function createDrawingObjectTreeCommandHandler({
       clearHorizontalLineSelection()
       clearTrendLineSelection()
       clearRulerSelection()
+      clearFibSelection()
       return
     }
     const target = resolveTarget(command.id)

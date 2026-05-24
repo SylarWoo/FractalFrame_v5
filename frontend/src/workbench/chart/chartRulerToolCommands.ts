@@ -25,6 +25,7 @@ export function createRulerToolCommandHandler({
   setRulerPersistenceEnabled,
   setSelectedRulerOverlayId,
   rulerOverlayIds,
+  tool = 'ruler',
 }: {
   chart: Chart
   createRulerOverlay: (options: PendingRulerOptions & { paneId?: string; selected: boolean }) => unknown
@@ -41,6 +42,7 @@ export function createRulerToolCommandHandler({
   setRulerPersistenceEnabled: (enabled: boolean) => void
   setSelectedRulerOverlayId: (id: string | null) => void
   rulerOverlayIds: Set<string>
+  tool?: 'ruler' | 'fibRetracement'
 }) {
   const updatePendingAndSelected = (patch: Partial<RulerExtendData>, style?: DrawingRulerStyle) => {
     const pendingOptions = getPendingRulerOptions()
@@ -72,7 +74,7 @@ export function createRulerToolCommandHandler({
   }
 
   return function handleRulerCommand(command: DrawingToolCommand) {
-    if (command.tool !== 'ruler') return
+    if (command.tool !== tool) return
 
     if (command.action === 'release') {
       const pendingId = getPendingRulerOverlayId()
@@ -90,7 +92,7 @@ export function createRulerToolCommandHandler({
           locked: false,
           selected: false,
           showPriceLabel: true,
-          tool: 'ruler',
+          tool,
         })
         return
       }
@@ -118,7 +120,7 @@ export function createRulerToolCommandHandler({
         locked: false,
         selected: false,
         showPriceLabel: true,
-        tool: 'ruler',
+        tool,
       })
       return
     }
@@ -131,7 +133,7 @@ export function createRulerToolCommandHandler({
           locked: false,
           selected: false,
           showPriceLabel: true,
-          tool: 'ruler',
+          tool,
         })
         return
       }
@@ -143,7 +145,7 @@ export function createRulerToolCommandHandler({
           locked: false,
           selected: false,
           showPriceLabel: true,
-          tool: 'ruler',
+          tool,
         })
         return
       }
@@ -157,7 +159,7 @@ export function createRulerToolCommandHandler({
         selected: true,
         showPriceLabel: extendData?.showPriceLabel !== false,
         textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-        tool: 'ruler',
+        tool,
         trendPointPrices: resolveTrendPointPrices(overlay),
       })
       return
@@ -197,7 +199,7 @@ export function createRulerToolCommandHandler({
         selected: true,
         showPriceLabel: extendData?.showPriceLabel !== false,
         textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-        tool: 'ruler',
+        tool,
       })
       return
     }
@@ -247,7 +249,7 @@ export function createRulerToolCommandHandler({
         selected: true,
         showPriceLabel: extendData?.showPriceLabel !== false,
         textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
-        tool: 'ruler',
+        tool,
         trendPointPrices: resolveTrendPointPrices({ points }),
       })
       return

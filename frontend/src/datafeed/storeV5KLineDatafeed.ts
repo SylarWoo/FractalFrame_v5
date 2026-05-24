@@ -1,5 +1,5 @@
 import type { KLineData } from 'klinecharts'
-import { queryMt5Rates } from '../services/mt5/mt5SymbolsApi'
+import { queryStoreV5Ohlcv } from '../services/mt5/mt5SymbolsApi'
 import type { StoreV5QueryPayload } from '../services/mt5/mt5SymbolsApi'
 
 function normalizeTimeframe(period: string) {
@@ -25,8 +25,12 @@ export async function loadStoreV5KLineData(options: {
   timeTo?: number
 }): Promise<KLineData[]> {
   const timeframe = normalizeTimeframe(options.period)
+  const isDirectM1 = timeframe === 'M1'
   let payload: StoreV5QueryPayload
-  payload = await queryMt5Rates({
+  payload = await queryStoreV5Ohlcv({
+    anchor: isDirectM1 ? undefined : 'UTC2200',
+    baseTimeframe: isDirectM1 ? undefined : 'M1',
+    mode: isDirectM1 ? 'direct' : 'aggregated',
     symbol: options.symbol,
     timeframe,
     timeFrom: options.timeFrom,

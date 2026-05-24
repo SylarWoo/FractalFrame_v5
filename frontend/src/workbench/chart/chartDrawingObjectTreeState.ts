@@ -8,7 +8,7 @@ type DrawingVisibility = {
   visible: boolean
 }
 
-export type DrawingObjectTreeTarget = { id: string; kind: 'horizontalLine' | 'trendLine' | 'ruler' }
+export type DrawingObjectTreeTarget = { id: string; kind: 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' }
 
 type DrawingObjectTreeStateAdapter = {
   collectItems: () => ObjectTreeDrawingItem[]
@@ -18,6 +18,7 @@ type DrawingObjectTreeStateAdapter = {
 export function collectDrawingObjectTreeState({
   activeObjectTreeOverlayId,
   chart,
+  fibOverlayIds = new Set<string>(),
   fallbackPaneId,
   horizontalLineOverlayIds,
   pendingTrendLineOverlayId,
@@ -27,12 +28,14 @@ export function collectDrawingObjectTreeState({
   rulerOverlayIds,
   selectedHorizontalLineOverlayIds,
   selectedRulerOverlayIds,
+  selectedFibOverlayIds = new Set<string>(),
   selectedTrendLineOverlayIds,
   selectedTrendLineOverlayId,
   trendLineOverlayIds,
 }: {
   activeObjectTreeOverlayId: string | null
   chart: Chart
+  fibOverlayIds?: Set<string>
   fallbackPaneId: string
   horizontalLineOverlayIds: Set<string>
   pendingTrendLineOverlayId: string | null
@@ -42,12 +45,14 @@ export function collectDrawingObjectTreeState({
   rulerOverlayIds: Set<string>
   selectedHorizontalLineOverlayIds: Set<string>
   selectedRulerOverlayIds: Set<string>
+  selectedFibOverlayIds?: Set<string>
   selectedTrendLineOverlayIds: Set<string>
   selectedTrendLineOverlayId: string | null
   trendLineOverlayIds: Set<string>
 }) {
   const items = createDrawingObjectTreeStateAdapters({
     chart,
+    fibOverlayIds,
     fallbackPaneId,
     horizontalLineOverlayIds,
     pendingTrendLineOverlayId,
@@ -57,6 +62,7 @@ export function collectDrawingObjectTreeState({
     rulerOverlayIds,
     selectedHorizontalLineOverlayIds,
     selectedRulerOverlayIds,
+    selectedFibOverlayIds,
     selectedTrendLineOverlayIds,
     selectedTrendLineOverlayId,
     trendLineOverlayIds,
@@ -70,18 +76,21 @@ export function collectDrawingObjectTreeState({
 export function resolveDrawingObjectTreeTarget({
   chart,
   horizontalLineOverlayIds,
+  fibOverlayIds = new Set(),
   treeId,
   trendLineOverlayIds,
   rulerOverlayIds = new Set(),
 }: {
   chart: Chart
   horizontalLineOverlayIds: Set<string>
+  fibOverlayIds?: Set<string>
   rulerOverlayIds?: Set<string>
   treeId: string
   trendLineOverlayIds: Set<string>
 }): DrawingObjectTreeTarget | null {
   return createDrawingObjectTreeStateAdapters({
     chart,
+    fibOverlayIds,
     fallbackPaneId: '',
     horizontalLineOverlayIds,
     pendingTrendLineOverlayId: null,
@@ -91,6 +100,7 @@ export function resolveDrawingObjectTreeTarget({
     rulerOverlayIds,
     selectedHorizontalLineOverlayIds: new Set(),
     selectedRulerOverlayIds: new Set(),
+    selectedFibOverlayIds: new Set(),
     selectedTrendLineOverlayIds: new Set(),
     selectedTrendLineOverlayId: null,
     trendLineOverlayIds,
@@ -99,6 +109,7 @@ export function resolveDrawingObjectTreeTarget({
 
 function createDrawingObjectTreeStateAdapters({
   chart,
+  fibOverlayIds,
   fallbackPaneId,
   horizontalLineOverlayIds,
   pendingTrendLineOverlayId,
@@ -108,11 +119,13 @@ function createDrawingObjectTreeStateAdapters({
   rulerOverlayIds,
   selectedHorizontalLineOverlayIds,
   selectedRulerOverlayIds,
+  selectedFibOverlayIds,
   selectedTrendLineOverlayIds,
   selectedTrendLineOverlayId,
   trendLineOverlayIds,
 }: {
   chart: Chart
+  fibOverlayIds: Set<string>
   fallbackPaneId: string
   horizontalLineOverlayIds: Set<string>
   pendingTrendLineOverlayId: string | null
@@ -122,6 +135,7 @@ function createDrawingObjectTreeStateAdapters({
   rulerOverlayIds: Set<string>
   selectedHorizontalLineOverlayIds: Set<string>
   selectedRulerOverlayIds: Set<string>
+  selectedFibOverlayIds: Set<string>
   selectedTrendLineOverlayIds: Set<string>
   selectedTrendLineOverlayId: string | null
   trendLineOverlayIds: Set<string>
@@ -219,6 +233,38 @@ function createDrawingObjectTreeStateAdapters({
           const treeOverlay = chart.getOverlayById(overlayId)
           const extendData = treeOverlay?.extendData as RulerExtendData | undefined
           if (extendData?.objectId === treeId) return { id: overlayId, kind: 'ruler' }
+        }
+        return null
+      },
+    },
+    {
+      collectItems: () => Array.from(fibOverlayIds)
+        .map((id): ObjectTreeDrawingItem | null => {
+          const overlay = chart.getOverlayById(id)
+          if (!overlay) return null
+          if (overlay.points.length < 2) return null
+          const extendData = overlay.extendData as RulerExtendData | undefined
+          const visibility = resolveRulerVisibility(extendData)
+          return {
+            id: extendData?.objectId || id,
+            kind: 'fibRetracement',
+            label: '斐波那契回撤',
+            locked: extendData?.locked === true || overlay.lock === true,
+            manualVisible: visibility.manualVisible,
+            overlayId: id,
+            paneId: overlay.paneId || fallbackPaneId,
+            periodVisible: visibility.periodVisible,
+            selected: selectedFibOverlayIds.has(id) || extendData?.selected === true || extendData?.pressed === true,
+            visible: visibility.visible,
+          }
+        })
+        .filter((item): item is ObjectTreeDrawingItem => item != null),
+      resolveTarget: (treeId) => {
+        if (fibOverlayIds.has(treeId) && chart.getOverlayById(treeId)) return { id: treeId, kind: 'fibRetracement' }
+        for (const overlayId of fibOverlayIds) {
+          const treeOverlay = chart.getOverlayById(overlayId)
+          const extendData = treeOverlay?.extendData as RulerExtendData | undefined
+          if (extendData?.objectId === treeId) return { id: overlayId, kind: 'fibRetracement' }
         }
         return null
       },

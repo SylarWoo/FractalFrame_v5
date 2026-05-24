@@ -1,8 +1,9 @@
 export const horizontalLineOverlayName = 'ffHorizontalLine'
 export const trendLineOverlayName = 'ffTrendLine'
 export const rulerOverlayName = 'ffRuler'
+export const fibRetracementOverlayName = 'ffFibRetracement'
 
-export const drawingOverlayNames = new Set([horizontalLineOverlayName, trendLineOverlayName, rulerOverlayName])
+export const drawingOverlayNames = new Set([horizontalLineOverlayName, trendLineOverlayName, rulerOverlayName, fibRetracementOverlayName])
 
 export const horizontalLineVisibilityRangeKey = 'drawing:horizontalLine'
 export const trendLineVisibilityRangeKey = 'drawing:trendLine'
