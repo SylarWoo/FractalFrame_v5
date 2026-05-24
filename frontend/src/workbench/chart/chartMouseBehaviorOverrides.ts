@@ -46,7 +46,7 @@ function resolveOverlayPoints(chart: Chart, instance: { id?: string; points?: Ar
 }
 
 function collectCursorElements(root: HTMLElement) {
-  return [root, ...Array.from(root.querySelectorAll<HTMLElement>('*'))]
+  return [root]
 }
 
 function resolveMainPaneFromEvent(chart: Chart, event: MouseEvent | PointerEvent) {

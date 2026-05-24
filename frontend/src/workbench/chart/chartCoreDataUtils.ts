@@ -1,8 +1,8 @@
 import type { KLineData } from 'klinecharts'
 
-export const initialLoadLimit = 10_000
+export const initialLoadLimit = 3_000
 export const maxInitialLoadLimit = 20_000
-export const historyPageSize = 10_000
+export const historyPageSize = 3_000
 export const jumpWindowBars = 50_000
 export const jumpDisplayWindowBars = 2_400
 export const jumpBarSpace = 6

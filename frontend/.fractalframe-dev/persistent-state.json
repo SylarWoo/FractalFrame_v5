@@ -2,14 +2,14 @@
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
     "lastTickAt": "15:38:54",
     "log": [
+      "15:57:00  Realtime stopped",
+      "15:52:45  Realtime stopped",
+      "15:52:26  Realtime stopped",
+      "15:51:07  Realtime stopped",
       "15:49:30  Realtime stopped",
       "15:49:18  Realtime stopped",
       "15:45:42  Realtime stopped",
-      "15:43:22  Realtime stopped",
-      "15:40:31  Realtime stopped",
-      "15:40:03  Realtime stopped",
-      "15:40:03  Realtime stopped",
-      "15:39:55  Realtime stopped"
+      "15:43:22  Realtime stopped"
     ],
     "ticks": {
       "1INCHUSDm": {
@@ -159,36 +159,36 @@
   },
   "fractalframe:chartViewport:v3:global:M5": {
     "barSpace": 4.734566339457652,
-    "dataLength": 10000,
-    "offsetRightDistance": 276.88174881235153,
+    "dataLength": 3000,
+    "offsetRightDistance": 113.88174881235157,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T07:49:53.487Z",
-    "visibleTo": 10000,
+    "savedAt": "2026-05-24T08:00:05.356Z",
+    "visibleTo": 3000,
     "yAxisRange": {
-      "from": 4465.7877283305625,
-      "range": 88.27559538245623,
-      "realFrom": 4465.7877283305625,
-      "realRange": 88.27559538245623,
-      "realTo": 4554.063323713019,
-      "to": 4554.063323713019
+      "from": 4397.38000374343,
+      "range": 203.22809686973233,
+      "realFrom": 4397.38000374343,
+      "realRange": 203.22809686973233,
+      "realTo": 4600.608100613163,
+      "to": 4600.608100613163
     },
     "symbol": "XAUUSDm",
     "period": "M5"
   },
   "fractalframe:chartViewport:v3:latest": {
     "barSpace": 4.734566339457652,
-    "dataLength": 10000,
-    "offsetRightDistance": 276.88174881235153,
+    "dataLength": 3000,
+    "offsetRightDistance": 113.88174881235157,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T07:49:53.487Z",
-    "visibleTo": 10000,
+    "savedAt": "2026-05-24T08:00:05.356Z",
+    "visibleTo": 3000,
     "yAxisRange": {
-      "from": 4465.7877283305625,
-      "range": 88.27559538245623,
-      "realFrom": 4465.7877283305625,
-      "realRange": 88.27559538245623,
-      "realTo": 4554.063323713019,
-      "to": 4554.063323713019
+      "from": 4397.38000374343,
+      "range": 203.22809686973233,
+      "realFrom": 4397.38000374343,
+      "realRange": 203.22809686973233,
+      "realTo": 4600.608100613163,
+      "to": 4600.608100613163
     },
     "symbol": "XAUUSDm",
     "period": "M5"
@@ -242,7 +242,7 @@
   "fractalframe:mt5ImportCenterWatchlistRealtimeEnabled:v1": "0",
   "fractalframe:mt5ImportCenterQuery:v1": "",
   "fractalframe:mt5ImportCenterSelectedTab:v1": "watchlist",
-  "fractalframe:rightWidgetDrawerWidthPx:v1": "382",
+  "fractalframe:rightWidgetDrawerWidthPx:v1": "396",
   "fractalframe:indicatorShortcutKeys:v1": [
     "RSI",
     "Stoch",
@@ -524,11 +524,11 @@
       "selectedKey": "MA"
     }
   },
-  "fractalframe:rightWidgetActiveDrawer:v1": "drawings",
+  "fractalframe:rightWidgetActiveDrawer:v1": "mt5",
   "fractalframe:bottomDrawerOpen:v1": "0",
   "fractalframe:bottomDrawerHeightPx:v1": "300",
-  "fractalframe.chart.macdPaneHeight": "219",
-  "fractalframe.chart.viPaneHeight": "240",
+  "fractalframe.chart.macdPaneHeight": "283",
+  "fractalframe.chart.viPaneHeight": "217",
   "fractalframe.drawingsDrawer.selectedTool": "fibRetracement",
   "fractalframe.objectTree.groups.v1": [],
   "fractalframe.drawings.ruler.items": [],
@@ -1808,6 +1808,7 @@
         ]
       }
     ],
-    "savedAt": "2026-05-24T07:49:31.124Z"
-  }
+    "savedAt": "2026-05-24T07:57:00.272Z"
+  },
+  "fractalframe:mt5ImportCenterTopPaneHeightPx:v1": "180"
 }

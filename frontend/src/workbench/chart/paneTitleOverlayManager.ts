@@ -118,7 +118,6 @@ export function installPaneTitleOverlay(chart: Chart, container: HTMLElement, co
 
   chart.subscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
   chart.subscribeAction(ActionType.OnDataReady, handleChartChange)
-  chart.subscribeAction(ActionType.OnPaneDrag, handleChartChange)
   chart.subscribeAction(ActionType.OnScroll, handleChartChange)
   chart.subscribeAction(ActionType.OnVisibleRangeChange, handleChartChange)
   chart.subscribeAction(ActionType.OnZoom, handleChartChange)
@@ -133,7 +132,6 @@ export function installPaneTitleOverlay(chart: Chart, container: HTMLElement, co
       if (frameId !== 0) window.cancelAnimationFrame(frameId)
       chart.unsubscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
       chart.unsubscribeAction(ActionType.OnDataReady, handleChartChange)
-      chart.unsubscribeAction(ActionType.OnPaneDrag, handleChartChange)
       chart.unsubscribeAction(ActionType.OnScroll, handleChartChange)
       chart.unsubscribeAction(ActionType.OnVisibleRangeChange, handleChartChange)
       chart.unsubscribeAction(ActionType.OnZoom, handleChartChange)

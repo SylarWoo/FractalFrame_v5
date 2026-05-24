@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 import type { MutableRefObject } from 'react'
-import { ActionType } from 'klinecharts'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
 import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
 import { useChartDataLoad } from './useChartDataLoad'
@@ -125,56 +124,6 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   }, [loadState, onLoadStateChange, period, symbol, totalRows])
 
   useChartStepLoad({ chartInstanceRef, period, setLoadState, stepLoad: stepLoad ?? null, symbol, totalRows })
-
-  useEffect(() => {
-    const chart = chartInstanceRef.current
-    if (!chart) return
-
-    const persistRsiPaneHeight = () => {
-      window.requestAnimationFrame(() => {
-        const size = chart.getSize(rsiPaneId)
-        if (size?.height) writeStoredPaneHeight(rsiPaneHeightStorageKey, size.height)
-      })
-    }
-
-    const persistStochPaneHeight = () => {
-      window.requestAnimationFrame(() => {
-        const size = chart.getSize(stochPaneId)
-        if (size?.height) writeStoredPaneHeight(stochPaneHeightStorageKey, size.height)
-      })
-    }
-    const persistMacdPaneHeight = () => {
-      window.requestAnimationFrame(() => {
-        const size = chart.getSize(macdPaneId)
-        if (size?.height) writeStoredPaneHeight(macdPaneHeightStorageKey, size.height)
-      })
-    }
-    const persistTsiPaneHeight = () => {
-      window.requestAnimationFrame(() => {
-        const size = chart.getSize(tsiPaneId)
-        if (size?.height) writeStoredPaneHeight(tsiPaneHeightStorageKey, size.height)
-      })
-    }
-    const persistViPaneHeight = () => {
-      window.requestAnimationFrame(() => {
-        const size = chart.getSize(viPaneId)
-        if (size?.height) writeStoredPaneHeight(viPaneHeightStorageKey, size.height)
-      })
-    }
-
-    chart.subscribeAction(ActionType.OnPaneDrag, persistRsiPaneHeight)
-    chart.subscribeAction(ActionType.OnPaneDrag, persistStochPaneHeight)
-    chart.subscribeAction(ActionType.OnPaneDrag, persistMacdPaneHeight)
-    chart.subscribeAction(ActionType.OnPaneDrag, persistTsiPaneHeight)
-    chart.subscribeAction(ActionType.OnPaneDrag, persistViPaneHeight)
-    return () => {
-      chart.unsubscribeAction(ActionType.OnPaneDrag, persistRsiPaneHeight)
-      chart.unsubscribeAction(ActionType.OnPaneDrag, persistStochPaneHeight)
-      chart.unsubscribeAction(ActionType.OnPaneDrag, persistMacdPaneHeight)
-      chart.unsubscribeAction(ActionType.OnPaneDrag, persistTsiPaneHeight)
-      chart.unsubscribeAction(ActionType.OnPaneDrag, persistViPaneHeight)
-    }
-  }, [chartInstanceRef])
 
   const observeIndicatorPaneHeight = (paneId: string, storageKey: string, observerRef: MutableRefObject<ResizeObserver | null>) => {
     observerRef.current?.disconnect()

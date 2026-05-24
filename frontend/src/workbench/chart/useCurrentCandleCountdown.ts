@@ -137,7 +137,6 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
     const intervalId = window.setInterval(update, 250)
     const actions = [
       ActionType.OnDataReady,
-      ActionType.OnPaneDrag,
       ActionType.OnScroll,
       ActionType.OnVisibleRangeChange,
       ActionType.OnZoom,
