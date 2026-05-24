@@ -11,6 +11,14 @@ let morganRangeOverlayRegistered = false
 
 type MorganRangePoint = { dataIndex?: number; timestamp?: number; value?: number }
 
+export type StaticMorganRangeOverlayOptions = {
+  futureWidthPx?: number
+  paneId?: string
+  points: [MorganRangePoint, MorganRangePoint]
+  startOffsetPx?: number
+  visible?: boolean
+}
+
 export function ensureMorganRangeOverlay() {
   if (morganRangeOverlayRegistered) return
   morganRangeOverlayRegistered = true
@@ -23,6 +31,30 @@ export function ensureMorganRangeOverlay() {
     createPointFigures: createMorganRangePointFigures,
     createYAxisFigures: () => [],
   })
+}
+
+export function createStaticMorganRangeOverlay(chart: Chart, {
+  futureWidthPx,
+  paneId,
+  points,
+  startOffsetPx,
+  visible = true,
+}: StaticMorganRangeOverlayOptions) {
+  ensureMorganRangeOverlay()
+  const createdId = chart.createOverlay({
+    name: morganRangeOverlayName,
+    extendData: {
+      ...readMorganRangeFibExtendData(),
+      futureWidthPx,
+      startOffsetPx,
+    },
+    lock: true,
+    points,
+    styles: {},
+    visible,
+    zLevel: morganRangeZLevel,
+  }, paneId)
+  return typeof createdId === 'string' ? createdId : null
 }
 
 export function createMorganRangeController({
@@ -166,14 +198,31 @@ export function createMorganRangeController({
 }
 
 function createMorganRangePointFigures(params: Parameters<typeof createFibRetracementPointFigures>[0]) {
+  const extendData = params.overlay.extendData as (RulerExtendData & { futureWidthPx?: number; startOffsetPx?: number }) | undefined
+  const futureWidthPx = Number(extendData?.futureWidthPx)
+  const startOffsetPx = Number(extendData?.startOffsetPx)
+  const coordinates = [...params.coordinates]
+  if (Number.isFinite(futureWidthPx) && futureWidthPx > 0 && coordinates[0] && coordinates[1]) {
+    const startX = Number(coordinates[0].x) + (Number.isFinite(startOffsetPx) ? startOffsetPx : 0)
+    coordinates[0] = {
+      ...coordinates[0],
+      x: startX,
+    }
+    coordinates[1] = {
+      ...coordinates[1],
+      x: startX + futureWidthPx,
+    }
+  }
+
   return createFibRetracementPointFigures({
     ...params,
+    coordinates,
     overlay: {
       ...params.overlay,
       currentStep: 0,
       extendData: {
         ...readMorganRangeFibExtendData(),
-        ...(params.overlay.extendData as RulerExtendData | undefined),
+        ...extendData,
         staticRender: true,
       },
       visible: true,

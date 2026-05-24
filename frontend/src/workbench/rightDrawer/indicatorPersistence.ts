@@ -4,6 +4,7 @@ import {
   defaultRsiIndicatorSettings,
   normalizeIndicatorSettingsTab,
   normalizeMacdSettings,
+  normalizeMrSettings,
   normalizeStochSettings,
   normalizeTsiSettings,
   normalizeViSettings,
@@ -20,6 +21,7 @@ export type {
   MaMarkerMode,
   MaSource,
   MaType,
+  MrIndicatorSettings,
   PersistedIndicatorsState,
   RsiIndicatorSettings,
   RsiLineStyle,
@@ -40,6 +42,7 @@ export type {
 export {
   defaultMacdIndicatorSettings,
   defaultMaIndicatorSettings,
+  defaultMrIndicatorSettings,
   defaultRsiIndicatorSettings,
   defaultStochIndicatorSettings,
   defaultTsiIndicatorSettings,
@@ -65,6 +68,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
     loaded: {
       MA: parsed?.loaded?.MA === true,
       MACD: parsed?.loaded?.MACD === true,
+      MR: parsed?.loaded?.MR === true,
       RSI: parsed?.loaded?.RSI === true,
       Stoch: parsed?.loaded?.Stoch === true,
       TSI: parsed?.loaded?.TSI === true,
@@ -80,6 +84,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
         : defaultMaIndicatorSettings.colors,
     },
     macd: normalizeMacdSettings(parsed?.macd),
+    mr: normalizeMrSettings(parsed?.mr),
     rsi: {
       ...defaultRsiIndicatorSettings,
       ...(parsed?.rsi ?? {}),
@@ -103,4 +108,3 @@ export function writePersistedIndicatorsState(state: PersistedIndicatorsState) {
 export function clearPersistedIndicatorsState() {
   removeStorageItem(persistedStateKey)
 }
-

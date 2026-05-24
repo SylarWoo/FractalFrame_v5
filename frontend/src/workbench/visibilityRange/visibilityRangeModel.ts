@@ -27,13 +27,26 @@ export const defaultVisibilityRangeRows: VisibilityRangeRow[] = [
   { enabled: true, from: 1, key: 'months', label: '\u4e2a\u6708', max: 12, min: 1, to: 12 },
 ]
 
+const mrVisibilityRangeRows: VisibilityRangeRow[] = [
+  { enabled: true, from: 1, key: 'minutes', label: '\u5206\u949f', max: 59, min: 1, to: 59 },
+  { enabled: true, from: 1, key: 'hours', label: '\u5c0f\u65f6', max: 24, min: 1, to: 2 },
+  { enabled: false, from: 1, key: 'days', label: '\u65e5', max: 366, min: 1, to: 366 },
+  { enabled: false, from: 1, key: 'weeks', label: '\u5468', max: 52, min: 1, to: 52 },
+  { enabled: false, from: 1, key: 'months', label: '\u4e2a\u6708', max: 12, min: 1, to: 12 },
+]
+
 export function clampVisibilityRangeValue(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.round(value)))
 }
 
 export function normalizeVisibilityRangeRows(input: unknown): VisibilityRangeRow[] {
   const saved = Array.isArray(input) ? input : []
-  return defaultVisibilityRangeRows.map((fallback) => {
+  return normalizeVisibilityRangeRowsWithFallback(saved, defaultVisibilityRangeRows)
+}
+
+function normalizeVisibilityRangeRowsWithFallback(input: unknown, fallbackRows: VisibilityRangeRow[]) {
+  const saved = Array.isArray(input) ? input : []
+  return fallbackRows.map((fallback) => {
     const match = saved.find((item): item is Partial<VisibilityRangeRow> => {
       return item != null && typeof item === 'object' && (item as Partial<VisibilityRangeRow>).key === fallback.key
     })
@@ -54,9 +67,10 @@ export function visibilityRangeStorageKey(key?: string) {
 
 export function readVisibilityRangeRows(key?: string) {
   const resolvedKey = visibilityRangeStorageKey(key)
+  const fallbackRows = key === 'indicator:MR' ? mrVisibilityRangeRows : defaultVisibilityRangeRows
   return resolvedKey
-    ? normalizeVisibilityRangeRows(readJson(resolvedKey, null))
-    : normalizeVisibilityRangeRows(null)
+    ? normalizeVisibilityRangeRowsWithFallback(readJson(resolvedKey, null), fallbackRows)
+    : normalizeVisibilityRangeRowsWithFallback(null, fallbackRows)
 }
 
 export function writeVisibilityRangeRows(key: string | undefined, rows: VisibilityRangeRow[]) {

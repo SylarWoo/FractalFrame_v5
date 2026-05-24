@@ -176,11 +176,13 @@ export function createFibRetracementPointFigures({
       smooth: false,
       style: lineTypeForStyle(horizontalStyle.lineStyle),
     }
-    figures.push({
-      key: `fib-level-${key}-hit`,
-      type: trendLineHitFigureName,
-      attrs: { coordinates, hitSlop: 6 },
-    })
+    if (!staticRender) {
+      figures.push({
+        key: `fib-level-${key}-hit`,
+        type: trendLineHitFigureName,
+        attrs: { coordinates, hitSlop: 6 },
+      })
+    }
     if (canDrawPriceLabels && labelAlign === 'center' && labelVAlign === 'middle') {
       const text = formatLevelPrice(ratio, level?.value)
       const textWidth = utils.calcTextWidth(text, fontSize, '500', 'Inter, Arial, sans-serif')

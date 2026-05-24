@@ -16,6 +16,7 @@ import type {
   IndicatorSettingsTab,
   MacdIndicatorSettings,
   MaIndicatorSettings,
+  MrIndicatorSettings,
   RsiIndicatorSettings,
   StochIndicatorSettings,
   TsiIndicatorSettings,
@@ -29,7 +30,7 @@ type IndicatorsDrawerProps = {
   indicatorShortcutKeys: string[]
   loadedIndicatorKeys: string[]
   onIndicatorShortcutKeysChange: (keys: string[]) => void
-  onLoadIndicator?: (name: SupportedChartIndicator, settings?: MacdIndicatorSettings | MaIndicatorSettings | RsiIndicatorSettings | StochIndicatorSettings | TsiIndicatorSettings | ViIndicatorSettings | VolIndicatorSettings | VwapIndicatorSettings) => void
+  onLoadIndicator?: (name: SupportedChartIndicator, settings?: MacdIndicatorSettings | MaIndicatorSettings | MrIndicatorSettings | RsiIndicatorSettings | StochIndicatorSettings | TsiIndicatorSettings | ViIndicatorSettings | VolIndicatorSettings | VwapIndicatorSettings) => void
   onUnloadIndicator?: (name: SupportedChartIndicator) => void
 }
 
@@ -39,6 +40,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
   const [settingsTab, setSettingsTab] = useState<IndicatorSettingsTab>(() => initialPersisted.ui.activeTab)
   const [persistenceEnabled, setPersistenceEnabled] = useState(readIndicatorPersistenceEnabled)
   const [maSettings, setMaSettings] = useState<MaIndicatorSettings>(() => initialPersisted.ma)
+  const [mrSettings] = useState<MrIndicatorSettings>(() => initialPersisted.mr)
   const [macdSettings, setMacdSettings] = useState<MacdIndicatorSettings>(() => initialPersisted.macd)
   const [rsiSettings, setRsiSettings] = useState<RsiIndicatorSettings>(() => initialPersisted.rsi)
   const [stochSettings, setStochSettings] = useState<StochIndicatorSettings>(() => initialPersisted.stoch)
@@ -54,9 +56,10 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
   useEffect(() => {
     if (!persistenceEnabled) return
     writePersistedIndicatorsState({
-      loaded: { MA: loadedKeySet.has('MA'), MACD: loadedKeySet.has('MACD'), RSI: loadedKeySet.has('RSI'), Stoch: loadedKeySet.has('Stoch'), TSI: loadedKeySet.has('TSI'), VI: loadedKeySet.has('VI'), VWAP: loadedKeySet.has('VWAP'), Vol: loadedKeySet.has('Vol') },
+      loaded: { MA: loadedKeySet.has('MA'), MACD: loadedKeySet.has('MACD'), MR: loadedKeySet.has('MR'), RSI: loadedKeySet.has('RSI'), Stoch: loadedKeySet.has('Stoch'), TSI: loadedKeySet.has('TSI'), VI: loadedKeySet.has('VI'), VWAP: loadedKeySet.has('VWAP'), Vol: loadedKeySet.has('Vol') },
       ma: maSettings,
       macd: macdSettings,
+      mr: mrSettings,
       rsi: rsiSettings,
       stoch: stochSettings,
       tsi: tsiSettings,
@@ -65,7 +68,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
       vol: volSettings,
       ui: { activeTab: settingsTab, selectedKey },
     })
-  }, [loadedIndicatorKeys, macdSettings, maSettings, persistenceEnabled, rsiSettings, selectedKey, settingsTab, stochSettings, tsiSettings, viSettings, volSettings, vwapSettings])
+  }, [loadedIndicatorKeys, macdSettings, maSettings, mrSettings, persistenceEnabled, rsiSettings, selectedKey, settingsTab, stochSettings, tsiSettings, viSettings, volSettings, vwapSettings])
 
   function handleSettingsChange(next: RsiIndicatorSettings) {
     setRsiSettings(next)
@@ -114,6 +117,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
     if (key === 'TSI') return tsiSettings
     if (key === 'VI') return viSettings
     if (key === 'MA') return maSettings
+    if (key === 'MR') return mrSettings
     if (key === 'VWAP') return vwapSettings
     return volSettings
   }
@@ -134,9 +138,10 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
       return
     }
     writePersistedIndicatorsState({
-      loaded: { MA: loadedKeySet.has('MA'), MACD: loadedKeySet.has('MACD'), RSI: loadedKeySet.has('RSI'), Stoch: loadedKeySet.has('Stoch'), TSI: loadedKeySet.has('TSI'), VI: loadedKeySet.has('VI'), VWAP: loadedKeySet.has('VWAP'), Vol: loadedKeySet.has('Vol') },
+      loaded: { MA: loadedKeySet.has('MA'), MACD: loadedKeySet.has('MACD'), MR: loadedKeySet.has('MR'), RSI: loadedKeySet.has('RSI'), Stoch: loadedKeySet.has('Stoch'), TSI: loadedKeySet.has('TSI'), VI: loadedKeySet.has('VI'), VWAP: loadedKeySet.has('VWAP'), Vol: loadedKeySet.has('Vol') },
       ma: maSettings,
       macd: macdSettings,
+      mr: mrSettings,
       rsi: rsiSettings,
       stoch: stochSettings,
       tsi: tsiSettings,
@@ -248,4 +253,3 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
     </section>
   )
 }
-

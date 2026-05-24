@@ -196,6 +196,13 @@ export type VolIndicatorSettings = {
   volumeUpOpacity: number
 }
 
+export type MrIndicatorSettings = {
+  inputsInStatusLine: boolean
+  labelsOnPriceScale: boolean
+  precision: RsiPrecision
+  valuesInStatusLine: boolean
+}
+
 export type MaIndicatorSettings = {
   colors: string[]
   dnColor: string
@@ -274,6 +281,7 @@ export type PersistedIndicatorsState = {
   loaded: {
     MA?: boolean
     MACD?: boolean
+    MR?: boolean
     RSI?: boolean
     Stoch?: boolean
     TSI?: boolean
@@ -283,6 +291,7 @@ export type PersistedIndicatorsState = {
   }
   ma: MaIndicatorSettings
   macd: MacdIndicatorSettings
+  mr: MrIndicatorSettings
   rsi: RsiIndicatorSettings
   stoch: StochIndicatorSettings
   tsi: TsiIndicatorSettings
@@ -519,6 +528,13 @@ export const defaultVolIndicatorSettings: VolIndicatorSettings = {
   volumeDownOpacity: 0.55,
   volumeUpColor: '#26a69a',
   volumeUpOpacity: 0.55,
+}
+
+export const defaultMrIndicatorSettings: MrIndicatorSettings = {
+  inputsInStatusLine: true,
+  labelsOnPriceScale: true,
+  precision: 'system',
+  valuesInStatusLine: true,
 }
 
 export const defaultVwapIndicatorSettings: VwapIndicatorSettings = {
@@ -792,5 +808,16 @@ export function normalizeVolSettings(input?: Partial<VolIndicatorSettings>): Vol
     volumeChecked: merged.volumeChecked !== false,
     volumeDownOpacity: Number.isFinite(volumeDownOpacity) ? Math.max(0, Math.min(volumeDownOpacity, 1)) : defaultVolIndicatorSettings.volumeDownOpacity,
     volumeUpOpacity: Number.isFinite(volumeUpOpacity) ? Math.max(0, Math.min(volumeUpOpacity, 1)) : defaultVolIndicatorSettings.volumeUpOpacity,
+  }
+}
+
+export function normalizeMrSettings(input?: Partial<MrIndicatorSettings>): MrIndicatorSettings {
+  const merged = { ...defaultMrIndicatorSettings, ...(input ?? {}) }
+  return {
+    ...merged,
+    inputsInStatusLine: merged.inputsInStatusLine !== false,
+    labelsOnPriceScale: merged.labelsOnPriceScale !== false,
+    precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
+    valuesInStatusLine: merged.valuesInStatusLine !== false,
   }
 }

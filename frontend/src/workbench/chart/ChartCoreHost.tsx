@@ -1,22 +1,28 @@
 import { useEffect, useRef } from 'react'
 import type { MutableRefObject } from 'react'
+import { ActionType } from 'klinecharts'
+import type { Chart, KLineData } from 'klinecharts'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
 import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
+import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
 import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
 import { useChartStepLoad } from './useChartStepLoad'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
+import { createStaticMorganRangeOverlay } from './morganRangeOverlay'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
+import { ensureTradingViewMrIndicator } from './tradingViewMrIndicator'
 import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
 import { ensureTradingViewStochIndicator } from './tradingViewStochIndicator'
 import { ensureTradingViewTsiIndicator } from './tradingViewTsiIndicator'
 import { ensureTradingViewViIndicator } from './tradingViewViIndicator'
 import { ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
-import type { MacdIndicatorSettings, MaIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import { readString, writeString } from '../persistence/jsonStorage'
+import { resolvePeriodSeconds } from './chartTimeFormatting'
 import './ChartCoreHost.css'
 
 const rsiPaneId = 'rsi_pane'
@@ -33,6 +39,17 @@ const defaultRsiPaneHeight = 128
 const minRsiPaneHeight = 80
 const maxStoredRsiPaneHeight = 720
 const updateLevelAll = 4
+const h4Seconds = 4 * 60 * 60
+const xauSessionAnchorSeconds = 22 * 60 * 60
+const maxMorganRangeBuckets = 36
+
+type H4MorganCandle = {
+  close: number
+  high: number
+  low: number
+  startIndex: number
+  startTimestamp: number
+}
 
 function refreshChartDrawings() {
   window.dispatchEvent(new Event(chartDrawingVisibilityRefreshEvent))
@@ -60,6 +77,7 @@ export type ChartIndicatorCommand = {
 } & (
   | { name: 'MA'; settings?: MaIndicatorSettings }
   | { name: 'MACD'; settings?: MacdIndicatorSettings }
+  | { name: 'MR'; settings?: MrIndicatorSettings }
   | { name: 'RSI'; settings?: RsiIndicatorSettings }
   | { name: 'Stoch'; settings?: StochIndicatorSettings }
   | { name: 'TSI'; settings?: TsiIndicatorSettings }
@@ -104,6 +122,155 @@ function refreshPane(chart: unknown, paneId: string) {
   })
 }
 
+function resolveKLineTimestampMs(data: KLineData) {
+  const row = data as KLineData & {
+    realTime?: number
+    realTimestamp?: number
+    sourceTimestamp?: number
+  }
+  const raw = typeof row.realTime === 'number'
+    ? row.realTime
+    : typeof row.realTimestamp === 'number'
+      ? row.realTimestamp
+      : typeof row.sourceTimestamp === 'number'
+        ? row.sourceTimestamp
+        : data.timestamp
+  return raw < 1_000_000_000_000 ? raw * 1000 : raw
+}
+
+function resolveH4BucketKey(timestampMs: number) {
+  return Math.floor((Math.floor(timestampMs / 1000) - xauSessionAnchorSeconds) / h4Seconds)
+}
+
+function collectH4MorganCandles(dataList: KLineData[]) {
+  const realRows = stripFuturePlaceholders(dataList)
+  const candles: H4MorganCandle[] = []
+  let activeKey: number | null = null
+  let active: H4MorganCandle | null = null
+
+  realRows.forEach((row, index) => {
+    const timestamp = resolveKLineTimestampMs(row)
+    const high = Number(row.high)
+    const low = Number(row.low)
+    const close = Number(row.close)
+    if (!Number.isFinite(timestamp) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) return
+
+    const key = resolveH4BucketKey(timestamp)
+    if (activeKey !== key || !active) {
+      active = { close, high, low, startIndex: index, startTimestamp: Number(row.timestamp) }
+      candles.push(active)
+      activeKey = key
+      return
+    }
+    active.high = Math.max(active.high, high)
+    active.low = Math.min(active.low, low)
+    active.close = close
+  })
+
+  return candles
+}
+
+function calculateH4Atr7(candles: H4MorganCandle[]) {
+  const trueRanges = candles.map((candle, index) => {
+    if (index === 0) return candle.high - candle.low
+    const previousClose = candles[index - 1].close
+    return Math.max(
+      candle.high - candle.low,
+      Math.abs(candle.high - previousClose),
+      Math.abs(candle.low - previousClose),
+    )
+  })
+
+  return trueRanges.map((_, index) => {
+    if (index < 6) return undefined
+    let sum = 0
+    for (let cursor = index - 6; cursor <= index; cursor += 1) {
+      sum += trueRanges[cursor]
+    }
+    return sum / 7
+  })
+}
+
+function clearMorganRangeOverlays(chart: Chart, overlayIds: Set<string>) {
+  overlayIds.forEach((id) => chart.removeOverlay({ id }))
+  overlayIds.clear()
+}
+
+function applyMorganRangeOverlays(chart: Chart, period: string, overlayIds: Set<string>) {
+  clearMorganRangeOverlays(chart, overlayIds)
+  const periodSeconds = resolvePeriodSeconds(period)
+  if (!Number.isFinite(periodSeconds) || periodSeconds <= 0 || periodSeconds > 2 * 60 * 60) return
+
+  const candles = collectH4MorganCandles(chart.getDataList())
+  if (candles.length < 8) return
+  const atr = calculateH4Atr7(candles)
+  const futureBars = Math.round(h4Seconds / periodSeconds)
+  const barSpace = Number(chart.getBarSpace())
+  const futureWidthPx = futureBars * barSpace
+  const startBoundaryOffsetPx = -barSpace / 2
+  if (!Number.isFinite(futureBars) || futureBars <= 0 || !Number.isFinite(futureWidthPx) || futureWidthPx <= 0) return
+  const visibleRange = chart.getVisibleRange()
+  const visibleFrom = Math.floor(Number(visibleRange.realFrom))
+  const visibleTo = Math.ceil(Number(visibleRange.realTo))
+  const lastBucketIndex = candles.length - 1
+  const visibleBucketIndexes = candles
+    .map((candle, index) => ({ candle, index }))
+    .filter(({ candle }) => {
+      const bucketEndIndex = candle.startIndex + futureBars
+      return bucketEndIndex >= visibleFrom - futureBars && candle.startIndex <= visibleTo + futureBars
+    })
+    .map(({ index }) => index)
+  const firstVisibleBucketIndex = visibleBucketIndexes.length > 0 ? Math.min(...visibleBucketIndexes) : lastBucketIndex
+  const lastVisibleBucketIndex = visibleBucketIndexes.length > 0 ? Math.max(...visibleBucketIndexes) : lastBucketIndex
+  const firstBucket = Math.max(1, firstVisibleBucketIndex - 2, lastVisibleBucketIndex - maxMorganRangeBuckets + 1)
+  const lastBucket = Math.min(lastBucketIndex, lastVisibleBucketIndex + 2)
+
+  const createRange = (
+    anchor: H4MorganCandle,
+    previous: H4MorganCandle,
+    atr7: number | undefined,
+    widthBars = futureBars,
+    startOffsetPx = startBoundaryOffsetPx,
+  ) => {
+    if (!previous || !anchor || !Number.isFinite(atr7)) return
+    const widthPx = widthBars * barSpace
+    if (!Number.isFinite(widthPx) || widthPx <= 0) return
+    const center = (previous.high + previous.low + previous.close) / 3
+    const radius = 3 * Number(atr7)
+    if (!Number.isFinite(center) || !Number.isFinite(radius) || radius <= 0) return
+
+    const startPoint = {
+      dataIndex: anchor.startIndex,
+      timestamp: anchor.startTimestamp,
+      value: center,
+    }
+    const upperId = createStaticMorganRangeOverlay(chart, {
+      futureWidthPx: widthPx,
+      paneId: 'candle_pane',
+      points: [startPoint, { ...startPoint, value: center + radius }],
+      startOffsetPx,
+    })
+    const lowerId = createStaticMorganRangeOverlay(chart, {
+      futureWidthPx: widthPx,
+      paneId: 'candle_pane',
+      points: [startPoint, { ...startPoint, value: center - radius }],
+      startOffsetPx,
+    })
+    if (upperId) overlayIds.add(upperId)
+    if (lowerId) overlayIds.add(lowerId)
+  }
+
+  for (let index = firstBucket; index <= lastBucket; index += 1) {
+    const next = candles[index + 1]
+    const widthBars = next
+      ? Math.max(1, Math.min(futureBars, next.startIndex - candles[index].startIndex))
+      : futureBars
+    createRange(candles[index], candles[index - 1], atr[index - 1], widthBars)
+  }
+
+  createRange(candles[lastBucketIndex], candles[lastBucketIndex], atr[lastBucketIndex], futureBars, futureWidthPx + startBoundaryOffsetPx)
+}
+
 export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLoadStateChange, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
   const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, period, reloadId, symbol, totalRows })
@@ -118,6 +285,8 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const tsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const viPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const mainVolumeOverlayRef = useRef<ReturnType<typeof installMainVolumeOverlay> | null>(null)
+  const morganRangeLoadedRef = useRef(false)
+  const morganRangeOverlayIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     onLoadStateChange?.({ ...loadState, period, symbol, totalRows })
@@ -393,6 +562,30 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       }
     }
 
+    if (indicatorCommand.name === 'MR') {
+      ensureTradingViewMrIndicator()
+
+      if (indicatorCommand.action === 'load') {
+        morganRangeLoadedRef.current = true
+        if (!isIndicatorVisibleInCurrentPeriod('MR')) {
+          chart.removeIndicator('candle_pane', 'MR')
+          clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+          return
+        }
+        if (chart.getIndicatorByPaneId('candle_pane', 'MR')) {
+          chart.overrideIndicator({ name: 'MR', calcParams: [indicatorCommand.settings] }, 'candle_pane')
+          applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+          return
+        }
+        chart.createIndicator({ name: 'MR', calcParams: [indicatorCommand.settings] }, true, { id: 'candle_pane' })
+        applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+      } else {
+        morganRangeLoadedRef.current = false
+        chart.removeIndicator('candle_pane', 'MR')
+        clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+      }
+    }
+
     if (indicatorCommand.name === 'Vol') {
       ensureMainVolumeLegendIndicator()
 
@@ -424,9 +617,46 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     }
   }, [chartInstanceRef, indicatorCommand, period, symbol])
 
+  useEffect(() => {
+    const chart = chartInstanceRef.current
+    if (!chart || !morganRangeLoadedRef.current || loadState.loading) return
+    if (!isIndicatorVisibleInCurrentPeriod('MR')) {
+      clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+      return
+    }
+    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+  }, [chartInstanceRef, loadState.loading, loadState.rows, period])
+
+  useEffect(() => {
+    const chart = chartInstanceRef.current
+    if (!chart) return
+
+    let frame = 0
+    const scheduleRefresh = () => {
+      if (!morganRangeLoadedRef.current || loadState.loading) return
+      window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(() => {
+        if (!isIndicatorVisibleInCurrentPeriod('MR')) {
+          clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+          return
+        }
+        applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+      })
+    }
+
+    const actions = [ActionType.OnZoom, ActionType.OnScroll, ActionType.OnVisibleRangeChange]
+    actions.forEach((action) => chart.subscribeAction(action, scheduleRefresh))
+    return () => {
+      window.cancelAnimationFrame(frame)
+      actions.forEach((action) => chart.unsubscribeAction(action, scheduleRefresh))
+    }
+  }, [chartInstanceRef, loadState.loading, period])
+
   useEffect(() => () => {
     mainVolumeOverlayRef.current?.destroy()
     mainVolumeOverlayRef.current = null
+    const chart = chartInstanceRef.current
+    if (chart) clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
     rsiPaneHeightObserverRef.current?.disconnect()
     stochPaneHeightObserverRef.current?.disconnect()
     macdPaneHeightObserverRef.current?.disconnect()

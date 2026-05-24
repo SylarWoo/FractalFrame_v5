@@ -2,7 +2,7 @@ import { readJson, writeJson } from '../persistence/jsonStorage'
 import type { AxisRangeSnapshot } from './chartViewportAxisRange'
 import { minCompressedBarSpace } from './chartBarSpaceCompression'
 
-const viewportStoragePrefix = 'fractalframe:chartViewport:v3'
+const viewportStoragePrefix = 'fractalframe:chartViewport:v4'
 const latestViewportStorageKey = `${viewportStoragePrefix}:latest`
 const cookieMaxAgeSeconds = 60 * 60 * 24 * 365
 const devViewportStateEndpoint = '/__fractalframe_chart_viewport_state'

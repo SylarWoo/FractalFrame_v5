@@ -52,8 +52,8 @@ export function applyRightPlaceholderOffset(_chart: Chart, _period: string) {
   // distance-limited scrolling, which breaks the existing free right-drag.
 }
 
-export function applyNewDataWithFuturePlaceholders(chart: Chart, rows: KLineData[], _period: string, more?: boolean, callback?: () => void) {
-  chart.applyNewData(stripFuturePlaceholders(rows), more, () => {
+export function applyNewDataWithFuturePlaceholders(chart: Chart, rows: KLineData[], period: string, more?: boolean, callback?: () => void) {
+  chart.applyNewData(appendFuturePlaceholders(rows, period), more, () => {
     callback?.()
   })
 }

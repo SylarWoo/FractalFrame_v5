@@ -1419,6 +1419,18 @@ function VwapInputPanel({
   )
 }
 
+function MrInputPanel() {
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">默认</div>
+  )
+}
+
+function MrStylePanel() {
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">默认</div>
+  )
+}
+
 export function LoadedIndicatorSettingsPanel({
   macdSettings,
   maSettings,
@@ -1472,6 +1484,8 @@ export function LoadedIndicatorSettingsPanel({
       {selectedKey === 'VI' && settingsTab === 'style' ? <ViStylePanel onSettingsChange={onViSettingsChange} settings={viSettings} /> : null}
       {selectedKey === 'MA' && settingsTab === 'input' ? <MaInputPanel onSettingsChange={onMaSettingsChange} settings={maSettings} /> : null}
       {selectedKey === 'MA' && settingsTab === 'style' ? <MaStylePanel onSettingsChange={onMaSettingsChange} settings={maSettings} /> : null}
+      {selectedKey === 'MR' && settingsTab === 'input' ? <MrInputPanel /> : null}
+      {selectedKey === 'MR' && settingsTab === 'style' ? <MrStylePanel /> : null}
       {selectedKey === 'VWAP' && settingsTab === 'input' ? <VwapInputPanel onSettingsChange={onVwapSettingsChange} settings={vwapSettings} /> : null}
       {selectedKey === 'VWAP' && settingsTab === 'style' ? <VwapStylePanel onSettingsChange={onVwapSettingsChange} settings={vwapSettings} /> : null}
       {selectedKey === 'Vol' && settingsTab === 'input' ? <VolInputPanel onSettingsChange={onVolSettingsChange} settings={volSettings} /> : null}

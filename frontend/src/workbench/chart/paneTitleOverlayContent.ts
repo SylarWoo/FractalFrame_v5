@@ -327,6 +327,11 @@ function createCandleVwapParts(chart: Chart, crosshairIndex: number | null) {
   return parts
 }
 
+function createCandleMrParts(chart: Chart) {
+  const indicator = indicatorFromChart(chart, 'candle_pane', 'MR')
+  return indicator ? [titlePart('MR')] : []
+}
+
 function createCandleVolParts(chart: Chart, crosshairIndex: number | null) {
   const indicator = indicatorFromChart(chart, 'candle_pane', mainVolumeIndicatorName)
   if (!indicator) return []
@@ -351,6 +356,7 @@ function createCandleIndicatorLines(chart: Chart, crosshairIndex: number | null)
   return [
     createCandleVolParts(chart, crosshairIndex),
     createCandleMaParts(chart, crosshairIndex),
+    createCandleMrParts(chart),
     createCandleVwapParts(chart, crosshairIndex),
   ].filter((line) => line.length > 0)
 }

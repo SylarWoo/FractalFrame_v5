@@ -1,6 +1,11 @@
+import { readJson, writeJson } from '../persistence/jsonStorage'
+import { storageKeys } from '../persistence/storageKeys'
+import { chartSettingKeys } from '../settings/chartSettingsSchema'
+
 const legacyViewportPrefixes = [
   'fractalframe:chartViewport:v1',
   'fractalframe:chartViewport:v2',
+  'fractalframe:chartViewport:v3',
 ]
 
 function cookieNameForStorageKey(key: string) {
@@ -35,4 +40,14 @@ export function clearLegacyChartViewportStorage() {
   } catch {
     // Ignore cookie access failures.
   }
+
+  clearBadRightPlaceholderSetting()
+}
+
+function clearBadRightPlaceholderSetting() {
+  const state = readJson<Record<string, unknown>>(storageKeys.settingsSymbolPanel, {})
+  if (!(chartSettingKeys.rightPlaceholderVisible in state)) return
+  const { [chartSettingKeys.rightPlaceholderVisible]: _removed, ...nextState } = state
+  void _removed
+  writeJson(storageKeys.settingsSymbolPanel, nextState)
 }

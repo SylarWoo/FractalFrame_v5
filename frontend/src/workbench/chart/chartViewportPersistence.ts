@@ -40,6 +40,14 @@ function readRightVisibleTimestamp(chart: Chart) {
   return Number.isFinite(timestamp) ? timestamp : null
 }
 
+function normalizeOffsetRightDistance(chart: Chart, value: unknown) {
+  const distance = Number(value)
+  if (!Number.isFinite(distance) || distance < 0) return null
+  const width = Number(chart.getSize(candlePaneId, DomPosition.Main)?.width)
+  const maxDistance = Number.isFinite(width) && width > 0 ? width * 0.8 : 800
+  return Math.max(0, Math.min(distance, maxDistance))
+}
+
 export function markChartViewportPersistenceReady(chart: Chart, symbol: string, period: string) {
   readyKeys.set(chart, viewportReadyKey(symbol, period))
 }
@@ -52,7 +60,7 @@ export function captureChartViewportSnapshot(chart: Chart, forceYAxisRange = fal
   return {
     barSpace,
     dataLength: chart.getDataList().length,
-    offsetRightDistance: chart.getOffsetRightDistance(),
+    offsetRightDistance: normalizeOffsetRightDistance(chart, chart.getOffsetRightDistance()),
     rightTimestamp: readRightVisibleTimestamp(chart),
     savedAt: new Date().toISOString(),
     visibleTo,
@@ -70,8 +78,9 @@ export function restoreChartViewportSnapshot(chart: Chart, snapshot: ChartViewpo
   const restoreScroll = () => {
     const dataLength = chart.getDataList().length
     if (dataLength === 0) return
-    if (snapshot.offsetRightDistance !== null) {
-      chart.setOffsetRightDistance(snapshot.offsetRightDistance)
+    const offsetRightDistance = normalizeOffsetRightDistance(chart, snapshot.offsetRightDistance)
+    if (offsetRightDistance !== null) {
+      chart.setOffsetRightDistance(offsetRightDistance)
       return
     }
     if (snapshot.rightTimestamp !== null) {
