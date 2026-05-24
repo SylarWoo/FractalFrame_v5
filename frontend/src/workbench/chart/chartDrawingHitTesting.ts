@@ -31,6 +31,7 @@ export function createChartDrawingHitTester({
   getPendingTrendLineOverlayId,
   horizontalLineOverlayIds,
   resolveHorizontalLineVisibility,
+  resolveFibRetracementVisibility,
   resolveRulerVisibility,
   resolveTrendLineVisibility,
   rulerOverlayIds,
@@ -44,6 +45,7 @@ export function createChartDrawingHitTester({
   getPendingTrendLineOverlayId: () => string | null
   horizontalLineOverlayIds: Set<string>
   resolveHorizontalLineVisibility: (extendData: HorizontalLineExtendData | undefined) => DrawingVisibilityState
+  resolveFibRetracementVisibility?: (extendData: RulerExtendData | undefined) => DrawingVisibilityState
   resolveRulerVisibility: (extendData: RulerExtendData | undefined) => DrawingVisibilityState
   resolveTrendLineVisibility: (extendData: TrendLineExtendData | undefined) => DrawingVisibilityState
   rulerOverlayIds: Set<string>
@@ -144,7 +146,37 @@ export function createChartDrawingHitTester({
   }
 
   const eventHitsFib = (event: MouseEvent, paneId: string, hitSlop = horizontalLineHitSlop) => {
-    return eventHitsTwoPointBox(event, paneId, fibOverlayIds, getPendingFibOverlayId, hitSlop)
+    const paneMain = chart.getDom(paneId, DomPosition.Main)
+    if (!paneMain) return false
+    const rect = paneMain.getBoundingClientRect()
+    const eventPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    if (!Number.isFinite(eventPoint.x) || !Number.isFinite(eventPoint.y)) return false
+    for (const id of fibOverlayIds) {
+      if (id === getPendingFibOverlayId()) continue
+      const overlay = chart.getOverlayById(id)
+      if (!overlay || (overlay.paneId || fallbackPaneId) !== paneId) continue
+      const extendData = overlay.extendData as RulerExtendData | undefined
+      if (!(resolveFibRetracementVisibility ?? resolveRulerVisibility)(extendData).visible) continue
+      const start = resolveOverlayPointPixel(overlay.points[0] ?? {}, paneId)
+      const end = resolveOverlayPointPixel(overlay.points[1] ?? {}, paneId)
+      if (!start || !end) continue
+      if (Math.hypot(eventPoint.x - start.x, eventPoint.y - start.y) <= hitSlop) return true
+      if (Math.hypot(eventPoint.x - end.x, eventPoint.y - end.y) <= hitSlop) return true
+      if (extendData?.fibTrendLineVisible === true && distanceToSegment(eventPoint, start, end) <= hitSlop) return true
+      const left = Math.min(start.x, end.x)
+      const right = Math.max(start.x, end.x)
+      const reverse = extendData?.fibReverse === true
+      const levels = Array.isArray(extendData?.fibLevels) ? extendData.fibLevels : []
+      for (const level of levels) {
+        if (level?.enabled === false) continue
+        const ratio = Number(level?.value)
+        if (!Number.isFinite(ratio)) continue
+        const yRatio = reverse ? 1 - ratio : ratio
+        const y = Math.round(start.y + (end.y - start.y) * yRatio)
+        if (distanceToSegment(eventPoint, { x: left, y }, { x: right, y }) <= hitSlop) return true
+      }
+    }
+    return false
   }
 
   return {

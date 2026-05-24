@@ -2,14 +2,14 @@
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
     "lastTickAt": "15:38:54",
     "log": [
-      "16:50:29  Realtime stopped",
-      "16:40:47  Realtime stopped",
-      "16:29:02  Realtime stopped",
-      "16:24:44  Realtime stopped",
-      "16:22:18  Realtime stopped",
-      "16:22:04  Realtime stopped",
-      "16:20:18  Realtime stopped",
-      "16:19:32  Realtime stopped"
+      "20:24:51  Realtime stopped",
+      "20:14:35  Realtime stopped",
+      "20:14:35  Realtime stopped",
+      "20:14:15  Realtime stopped",
+      "20:07:59  Realtime stopped",
+      "19:51:08  Realtime stopped",
+      "19:45:12  Realtime stopped",
+      "19:42:53  Realtime stopped"
     ],
     "ticks": {
       "1INCHUSDm": {
@@ -158,37 +158,37 @@
     }
   },
   "fractalframe:chartViewport:v3:global:M5": {
-    "barSpace": 4.802447030484284,
+    "barSpace": 1.0588006327680706,
     "dataLength": 3000,
-    "offsetRightDistance": 156.61181109339407,
-    "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T08:51:49.821Z",
-    "visibleTo": 3000,
+    "offsetRightDistance": 0,
+    "rightTimestamp": 1779438600000,
+    "savedAt": "2026-05-24T12:28:33.581Z",
+    "visibleTo": 2850,
     "yAxisRange": {
-      "from": 4448.3777612397025,
-      "range": 158.9884999109363,
-      "realFrom": 4448.3777612397025,
-      "realRange": 158.9884999109363,
-      "realTo": 4607.366261150639,
-      "to": 4607.366261150639
+      "from": 4322.690769406709,
+      "range": 351.3082653433248,
+      "realFrom": 4322.690769406709,
+      "realRange": 351.3082653433248,
+      "realTo": 4673.999034750033,
+      "to": 4673.999034750033
     },
     "symbol": "XAUUSDm",
     "period": "M5"
   },
   "fractalframe:chartViewport:v3:latest": {
-    "barSpace": 4.802447030484284,
+    "barSpace": 1.0588006327680706,
     "dataLength": 3000,
-    "offsetRightDistance": 156.61181109339407,
-    "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T08:51:49.821Z",
-    "visibleTo": 3000,
+    "offsetRightDistance": 0,
+    "rightTimestamp": 1779438600000,
+    "savedAt": "2026-05-24T12:28:33.581Z",
+    "visibleTo": 2850,
     "yAxisRange": {
-      "from": 4448.3777612397025,
-      "range": 158.9884999109363,
-      "realFrom": 4448.3777612397025,
-      "realRange": 158.9884999109363,
-      "realTo": 4607.366261150639,
-      "to": 4607.366261150639
+      "from": 4322.690769406709,
+      "range": 351.3082653433248,
+      "realFrom": 4322.690769406709,
+      "realRange": 351.3082653433248,
+      "realTo": 4673.999034750033,
+      "to": 4673.999034750033
     },
     "symbol": "XAUUSDm",
     "period": "M5"
@@ -524,16 +524,62 @@
       "selectedKey": "MA"
     }
   },
-  "fractalframe:rightWidgetActiveDrawer:v1": "drawings",
   "fractalframe:bottomDrawerOpen:v1": "0",
   "fractalframe:bottomDrawerHeightPx:v1": "300",
-  "fractalframe.chart.macdPaneHeight": "201",
+  "fractalframe.chart.macdPaneHeight": "251",
   "fractalframe.chart.viPaneHeight": "217",
-  "fractalframe.drawingsDrawer.selectedTool": "trendLine",
+  "fractalframe.drawingsDrawer.selectedTool": "fibRetracement",
   "fractalframe.objectTree.groups.v1": [],
   "fractalframe.drawings.ruler.items": [],
   "fractalframe.drawings.trendLine.items": [],
-  "fractalframe.drawings.horizontalLine.items": [],
+  "fractalframe.drawings.horizontalLine.items": [
+    {
+      "lineStyle": {
+        "hex": "#0f766e",
+        "lineStyle": "solid",
+        "opacity": 1,
+        "thickness": 1
+      },
+      "locked": false,
+      "manualVisible": true,
+      "objectId": "HL0002",
+      "paneId": "candle_pane",
+      "showPriceLabel": false,
+      "textStyle": {
+        "alignH": "right",
+        "alignV": "top",
+        "body": "",
+        "bold": false,
+        "fontSize": 14,
+        "italic": false,
+        "textColor": "#131722"
+      },
+      "value": 4398.5159112444135
+    },
+    {
+      "lineStyle": {
+        "hex": "#0f766e",
+        "lineStyle": "solid",
+        "opacity": 1,
+        "thickness": 1
+      },
+      "locked": false,
+      "manualVisible": true,
+      "objectId": "HL0004",
+      "paneId": "candle_pane",
+      "showPriceLabel": false,
+      "textStyle": {
+        "alignH": "right",
+        "alignV": "top",
+        "body": "",
+        "bold": false,
+        "fontSize": 14,
+        "italic": false,
+        "textColor": "#131722"
+      },
+      "value": 4556.342852071323
+    }
+  ],
   "fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1": "325",
   "fractalframe:mt5ImportCenterSharedSelection:v1": {
     "symbol": "XAUUSDm",
@@ -1808,11 +1854,104 @@
         ]
       }
     ],
-    "savedAt": "2026-05-24T08:50:29.491Z"
+    "savedAt": "2026-05-24T12:24:51.644Z"
   },
   "fractalframe:mt5ImportCenterTopPaneHeightPx:v1": "180",
   "fractalframe.drawings.fibRetracement.items": [
     {
+      "fibTrendLineStyle": {
+        "hex": "#2a2e39",
+        "lineStyle": "dashed",
+        "opacity": 1,
+        "thickness": 1
+      },
+      "fibTrendLineVisible": false,
+      "fibBackgroundOpacity": 0.24,
+      "fibBackgroundVisible": true,
+      "fibHorizontalLineStyle": {
+        "hex": "#787b86",
+        "lineStyle": "solid",
+        "opacity": 1,
+        "thickness": 1
+      },
+      "fibLabelAlign": "center",
+      "fibLabelFontSize": "12",
+      "fibLabelVAlign": "bottom",
+      "fibLevelDisplay": "value",
+      "fibLevelVisible": true,
+      "fibLevels": [
+        {
+          "color": "#787b86",
+          "enabled": true,
+          "opacity": 1,
+          "value": "0"
+        },
+        {
+          "color": "#f23645",
+          "enabled": true,
+          "opacity": 1,
+          "value": "0.236"
+        },
+        {
+          "color": "#81c784",
+          "enabled": true,
+          "opacity": 1,
+          "value": "0.382"
+        },
+        {
+          "color": "#4caf50",
+          "enabled": true,
+          "opacity": 1,
+          "value": "0.5"
+        },
+        {
+          "color": "#009688",
+          "enabled": true,
+          "opacity": 1,
+          "value": "0.618"
+        },
+        {
+          "color": "#64b5f6",
+          "enabled": true,
+          "opacity": 1,
+          "value": "0.786"
+        },
+        {
+          "color": "#787b86",
+          "enabled": true,
+          "opacity": 1,
+          "value": "1"
+        },
+        {
+          "color": "#90caf9",
+          "enabled": false,
+          "opacity": 1,
+          "value": "1.618"
+        }
+      ],
+      "fibPriceVisible": false,
+      "fibQuarterLineStyles": [
+        {
+          "hex": "#4caf50",
+          "lineStyle": "solid",
+          "opacity": 1,
+          "thickness": 1
+        },
+        {
+          "hex": "#64b5f6",
+          "lineStyle": "solid",
+          "opacity": 1,
+          "thickness": 1
+        },
+        {
+          "hex": "#ff8a12",
+          "lineStyle": "solid",
+          "opacity": 1,
+          "thickness": 1
+        }
+      ],
+      "fibQuarterSplitVisible": false,
+      "fibReverse": false,
       "lineStyle": {
         "hex": "#787b86",
         "lineStyle": "solid",
@@ -1821,18 +1960,18 @@
       },
       "locked": false,
       "manualVisible": true,
-      "objectId": "FB0002",
+      "objectId": "FB0012",
       "paneId": "candle_pane",
       "points": [
         {
-          "dataIndex": 2930,
-          "timestamp": 1779462600000,
-          "value": 4470.49969815839
+          "dataIndex": 2449,
+          "timestamp": 1779314700000,
+          "value": 4398.171635197272
         },
         {
-          "dataIndex": 2981,
-          "timestamp": 1779477900000,
-          "value": 4554.23226313099
+          "dataIndex": 2724,
+          "timestamp": 1779400800000,
+          "value": 4650.716285849357
         }
       ],
       "rulerStyle": {
@@ -1852,7 +1991,7 @@
           "hex": "#ffffff",
           "opacity": 1
         },
-        "labelBackgroundVisible": true,
+        "labelBackgroundVisible": false,
         "labelColor": {
           "hex": "#000000",
           "opacity": 1
@@ -1872,5 +2011,295 @@
         "textColor": "#131722"
       }
     }
-  ]
+  ],
+  "fractalframe.drawingsDrawer.fibRetracementStyle": {
+    "background": {
+      "hex": "#2962ff",
+      "opacity": 0.24
+    },
+    "backgroundEnabled": true,
+    "extendLeft": false,
+    "extendRight": false,
+    "fontSize": "12",
+    "horizontalLineStyle": "solid",
+    "horizontalLineThickness": 1,
+    "labelAlign": "center",
+    "labelVAlign": "bottom",
+    "levelDisplay": "value",
+    "levelVisible": true,
+    "levels": [
+      {
+        "color": "#787b86",
+        "enabled": true,
+        "opacity": 1,
+        "value": "0"
+      },
+      {
+        "color": "#f23645",
+        "enabled": true,
+        "opacity": 1,
+        "value": "0.236"
+      },
+      {
+        "color": "#81c784",
+        "enabled": true,
+        "opacity": 1,
+        "value": "0.382"
+      },
+      {
+        "color": "#4caf50",
+        "enabled": true,
+        "opacity": 1,
+        "value": "0.5"
+      },
+      {
+        "color": "#009688",
+        "enabled": true,
+        "opacity": 1,
+        "value": "0.618"
+      },
+      {
+        "color": "#64b5f6",
+        "enabled": true,
+        "opacity": 1,
+        "value": "0.786"
+      },
+      {
+        "color": "#787b86",
+        "enabled": true,
+        "opacity": 1,
+        "value": "1"
+      },
+      {
+        "color": "#90caf9",
+        "enabled": false,
+        "opacity": 1,
+        "value": "1.618"
+      }
+    ],
+    "priceVisible": false,
+    "quarterLineStyles": [
+      {
+        "hex": "#4caf50",
+        "lineStyle": "solid",
+        "opacity": 1,
+        "thickness": 1
+      },
+      {
+        "hex": "#64b5f6",
+        "lineStyle": "solid",
+        "opacity": 1,
+        "thickness": 1
+      },
+      {
+        "hex": "#ff8a12",
+        "lineStyle": "solid",
+        "opacity": 1,
+        "thickness": 1
+      }
+    ],
+    "reverse": false,
+    "textAlign": "center",
+    "textVAlign": "middle",
+    "textVisible": false,
+    "trendLineStyle": {
+      "hex": "#2a2e39",
+      "lineStyle": "dashed",
+      "opacity": 1,
+      "thickness": 1
+    },
+    "trendLineVisible": false
+  },
+  "fractalframe.drawingsDrawer.rulerStyle": {
+    "background": {
+      "hex": "#5286e0",
+      "opacity": 0.14
+    },
+    "backgroundVisible": true,
+    "borderLineStyle": {
+      "hex": "#8aa8f8",
+      "lineStyle": "solid",
+      "opacity": 1,
+      "thickness": 1
+    },
+    "borderVisible": false,
+    "labelBackground": {
+      "hex": "#ffffff",
+      "opacity": 1
+    },
+    "labelBackgroundVisible": false,
+    "labelColor": {
+      "hex": "#000000",
+      "opacity": 1
+    },
+    "labelFontSize": 12,
+    "statsAlwaysVisible": true,
+    "statsData": [
+      "price-range",
+      "percent-change",
+      "point-change",
+      "bars-range",
+      "date-time-range",
+      "volume"
+    ]
+  },
+  "fractalframe.drawingsDrawer.priceLabel.trendLine": "1",
+  "fractalframe.drawingsDrawer.priceLabel.horizontalLine": "0",
+  "fractalframe.drawingsDrawer.priceLabel.ruler": "1",
+  "fractalframe:rightWidgetActiveDrawer:v1": "drawings",
+  "fractalframe:visibilityRange:drawing:fibRetracement:FB0012:v1": [
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "minutes",
+      "label": "分钟",
+      "max": 59,
+      "min": 1,
+      "to": 59
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "hours",
+      "label": "小时",
+      "max": 24,
+      "min": 1,
+      "to": 24
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "days",
+      "label": "日",
+      "max": 366,
+      "min": 1,
+      "to": 366
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "weeks",
+      "label": "周",
+      "max": 52,
+      "min": 1,
+      "to": 52
+    },
+    {
+      "enabled": true,
+      "from": 1,
+      "key": "months",
+      "label": "个月",
+      "max": 12,
+      "min": 1,
+      "to": 12
+    }
+  ],
+  "fractalframe:chartViewport:v3:global:H1": {
+    "barSpace": 6.317513401127424,
+    "dataLength": 3000,
+    "offsetRightDistance": 178.774428110994,
+    "rightTimestamp": 1779480000000,
+    "savedAt": "2026-05-24T12:27:32.804Z",
+    "visibleTo": 3000,
+    "yAxisRange": {
+      "from": 4143.407360312431,
+      "range": 718.3353476164721,
+      "realFrom": 4143.407360312431,
+      "realRange": 718.3353476164721,
+      "realTo": 4861.742707928903,
+      "to": 4861.742707928903
+    },
+    "symbol": "XAUUSDm",
+    "period": "H1"
+  },
+  "fractalframe:chartViewport:v3:global:H2": {
+    "barSpace": 6.317513401127424,
+    "dataLength": 3000,
+    "offsetRightDistance": 178.774428110994,
+    "rightTimestamp": 1779480000000,
+    "savedAt": "2026-05-24T12:27:31.284Z",
+    "visibleTo": 3000,
+    "yAxisRange": {
+      "from": 4143.407360312431,
+      "range": 718.3353476164721,
+      "realFrom": 4143.407360312431,
+      "realRange": 718.3353476164721,
+      "realTo": 4861.742707928903,
+      "to": 4861.742707928903
+    },
+    "symbol": "XAUUSDm",
+    "period": "H2"
+  },
+  "fractalframe:chartViewport:v3:global:D1": {
+    "barSpace": 27.768494900625306,
+    "dataLength": 2505,
+    "offsetRightDistance": 208.3872320707058,
+    "rightTimestamp": 1779400800000,
+    "savedAt": "2026-05-24T12:26:26.282Z",
+    "visibleTo": 2505,
+    "yAxisRange": {
+      "from": 4135.414755610162,
+      "range": 718.3353476164721,
+      "realFrom": 4135.414755610162,
+      "realRange": 718.3353476164721,
+      "realTo": 4853.750103226634,
+      "to": 4853.750103226634
+    },
+    "symbol": "XAUUSDm",
+    "period": "D1"
+  },
+  "fractalframe:chartViewport:v3:global:M30": {
+    "barSpace": 1.0329639232382004,
+    "dataLength": 3000,
+    "offsetRightDistance": 133,
+    "rightTimestamp": 1779481800000,
+    "savedAt": "2026-05-24T12:27:20.683Z",
+    "visibleTo": 3000,
+    "yAxisRange": {
+      "from": 4107.440639152218,
+      "range": 718.3353476164721,
+      "realFrom": 4107.440639152218,
+      "realRange": 718.3353476164721,
+      "realTo": 4825.77598676869,
+      "to": 4825.77598676869
+    },
+    "symbol": "XAUUSDm",
+    "period": "M30"
+  },
+  "fractalframe:chartViewport:v3:global:H3": {
+    "barSpace": 6.317513401127424,
+    "dataLength": 3000,
+    "offsetRightDistance": 178.774428110994,
+    "rightTimestamp": 1779476400000,
+    "savedAt": "2026-05-24T12:27:29.674Z",
+    "visibleTo": 3000,
+    "yAxisRange": {
+      "from": 4143.407360312431,
+      "range": 718.3353476164721,
+      "realFrom": 4143.407360312431,
+      "realRange": 718.3353476164721,
+      "realTo": 4861.742707928903,
+      "to": 4861.742707928903
+    },
+    "symbol": "XAUUSDm",
+    "period": "H3"
+  },
+  "fractalframe:chartViewport:v3:global:M15": {
+    "barSpace": 2.2027807180159558,
+    "dataLength": 3000,
+    "offsetRightDistance": 73.11746947565575,
+    "rightTimestamp": 1779482700000,
+    "savedAt": "2026-05-24T12:27:38.168Z",
+    "visibleTo": 3000,
+    "yAxisRange": {
+      "from": 4163.388872068104,
+      "range": 718.3353476164721,
+      "realFrom": 4163.388872068104,
+      "realRange": 718.3353476164721,
+      "realTo": 4881.724219684576,
+      "to": 4881.724219684576
+    },
+    "symbol": "XAUUSDm",
+    "period": "M15"
+  }
 }

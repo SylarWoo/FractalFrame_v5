@@ -1,5 +1,5 @@
 import { normalizeDrawingLineStyle, normalizeDrawingTextStyle, normalizeDrawingTrendLineStyle } from '../rightDrawer/drawingPersistence'
-import type { StoredHorizontalLineDrawing, StoredRulerDrawing, StoredTrendLineDrawing } from '../rightDrawer/drawingObjectPersistence'
+import type { StoredFibRetracementDrawing, StoredHorizontalLineDrawing, StoredRulerDrawing, StoredTrendLineDrawing } from '../rightDrawer/drawingObjectPersistence'
 import { normalizeDrawingRulerStyle } from '../rightDrawer/rulerDrawingStyle'
 import type { HorizontalLineExtendData, RulerExtendData, TrendLineExtendData } from './chartDrawingTypes'
 
@@ -50,6 +50,39 @@ export function storedRulerFromOverlay(overlay: DrawingOverlayLike, ensureObject
   const extendData = overlay.extendData as RulerExtendData | undefined
   return {
     lineStyle: normalizeDrawingLineStyle(extendData?.lineStyle, '#2962ff'),
+    locked: extendData?.locked === true,
+    manualVisible: extendData?.manualVisible !== false,
+    objectId: extendData?.objectId || ensureObjectId(),
+    paneId: overlay.paneId || fallbackPaneId,
+    points,
+    rulerStyle: normalizeDrawingRulerStyle(extendData?.rulerStyle),
+    showPriceLabel: extendData?.showPriceLabel !== false,
+    textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
+  }
+}
+
+export function storedFibRetracementFromOverlay(overlay: DrawingOverlayLike, ensureObjectId: () => string, fallbackPaneId: string): StoredFibRetracementDrawing | null {
+  if (overlay.points.length < 2) return null
+  const points = overlay.points.slice(0, 2).map(normalizeStoredTrendLinePoint)
+  if (points.length < 2 || points.some((point) => typeof point.value !== 'number')) return null
+  const extendData = overlay.extendData as RulerExtendData | undefined
+  return {
+    fibBackgroundOpacity: typeof extendData?.fibBackgroundOpacity === 'number' ? Math.max(0, Math.min(extendData.fibBackgroundOpacity, 1)) : 0.25,
+    fibBackgroundVisible: extendData?.fibBackgroundVisible !== false,
+    fibHorizontalLineStyle: normalizeDrawingLineStyle(extendData?.fibHorizontalLineStyle, '#787b86'),
+    fibLabelAlign: typeof extendData?.fibLabelAlign === 'string' ? extendData.fibLabelAlign : 'center',
+    fibLabelFontSize: typeof extendData?.fibLabelFontSize === 'string' ? extendData.fibLabelFontSize : '12',
+    fibLabelVAlign: typeof extendData?.fibLabelVAlign === 'string' ? extendData.fibLabelVAlign : 'top',
+    fibLevelDisplay: extendData?.fibLevelDisplay === 'percent' ? 'percent' : 'value',
+    fibLevelVisible: extendData?.fibLevelVisible !== false,
+    fibLevels: Array.isArray(extendData?.fibLevels) ? extendData.fibLevels : [],
+    fibPriceVisible: extendData?.fibPriceVisible !== false,
+    fibQuarterLineStyles: Array.isArray(extendData?.fibQuarterLineStyles) ? extendData.fibQuarterLineStyles : [],
+    fibQuarterSplitVisible: extendData?.fibQuarterSplitVisible === true,
+    fibReverse: extendData?.fibReverse === true,
+    fibTrendLineStyle: normalizeDrawingLineStyle(extendData?.fibTrendLineStyle, '#b6bac4'),
+    fibTrendLineVisible: extendData?.fibTrendLineVisible === true,
+    lineStyle: normalizeDrawingLineStyle(extendData?.lineStyle, '#787b86'),
     locked: extendData?.locked === true,
     manualVisible: extendData?.manualVisible !== false,
     objectId: extendData?.objectId || ensureObjectId(),

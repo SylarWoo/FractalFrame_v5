@@ -1,7 +1,7 @@
-﻿import { useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
-import { readString, writeString } from '../persistence/jsonStorage'
+import { readJson, readString, writeJson, writeString } from '../persistence/jsonStorage'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../settings/SettingsSwatches'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import {
@@ -44,10 +44,26 @@ type DrawingTool = {
 }
 
 type SelectedDrawingState = {
+  fibBackgroundOpacity?: number
+  fibBackgroundVisible?: boolean
+  fibHorizontalLineStyle?: SettingsLineSwatchValue
+  fibLabelAlign?: string
+  fibLabelFontSize?: string
+  fibLabelVAlign?: string
+  fibLevelDisplay?: string
+  fibLevelVisible?: boolean
+  fibLevels?: FibLevelState[]
+  fibPriceVisible?: boolean
+  fibQuarterLineStyles?: SettingsLineSwatchValue[]
+  fibQuarterSplitVisible?: boolean
+  fibReverse?: boolean
+  fibTrendLineStyle?: SettingsLineSwatchValue
+  fibTrendLineVisible?: boolean
   lineStyle?: SettingsLineSwatchValue
   locked: boolean
   objectId?: string
   price?: number
+  rulerStyle?: DrawingRulerStyle
   showPriceLabel: boolean
   textStyle?: DrawingTextStyle
   tool: DrawingToolKey
@@ -133,6 +149,29 @@ export function DrawingsDrawer() {
   }))
   const [trendLineStyle, setTrendLineStyle] = useState<DrawingTrendLineStyle>(readDrawingTrendLineStyle)
   const [rulerStyle, setRulerStyle] = useState<DrawingRulerStyle>(readDrawingRulerStyle)
+  const [fibTrendLineVisible, setFibTrendLineVisible] = useState(() => readFibRetracementStyleState().trendLineVisible)
+  const [fibTrendLineStyle, setFibTrendLineStyle] = useState<SettingsLineSwatchValue>(() => readFibRetracementStyleState().trendLineStyle)
+  const [fibLevels, setFibLevels] = useState<FibLevelState[]>(() => readFibRetracementStyleState().levels)
+  const [fibBackgroundVisible, setFibBackgroundVisible] = useState(() => readFibRetracementStyleState().backgroundEnabled)
+  const [fibBackgroundOpacity, setFibBackgroundOpacity] = useState(() => readFibRetracementStyleState().background.opacity)
+  const [fibReverse, setFibReverse] = useState(() => readFibRetracementStyleState().reverse)
+  const [fibPriceVisible, setFibPriceVisible] = useState(() => readFibRetracementStyleState().priceVisible)
+  const [fibLabelAlign, setFibLabelAlign] = useState(() => readFibRetracementStyleState().labelAlign)
+  const [fibLabelVAlign, setFibLabelVAlign] = useState(() => readFibRetracementStyleState().labelVAlign)
+  const [fibLabelFontSize, setFibLabelFontSize] = useState(() => readFibRetracementStyleState().fontSize)
+  const [fibLevelVisible, setFibLevelVisible] = useState(() => readFibRetracementStyleState().levelVisible)
+  const [fibLevelDisplay, setFibLevelDisplay] = useState(() => readFibRetracementStyleState().levelDisplay)
+  const [fibQuarterSplitVisible, setFibQuarterSplitVisible] = useState(() => readFibRetracementStyleState().textVisible)
+  const [fibQuarterLineStyles, setFibQuarterLineStyles] = useState<SettingsLineSwatchValue[]>(() => readFibRetracementStyleState().quarterLineStyles)
+  const [fibHorizontalLineStyle, setFibHorizontalLineStyle] = useState<SettingsLineSwatchValue>(() => {
+    const style = readFibRetracementStyleState()
+    return {
+      hex: '#787b86',
+      lineStyle: style.horizontalLineStyle,
+      opacity: 1,
+      thickness: style.horizontalLineThickness,
+    }
+  })
   const [quickMeasureEnabled, setQuickMeasureEnabled] = useState(readQuickMeasureEnabled)
   const [cursorMode, setCursorMode] = useState<CursorMode>(readCursorMode)
   const [topHeight, setTopHeight] = useState(defaultTopHeight)
@@ -158,6 +197,54 @@ export function DrawingsDrawer() {
   const selectedObjectId = selectedDrawing?.tool === selectedKey && selectedDrawing.objectId
     ? shortObjectTreeId(selectedDrawing.objectId)
     : ''
+  const selectedFibTrendLineVisible = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibTrendLineVisible === 'boolean'
+    ? selectedDrawing.fibTrendLineVisible
+    : fibTrendLineVisible
+  const selectedFibTrendLineStyle = selectedDrawing?.tool === 'fibRetracement' && selectedDrawing.fibTrendLineStyle
+    ? selectedDrawing.fibTrendLineStyle
+    : fibTrendLineStyle
+  const selectedFibLevels = selectedDrawing?.tool === 'fibRetracement' && selectedDrawing.fibLevels
+    ? selectedDrawing.fibLevels
+    : fibLevels
+  const selectedFibHorizontalLineStyle = selectedDrawing?.tool === 'fibRetracement' && selectedDrawing.fibHorizontalLineStyle
+    ? selectedDrawing.fibHorizontalLineStyle
+    : fibHorizontalLineStyle
+  const selectedFibBackgroundVisible = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibBackgroundVisible === 'boolean'
+    ? selectedDrawing.fibBackgroundVisible
+    : fibBackgroundVisible
+  const selectedFibBackgroundOpacity = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibBackgroundOpacity === 'number'
+    ? selectedDrawing.fibBackgroundOpacity
+    : fibBackgroundOpacity
+  const selectedFibReverse = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibReverse === 'boolean'
+    ? selectedDrawing.fibReverse
+    : fibReverse
+  const selectedFibPriceVisible = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibPriceVisible === 'boolean'
+    ? selectedDrawing.fibPriceVisible
+    : fibPriceVisible
+  const selectedFibLabelAlign = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibLabelAlign === 'string'
+    ? selectedDrawing.fibLabelAlign
+    : fibLabelAlign
+  const selectedFibLabelVAlign = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibLabelVAlign === 'string'
+    ? selectedDrawing.fibLabelVAlign
+    : fibLabelVAlign
+  const selectedFibLabelFontSize = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibLabelFontSize === 'string'
+    ? selectedDrawing.fibLabelFontSize
+    : fibLabelFontSize
+  const selectedFibLevelVisible = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibLevelVisible === 'boolean'
+    ? selectedDrawing.fibLevelVisible
+    : fibLevelVisible
+  const selectedFibLevelDisplay = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibLevelDisplay === 'string'
+    ? selectedDrawing.fibLevelDisplay
+    : fibLevelDisplay
+  const selectedFibQuarterSplitVisible = selectedDrawing?.tool === 'fibRetracement' && typeof selectedDrawing.fibQuarterSplitVisible === 'boolean'
+    ? selectedDrawing.fibQuarterSplitVisible
+    : fibQuarterSplitVisible
+  const selectedFibQuarterLineStyles = normalizeFibQuarterLineStyles(selectedDrawing?.tool === 'fibRetracement' && Array.isArray(selectedDrawing.fibQuarterLineStyles)
+    ? selectedDrawing.fibQuarterLineStyles
+    : fibQuarterLineStyles)
+  const selectedRulerStyle = selectedDrawing?.tool === 'ruler' && selectedDrawing.rulerStyle
+    ? selectedDrawing.rulerStyle
+    : rulerStyle
 
   function selectTool(key: DrawingToolKey) {
     if (selectedDrawing?.tool !== key && selectedDrawing?.objectId && (key === 'horizontalLine' || key === 'trendLine' || key === 'ruler' || key === 'fibRetracement')) {
@@ -198,10 +285,26 @@ export function DrawingsDrawer() {
           return current?.tool === event.detail.tool ? null : current
         }
         return {
+          fibBackgroundOpacity: event.detail.fibBackgroundOpacity,
+          fibBackgroundVisible: event.detail.fibBackgroundVisible,
+          fibHorizontalLineStyle: event.detail.fibHorizontalLineStyle,
+          fibLabelAlign: event.detail.fibLabelAlign,
+          fibLabelFontSize: event.detail.fibLabelFontSize,
+          fibLabelVAlign: event.detail.fibLabelVAlign,
+          fibLevelDisplay: event.detail.fibLevelDisplay,
+          fibLevelVisible: event.detail.fibLevelVisible,
+          fibLevels: event.detail.fibLevels as FibLevelState[] | undefined,
+          fibPriceVisible: event.detail.fibPriceVisible,
+          fibQuarterLineStyles: event.detail.fibQuarterLineStyles,
+          fibQuarterSplitVisible: event.detail.fibQuarterSplitVisible,
+          fibReverse: event.detail.fibReverse,
+          fibTrendLineStyle: event.detail.fibTrendLineStyle,
+          fibTrendLineVisible: event.detail.fibTrendLineVisible,
           lineStyle: event.detail.lineStyle,
           locked: event.detail.locked,
           objectId: event.detail.objectId,
           price: event.detail.price,
+          rulerStyle: event.detail.rulerStyle,
           showPriceLabel: event.detail.showPriceLabel,
           textStyle: event.detail.textStyle,
           tool: event.detail.tool,
@@ -300,6 +403,21 @@ export function DrawingsDrawer() {
         action: 'start',
         lineStyle: lineStyles.fibRetracement ?? createDefaultDrawingLineStyle('#787b86'),
         locked: selectedLocked,
+        fibBackgroundOpacity,
+        fibBackgroundVisible,
+        fibLabelAlign,
+        fibLabelFontSize,
+        fibLabelVAlign,
+        fibLevelDisplay,
+        fibLevelVisible,
+        fibPriceVisible,
+        fibQuarterLineStyles,
+        fibQuarterSplitVisible,
+        fibReverse,
+        fibTrendLineStyle,
+        fibTrendLineVisible,
+        fibHorizontalLineStyle,
+        fibLevels,
         rulerStyle: {
           ...rulerStyle,
           statsAlwaysVisible: false,
@@ -320,6 +438,70 @@ export function DrawingsDrawer() {
       tool: 'horizontalLine',
     })
   }
+
+  function setSelectedFibTrendLine(visible: boolean, style = fibTrendLineStyle) {
+    setFibTrendLineVisible(visible)
+    setFibTrendLineStyle(style)
+    setSelectedDrawing((current) => current?.tool === 'fibRetracement'
+      ? { ...current, fibTrendLineStyle: style, fibTrendLineVisible: visible }
+      : current)
+    publishDrawingToolCommand({
+      action: 'updateSelectedFibTrendLine',
+      fibTrendLineStyle: style,
+      fibTrendLineVisible: visible,
+      tool: 'fibRetracement',
+    })
+  }
+
+  const setSelectedFibRetracementStyle = useCallback((levels: FibLevelState[], horizontalLineStyle: SettingsLineSwatchValue, backgroundVisible: boolean, backgroundOpacity: number, reverse: boolean, priceVisible: boolean, labelAlign: string, labelVAlign: string, labelFontSize: string, levelVisible: boolean, levelDisplay: string, quarterSplitVisible: boolean, quarterLineStyles: SettingsLineSwatchValue[]) => {
+    setFibLevels((current) => sameFibLevels(current, levels) ? current : levels)
+    setFibHorizontalLineStyle((current) => sameLineSwatch(current, horizontalLineStyle) ? current : horizontalLineStyle)
+    setFibBackgroundVisible((current) => current === backgroundVisible ? current : backgroundVisible)
+    setFibBackgroundOpacity((current) => Math.abs(current - backgroundOpacity) < 0.001 ? current : backgroundOpacity)
+    setFibReverse((current) => current === reverse ? current : reverse)
+    setFibPriceVisible((current) => current === priceVisible ? current : priceVisible)
+    setFibLabelAlign((current) => current === labelAlign ? current : labelAlign)
+    setFibLabelVAlign((current) => current === labelVAlign ? current : labelVAlign)
+    setFibLabelFontSize((current) => current === labelFontSize ? current : labelFontSize)
+    setFibLevelVisible((current) => current === levelVisible ? current : levelVisible)
+    setFibLevelDisplay((current) => current === levelDisplay ? current : levelDisplay)
+    setFibQuarterSplitVisible((current) => current === quarterSplitVisible ? current : quarterSplitVisible)
+    setFibQuarterLineStyles((current) => sameLineSwatchList(current, quarterLineStyles) ? current : quarterLineStyles)
+    setSelectedDrawing((current) => current?.tool === 'fibRetracement'
+      ? sameLineSwatch(current.fibHorizontalLineStyle ?? horizontalLineStyle, horizontalLineStyle)
+        && sameFibLevels(current.fibLevels ?? levels, levels)
+        && current.fibBackgroundVisible === backgroundVisible
+        && Math.abs((current.fibBackgroundOpacity ?? backgroundOpacity) - backgroundOpacity) < 0.001
+        && current.fibReverse === reverse
+        && current.fibPriceVisible === priceVisible
+        && current.fibLabelAlign === labelAlign
+        && current.fibLabelVAlign === labelVAlign
+        && current.fibLabelFontSize === labelFontSize
+        && current.fibLevelVisible === levelVisible
+        && current.fibLevelDisplay === levelDisplay
+        && current.fibQuarterSplitVisible === quarterSplitVisible
+        && sameLineSwatchList(current.fibQuarterLineStyles ?? quarterLineStyles, quarterLineStyles)
+        ? current
+        : { ...current, fibBackgroundOpacity: backgroundOpacity, fibBackgroundVisible: backgroundVisible, fibHorizontalLineStyle: horizontalLineStyle, fibLabelAlign: labelAlign, fibLabelFontSize: labelFontSize, fibLabelVAlign: labelVAlign, fibLevelDisplay: levelDisplay, fibLevelVisible: levelVisible, fibLevels: levels, fibPriceVisible: priceVisible, fibQuarterLineStyles: quarterLineStyles, fibQuarterSplitVisible: quarterSplitVisible, fibReverse: reverse }
+      : current)
+    publishDrawingToolCommand({
+      action: 'updateSelectedFibRetracementStyle',
+      fibBackgroundOpacity: backgroundOpacity,
+      fibBackgroundVisible: backgroundVisible,
+      fibHorizontalLineStyle: horizontalLineStyle,
+      fibLabelAlign: labelAlign,
+      fibLabelFontSize: labelFontSize,
+      fibLabelVAlign: labelVAlign,
+      fibLevelDisplay: levelDisplay,
+      fibLevelVisible: levelVisible,
+      fibLevels: levels,
+      fibPriceVisible: priceVisible,
+      fibQuarterLineStyles: quarterLineStyles,
+      fibQuarterSplitVisible: quarterSplitVisible,
+      fibReverse: reverse,
+      tool: 'fibRetracement',
+    })
+  }, [])
 
   function releaseSelectedTool() {
     setArmedKey(null)
@@ -373,6 +555,9 @@ export function DrawingsDrawer() {
   function setSelectedLineStyle(value: SettingsLineSwatchValue) {
     setLineStyles((current) => ({ ...current, [selectedTool.key]: value }))
     writeDrawingLineStyle(selectedTool.key, value)
+    setSelectedDrawing((current) => current?.tool === selectedKey
+      ? { ...current, lineStyle: value }
+      : current)
     if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler') return
     publishDrawingToolCommand({
       action: 'updateSelectedLineStyle',
@@ -411,6 +596,9 @@ export function DrawingsDrawer() {
     const normalized = normalizeDrawingRulerStyle(value)
     setRulerStyle(normalized)
     writeDrawingRulerStyle(normalized)
+    setSelectedDrawing((current) => current?.tool === 'ruler'
+      ? { ...current, rulerStyle: normalized }
+      : current)
     publishDrawingToolCommand({
       action: 'updateSelectedRulerStyle',
       rulerStyle: normalized,
@@ -571,13 +759,30 @@ export function DrawingsDrawer() {
                       onTextStyleChange={setSelectedTextStyle}
                       onTrendLineStyleChange={setSelectedTrendLineStyle}
                       priceLabelVisible={selectedPriceLabel}
-                      rulerStyle={rulerStyle}
+                      rulerStyle={selectedRulerStyle}
                       selectedDrawing={selectedDrawing}
                       onPriceChange={setSelectedPrice}
+                      onFibTrendLineChange={setSelectedFibTrendLine}
                       onQuickMeasureChange={setQuickMeasure}
                       onTrendPointPriceChange={setSelectedTrendPointPrice}
                       tab={tab as DrawingTab}
                       textStyle={selectedTextStyle}
+                      fibTrendLineStyle={selectedFibTrendLineStyle}
+                      fibTrendLineVisible={selectedFibTrendLineVisible}
+                      fibHorizontalLineStyle={selectedFibHorizontalLineStyle}
+                      fibLevels={selectedFibLevels}
+                      fibBackgroundOpacity={selectedFibBackgroundOpacity}
+                      fibBackgroundVisible={selectedFibBackgroundVisible}
+                      fibLabelAlign={selectedFibLabelAlign}
+                      fibLabelFontSize={selectedFibLabelFontSize}
+                      fibLabelVAlign={selectedFibLabelVAlign}
+                      fibLevelDisplay={selectedFibLevelDisplay}
+                      fibLevelVisible={selectedFibLevelVisible}
+                      fibPriceVisible={selectedFibPriceVisible}
+                      fibQuarterLineStyles={selectedFibQuarterLineStyles}
+                      fibQuarterSplitVisible={selectedFibQuarterSplitVisible}
+                      fibReverse={selectedFibReverse}
+                      onFibRetracementStyleChange={setSelectedFibRetracementStyle}
                       trendLineStyle={trendLineStyle}
                       tool={selectedTool}
                       quickMeasureEnabled={quickMeasureEnabled}
@@ -614,7 +819,24 @@ function CursorToolPanel({
 }
 
 function DrawingTabPanel({
+  fibBackgroundOpacity,
+  fibBackgroundVisible,
+  fibHorizontalLineStyle,
+  fibLabelAlign,
+  fibLabelFontSize,
+  fibLabelVAlign,
+  fibLevelDisplay,
+  fibLevelVisible,
+  fibLevels,
+  fibPriceVisible,
+  fibQuarterLineStyles,
+  fibQuarterSplitVisible,
+  fibReverse,
+  fibTrendLineStyle,
+  fibTrendLineVisible,
   lineStyle,
+  onFibTrendLineChange,
+  onFibRetracementStyleChange,
   onLineStyleChange,
   onPriceLabelChange,
   onPriceChange,
@@ -632,7 +854,24 @@ function DrawingTabPanel({
   trendLineStyle,
   tool,
 }: {
+  fibBackgroundOpacity: number
+  fibBackgroundVisible: boolean
+  fibHorizontalLineStyle: SettingsLineSwatchValue
+  fibLabelAlign: string
+  fibLabelFontSize: string
+  fibLabelVAlign: string
+  fibLevelDisplay: string
+  fibLevelVisible: boolean
+  fibLevels: FibLevelState[]
+  fibPriceVisible: boolean
+  fibQuarterLineStyles: SettingsLineSwatchValue[]
+  fibQuarterSplitVisible: boolean
+  fibReverse: boolean
+  fibTrendLineStyle: SettingsLineSwatchValue
+  fibTrendLineVisible: boolean
   lineStyle: SettingsLineSwatchValue
+  onFibTrendLineChange: (visible: boolean, style?: SettingsLineSwatchValue) => void
+  onFibRetracementStyleChange: (levels: FibLevelState[], horizontalLineStyle: SettingsLineSwatchValue, backgroundVisible: boolean, backgroundOpacity: number, reverse: boolean, priceVisible: boolean, labelAlign: string, labelVAlign: string, labelFontSize: string, levelVisible: boolean, levelDisplay: string, quarterSplitVisible: boolean, quarterLineStyles: SettingsLineSwatchValue[]) => void
   onLineStyleChange: (value: SettingsLineSwatchValue) => void
   onPriceLabelChange: (enabled: boolean) => void
   onPriceChange: (price: number) => void
@@ -653,7 +892,24 @@ function DrawingTabPanel({
   if (tab === 'style') {
     return (
       <DrawingStylePanel
+        fibHorizontalLineStyle={fibHorizontalLineStyle}
+        fibBackgroundOpacity={fibBackgroundOpacity}
+        fibBackgroundVisible={fibBackgroundVisible}
+        fibLevels={fibLevels}
+        fibLabelAlign={fibLabelAlign}
+        fibLabelFontSize={fibLabelFontSize}
+        fibLabelVAlign={fibLabelVAlign}
+        fibLevelDisplay={fibLevelDisplay}
+        fibLevelVisible={fibLevelVisible}
+        fibPriceVisible={fibPriceVisible}
+        fibQuarterLineStyles={fibQuarterLineStyles}
+        fibQuarterSplitVisible={fibQuarterSplitVisible}
+        fibReverse={fibReverse}
         lineStyle={lineStyle}
+        fibTrendLineStyle={fibTrendLineStyle}
+        fibTrendLineVisible={fibTrendLineVisible}
+        onFibTrendLineChange={onFibTrendLineChange}
+        onFibRetracementStyleChange={onFibRetracementStyleChange}
         onLineStyleChange={onLineStyleChange}
         onPriceLabelChange={onPriceLabelChange}
         onQuickMeasureChange={onQuickMeasureChange}
@@ -672,7 +928,24 @@ function DrawingTabPanel({
 }
 
 function DrawingStylePanel({
+  fibBackgroundOpacity,
+  fibBackgroundVisible,
+  fibHorizontalLineStyle,
+  fibLabelAlign,
+  fibLabelFontSize,
+  fibLabelVAlign,
+  fibLevelDisplay,
+  fibLevelVisible,
+  fibLevels,
+  fibPriceVisible,
+  fibQuarterLineStyles,
+  fibQuarterSplitVisible,
+  fibReverse,
+  fibTrendLineStyle,
+  fibTrendLineVisible,
   lineStyle,
+  onFibTrendLineChange,
+  onFibRetracementStyleChange,
   onLineStyleChange,
   onPriceLabelChange,
   onQuickMeasureChange,
@@ -684,7 +957,24 @@ function DrawingStylePanel({
   trendLineStyle,
   tool,
 }: {
+  fibBackgroundOpacity: number
+  fibBackgroundVisible: boolean
+  fibHorizontalLineStyle: SettingsLineSwatchValue
+  fibLabelAlign: string
+  fibLabelFontSize: string
+  fibLabelVAlign: string
+  fibLevelDisplay: string
+  fibLevelVisible: boolean
+  fibLevels: FibLevelState[]
+  fibPriceVisible: boolean
+  fibQuarterLineStyles: SettingsLineSwatchValue[]
+  fibQuarterSplitVisible: boolean
+  fibReverse: boolean
+  fibTrendLineStyle: SettingsLineSwatchValue
+  fibTrendLineVisible: boolean
   lineStyle: SettingsLineSwatchValue
+  onFibTrendLineChange: (visible: boolean, style?: SettingsLineSwatchValue) => void
+  onFibRetracementStyleChange: (levels: FibLevelState[], horizontalLineStyle: SettingsLineSwatchValue, backgroundVisible: boolean, backgroundOpacity: number, reverse: boolean, priceVisible: boolean, labelAlign: string, labelVAlign: string, labelFontSize: string, levelVisible: boolean, levelDisplay: string, quarterSplitVisible: boolean, quarterLineStyles: SettingsLineSwatchValue[]) => void
   onLineStyleChange: (value: SettingsLineSwatchValue) => void
   onPriceLabelChange: (enabled: boolean) => void
   onQuickMeasureChange: (enabled: boolean) => void
@@ -718,7 +1008,25 @@ function DrawingStylePanel({
   if (tool.key === 'fibRetracement') {
     return (
       <div className="ff-drawing-tline-tv-style-v1">
-        <FibRetracementStylePanel />
+        <FibRetracementStylePanel
+          backgroundOpacityValue={fibBackgroundOpacity}
+          backgroundVisibleValue={fibBackgroundVisible}
+          reverseValue={fibReverse}
+          horizontalLineStyleValue={fibHorizontalLineStyle}
+          labelAlignValue={fibLabelAlign}
+          labelFontSizeValue={fibLabelFontSize}
+          labelVAlignValue={fibLabelVAlign}
+          levelDisplayValue={fibLevelDisplay}
+          levelVisibleValue={fibLevelVisible}
+          levelsValue={fibLevels}
+          priceVisibleValue={fibPriceVisible}
+          quarterLineStylesValue={fibQuarterLineStyles}
+          quarterSplitVisibleValue={fibQuarterSplitVisible}
+          onFibRetracementStyleChange={onFibRetracementStyleChange}
+          onTrendLineChange={onFibTrendLineChange}
+          trendLineStyle={fibTrendLineStyle}
+          trendLineVisible={fibTrendLineVisible}
+        />
       </div>
     )
   }
@@ -759,51 +1067,318 @@ function DrawingStylePanel({
 }
 
 const fibLevelDefaults = [
-  { color: '#787b86', enabled: true, value: '0' },
-  { color: '#f23645', enabled: true, value: '0.236' },
-  { color: '#81c784', enabled: true, value: '0.382' },
-  { color: '#4caf50', enabled: true, value: '0.5' },
-  { color: '#009688', enabled: true, value: '0.618' },
-  { color: '#64b5f6', enabled: true, value: '0.786' },
-  { color: '#787b86', enabled: true, value: '1' },
-  { color: '#90caf9', enabled: false, value: '1.618' },
+  { color: '#787b86', enabled: true, opacity: 1, value: '0' },
+  { color: '#f23645', enabled: true, opacity: 1, value: '0.236' },
+  { color: '#81c784', enabled: true, opacity: 1, value: '0.382' },
+  { color: '#4caf50', enabled: true, opacity: 1, value: '0.5' },
+  { color: '#009688', enabled: true, opacity: 1, value: '0.618' },
+  { color: '#64b5f6', enabled: true, opacity: 1, value: '0.786' },
+  { color: '#787b86', enabled: true, opacity: 1, value: '1' },
+  { color: '#90caf9', enabled: false, opacity: 1, value: '1.618' },
 ]
 
-function FibRetracementStylePanel() {
-  const [levels, setLevels] = useState(fibLevelDefaults)
-  const [trendLineVisible, setTrendLineVisible] = useState(false)
-  const [trendLineStyle, setTrendLineStyle] = useState<SettingsLineSwatchValue>({
-    hex: '#b6bac4',
-    lineStyle: 'dashed',
-    opacity: 1,
-    thickness: 1,
+type FibLevelState = typeof fibLevelDefaults[number]
+
+function sameFibLevels(a: FibLevelState[], b: FibLevelState[]) {
+  return a.length === b.length && a.every((level, index) => {
+    const other = b[index]
+    return other
+      && level.color === other.color
+      && level.enabled === other.enabled
+      && Math.abs((level.opacity ?? 1) - (other.opacity ?? 1)) < 0.001
+      && level.value === other.value
   })
-  const [backgroundEnabled, setBackgroundEnabled] = useState(true)
-  const [background, setBackground] = useState({ hex: '#2962ff', opacity: 0.25 })
-  const [reverse, setReverse] = useState(false)
-  const [priceVisible, setPriceVisible] = useState(true)
-  const [levelVisible, setLevelVisible] = useState(true)
-  const [textVisible, setTextVisible] = useState(true)
-  const [horizontalLineThickness, setHorizontalLineThickness] = useState(1)
+}
+
+function sameLineSwatch(a: SettingsLineSwatchValue, b: SettingsLineSwatchValue) {
+  return a.hex === b.hex
+    && a.lineStyle === b.lineStyle
+    && Math.abs(a.opacity - b.opacity) < 0.001
+    && a.thickness === b.thickness
+}
+
+function sameLineSwatchList(a: SettingsLineSwatchValue[], b: SettingsLineSwatchValue[]) {
+  return a.length === b.length && a.every((item, index) => sameLineSwatch(item, b[index]))
+}
+
+function sameFibStylePayload(
+  a: { backgroundEnabled: boolean; backgroundOpacity: number; horizontalLineStyle: SettingsLineSwatchValue; labelAlign: string; labelFontSize: string; labelVAlign: string; levelDisplay: string; levelVisible: boolean; levels: FibLevelState[]; priceVisible: boolean; quarterLineStyles: SettingsLineSwatchValue[]; quarterSplitVisible: boolean; reverse: boolean } | null,
+  b: { backgroundEnabled: boolean; backgroundOpacity: number; horizontalLineStyle: SettingsLineSwatchValue; labelAlign: string; labelFontSize: string; labelVAlign: string; levelDisplay: string; levelVisible: boolean; levels: FibLevelState[]; priceVisible: boolean; quarterLineStyles: SettingsLineSwatchValue[]; quarterSplitVisible: boolean; reverse: boolean },
+) {
+  return a != null
+    && a.backgroundEnabled === b.backgroundEnabled
+    && Math.abs(a.backgroundOpacity - b.backgroundOpacity) < 0.001
+    && a.labelAlign === b.labelAlign
+    && a.labelFontSize === b.labelFontSize
+    && a.labelVAlign === b.labelVAlign
+    && a.levelDisplay === b.levelDisplay
+    && a.levelVisible === b.levelVisible
+    && a.priceVisible === b.priceVisible
+    && a.quarterSplitVisible === b.quarterSplitVisible
+    && sameLineSwatchList(a.quarterLineStyles, b.quarterLineStyles)
+    && a.reverse === b.reverse
+    && sameLineSwatch(a.horizontalLineStyle, b.horizontalLineStyle)
+    && sameFibLevels(a.levels, b.levels)
+}
+
+type FibRetracementStyleState = {
+  background: { hex: string; opacity: number }
+  backgroundEnabled: boolean
+  extendLeft: boolean
+  extendRight: boolean
+  fontSize: string
+  horizontalLineStyle: 'solid' | 'dashed' | 'dotted'
+  horizontalLineThickness: number
+  labelAlign: string
+  labelVAlign: string
+  levelDisplay: string
+  levelVisible: boolean
+  levels: FibLevelState[]
+  priceVisible: boolean
+  quarterLineStyles: SettingsLineSwatchValue[]
+  reverse: boolean
+  textAlign: string
+  textVAlign: string
+  textVisible: boolean
+  trendLineStyle: SettingsLineSwatchValue
+  trendLineVisible: boolean
+}
+
+const fibRetracementStyleStorageKey = 'fractalframe.drawingsDrawer.fibRetracementStyle'
+const defaultFibTrendLineStyle: SettingsLineSwatchValue = {
+  hex: '#b6bac4',
+  lineStyle: 'dashed',
+  opacity: 1,
+  thickness: 1,
+}
+
+const defaultFibQuarterLineStyle: SettingsLineSwatchValue = {
+  hex: '#787b86',
+  lineStyle: 'solid',
+  opacity: 1,
+  thickness: 1,
+}
+
+function normalizeFibQuarterLineStyles(value: unknown): SettingsLineSwatchValue[] {
+  const source = Array.isArray(value) ? value : []
+  return [0, 1, 2].map((index) => ({
+    ...defaultFibQuarterLineStyle,
+    ...createDefaultDrawingLineStyle(source[index]?.hex ?? defaultFibQuarterLineStyle.hex),
+    hex: typeof source[index]?.hex === 'string' && source[index].hex.trim() ? source[index].hex : defaultFibQuarterLineStyle.hex,
+    lineStyle: source[index]?.lineStyle === 'dashed' || source[index]?.lineStyle === 'dotted' ? source[index].lineStyle : defaultFibQuarterLineStyle.lineStyle,
+    opacity: typeof source[index]?.opacity === 'number' && Number.isFinite(source[index].opacity) ? Math.max(0, Math.min(source[index].opacity, 1)) : defaultFibQuarterLineStyle.opacity,
+    thickness: typeof source[index]?.thickness === 'number' && Number.isFinite(source[index].thickness) ? Math.max(1, Math.min(Math.round(source[index].thickness), 4)) : defaultFibQuarterLineStyle.thickness,
+  }))
+}
+
+function normalizeFibRetracementStyleState(value: Partial<FibRetracementStyleState> | null | undefined): FibRetracementStyleState {
+  const lineStyle = value?.trendLineStyle
+  const backgroundOpacity = Number(value?.background?.opacity)
+  const horizontalLineThickness = Number(value?.horizontalLineThickness)
+  return {
+    background: {
+      hex: typeof value?.background?.hex === 'string' && value.background.hex.trim() ? value.background.hex : '#2962ff',
+      opacity: Number.isFinite(backgroundOpacity) ? Math.max(0, Math.min(backgroundOpacity, 1)) : 0.25,
+    },
+    backgroundEnabled: value?.backgroundEnabled !== false,
+    extendLeft: value?.extendLeft === true,
+    extendRight: value?.extendRight === true,
+    fontSize: ['10', '12', '14', '16', '18', '20'].includes(String(value?.fontSize)) ? String(value?.fontSize) : '12',
+    horizontalLineStyle: value?.horizontalLineStyle === 'dashed' || value?.horizontalLineStyle === 'dotted' ? value.horizontalLineStyle : 'solid',
+    horizontalLineThickness: Number.isFinite(horizontalLineThickness) ? Math.max(1, Math.min(Math.round(horizontalLineThickness), 4)) : 1,
+    labelAlign: typeof value?.labelAlign === 'string' ? value.labelAlign : 'center',
+    labelVAlign: typeof value?.labelVAlign === 'string' ? value.labelVAlign : 'top',
+    levelDisplay: value?.levelDisplay === 'percent' ? 'percent' : 'value',
+    levelVisible: value?.levelVisible !== false,
+    levels: Array.isArray(value?.levels) && value.levels.length > 0
+      ? value.levels.slice(0, fibLevelDefaults.length).map((level, index) => ({
+          color: typeof level.color === 'string' && level.color.trim() ? level.color : fibLevelDefaults[index]?.color ?? '#787b86',
+          enabled: level.enabled !== false,
+          opacity: typeof level.opacity === 'number' && Number.isFinite(level.opacity) ? Math.max(0, Math.min(level.opacity, 1)) : fibLevelDefaults[index]?.opacity ?? 1,
+          value: typeof level.value === 'string' ? level.value : fibLevelDefaults[index]?.value ?? '0',
+        }))
+      : fibLevelDefaults,
+    priceVisible: value?.priceVisible !== false,
+    quarterLineStyles: normalizeFibQuarterLineStyles(value?.quarterLineStyles),
+    reverse: value?.reverse === true,
+    textAlign: typeof value?.textAlign === 'string' ? value.textAlign : 'center',
+    textVAlign: typeof value?.textVAlign === 'string' ? value.textVAlign : 'middle',
+    textVisible: value?.textVisible !== false,
+    trendLineStyle: {
+      hex: typeof lineStyle?.hex === 'string' && lineStyle.hex.trim() ? lineStyle.hex : defaultFibTrendLineStyle.hex,
+      lineStyle: lineStyle?.lineStyle === 'solid' || lineStyle?.lineStyle === 'dotted' ? lineStyle.lineStyle : defaultFibTrendLineStyle.lineStyle,
+      opacity: typeof lineStyle?.opacity === 'number' && Number.isFinite(lineStyle.opacity) ? Math.max(0, Math.min(lineStyle.opacity, 1)) : defaultFibTrendLineStyle.opacity,
+      thickness: typeof lineStyle?.thickness === 'number' && Number.isFinite(lineStyle.thickness) ? Math.max(1, Math.min(Math.round(lineStyle.thickness), 4)) : defaultFibTrendLineStyle.thickness,
+    },
+    trendLineVisible: value?.trendLineVisible === true,
+  }
+}
+
+function readFibRetracementStyleState() {
+  return normalizeFibRetracementStyleState(readJson<Partial<FibRetracementStyleState> | null>(fibRetracementStyleStorageKey, null))
+}
+
+function writeFibRetracementStyleState(value: FibRetracementStyleState) {
+  writeJson(fibRetracementStyleStorageKey, normalizeFibRetracementStyleState(value))
+}
+
+function FibRetracementStylePanel({
+  backgroundOpacityValue,
+  backgroundVisibleValue,
+  reverseValue,
+  horizontalLineStyleValue,
+  labelAlignValue,
+  labelFontSizeValue,
+  labelVAlignValue,
+  levelDisplayValue,
+  levelVisibleValue,
+  levelsValue,
+  onFibRetracementStyleChange,
+  priceVisibleValue,
+  quarterLineStylesValue,
+  quarterSplitVisibleValue,
+  onTrendLineChange,
+  trendLineStyle,
+  trendLineVisible,
+}: {
+  backgroundOpacityValue: number
+  backgroundVisibleValue: boolean
+  reverseValue: boolean
+  horizontalLineStyleValue: SettingsLineSwatchValue
+  labelAlignValue: string
+  labelFontSizeValue: string
+  labelVAlignValue: string
+  levelDisplayValue: string
+  levelVisibleValue: boolean
+  levelsValue: FibLevelState[]
+  onFibRetracementStyleChange: (levels: FibLevelState[], horizontalLineStyle: SettingsLineSwatchValue, backgroundVisible: boolean, backgroundOpacity: number, reverse: boolean, priceVisible: boolean, labelAlign: string, labelVAlign: string, labelFontSize: string, levelVisible: boolean, levelDisplay: string, quarterSplitVisible: boolean, quarterLineStyles: SettingsLineSwatchValue[]) => void
+  priceVisibleValue: boolean
+  quarterLineStylesValue: SettingsLineSwatchValue[]
+  quarterSplitVisibleValue: boolean
+  onTrendLineChange: (visible: boolean, style?: SettingsLineSwatchValue) => void
+  trendLineStyle: SettingsLineSwatchValue
+  trendLineVisible: boolean
+}) {
+  const initialStyleRef = useRef<FibRetracementStyleState | null>(null)
+  if (!initialStyleRef.current) initialStyleRef.current = readFibRetracementStyleState()
+  const initialStyle = initialStyleRef.current
+  const [levels, setLevels] = useState(levelsValue.length > 0 ? levelsValue : initialStyle.levels)
+  const [backgroundEnabled, setBackgroundEnabled] = useState(backgroundVisibleValue)
+  const [background, setBackground] = useState({ ...initialStyle.background, opacity: backgroundOpacityValue })
+  const [reverse, setReverse] = useState(reverseValue)
+  const [priceVisible, setPriceVisible] = useState(priceVisibleValue)
+  const [levelVisible, setLevelVisible] = useState(levelVisibleValue)
+  const [textVisible, setTextVisible] = useState(quarterSplitVisibleValue)
+  const [horizontalLineThickness, setHorizontalLineThickness] = useState(horizontalLineStyleValue.thickness || initialStyle.horizontalLineThickness)
   const [horizontalLineThicknessOpen, setHorizontalLineThicknessOpen] = useState(false)
-  const [horizontalLineStyle, setHorizontalLineStyle] = useState<'solid' | 'dashed' | 'dotted'>('solid')
+  const [horizontalLineStyle, setHorizontalLineStyle] = useState<'solid' | 'dashed' | 'dotted'>(horizontalLineStyleValue.lineStyle || initialStyle.horizontalLineStyle)
   const [horizontalLineStyleOpen, setHorizontalLineStyleOpen] = useState(false)
-  const [extendLeft, setExtendLeft] = useState(false)
-  const [extendRight, setExtendRight] = useState(false)
+  const [extendLeft, setExtendLeft] = useState(initialStyle.extendLeft)
+  const [extendRight, setExtendRight] = useState(initialStyle.extendRight)
   const [extendOpen, setExtendOpen] = useState(false)
   const horizontalLineThicknessRef = useRef<HTMLDivElement | null>(null)
   const horizontalLineStyleRef = useRef<HTMLDivElement | null>(null)
   const extendRef = useRef<HTMLDivElement | null>(null)
-  const [levelDisplay, setLevelDisplay] = useState('value')
-  const [labelAlign, setLabelAlign] = useState('center')
-  const [labelVAlign, setLabelVAlign] = useState('top')
-  const [textAlign, setTextAlign] = useState('center')
-  const [textVAlign, setTextVAlign] = useState('middle')
-  const [fontSize, setFontSize] = useState('12')
+  const [levelDisplay, setLevelDisplay] = useState(levelDisplayValue)
+  const [labelAlign, setLabelAlign] = useState(labelAlignValue)
+  const [labelVAlign, setLabelVAlign] = useState(labelVAlignValue)
+  const [textAlign] = useState(initialStyle.textAlign)
+  const [textVAlign] = useState(initialStyle.textVAlign)
+  const [fontSize, setFontSize] = useState(labelFontSizeValue)
+  const [quarterLineStyles, setQuarterLineStyles] = useState<SettingsLineSwatchValue[]>(quarterLineStylesValue.length === 3 ? quarterLineStylesValue : initialStyle.quarterLineStyles)
+  const lastPublishedFibStyleRef = useRef<{
+    backgroundEnabled: boolean
+    backgroundOpacity: number
+    horizontalLineStyle: SettingsLineSwatchValue
+    labelAlign: string
+    labelFontSize: string
+    labelVAlign: string
+    levelDisplay: string
+    levelVisible: boolean
+    levels: FibLevelState[]
+    priceVisible: boolean
+    quarterLineStyles: SettingsLineSwatchValue[]
+    quarterSplitVisible: boolean
+    reverse: boolean
+  } | null>(null)
 
   const updateLevel = (index: number, patch: Partial<typeof fibLevelDefaults[number]>) => {
     setLevels((current) => current.map((level, levelIndex) => levelIndex === index ? { ...level, ...patch } : level))
   }
+
+  const updateQuarterLineStyle = (index: number, value: SettingsLineSwatchValue) => {
+    setQuarterLineStyles((current) => current.map((style, styleIndex) => styleIndex === index ? value : style))
+  }
+
+  useEffect(() => {
+    if (levelsValue.length > 0) {
+      setLevels((current) => sameFibLevels(current, levelsValue) ? current : levelsValue)
+    }
+    setHorizontalLineThickness((current) => current === (horizontalLineStyleValue.thickness || 1) ? current : horizontalLineStyleValue.thickness || 1)
+    setHorizontalLineStyle((current) => current === (horizontalLineStyleValue.lineStyle || 'solid') ? current : horizontalLineStyleValue.lineStyle || 'solid')
+    setBackgroundEnabled((current) => current === backgroundVisibleValue ? current : backgroundVisibleValue)
+    setBackground((current) => Math.abs(current.opacity - backgroundOpacityValue) < 0.001 ? current : { ...current, opacity: backgroundOpacityValue })
+    setReverse((current) => current === reverseValue ? current : reverseValue)
+    setPriceVisible((current) => current === priceVisibleValue ? current : priceVisibleValue)
+    setLabelAlign((current) => current === labelAlignValue ? current : labelAlignValue)
+    setLabelVAlign((current) => current === labelVAlignValue ? current : labelVAlignValue)
+    setFontSize((current) => current === labelFontSizeValue ? current : labelFontSizeValue)
+    setLevelVisible((current) => current === levelVisibleValue ? current : levelVisibleValue)
+    setLevelDisplay((current) => current === levelDisplayValue ? current : levelDisplayValue)
+    setTextVisible((current) => current === quarterSplitVisibleValue ? current : quarterSplitVisibleValue)
+    const nextQuarterLineStyles = normalizeFibQuarterLineStyles(quarterLineStylesValue)
+    setQuarterLineStyles((current) => sameLineSwatchList(current, nextQuarterLineStyles) ? current : nextQuarterLineStyles)
+  }, [backgroundOpacityValue, backgroundVisibleValue, horizontalLineStyleValue, labelAlignValue, labelFontSizeValue, labelVAlignValue, levelDisplayValue, levelVisibleValue, levelsValue, priceVisibleValue, quarterLineStylesValue, quarterSplitVisibleValue, reverseValue])
+
+  useEffect(() => {
+    const nextHorizontalLineStyle: SettingsLineSwatchValue = {
+      hex: '#787b86',
+      lineStyle: horizontalLineStyle,
+      opacity: 1,
+      thickness: horizontalLineThickness,
+    }
+    writeFibRetracementStyleState({
+      background,
+      backgroundEnabled,
+      extendLeft,
+      extendRight,
+      fontSize,
+      horizontalLineStyle,
+      horizontalLineThickness,
+      labelAlign,
+      labelVAlign,
+      levelDisplay,
+      levelVisible,
+      levels,
+      priceVisible,
+      quarterLineStyles,
+      reverse,
+      textAlign,
+      textVAlign,
+      textVisible,
+      trendLineStyle,
+      trendLineVisible,
+    })
+    const nextPayload = {
+      backgroundEnabled,
+      backgroundOpacity: background.opacity,
+      horizontalLineStyle: nextHorizontalLineStyle,
+      labelAlign,
+      labelFontSize: fontSize,
+      labelVAlign,
+      levelDisplay,
+      levelVisible,
+      levels,
+      priceVisible,
+      quarterLineStyles,
+      quarterSplitVisible: textVisible,
+      reverse,
+    }
+    if (!sameFibStylePayload(lastPublishedFibStyleRef.current, nextPayload)) {
+      lastPublishedFibStyleRef.current = nextPayload
+      onFibRetracementStyleChange(levels, nextHorizontalLineStyle, backgroundEnabled, background.opacity, reverse, priceVisible, labelAlign, labelVAlign, fontSize, levelVisible, levelDisplay, textVisible, quarterLineStyles)
+    }
+  }, [background, backgroundEnabled, extendLeft, extendRight, fontSize, horizontalLineStyle, horizontalLineThickness, labelAlign, labelVAlign, levelDisplay, levelVisible, levels, onFibRetracementStyleChange, priceVisible, quarterLineStyles, reverse, textAlign, textVAlign, textVisible, trendLineStyle, trendLineVisible])
 
   useEffect(() => {
     if (!horizontalLineThicknessOpen) return
@@ -868,14 +1443,14 @@ function FibRetracementStylePanel() {
     <div className="ff-drawing-fib-style-v1">
       <div className="ff-drawing-fib-top-row-v1">
         <label className="ff-drawing-tline-tv-check-row-v1">
-          <input checked={trendLineVisible} onChange={(event) => setTrendLineVisible(event.target.checked)} type="checkbox" />
+          <input checked={trendLineVisible} onChange={(event) => onTrendLineChange(event.target.checked, trendLineStyle)} type="checkbox" />
           <span className="ff-drawing-tline-tv-check-box-v1" />
         </label>
         <span className="ff-drawing-tline-tv-label-v1">趋势线</span>
         <SettingsLineSwatch
           color={trendLineStyle.hex}
           lineStyle={trendLineStyle.lineStyle}
-          onChange={setTrendLineStyle}
+          onChange={(value) => onTrendLineChange(trendLineVisible, value)}
           thickness={trendLineStyle.thickness}
           value={trendLineStyle}
         />
@@ -998,9 +1573,10 @@ function FibRetracementStylePanel() {
               value={level.value}
             />
             <SettingsColorSwatch
+              checkerboard
               color={level.color}
-              onChange={(value) => updateLevel(index, { color: value.hex })}
-              value={{ hex: level.color, opacity: 1 }}
+              onChange={(value) => updateLevel(index, { color: value.hex, opacity: value.opacity })}
+              value={{ hex: level.color, opacity: level.opacity }}
             />
           </div>
         ))}
@@ -1057,21 +1633,26 @@ function FibRetracementStylePanel() {
         <OpenableSelect ariaLabel="标签垂直位置" className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-fib-small-select-v1" onChange={setLabelVAlign} options={[{ label: '顶部', value: 'top' }, { label: '中间', value: 'middle' }, { label: '底部', value: 'bottom' }]} value={labelVAlign} />
       </div>
 
-      <div className="ff-drawing-fib-select-line-v1">
+      <div className="ff-drawing-fib-select-line-v1 ff-drawing-fib-select-line-v1--split-label">
         <label className="ff-drawing-tline-tv-check-row-v1">
           <input checked={textVisible} onChange={(event) => setTextVisible(event.target.checked)} type="checkbox" />
           <span className="ff-drawing-tline-tv-check-box-v1" />
         </label>
-        <span className="ff-drawing-tline-tv-label-v1">文本</span>
-        <OpenableSelect ariaLabel="文本位置" className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-fib-small-select-v1" onChange={setTextAlign} options={[{ label: '左侧', value: 'left' }, { label: '中心', value: 'center' }, { label: '右侧', value: 'right' }]} value={textAlign} />
-        <OpenableSelect ariaLabel="文本垂直位置" className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-fib-small-select-v1" onChange={setTextVAlign} options={[{ label: '顶部', value: 'top' }, { label: '中间', value: 'middle' }, { label: '底部', value: 'bottom' }]} value={textVAlign} />
+        <span className="ff-drawing-tline-tv-label-v1">0.236 分割</span>
       </div>
 
-      <div className="ff-drawing-fib-select-line-v1 ff-drawing-fib-select-line-v1--plain-label">
-        <span className="ff-drawing-fib-empty-check-v1" />
-        <span className="ff-drawing-tline-tv-label-v1">字体大小</span>
-        <OpenableSelect ariaLabel="字体大小" className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-fib-small-select-v1" onChange={setFontSize} options={[{ label: '10', value: '10' }, { label: '12', value: '12' }, { label: '14', value: '14' }, { label: '16', value: '16' }, { label: '18', value: '18' }, { label: '20', value: '20' }]} value={fontSize} />
-      </div>
+      {quarterLineStyles.map((style, index) => (
+        <div className="ff-drawing-fib-quarter-row-v1" key={index}>
+          <span className="ff-drawing-tline-tv-label-v1">{`${index + 1}/4`}</span>
+          <SettingsLineSwatch
+            color={style.hex}
+            lineStyle={style.lineStyle}
+            onChange={(value) => updateQuarterLineStyle(index, value)}
+            thickness={style.thickness}
+            value={style}
+          />
+        </div>
+      ))}
     </div>
   )
 }

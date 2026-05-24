@@ -12,6 +12,7 @@ import {
   writeStoredTrendLineDrawings,
 } from '../rightDrawer/drawingObjectPersistence'
 import type {
+  StoredFibRetracementDrawing,
   StoredHorizontalLineDrawing,
   StoredRulerDrawing,
   StoredTrendLineDrawing,
@@ -31,12 +32,12 @@ import {
   syncRulerObjectIdSeed,
   syncTrendLineObjectIdSeed,
 } from './chartDrawingObjectIds'
-import { storedHorizontalLineFromOverlay, storedRulerFromOverlay, storedTrendLineFromOverlay } from './chartDrawingSerialization'
+import { storedFibRetracementFromOverlay, storedHorizontalLineFromOverlay, storedRulerFromOverlay, storedTrendLineFromOverlay } from './chartDrawingSerialization'
 
 export type InitialStoredDrawingState = {
   fibRetracementPersistenceEnabled: boolean
   horizontalLinePersistenceEnabled: boolean
-  pendingFibRetracementDrawings: StoredRulerDrawing[]
+  pendingFibRetracementDrawings: StoredFibRetracementDrawing[]
   pendingHorizontalLineDrawings: StoredHorizontalLineDrawing[]
   pendingRulerDrawings: StoredRulerDrawing[]
   pendingTrendLineDrawings: StoredTrendLineDrawing[]
@@ -108,6 +109,21 @@ export function createChartDrawingPersistenceController({
     textStyle?: DrawingTextStyle
   }) => unknown
   createFibRetracementOverlay: (options: {
+    fibBackgroundOpacity?: number
+    fibBackgroundVisible?: boolean
+    fibHorizontalLineStyle?: SettingsLineSwatchValue
+    fibLabelAlign?: string
+    fibLabelFontSize?: string
+    fibLabelVAlign?: string
+    fibLevelDisplay?: string
+    fibLevelVisible?: boolean
+    fibLevels?: Array<{ color?: string; enabled?: boolean; opacity?: number; value?: string }>
+    fibPriceVisible?: boolean
+    fibQuarterLineStyles?: SettingsLineSwatchValue[]
+    fibQuarterSplitVisible?: boolean
+    fibReverse?: boolean
+    fibTrendLineStyle?: SettingsLineSwatchValue
+    fibTrendLineVisible?: boolean
     lineStyle: SettingsLineSwatchValue
     locked: boolean
     manualVisible?: boolean
@@ -154,7 +170,7 @@ export function createChartDrawingPersistenceController({
   getTrendLinePersistenceEnabled: () => boolean
   horizontalLineOverlayIds: Set<string>
   fibRetracementOverlayIds: Set<string>
-  initialFibRetracementDrawings: StoredRulerDrawing[]
+  initialFibRetracementDrawings: StoredFibRetracementDrawing[]
   initialHorizontalLineDrawings: StoredHorizontalLineDrawing[]
   initialRulerDrawings: StoredRulerDrawing[]
   initialTrendLineDrawings: StoredTrendLineDrawing[]
@@ -219,7 +235,7 @@ export function createChartDrawingPersistenceController({
   const persistCurrentFibRetracements = () => {
     if (getDestroyed()) return
     if (!getFibRetracementPersistenceEnabled()) return
-    const drawings: StoredRulerDrawing[] = []
+    const drawings: StoredFibRetracementDrawing[] = []
     fibRetracementOverlayIds.forEach((id) => {
       const overlay = chart.getOverlayById(id)
       if (!overlay) {
@@ -227,7 +243,7 @@ export function createChartDrawingPersistenceController({
         return
       }
       if (overlay.id === getPendingFibRetracementOverlayId() || overlay.points.length < 2) return
-      const drawing = storedRulerFromOverlay(overlay, createFibRetracementObjectId, fallbackPaneId)
+      const drawing = storedFibRetracementFromOverlay(overlay, createFibRetracementObjectId, fallbackPaneId)
       if (drawing) drawings.push(drawing)
     })
     writeStoredFibRetracementDrawings(drawings)
@@ -312,7 +328,7 @@ export function createChartDrawingPersistenceController({
 
   const restorePendingStoredFibRetracements = () => {
     if (!getFibRetracementPersistenceEnabled() || pendingFibRetracementDrawings.length === 0) return
-    const remaining: StoredRulerDrawing[] = []
+    const remaining: StoredFibRetracementDrawing[] = []
     pendingFibRetracementDrawings.forEach((drawing) => {
       const paneId = drawing.paneId || fallbackPaneId
       if (!canCreateOverlayOnPane(paneId)) {
@@ -320,6 +336,21 @@ export function createChartDrawingPersistenceController({
         return
       }
       const overlayId = createFibRetracementOverlay({
+        fibBackgroundOpacity: drawing.fibBackgroundOpacity,
+        fibBackgroundVisible: drawing.fibBackgroundVisible,
+        fibHorizontalLineStyle: drawing.fibHorizontalLineStyle,
+        fibLabelAlign: drawing.fibLabelAlign,
+        fibLabelFontSize: drawing.fibLabelFontSize,
+        fibLabelVAlign: drawing.fibLabelVAlign,
+        fibLevelDisplay: drawing.fibLevelDisplay,
+        fibLevelVisible: drawing.fibLevelVisible,
+        fibLevels: drawing.fibLevels,
+        fibPriceVisible: drawing.fibPriceVisible,
+        fibQuarterLineStyles: drawing.fibQuarterLineStyles,
+        fibQuarterSplitVisible: drawing.fibQuarterSplitVisible,
+        fibReverse: drawing.fibReverse,
+        fibTrendLineStyle: drawing.fibTrendLineStyle,
+        fibTrendLineVisible: drawing.fibTrendLineVisible,
         lineStyle: drawing.lineStyle,
         locked: drawing.locked,
         manualVisible: drawing.manualVisible,

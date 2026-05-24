@@ -50,6 +50,37 @@ export type StoredRulerDrawing = {
   textStyle: DrawingTextStyle
 }
 
+export type StoredFibRetracementDrawing = {
+  fibBackgroundOpacity: number
+  fibBackgroundVisible: boolean
+  fibHorizontalLineStyle: SettingsLineSwatchValue
+  fibLabelAlign: string
+  fibLabelFontSize: string
+  fibLabelVAlign: string
+  fibLevelDisplay: string
+  fibLevelVisible: boolean
+  fibLevels: Array<{ color?: string; enabled?: boolean; opacity?: number; value?: string }>
+  fibPriceVisible: boolean
+  fibQuarterLineStyles: SettingsLineSwatchValue[]
+  fibQuarterSplitVisible: boolean
+  fibReverse: boolean
+  fibTrendLineStyle: SettingsLineSwatchValue
+  fibTrendLineVisible: boolean
+  lineStyle: SettingsLineSwatchValue
+  locked: boolean
+  manualVisible: boolean
+  objectId: string
+  paneId: string
+  points: Array<{
+    dataIndex?: number
+    timestamp?: number
+    value?: number
+  }>
+  rulerStyle: DrawingRulerStyle
+  showPriceLabel: boolean
+  textStyle: DrawingTextStyle
+}
+
 export const drawingObjectPersistenceStoragePrefix = 'fractalframe.drawingsDrawer.persist'
 export const horizontalLineDrawingsStorageKey = 'fractalframe.drawings.horizontalLine.items'
 export const trendLineDrawingsStorageKey = 'fractalframe.drawings.trendLine.items'
@@ -106,6 +137,37 @@ function normalizeTrendLinePoint(point: StoredTrendLineDrawing['points'][number]
     ...(Number.isFinite(timestamp) ? { timestamp } : {}),
     ...(Number.isFinite(value) ? { value } : {}),
   }
+}
+
+function normalizeFibTrendLineStyle(lineStyle: SettingsLineSwatchValue | undefined) {
+  return normalizeDrawingLineStyle(lineStyle ?? {
+    hex: '#b6bac4',
+    lineStyle: 'dashed',
+    opacity: 1,
+    thickness: 1,
+  }, '#b6bac4')
+}
+
+function normalizeUnitOpacity(value: unknown, fallback: number) {
+  const opacity = Number(value)
+  return Number.isFinite(opacity) ? Math.max(0, Math.min(opacity, 1)) : fallback
+}
+
+function normalizeFibLabelAlign(value: unknown) {
+  return value === 'left' || value === 'right' ? value : 'center'
+}
+
+function normalizeFibLabelVAlign(value: unknown) {
+  return value === 'middle' || value === 'bottom' ? value : 'top'
+}
+
+function normalizeFibLabelFontSize(value: unknown) {
+  const normalized = String(value)
+  return ['10', '12', '14', '16', '18', '20'].includes(normalized) ? normalized : '12'
+}
+
+function normalizeFibLevelDisplay(value: unknown) {
+  return value === 'percent' ? 'percent' : 'value'
 }
 
 export function readStoredTrendLineDrawings() {
@@ -179,9 +241,24 @@ export function clearStoredRulerDrawings() {
 }
 
 export function readStoredFibRetracementDrawings() {
-  const stored = readJson<StoredRulerDrawing[]>(fibRetracementDrawingsStorageKey, [])
+  const stored = readJson<StoredFibRetracementDrawing[]>(fibRetracementDrawingsStorageKey, [])
   return stored
     .map((drawing) => ({
+      fibTrendLineStyle: normalizeFibTrendLineStyle(drawing.fibTrendLineStyle),
+      fibTrendLineVisible: drawing.fibTrendLineVisible === true,
+      fibBackgroundOpacity: normalizeUnitOpacity(drawing.fibBackgroundOpacity, 0.25),
+      fibBackgroundVisible: drawing.fibBackgroundVisible !== false,
+      fibHorizontalLineStyle: normalizeDrawingLineStyle(drawing.fibHorizontalLineStyle, '#787b86'),
+      fibLabelAlign: normalizeFibLabelAlign(drawing.fibLabelAlign),
+      fibLabelFontSize: normalizeFibLabelFontSize(drawing.fibLabelFontSize),
+      fibLabelVAlign: normalizeFibLabelVAlign(drawing.fibLabelVAlign),
+      fibLevelDisplay: normalizeFibLevelDisplay(drawing.fibLevelDisplay),
+      fibLevelVisible: drawing.fibLevelVisible !== false,
+      fibLevels: Array.isArray(drawing.fibLevels) ? drawing.fibLevels : [],
+      fibPriceVisible: drawing.fibPriceVisible !== false,
+      fibQuarterLineStyles: Array.isArray(drawing.fibQuarterLineStyles) ? drawing.fibQuarterLineStyles.map((style) => normalizeDrawingLineStyle(style, '#787b86')).slice(0, 3) : [],
+      fibQuarterSplitVisible: drawing.fibQuarterSplitVisible === true,
+      fibReverse: drawing.fibReverse === true,
       lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#787b86'),
       locked: drawing.locked === true,
       manualVisible: drawing.manualVisible !== false,
@@ -195,8 +272,23 @@ export function readStoredFibRetracementDrawings() {
     .filter((drawing) => drawing.points.length >= 2 && drawing.points.slice(0, 2).every((point) => typeof point.value === 'number'))
 }
 
-export function writeStoredFibRetracementDrawings(drawings: StoredRulerDrawing[]) {
+export function writeStoredFibRetracementDrawings(drawings: StoredFibRetracementDrawing[]) {
   return writeJson(fibRetracementDrawingsStorageKey, drawings.map((drawing) => ({
+    fibTrendLineStyle: normalizeFibTrendLineStyle(drawing.fibTrendLineStyle),
+    fibTrendLineVisible: drawing.fibTrendLineVisible === true,
+    fibBackgroundOpacity: normalizeUnitOpacity(drawing.fibBackgroundOpacity, 0.25),
+    fibBackgroundVisible: drawing.fibBackgroundVisible !== false,
+    fibHorizontalLineStyle: normalizeDrawingLineStyle(drawing.fibHorizontalLineStyle, '#787b86'),
+    fibLabelAlign: normalizeFibLabelAlign(drawing.fibLabelAlign),
+    fibLabelFontSize: normalizeFibLabelFontSize(drawing.fibLabelFontSize),
+    fibLabelVAlign: normalizeFibLabelVAlign(drawing.fibLabelVAlign),
+    fibLevelDisplay: normalizeFibLevelDisplay(drawing.fibLevelDisplay),
+    fibLevelVisible: drawing.fibLevelVisible !== false,
+    fibLevels: Array.isArray(drawing.fibLevels) ? drawing.fibLevels : [],
+    fibPriceVisible: drawing.fibPriceVisible !== false,
+    fibQuarterLineStyles: Array.isArray(drawing.fibQuarterLineStyles) ? drawing.fibQuarterLineStyles.map((style) => normalizeDrawingLineStyle(style, '#787b86')).slice(0, 3) : [],
+    fibQuarterSplitVisible: drawing.fibQuarterSplitVisible === true,
+    fibReverse: drawing.fibReverse === true,
     lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#787b86'),
     locked: drawing.locked === true,
     manualVisible: drawing.manualVisible !== false,

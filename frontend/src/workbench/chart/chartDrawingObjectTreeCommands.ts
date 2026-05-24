@@ -34,6 +34,7 @@ export function createDrawingObjectTreeCommandHandler({
   horizontalLineOverlayIds,
   isHorizontalLineVisibleInCurrentPeriod,
   isRulerVisibleInCurrentPeriod,
+  isFibRetracementVisibleInCurrentPeriod = isRulerVisibleInCurrentPeriod,
   isTrendLineVisibleInCurrentPeriod,
   persistCurrentHorizontalLines,
   persistCurrentFibRetracements = () => undefined,
@@ -71,6 +72,7 @@ export function createDrawingObjectTreeCommandHandler({
   horizontalLineOverlayIds: Set<string>
   isHorizontalLineVisibleInCurrentPeriod: (objectId?: string) => boolean
   isRulerVisibleInCurrentPeriod: (objectId?: string) => boolean
+  isFibRetracementVisibleInCurrentPeriod?: (objectId?: string) => boolean
   isTrendLineVisibleInCurrentPeriod: (objectId?: string) => boolean
   persistCurrentHorizontalLines: () => void
   persistCurrentFibRetracements?: () => void
@@ -230,7 +232,7 @@ export function createDrawingObjectTreeCommandHandler({
         if (getSelectedRulerOverlayId() === target.id) setSelectedRulerOverlayId(null)
         if (getActiveObjectTreeOverlayId() === target.id) setActiveObjectTreeOverlayId(getSelectedOverlayId() ?? getSelectedTrendLineOverlayId())
       },
-      isVisibleInCurrentPeriod: isRulerVisibleInCurrentPeriod,
+      isVisibleInCurrentPeriod: isFibRetracementVisibleInCurrentPeriod,
       kind: 'ruler',
       persist: persistCurrentRulers,
       selectedForVisible: (id, extendData) => selectedRulerOverlayIds.has(id) || getSelectedRulerOverlayId() === id || (extendData as RulerExtendData | undefined)?.selected === true,
@@ -263,6 +265,21 @@ export function createDrawingObjectTreeCommandHandler({
         })
         publishDrawingToolState({
           armed: false,
+          fibBackgroundOpacity: targetExtendData?.fibBackgroundOpacity,
+          fibBackgroundVisible: targetExtendData?.fibBackgroundVisible,
+          fibHorizontalLineStyle: targetExtendData?.fibHorizontalLineStyle,
+          fibLabelAlign: targetExtendData?.fibLabelAlign,
+          fibLabelFontSize: targetExtendData?.fibLabelFontSize,
+          fibLabelVAlign: targetExtendData?.fibLabelVAlign,
+          fibLevelDisplay: targetExtendData?.fibLevelDisplay,
+          fibLevelVisible: targetExtendData?.fibLevelVisible,
+          fibLevels: targetExtendData?.fibLevels,
+          fibPriceVisible: targetExtendData?.fibPriceVisible,
+          fibQuarterLineStyles: targetExtendData?.fibQuarterLineStyles,
+          fibQuarterSplitVisible: targetExtendData?.fibQuarterSplitVisible,
+          fibReverse: targetExtendData?.fibReverse,
+          fibTrendLineStyle: targetExtendData?.fibTrendLineStyle,
+          fibTrendLineVisible: targetExtendData?.fibTrendLineVisible,
           lineStyle: normalizeLineStyle(targetExtendData?.lineStyle),
           locked: targetExtendData?.locked === true,
           objectId: targetExtendData?.objectId,
@@ -333,6 +350,21 @@ export function createDrawingObjectTreeCommandHandler({
         })
         publishDrawingToolState({
           armed: false,
+          fibBackgroundOpacity: targetExtendData?.fibBackgroundOpacity,
+          fibBackgroundVisible: targetExtendData?.fibBackgroundVisible,
+          fibHorizontalLineStyle: targetExtendData?.fibHorizontalLineStyle,
+          fibLabelAlign: targetExtendData?.fibLabelAlign,
+          fibLabelFontSize: targetExtendData?.fibLabelFontSize,
+          fibLabelVAlign: targetExtendData?.fibLabelVAlign,
+          fibLevelDisplay: targetExtendData?.fibLevelDisplay,
+          fibLevelVisible: targetExtendData?.fibLevelVisible,
+          fibLevels: targetExtendData?.fibLevels,
+          fibPriceVisible: targetExtendData?.fibPriceVisible,
+          fibQuarterLineStyles: targetExtendData?.fibQuarterLineStyles,
+          fibQuarterSplitVisible: targetExtendData?.fibQuarterSplitVisible,
+          fibReverse: targetExtendData?.fibReverse,
+          fibTrendLineStyle: targetExtendData?.fibTrendLineStyle,
+          fibTrendLineVisible: targetExtendData?.fibTrendLineVisible,
           lineStyle: normalizeLineStyle(targetExtendData?.lineStyle),
           locked: targetExtendData?.locked === true,
           objectId: targetExtendData?.objectId,

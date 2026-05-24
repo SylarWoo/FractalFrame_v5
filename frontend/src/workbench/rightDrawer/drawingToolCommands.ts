@@ -5,8 +5,23 @@ import type { DrawingRulerStyle } from './rulerDrawingStyle'
 export type DrawingCommandTool = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement'
 
 export type DrawingToolCommand = {
-  action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateQuickMeasureEnabled' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedRulerStyle' | 'updateSelectedTextStyle' | 'updateSelectedTrendLinePointPrice' | 'updateSelectedTrendLineStyle'
+  action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateQuickMeasureEnabled' | 'updateSelectedFibRetracementStyle' | 'updateSelectedFibTrendLine' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedRulerStyle' | 'updateSelectedTextStyle' | 'updateSelectedTrendLinePointPrice' | 'updateSelectedTrendLineStyle'
   enabled?: boolean
+  fibBackgroundOpacity?: number
+  fibBackgroundVisible?: boolean
+  fibHorizontalLineStyle?: SettingsLineSwatchValue
+  fibLabelAlign?: string
+  fibLabelFontSize?: string
+  fibLabelVAlign?: string
+  fibLevelDisplay?: string
+  fibLevelVisible?: boolean
+  fibLevels?: Array<{ color?: string; enabled?: boolean; opacity?: number; value?: string }>
+  fibPriceVisible?: boolean
+  fibQuarterLineStyles?: SettingsLineSwatchValue[]
+  fibQuarterSplitVisible?: boolean
+  fibReverse?: boolean
+  fibTrendLineStyle?: SettingsLineSwatchValue
+  fibTrendLineVisible?: boolean
   id: number
   lineStyle?: SettingsLineSwatchValue
   locked?: boolean
@@ -22,6 +37,21 @@ export type DrawingToolCommand = {
 
 export type DrawingToolState = {
   armed: boolean
+  fibBackgroundOpacity?: number
+  fibBackgroundVisible?: boolean
+  fibHorizontalLineStyle?: SettingsLineSwatchValue
+  fibLabelAlign?: string
+  fibLabelFontSize?: string
+  fibLabelVAlign?: string
+  fibLevelDisplay?: string
+  fibLevelVisible?: boolean
+  fibLevels?: Array<{ color?: string; enabled?: boolean; opacity?: number; value?: string }>
+  fibPriceVisible?: boolean
+  fibQuarterLineStyles?: SettingsLineSwatchValue[]
+  fibQuarterSplitVisible?: boolean
+  fibReverse?: boolean
+  fibTrendLineStyle?: SettingsLineSwatchValue
+  fibTrendLineVisible?: boolean
   locked: boolean
   lineStyle?: SettingsLineSwatchValue
   objectId?: string

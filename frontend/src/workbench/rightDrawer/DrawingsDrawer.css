@@ -159,12 +159,18 @@
 .ff-drawing-fib-top-row-v1 .ff-drawing-tline-tv-check-row-v1 {
   grid-column: 1;
   grid-row: 1;
+  width: 28px;
+  min-height: 34px;
+  justify-content: flex-start;
+  cursor: pointer;
+  z-index: 1;
 }
 
 .ff-drawing-fib-top-row-v1 > .ff-drawing-tline-tv-label-v1 {
   grid-column: 1;
   grid-row: 1;
   padding-left: 28px;
+  pointer-events: none;
 }
 
 .ff-drawing-fib-top-row-v1--horizontal {
@@ -532,6 +538,26 @@
 
 .ff-drawing-fib-select-line-v1 {
   grid-template-columns: 20px calc(var(--ff-drawing-fib-control-start) - 28px) minmax(84px, 100px) minmax(84px, 100px);
+}
+
+.ff-drawing-fib-select-line-v1--split-label {
+  grid-template-columns: 20px minmax(0, 1fr);
+}
+
+.ff-drawing-fib-select-line-v1--split-label > .ff-drawing-tline-tv-label-v1 {
+  white-space: nowrap;
+}
+
+.ff-drawing-fib-quarter-row-v1 {
+  display: grid;
+  grid-template-columns: var(--ff-drawing-fib-control-start) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.ff-drawing-fib-quarter-row-v1 > .ff-drawing-tline-tv-label-v1 {
+  white-space: nowrap;
 }
 
 .ff-drawing-fib-empty-check-v1 {

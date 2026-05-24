@@ -256,6 +256,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const applyDrawingVisibility = () => drawingVisibilityController?.applyDrawingVisibility()
   const applyHorizontalLineVisibility = () => drawingVisibilityController?.applyHorizontalLineVisibility()
   const isHorizontalLineVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isHorizontalLineVisibleInCurrentPeriod(objectId) ?? true
+  const isFibRetracementVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isFibRetracementVisibleInCurrentPeriod(objectId) ?? true
   const isRulerVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isRulerVisibleInCurrentPeriod(objectId) ?? true
   const isTrendLineVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isTrendLineVisibleInCurrentPeriod(objectId) ?? true
   const resolveHorizontalLineVisibility = (extendData: HorizontalLineExtendData | undefined) => drawingVisibilityController?.resolveHorizontalLineVisibility(extendData) ?? {
@@ -273,8 +274,12 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     periodVisible: true,
     visible: extendData?.manualVisible !== false,
   }
+  const resolveFibRetracementVisibility = (extendData: RulerExtendData | undefined) => drawingVisibilityController?.resolveFibRetracementVisibility(extendData) ?? {
+    manualVisible: extendData?.manualVisible !== false,
+    periodVisible: true,
+    visible: extendData?.manualVisible !== false,
+  }
   const restoreObjectCurrentPeriodVisibility = (kind: 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement', objectId?: string) => {
-    if (kind === 'fibRetracement') return
     drawingVisibilityController?.restoreObjectCurrentPeriodVisibility(kind, objectId)
   }
   const getHorizontalLineVisible = () => drawingVisibilityController?.getHorizontalLineVisible() ?? true
@@ -323,6 +328,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       horizontalLineOverlayIds,
       pendingTrendLineOverlayId,
       resolveHorizontalLineVisibility,
+      resolveFibRetracementVisibility,
       resolveRulerVisibility,
       resolveTrendLineVisibility,
       rulerOverlayIds,
@@ -368,6 +374,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
     horizontalLineOverlayIds,
     resolveHorizontalLineVisibility,
+    resolveFibRetracementVisibility,
     resolveRulerVisibility,
     resolveTrendLineVisibility,
     rulerOverlayIds,
@@ -744,7 +751,9 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
 
   drawingVisibilityController = createChartDrawingVisibilityController({
     chart,
+    fibOverlayIds,
     getPeriod,
+    getSelectedFibOverlayId: () => selectedFibOverlayId,
     getSelectedOverlayId: () => selectedOverlayId,
     getSelectedRulerOverlayId: () => selectedRulerOverlayId,
     getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
@@ -752,6 +761,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     publishHorizontalLineState: publishState,
     publishObjectTreeState,
     rulerOverlayIds,
+    selectedFibOverlayIds,
     selectedHorizontalLineOverlayIds,
     selectedRulerOverlayIds,
     trendLineOverlayIds,
@@ -927,6 +937,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
     horizontalLineOverlayIds,
     isHorizontalLineVisibleInCurrentPeriod,
+    isFibRetracementVisibleInCurrentPeriod,
     isRulerVisibleInCurrentPeriod,
     isTrendLineVisibleInCurrentPeriod,
     persistCurrentFibRetracements,

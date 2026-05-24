@@ -51,7 +51,22 @@ export function createRulerToolCommandHandler({
     setPendingRulerOptions(pendingOptions
       ? {
           ...pendingOptions,
+          fibBackgroundOpacity: typeof patch.fibBackgroundOpacity === 'number' ? patch.fibBackgroundOpacity : pendingOptions.fibBackgroundOpacity,
+          fibBackgroundVisible: typeof patch.fibBackgroundVisible === 'boolean' ? patch.fibBackgroundVisible : pendingOptions.fibBackgroundVisible,
+          fibHorizontalLineStyle: patch.fibHorizontalLineStyle ? normalizeLineStyle(patch.fibHorizontalLineStyle) : pendingOptions.fibHorizontalLineStyle,
+          fibLabelAlign: typeof patch.fibLabelAlign === 'string' ? patch.fibLabelAlign : pendingOptions.fibLabelAlign,
+          fibLabelFontSize: typeof patch.fibLabelFontSize === 'string' ? patch.fibLabelFontSize : pendingOptions.fibLabelFontSize,
+          fibLabelVAlign: typeof patch.fibLabelVAlign === 'string' ? patch.fibLabelVAlign : pendingOptions.fibLabelVAlign,
+          fibLevelDisplay: typeof patch.fibLevelDisplay === 'string' ? patch.fibLevelDisplay : pendingOptions.fibLevelDisplay,
+          fibLevelVisible: typeof patch.fibLevelVisible === 'boolean' ? patch.fibLevelVisible : pendingOptions.fibLevelVisible,
+          fibLevels: Array.isArray(patch.fibLevels) ? patch.fibLevels : pendingOptions.fibLevels,
+          fibPriceVisible: typeof patch.fibPriceVisible === 'boolean' ? patch.fibPriceVisible : pendingOptions.fibPriceVisible,
+          fibQuarterLineStyles: Array.isArray(patch.fibQuarterLineStyles) ? patch.fibQuarterLineStyles : pendingOptions.fibQuarterLineStyles,
+          fibQuarterSplitVisible: typeof patch.fibQuarterSplitVisible === 'boolean' ? patch.fibQuarterSplitVisible : pendingOptions.fibQuarterSplitVisible,
+          fibReverse: typeof patch.fibReverse === 'boolean' ? patch.fibReverse : pendingOptions.fibReverse,
           lineStyle: patch.lineStyle ? normalizeLineStyle(patch.lineStyle) : pendingOptions.lineStyle,
+          fibTrendLineStyle: patch.fibTrendLineStyle ? normalizeLineStyle(patch.fibTrendLineStyle) : pendingOptions.fibTrendLineStyle,
+          fibTrendLineVisible: typeof patch.fibTrendLineVisible === 'boolean' ? patch.fibTrendLineVisible : pendingOptions.fibTrendLineVisible,
           rulerStyle: style ? normalizeDrawingRulerStyle(style) : pendingOptions.rulerStyle,
           showPriceLabel: typeof patch.showPriceLabel === 'boolean' ? patch.showPriceLabel : pendingOptions.showPriceLabel,
           textStyle: patch.textStyle ? normalizeDrawingTextStyle(patch.textStyle) : pendingOptions.textStyle,
@@ -154,6 +169,21 @@ export function createRulerToolCommandHandler({
       setActiveObjectTreeOverlayId(selectedId)
       publishDrawingToolState({
         armed: getPendingRulerOverlayId() != null,
+        fibBackgroundOpacity: extendData?.fibBackgroundOpacity,
+        fibBackgroundVisible: extendData?.fibBackgroundVisible,
+        fibHorizontalLineStyle: extendData?.fibHorizontalLineStyle,
+        fibLabelAlign: extendData?.fibLabelAlign,
+        fibLabelFontSize: extendData?.fibLabelFontSize,
+        fibLabelVAlign: extendData?.fibLabelVAlign,
+        fibLevelDisplay: extendData?.fibLevelDisplay,
+        fibLevelVisible: extendData?.fibLevelVisible,
+        fibLevels: extendData?.fibLevels,
+        fibPriceVisible: extendData?.fibPriceVisible,
+        fibQuarterLineStyles: extendData?.fibQuarterLineStyles,
+        fibQuarterSplitVisible: extendData?.fibQuarterSplitVisible,
+        fibReverse: extendData?.fibReverse,
+        fibTrendLineStyle: extendData?.fibTrendLineStyle ? normalizeLineStyle(extendData.fibTrendLineStyle) : undefined,
+        fibTrendLineVisible: extendData?.fibTrendLineVisible,
         lineStyle: normalizeLineStyle(extendData?.lineStyle),
         locked: extendData?.locked === true,
         objectId: extendData?.objectId,
@@ -194,6 +224,21 @@ export function createRulerToolCommandHandler({
       persistCurrentRulers()
       publishDrawingToolState({
         armed: getPendingRulerOverlayId() != null,
+        fibBackgroundOpacity: extendData?.fibBackgroundOpacity,
+        fibBackgroundVisible: extendData?.fibBackgroundVisible,
+        fibHorizontalLineStyle: extendData?.fibHorizontalLineStyle,
+        fibLabelAlign: extendData?.fibLabelAlign,
+        fibLabelFontSize: extendData?.fibLabelFontSize,
+        fibLabelVAlign: extendData?.fibLabelVAlign,
+        fibLevelDisplay: extendData?.fibLevelDisplay,
+        fibLevelVisible: extendData?.fibLevelVisible,
+        fibLevels: extendData?.fibLevels,
+        fibPriceVisible: extendData?.fibPriceVisible,
+        fibQuarterLineStyles: extendData?.fibQuarterLineStyles,
+        fibQuarterSplitVisible: extendData?.fibQuarterSplitVisible,
+        fibReverse: extendData?.fibReverse,
+        fibTrendLineStyle: extendData?.fibTrendLineStyle ? normalizeLineStyle(extendData.fibTrendLineStyle) : undefined,
+        fibTrendLineVisible: extendData?.fibTrendLineVisible,
         lineStyle: normalizeLineStyle(extendData?.lineStyle),
         locked,
         objectId: extendData?.objectId,
@@ -213,6 +258,33 @@ export function createRulerToolCommandHandler({
 
     if (command.action === 'updateSelectedRulerStyle' && command.rulerStyle) {
       updatePendingAndSelected({ rulerStyle: normalizeDrawingRulerStyle(command.rulerStyle) }, command.rulerStyle)
+      return
+    }
+
+    if (command.action === 'updateSelectedFibTrendLine') {
+      updatePendingAndSelected({
+        ...(command.fibTrendLineStyle ? { fibTrendLineStyle: normalizeLineStyle(command.fibTrendLineStyle) } : {}),
+        ...(typeof command.fibTrendLineVisible === 'boolean' ? { fibTrendLineVisible: command.fibTrendLineVisible } : {}),
+      })
+      return
+    }
+
+    if (command.action === 'updateSelectedFibRetracementStyle') {
+      updatePendingAndSelected({
+        ...(typeof command.fibBackgroundOpacity === 'number' ? { fibBackgroundOpacity: command.fibBackgroundOpacity } : {}),
+        ...(typeof command.fibBackgroundVisible === 'boolean' ? { fibBackgroundVisible: command.fibBackgroundVisible } : {}),
+        ...(command.fibHorizontalLineStyle ? { fibHorizontalLineStyle: normalizeLineStyle(command.fibHorizontalLineStyle) } : {}),
+        ...(typeof command.fibLabelAlign === 'string' ? { fibLabelAlign: command.fibLabelAlign } : {}),
+        ...(typeof command.fibLabelFontSize === 'string' ? { fibLabelFontSize: command.fibLabelFontSize } : {}),
+        ...(typeof command.fibLabelVAlign === 'string' ? { fibLabelVAlign: command.fibLabelVAlign } : {}),
+        ...(typeof command.fibLevelDisplay === 'string' ? { fibLevelDisplay: command.fibLevelDisplay } : {}),
+        ...(typeof command.fibLevelVisible === 'boolean' ? { fibLevelVisible: command.fibLevelVisible } : {}),
+        ...(Array.isArray(command.fibLevels) ? { fibLevels: command.fibLevels } : {}),
+        ...(typeof command.fibPriceVisible === 'boolean' ? { fibPriceVisible: command.fibPriceVisible } : {}),
+        ...(Array.isArray(command.fibQuarterLineStyles) ? { fibQuarterLineStyles: command.fibQuarterLineStyles.map(normalizeLineStyle) } : {}),
+        ...(typeof command.fibQuarterSplitVisible === 'boolean' ? { fibQuarterSplitVisible: command.fibQuarterSplitVisible } : {}),
+        ...(typeof command.fibReverse === 'boolean' ? { fibReverse: command.fibReverse } : {}),
+      })
       return
     }
 
@@ -244,6 +316,21 @@ export function createRulerToolCommandHandler({
       persistCurrentRulers()
       publishDrawingToolState({
         armed: false,
+        fibBackgroundOpacity: extendData?.fibBackgroundOpacity,
+        fibBackgroundVisible: extendData?.fibBackgroundVisible,
+        fibHorizontalLineStyle: extendData?.fibHorizontalLineStyle,
+        fibLabelAlign: extendData?.fibLabelAlign,
+        fibLabelFontSize: extendData?.fibLabelFontSize,
+        fibLabelVAlign: extendData?.fibLabelVAlign,
+        fibLevelDisplay: extendData?.fibLevelDisplay,
+        fibLevelVisible: extendData?.fibLevelVisible,
+        fibLevels: extendData?.fibLevels,
+        fibPriceVisible: extendData?.fibPriceVisible,
+        fibQuarterLineStyles: extendData?.fibQuarterLineStyles,
+        fibQuarterSplitVisible: extendData?.fibQuarterSplitVisible,
+        fibReverse: extendData?.fibReverse,
+        fibTrendLineStyle: extendData?.fibTrendLineStyle ? normalizeLineStyle(extendData.fibTrendLineStyle) : undefined,
+        fibTrendLineVisible: extendData?.fibTrendLineVisible,
         lineStyle: normalizeLineStyle(extendData?.lineStyle),
         locked: false,
         objectId: extendData?.objectId,
@@ -264,6 +351,21 @@ export function createRulerToolCommandHandler({
     const options: PendingRulerOptions = {
       lineStyle: normalizeLineStyle(command.lineStyle),
       locked: command.locked === true,
+      fibBackgroundOpacity: command.fibBackgroundOpacity,
+      fibBackgroundVisible: command.fibBackgroundVisible,
+      fibTrendLineStyle: command.fibTrendLineStyle ? normalizeLineStyle(command.fibTrendLineStyle) : undefined,
+      fibTrendLineVisible: command.fibTrendLineVisible,
+      fibHorizontalLineStyle: command.fibHorizontalLineStyle ? normalizeLineStyle(command.fibHorizontalLineStyle) : undefined,
+      fibLabelAlign: command.fibLabelAlign,
+      fibLabelFontSize: command.fibLabelFontSize,
+      fibLabelVAlign: command.fibLabelVAlign,
+      fibLevelDisplay: command.fibLevelDisplay,
+      fibLevelVisible: command.fibLevelVisible,
+      fibLevels: command.fibLevels,
+      fibPriceVisible: command.fibPriceVisible,
+      fibQuarterLineStyles: Array.isArray(command.fibQuarterLineStyles) ? command.fibQuarterLineStyles.map(normalizeLineStyle) : undefined,
+      fibQuarterSplitVisible: command.fibQuarterSplitVisible,
+      fibReverse: command.fibReverse,
       rulerStyle: normalizeDrawingRulerStyle(command.rulerStyle),
       showPriceLabel: command.showPriceLabel !== false,
       textStyle: command.textStyle,

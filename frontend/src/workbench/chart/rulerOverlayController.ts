@@ -7,11 +7,25 @@ import { normalizeDrawingRulerStyle } from '../rightDrawer/rulerDrawingStyle'
 import type { DrawingRulerStyle } from '../rightDrawer/rulerDrawingStyle'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import { normalizeLineStyle, trendOverlayStylesFromLine } from './chartDrawingStyle'
-import type { RulerExtendData, ScreenPoint } from './chartDrawingTypes'
-import { isCoordinate } from './chartDrawingTypes'
-import { isTwoPointEndpointFigureKey, resolveTwoPointEndpointPressStart, shouldActivateTwoPointEndpointDrag } from './twoPointDrawingInteraction'
+import type { RulerExtendData } from './chartDrawingTypes'
+import { resolveTwoPointEndpointPressStart, shouldActivateTwoPointEndpointDrag } from './twoPointDrawingInteraction'
 
 export type PendingRulerOptions = {
+  fibBackgroundOpacity?: number
+  fibBackgroundVisible?: boolean
+  fibHorizontalLineStyle?: SettingsLineSwatchValue
+  fibLabelAlign?: string
+  fibLabelFontSize?: string
+  fibLabelVAlign?: string
+  fibLevelDisplay?: string
+  fibLevelVisible?: boolean
+  fibLevels?: Array<{ color?: string; enabled?: boolean; opacity?: number; value?: string }>
+  fibPriceVisible?: boolean
+  fibQuarterLineStyles?: SettingsLineSwatchValue[]
+  fibQuarterSplitVisible?: boolean
+  fibReverse?: boolean
+  fibTrendLineStyle?: SettingsLineSwatchValue
+  fibTrendLineVisible?: boolean
   lineStyle: SettingsLineSwatchValue
   locked: boolean
   rulerStyle: DrawingRulerStyle
@@ -50,61 +64,6 @@ export function createRulerOverlayFactory({
 }) {
   let pendingEndpointPress: { overlayId: string; pointIndex: number; x: number; y: number } | null = null
   let protectSelectedAfterMove: { overlayId: string; time: number } | null = null
-  let bodyMoveState: {
-    overlayId: string
-    paneId: string
-    startX: number
-    startY: number
-    points: Array<{
-      pixel: ScreenPoint
-      point: { dataIndex?: number; timestamp?: number; value?: number }
-    }>
-  } | null = null
-
-  const resolveOverlayPointPixel = (point: { dataIndex?: number; timestamp?: number; value?: number }, paneId: string): ScreenPoint | null => {
-    const value = Number(point?.value)
-    if (!Number.isFinite(value)) return null
-    const dataIndex = Number(point?.dataIndex)
-    const timestamp = Number(point?.timestamp)
-    const pixel = chart.convertToPixel({
-      ...(Number.isFinite(dataIndex) ? { dataIndex } : {}),
-      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
-      value,
-    }, { paneId })
-    const coordinate = isCoordinate(pixel) ? pixel : pixel[0]
-    const x = Number(coordinate?.x)
-    const y = Number(coordinate?.y)
-    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null
-  }
-
-  const resolvePointFromPixel = (pixel: ScreenPoint, paneId: string) => {
-    const point = chart.convertFromPixel([pixel], { paneId })
-    const coordinate = Array.isArray(point) ? point[0] : point
-    const dataIndex = Number(coordinate?.dataIndex)
-    const timestamp = Number(coordinate?.timestamp)
-    const value = Number(coordinate?.value)
-    return {
-      ...(Number.isFinite(dataIndex) ? { dataIndex } : {}),
-      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
-      ...(Number.isFinite(value) ? { value } : {}),
-    }
-  }
-
-  const beginBodyMove = (overlay: { id: string; paneId?: string; points?: Array<{ dataIndex?: number; timestamp?: number; value?: number }> }, paneId: string, event: { x?: number; y?: number }) => {
-    const startX = Number(event.x)
-    const startY = Number(event.y)
-    if (!Number.isFinite(startX) || !Number.isFinite(startY)) {
-      bodyMoveState = null
-      return
-    }
-    const points = (overlay.points ?? []).slice(0, 2)
-      .map((point) => {
-        const pixel = resolveOverlayPointPixel(point, paneId)
-        return pixel ? { pixel, point: { ...point } } : null
-      })
-      .filter((point): point is NonNullable<typeof point> => point != null)
-    bodyMoveState = points.length >= 2 ? { overlayId: overlay.id, paneId, points, startX, startY } : null
-  }
 
   return function createRulerOverlay({
     lineStyle,
@@ -117,6 +76,21 @@ export function createRulerOverlayFactory({
     selected,
     showPriceLabel,
     textStyle,
+    fibBackgroundOpacity,
+    fibBackgroundVisible,
+    fibTrendLineStyle,
+    fibTrendLineVisible,
+    fibHorizontalLineStyle,
+    fibLabelAlign,
+    fibLabelFontSize,
+    fibLabelVAlign,
+    fibLevelDisplay,
+    fibLevelVisible,
+    fibLevels,
+    fibPriceVisible,
+    fibQuarterLineStyles,
+    fibQuarterSplitVisible,
+    fibReverse,
   }: PendingRulerOptions & {
     manualVisible?: boolean
     objectId: string
@@ -146,6 +120,21 @@ export function createRulerOverlayFactory({
         selected,
         showPriceLabel,
         textStyle: normalizeDrawingTextStyle(textStyle),
+        fibBackgroundOpacity,
+        fibBackgroundVisible,
+        fibTrendLineStyle,
+        fibTrendLineVisible,
+        fibHorizontalLineStyle,
+        fibLabelAlign,
+        fibLabelFontSize,
+        fibLabelVAlign,
+        fibLevelDisplay,
+        fibLevelVisible,
+        fibLevels,
+        fibPriceVisible,
+        fibQuarterLineStyles,
+        fibQuarterSplitVisible,
+        fibReverse,
       },
       lock: locked,
       points,
@@ -167,6 +156,21 @@ export function createRulerOverlayFactory({
         })
         publishDrawingToolState({
           armed: false,
+          fibBackgroundOpacity,
+          fibBackgroundVisible,
+          fibTrendLineStyle: fibTrendLineStyle ? normalizeLineStyle(fibTrendLineStyle) : undefined,
+          fibTrendLineVisible,
+          fibHorizontalLineStyle,
+          fibLabelAlign,
+          fibLabelFontSize,
+          fibLabelVAlign,
+          fibLevelDisplay,
+          fibLevelVisible,
+          fibLevels,
+          fibPriceVisible,
+          fibQuarterLineStyles,
+          fibQuarterSplitVisible,
+          fibReverse,
           lineStyle: normalizeLineStyle(lineStyle),
           locked,
           objectId,
@@ -206,9 +210,23 @@ export function createRulerOverlayFactory({
           },
         })
         pendingEndpointPress = null
-        bodyMoveState = null
         publishDrawingToolState({
           armed: false,
+          fibBackgroundOpacity: extendData?.fibBackgroundOpacity,
+          fibBackgroundVisible: extendData?.fibBackgroundVisible,
+          fibTrendLineStyle: extendData?.fibTrendLineStyle ? normalizeLineStyle(extendData.fibTrendLineStyle) : undefined,
+          fibTrendLineVisible: extendData?.fibTrendLineVisible,
+          fibHorizontalLineStyle: extendData?.fibHorizontalLineStyle,
+          fibLabelAlign: extendData?.fibLabelAlign,
+          fibLabelFontSize: extendData?.fibLabelFontSize,
+          fibLabelVAlign: extendData?.fibLabelVAlign,
+          fibLevelDisplay: extendData?.fibLevelDisplay,
+          fibLevelVisible: extendData?.fibLevelVisible,
+          fibLevels: extendData?.fibLevels,
+          fibPriceVisible: extendData?.fibPriceVisible,
+          fibQuarterLineStyles: extendData?.fibQuarterLineStyles,
+          fibQuarterSplitVisible: extendData?.fibQuarterSplitVisible,
+          fibReverse: extendData?.fibReverse,
           lineStyle: normalizeLineStyle(extendData?.lineStyle),
           locked: extendData?.locked === true,
           objectId: extendData?.objectId,
@@ -226,11 +244,8 @@ export function createRulerOverlayFactory({
       onPressedMoveStart: (event) => {
         const { overlay } = event
         const extendData = overlay.extendData as RulerExtendData | undefined
-        const endpointPressed = isTwoPointEndpointFigureKey(event.figureKey)
         setActiveRuler(overlay.id)
         pendingEndpointPress = resolveTwoPointEndpointPressStart(event)
-        if (!endpointPressed) beginBodyMove(overlay, overlay.paneId || paneId, event as { x?: number; y?: number })
-        else bodyMoveState = null
         chart.overrideOverlay({
           id: overlay.id,
           extendData: {
@@ -243,6 +258,21 @@ export function createRulerOverlayFactory({
         })
         publishDrawingToolState({
           armed: false,
+          fibBackgroundOpacity: extendData?.fibBackgroundOpacity,
+          fibBackgroundVisible: extendData?.fibBackgroundVisible,
+          fibTrendLineStyle: extendData?.fibTrendLineStyle ? normalizeLineStyle(extendData.fibTrendLineStyle) : undefined,
+          fibTrendLineVisible: extendData?.fibTrendLineVisible,
+          fibHorizontalLineStyle: extendData?.fibHorizontalLineStyle,
+          fibLabelAlign: extendData?.fibLabelAlign,
+          fibLabelFontSize: extendData?.fibLabelFontSize,
+          fibLabelVAlign: extendData?.fibLabelVAlign,
+          fibLevelDisplay: extendData?.fibLevelDisplay,
+          fibLevelVisible: extendData?.fibLevelVisible,
+          fibLevels: extendData?.fibLevels,
+          fibPriceVisible: extendData?.fibPriceVisible,
+          fibQuarterLineStyles: extendData?.fibQuarterLineStyles,
+          fibQuarterSplitVisible: extendData?.fibQuarterSplitVisible,
+          fibReverse: extendData?.fibReverse,
           lineStyle: normalizeLineStyle(extendData?.lineStyle),
           locked: extendData?.locked === true,
           objectId: extendData?.objectId,
@@ -273,25 +303,11 @@ export function createRulerOverlayFactory({
             },
           })
           pendingEndpointPress = null
-          bodyMoveState = null
           return false
         }
         if (pendingEndpointPress) return false
         if (extendData?.endpointPressed === true) return false
-        if (!bodyMoveState || bodyMoveState.overlayId !== overlay.id) return false
-        const x = Number(event.x)
-        const y = Number(event.y)
-        if (!Number.isFinite(x) || !Number.isFinite(y)) return false
-        const dx = x - bodyMoveState.startX
-        const dy = y - bodyMoveState.startY
-        chart.overrideOverlay({
-          id: overlay.id,
-          points: bodyMoveState.points.map((point) => ({
-            ...point.point,
-            ...resolvePointFromPixel({ x: point.pixel.x + dx, y: point.pixel.y + dy }, bodyMoveState?.paneId ?? paneId),
-          })),
-        })
-        return true
+        return false
       },
       onRemoved: ({ overlay }) => {
         clearRemovedRuler(overlay.id)
@@ -306,6 +322,21 @@ export function createRulerOverlayFactory({
         chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, selected: true } })
         publishDrawingToolState({
           armed: false,
+          fibBackgroundOpacity: extendData?.fibBackgroundOpacity,
+          fibBackgroundVisible: extendData?.fibBackgroundVisible,
+          fibTrendLineStyle: extendData?.fibTrendLineStyle ? normalizeLineStyle(extendData.fibTrendLineStyle) : undefined,
+          fibTrendLineVisible: extendData?.fibTrendLineVisible,
+          fibHorizontalLineStyle: extendData?.fibHorizontalLineStyle,
+          fibLabelAlign: extendData?.fibLabelAlign,
+          fibLabelFontSize: extendData?.fibLabelFontSize,
+          fibLabelVAlign: extendData?.fibLabelVAlign,
+          fibLevelDisplay: extendData?.fibLevelDisplay,
+          fibLevelVisible: extendData?.fibLevelVisible,
+          fibLevels: extendData?.fibLevels,
+          fibPriceVisible: extendData?.fibPriceVisible,
+          fibQuarterLineStyles: extendData?.fibQuarterLineStyles,
+          fibQuarterSplitVisible: extendData?.fibQuarterSplitVisible,
+          fibReverse: extendData?.fibReverse,
           lineStyle: normalizeLineStyle(extendData?.lineStyle),
           locked: extendData?.locked === true,
           objectId: extendData?.objectId,

@@ -54,6 +54,26 @@ export type RulerExtendData = {
   showPriceLabel?: boolean
   textStyle?: DrawingTextStyle
   rulerStyle?: DrawingRulerStyle
+  fibBackgroundOpacity?: number
+  fibBackgroundVisible?: boolean
+  fibHorizontalLineStyle?: SettingsLineSwatchValue
+  fibLabelAlign?: string
+  fibLabelFontSize?: string
+  fibLabelVAlign?: string
+  fibLevelDisplay?: string
+  fibLevelVisible?: boolean
+  fibLevels?: Array<{
+    color?: string
+    enabled?: boolean
+    opacity?: number
+    value?: string
+  }>
+  fibPriceVisible?: boolean
+  fibQuarterLineStyles?: SettingsLineSwatchValue[]
+  fibQuarterSplitVisible?: boolean
+  fibReverse?: boolean
+  fibTrendLineVisible?: boolean
+  fibTrendLineStyle?: SettingsLineSwatchValue
 }
 
 export type HorizontalLineFigure = {

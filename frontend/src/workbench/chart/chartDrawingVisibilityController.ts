@@ -3,6 +3,8 @@ import {
   horizontalLineObjectVisibilityRangeKey,
   horizontalLineVisibilityRangeKey,
   isDrawingVisibilityRangeKey,
+  fibRetracementObjectVisibilityRangeKey,
+  fibRetracementVisibilityRangeKey,
   rulerObjectVisibilityRangeKey,
   rulerVisibilityRangeKey,
   trendLineObjectVisibilityRangeKey,
@@ -23,20 +25,25 @@ export type DrawingVisibilityState = {
 export function createChartDrawingVisibilityController({
   chart,
   getPeriod,
+  getSelectedFibOverlayId,
   getSelectedOverlayId,
   getSelectedRulerOverlayId,
   getSelectedTrendLineOverlayId,
+  fibOverlayIds,
   horizontalLineOverlayIds,
   publishHorizontalLineState,
   publishObjectTreeState,
   rulerOverlayIds,
   selectedHorizontalLineOverlayIds,
+  selectedFibOverlayIds,
   selectedRulerOverlayIds,
   trendLineOverlayIds,
   updateOverlayState,
 }: {
   chart: Chart
+  fibOverlayIds: Set<string>
   getPeriod: () => string
+  getSelectedFibOverlayId: () => string | null
   getSelectedOverlayId: () => string | null
   getSelectedRulerOverlayId: () => string | null
   getSelectedTrendLineOverlayId: () => string | null
@@ -45,6 +52,7 @@ export function createChartDrawingVisibilityController({
   publishObjectTreeState: () => void
   rulerOverlayIds: Set<string>
   selectedHorizontalLineOverlayIds: Set<string>
+  selectedFibOverlayIds: Set<string>
   selectedRulerOverlayIds: Set<string>
   trendLineOverlayIds: Set<string>
   updateOverlayState: (id: string | undefined, patch: Record<string, unknown>) => void
@@ -63,16 +71,22 @@ export function createChartDrawingVisibilityController({
     isStoredVisibilityRangePeriodVisible(rulerObjectVisibilityRangeKey(objectId), getPeriod())
   )
 
+  const isFibRetracementVisibleInCurrentPeriod = (objectId?: string) => (
+    isStoredVisibilityRangePeriodVisible(fibRetracementObjectVisibilityRangeKey(objectId), getPeriod())
+  )
+
   const restoreCurrentPeriodVisibility = (key: string | undefined) => {
     restoreVisibilityRangeCurrentPeriod(key, getPeriod())
   }
 
-  const restoreObjectCurrentPeriodVisibility = (kind: 'horizontalLine' | 'trendLine' | 'ruler', objectId?: string) => {
+  const restoreObjectCurrentPeriodVisibility = (kind: 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement', objectId?: string) => {
     restoreCurrentPeriodVisibility(kind === 'horizontalLine'
       ? horizontalLineObjectVisibilityRangeKey(objectId)
       : kind === 'trendLine'
         ? trendLineObjectVisibilityRangeKey(objectId)
-        : rulerObjectVisibilityRangeKey(objectId))
+        : kind === 'ruler'
+          ? rulerObjectVisibilityRangeKey(objectId)
+          : fibRetracementObjectVisibilityRangeKey(objectId))
   }
 
   const resolveHorizontalLineVisibility = (extendData: HorizontalLineExtendData | undefined): DrawingVisibilityState => {
@@ -98,6 +112,16 @@ export function createChartDrawingVisibilityController({
   const resolveRulerVisibility = (extendData: RulerExtendData | undefined): DrawingVisibilityState => {
     const manualVisible = extendData?.manualVisible !== false
     const periodVisible = isRulerVisibleInCurrentPeriod(extendData?.objectId)
+    return {
+      manualVisible,
+      periodVisible,
+      visible: manualVisible && periodVisible,
+    }
+  }
+
+  const resolveFibRetracementVisibility = (extendData: RulerExtendData | undefined): DrawingVisibilityState => {
+    const manualVisible = extendData?.manualVisible !== false
+    const periodVisible = isFibRetracementVisibleInCurrentPeriod(extendData?.objectId)
     return {
       manualVisible,
       periodVisible,
@@ -203,10 +227,47 @@ export function createChartDrawingVisibilityController({
     publishObjectTreeState()
   }
 
+  const applyFibRetracementVisibility = () => {
+    fibOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) return
+      const extendData = overlay.extendData as RulerExtendData | undefined
+      const { manualVisible, periodVisible, visible } = resolveFibRetracementVisibility(extendData)
+      const selected = selectedFibOverlayIds.has(id) || getSelectedFibOverlayId() === id || extendData?.selected === true
+      if (overlay.visible !== manualVisible || extendData?.manualVisible !== manualVisible || extendData?.periodVisible !== periodVisible || extendData?.selected !== selected) {
+        chart.overrideOverlay({
+          id,
+          extendData: {
+            ...(overlay.extendData ?? {}),
+            manualVisible,
+            periodVisible,
+            selected,
+          },
+          visible: manualVisible,
+        })
+      }
+      if (!visible) {
+        chart.overrideOverlay({
+          id,
+          extendData: {
+            ...(overlay.extendData ?? {}),
+            endpointPressed: false,
+            hovered: false,
+            pressed: false,
+            pressedPointIndex: undefined,
+            selected,
+          },
+        })
+      }
+    })
+    publishObjectTreeState()
+  }
+
   const applyDrawingVisibility = () => {
     applyHorizontalLineVisibility()
     applyTrendLineVisibility()
     applyRulerVisibility()
+    applyFibRetracementVisibility()
   }
 
   const handleVisibilityRangeChanged = (event: Event) => {
@@ -216,12 +277,13 @@ export function createChartDrawingVisibilityController({
   }
 
   const handleStorage = (event: StorageEvent) => {
-    if (!event.key || (!event.key.includes(horizontalLineVisibilityRangeKey) && !event.key.includes(trendLineVisibilityRangeKey) && !event.key.includes(rulerVisibilityRangeKey))) return
+    if (!event.key || (!event.key.includes(horizontalLineVisibilityRangeKey) && !event.key.includes(trendLineVisibilityRangeKey) && !event.key.includes(rulerVisibilityRangeKey) && !event.key.includes(fibRetracementVisibilityRangeKey))) return
     applyDrawingVisibility()
   }
 
   return {
     applyDrawingVisibility,
+    applyFibRetracementVisibility,
     applyHorizontalLineVisibility,
     applyRulerVisibility,
     applyTrendLineVisibility,
@@ -229,8 +291,10 @@ export function createChartDrawingVisibilityController({
     handleStorage,
     handleVisibilityRangeChanged,
     isHorizontalLineVisibleInCurrentPeriod,
+    isFibRetracementVisibleInCurrentPeriod,
     isRulerVisibleInCurrentPeriod,
     isTrendLineVisibleInCurrentPeriod,
+    resolveFibRetracementVisibility,
     resolveHorizontalLineVisibility,
     resolveRulerVisibility,
     resolveTrendLineVisibility,

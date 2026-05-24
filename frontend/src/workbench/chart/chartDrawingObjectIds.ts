@@ -1,4 +1,4 @@
-import type { StoredHorizontalLineDrawing, StoredRulerDrawing, StoredTrendLineDrawing } from '../rightDrawer/drawingObjectPersistence'
+import type { StoredFibRetracementDrawing, StoredHorizontalLineDrawing, StoredRulerDrawing, StoredTrendLineDrawing } from '../rightDrawer/drawingObjectPersistence'
 
 let horizontalLineObjectIdSeed = 0
 let trendLineObjectIdSeed = 0
@@ -46,7 +46,7 @@ export function syncRulerObjectIdSeed(drawings: StoredRulerDrawing[]) {
   })
 }
 
-export function syncFibRetracementObjectIdSeed(drawings: StoredRulerDrawing[]) {
+export function syncFibRetracementObjectIdSeed(drawings: StoredFibRetracementDrawing[]) {
   drawings.forEach((drawing) => {
     const value = numericFibRetracementObjectIdValue(drawing.objectId)
     if (Number.isFinite(value)) fibRetracementObjectIdSeed = Math.max(fibRetracementObjectIdSeed, value)

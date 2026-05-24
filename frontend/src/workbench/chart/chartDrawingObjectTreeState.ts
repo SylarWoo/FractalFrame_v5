@@ -23,6 +23,7 @@ export function collectDrawingObjectTreeState({
   horizontalLineOverlayIds,
   pendingTrendLineOverlayId,
   resolveHorizontalLineVisibility,
+  resolveFibRetracementVisibility,
   resolveRulerVisibility,
   resolveTrendLineVisibility,
   rulerOverlayIds,
@@ -40,6 +41,7 @@ export function collectDrawingObjectTreeState({
   horizontalLineOverlayIds: Set<string>
   pendingTrendLineOverlayId: string | null
   resolveHorizontalLineVisibility: (extendData: HorizontalLineExtendData | undefined) => DrawingVisibility
+  resolveFibRetracementVisibility: (extendData: RulerExtendData | undefined) => DrawingVisibility
   resolveRulerVisibility: (extendData: RulerExtendData | undefined) => DrawingVisibility
   resolveTrendLineVisibility: (extendData: TrendLineExtendData | undefined) => DrawingVisibility
   rulerOverlayIds: Set<string>
@@ -57,6 +59,7 @@ export function collectDrawingObjectTreeState({
     horizontalLineOverlayIds,
     pendingTrendLineOverlayId,
     resolveHorizontalLineVisibility,
+    resolveFibRetracementVisibility,
     resolveRulerVisibility,
     resolveTrendLineVisibility,
     rulerOverlayIds,
@@ -95,6 +98,7 @@ export function resolveDrawingObjectTreeTarget({
     horizontalLineOverlayIds,
     pendingTrendLineOverlayId: null,
     resolveHorizontalLineVisibility: () => ({ manualVisible: true, periodVisible: true, visible: true }),
+    resolveFibRetracementVisibility: () => ({ manualVisible: true, periodVisible: true, visible: true }),
     resolveRulerVisibility: () => ({ manualVisible: true, periodVisible: true, visible: true }),
     resolveTrendLineVisibility: () => ({ manualVisible: true, periodVisible: true, visible: true }),
     rulerOverlayIds,
@@ -114,6 +118,7 @@ function createDrawingObjectTreeStateAdapters({
   horizontalLineOverlayIds,
   pendingTrendLineOverlayId,
   resolveHorizontalLineVisibility,
+  resolveFibRetracementVisibility,
   resolveRulerVisibility,
   resolveTrendLineVisibility,
   rulerOverlayIds,
@@ -130,6 +135,7 @@ function createDrawingObjectTreeStateAdapters({
   horizontalLineOverlayIds: Set<string>
   pendingTrendLineOverlayId: string | null
   resolveHorizontalLineVisibility: (extendData: HorizontalLineExtendData | undefined) => DrawingVisibility
+  resolveFibRetracementVisibility: (extendData: RulerExtendData | undefined) => DrawingVisibility
   resolveRulerVisibility: (extendData: RulerExtendData | undefined) => DrawingVisibility
   resolveTrendLineVisibility: (extendData: TrendLineExtendData | undefined) => DrawingVisibility
   rulerOverlayIds: Set<string>
@@ -212,7 +218,7 @@ function createDrawingObjectTreeStateAdapters({
           if (!overlay) return null
           if (overlay.points.length < 2) return null
           const extendData = overlay.extendData as RulerExtendData | undefined
-          const visibility = resolveRulerVisibility(extendData)
+          const visibility = resolveFibRetracementVisibility(extendData)
           return {
             id: extendData?.objectId || id,
             kind: 'ruler',
