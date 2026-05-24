@@ -1,15 +1,15 @@
 {
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
-    "lastTickAt": "14:27:16",
+    "lastTickAt": "14:57:10",
     "log": [
-      "14:20:11  Realtime feed connected",
-      "14:20:11  Realtime restored for 10 symbols",
-      "14:19:59  Realtime feed connected",
-      "14:19:59  Realtime restored for 10 symbols",
-      "14:19:14  Realtime feed connected",
-      "14:19:14  Realtime restored for 10 symbols",
-      "14:12:26  Realtime feed connected",
-      "14:12:26  Realtime restored for 10 symbols"
+      "14:55:03  Realtime feed connected",
+      "14:55:03  Realtime restored for 10 symbols",
+      "14:53:39  Realtime feed connected",
+      "14:53:39  Realtime restored for 10 symbols",
+      "14:51:17  Realtime feed connected",
+      "14:51:17  Realtime restored for 10 symbols",
+      "14:47:48  Realtime feed connected",
+      "14:47:48  Realtime restored for 10 symbols"
     ],
     "ticks": {
       "1INCHUSDm": {
@@ -36,20 +36,20 @@
         "dayOpen": 4535.491,
         "change": -27.52900000000045,
         "changePercent": -0.6069684627309468,
-        "publishedAt": "2026-05-24T06:27:16Z"
+        "publishedAt": "2026-05-24T06:57:10Z"
       },
       "BTCUSDm": {
         "symbol": "BTCUSDm",
-        "bid": 76641.57,
-        "ask": 76655.57,
-        "last": 76648.57,
+        "bid": 76887.54,
+        "ask": 76901.54,
+        "last": 76894.54,
         "volume": 0,
-        "time": 1779604030,
-        "timeMsc": 1779604030710,
+        "time": 1779605829,
+        "timeMsc": 1779605829752,
         "dayOpen": 76657.63,
-        "change": -9.059999999997672,
-        "changePercent": -0.011818784379320976,
-        "publishedAt": "2026-05-24T06:27:16Z"
+        "change": 236.90999999998894,
+        "changePercent": 0.30904947100502445,
+        "publishedAt": "2026-05-24T06:57:10Z"
       },
       "DXYm": {
         "symbol": "DXYm",
@@ -62,7 +62,7 @@
         "dayOpen": 99.195,
         "change": 0.13300000000000978,
         "changePercent": 0.13407933867635444,
-        "publishedAt": "2026-05-24T06:27:16Z"
+        "publishedAt": "2026-05-24T06:57:10Z"
       },
       "EURUSDm": {
         "symbol": "EURUSDm",
@@ -75,7 +75,7 @@
         "dayOpen": 1.16173,
         "change": -0.0014899999999999913,
         "changePercent": -0.12825699603177945,
-        "publishedAt": "2026-05-24T06:27:16Z"
+        "publishedAt": "2026-05-24T06:57:10Z"
       },
       "GBPUSDm": {
         "symbol": "GBPUSDm",
@@ -88,7 +88,7 @@
         "dayOpen": 1.3431600000000001,
         "change": 0.000009999999999843467,
         "changePercent": 0.0007445129396232367,
-        "publishedAt": "2026-05-24T06:27:16Z"
+        "publishedAt": "2026-05-24T06:57:10Z"
       },
       "USDJPYm": {
         "symbol": "USDJPYm",
@@ -101,20 +101,20 @@
         "dayOpen": 159.022,
         "change": 0.17900000000003047,
         "changePercent": 0.11256304159174861,
-        "publishedAt": "2026-05-24T06:27:16Z"
+        "publishedAt": "2026-05-24T06:57:10Z"
       },
       "ETHUSDm": {
         "symbol": "ETHUSDm",
-        "bid": 2115.15,
-        "ask": 2116.55,
-        "last": 2115.8500000000004,
+        "bid": 2124.24,
+        "ask": 2125.64,
+        "last": 2124.9399999999996,
         "volume": 0,
-        "time": 1779604030,
-        "timeMsc": 1779604030981,
+        "time": 1779605824,
+        "timeMsc": 1779605824395,
         "dayOpen": 2114.53,
-        "change": 1.3200000000001637,
-        "changePercent": 0.0624252197888024,
-        "publishedAt": "2026-05-24T06:27:16Z"
+        "change": 10.4099999999994,
+        "changePercent": 0.49230798333432957,
+        "publishedAt": "2026-05-24T06:57:10Z"
       },
       "XAGUSDm": {
         "symbol": "XAGUSDm",
@@ -127,7 +127,7 @@
         "dayOpen": 76.62,
         "change": -1.1470000000000056,
         "changePercent": -1.4969981728008426,
-        "publishedAt": "2026-05-24T06:27:16Z"
+        "publishedAt": "2026-05-24T06:57:10Z"
       },
       "USTEC_x100m": {
         "symbol": "USTEC_x100m",
@@ -140,7 +140,7 @@
         "dayOpen": 29495.81,
         "change": -16.520000000000437,
         "changePercent": -0.056007955028190226,
-        "publishedAt": "2026-05-24T06:27:16Z"
+        "publishedAt": "2026-05-24T06:57:10Z"
       },
       "US30m": {
         "symbol": "US30m",
@@ -153,24 +153,24 @@
         "dayOpen": 50419.7,
         "change": 179.0500000000029,
         "changePercent": 0.35511913002259615,
-        "publishedAt": "2026-05-24T06:27:16Z"
+        "publishedAt": "2026-05-24T06:57:10Z"
       }
     }
   },
   "fractalframe:chartViewport:v3:global:M5": {
     "barSpace": 1.6269604319784439,
     "dataLength": 10000,
-    "offsetRightDistance": 0,
+    "offsetRightDistance": 148,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T06:27:16.345Z",
+    "savedAt": "2026-05-24T06:57:10.337Z",
     "visibleTo": 10000,
     "yAxisRange": {
-      "from": 4469.856433145227,
+      "from": 4353.923117618137,
       "range": 370.9866096866863,
-      "realFrom": 4469.856433145227,
+      "realFrom": 4353.923117618137,
       "realRange": 370.9866096866863,
-      "realTo": 4840.843042831913,
-      "to": 4840.843042831913
+      "realTo": 4724.909727304824,
+      "to": 4724.909727304824
     },
     "symbol": "XAUUSDm",
     "period": "M5"
@@ -178,19 +178,356 @@
   "fractalframe:chartViewport:v3:latest": {
     "barSpace": 1.6269604319784439,
     "dataLength": 10000,
-    "offsetRightDistance": 0,
+    "offsetRightDistance": 148,
     "rightTimestamp": 1779483300000,
-    "savedAt": "2026-05-24T06:27:16.345Z",
+    "savedAt": "2026-05-24T06:57:10.337Z",
     "visibleTo": 10000,
     "yAxisRange": {
-      "from": 4469.856433145227,
+      "from": 4353.923117618137,
       "range": 370.9866096866863,
-      "realFrom": 4469.856433145227,
+      "realFrom": 4353.923117618137,
       "realRange": 370.9866096866863,
-      "realTo": 4840.843042831913,
-      "to": 4840.843042831913
+      "realTo": 4724.909727304824,
+      "to": 4724.909727304824
     },
     "symbol": "XAUUSDm",
     "period": "M5"
-  }
+  },
+  "fractalframe:mt5ImportCenterShortcutMenuPeriods:v1": [
+    {
+      "period": "M1",
+      "rowsCount": 3195259
+    },
+    {
+      "period": "M5",
+      "rowsCount": 640285
+    },
+    {
+      "period": "M15",
+      "rowsCount": 213694
+    },
+    {
+      "period": "M30",
+      "rowsCount": 106960
+    },
+    {
+      "period": "H1",
+      "rowsCount": 53590
+    },
+    {
+      "period": "H2",
+      "rowsCount": 28058
+    },
+    {
+      "period": "H3",
+      "rowsCount": 18805
+    },
+    {
+      "period": "H4",
+      "rowsCount": 14149
+    },
+    {
+      "period": "D1",
+      "rowsCount": 2505
+    },
+    {
+      "period": "W1",
+      "rowsCount": 474
+    },
+    {
+      "period": "MN1",
+      "rowsCount": 110
+    }
+  ],
+  "fractalframe:mt5ImportCenterWatchlistRealtimeEnabled:v1": "1",
+  "fractalframe:mt5ImportCenterQuery:v1": "",
+  "fractalframe:mt5ImportCenterSelectedTab:v1": "watchlist",
+  "fractalframe:rightWidgetDrawerWidthPx:v1": "373",
+  "fractalframe:indicatorShortcutKeys:v1": [
+    "RSI",
+    "Stoch",
+    "MACD",
+    "VI",
+    "VWAP",
+    "Vol",
+    "MA",
+    "TSI"
+  ],
+  "fractalframe:v5:indicators:state:v1": {
+    "loaded": {
+      "MA": true,
+      "MACD": true,
+      "RSI": false,
+      "Stoch": false,
+      "TSI": false,
+      "VI": true,
+      "VWAP": false,
+      "Vol": true
+    },
+    "ma": {
+      "colors": [
+        "#159e9a",
+        "#159e9a",
+        "#ff8a12",
+        "#ff8a12"
+      ],
+      "dnColor": "#787b86",
+      "dnMarkerMode": "bar_up",
+      "dnVisible": true,
+      "inputStatusLineVisible": true,
+      "length": 120,
+      "maFadedColor": "#131722",
+      "maFadedLineStyle": "solid",
+      "maFadedLineWidth": 5,
+      "maFadedOpacity": 0.1,
+      "maFadedVisible": true,
+      "maLineColor": "#131722",
+      "maLineStyle": "solid",
+      "maLineWidth": 3,
+      "maLineOpacity": 1,
+      "maLineVisible": true,
+      "precision": "system",
+      "priceScaleLabelsVisible": true,
+      "shiftLength": 15,
+      "shiftMultiplier": 0.5,
+      "shiftOscillatorVisible": true,
+      "source": "hl2",
+      "statusLineValuesVisible": true,
+      "type": "sma",
+      "upColor": "#787b86",
+      "upMarkerMode": "bar_down",
+      "upVisible": true
+    },
+    "macd": {
+      "source": "close",
+      "fastLength": 12,
+      "slowLength": 26,
+      "signalLength": 9,
+      "oscillatorMaType": "ema",
+      "signalMaType": "ema",
+      "timeframe": "chart",
+      "waitForTimeframeClose": true,
+      "histogramVisible": true,
+      "histogramColor0": "#26a69a",
+      "histogramColor0Opacity": 1,
+      "histogramColor1": "#b2dfdb",
+      "histogramColor1Opacity": 1,
+      "histogramColor2": "#ffcdd2",
+      "histogramColor2Opacity": 1,
+      "histogramColor3": "#ff5252",
+      "histogramColor3Opacity": 1,
+      "macdVisible": true,
+      "macdColor": "#2962ff",
+      "macdLineStyle": "solid",
+      "macdLineWidth": 1,
+      "macdOpacity": 1,
+      "signalVisible": true,
+      "signalColor": "#ff6d00",
+      "signalLineStyle": "solid",
+      "signalLineWidth": 1,
+      "signalOpacity": 1,
+      "zeroLineVisible": true,
+      "zeroLineColor": "#787b86",
+      "zeroLineStyle": "dashed",
+      "zeroLineWidth": 1,
+      "zeroLineOpacity": 1,
+      "precision": "system",
+      "priceScaleLabelsVisible": true,
+      "statusLineValuesVisible": true,
+      "inputStatusLineVisible": true
+    },
+    "rsi": {
+      "backgroundFillColor": "#d1d4dc",
+      "backgroundFillOpacity": 0.18,
+      "backgroundFillVisible": true,
+      "calculateDivergence": false,
+      "crosshairMarkers": true,
+      "lowerBand": 30,
+      "lowerBandColor": "#787b86",
+      "lowerBandLineStyle": "dashed",
+      "lowerBandLineWidth": 1,
+      "lowerBandOpacity": 1,
+      "lowerBandVisible": true,
+      "middleBand": 50,
+      "middleBandColor": "#94a3b8",
+      "middleBandLineStyle": "dashed",
+      "middleBandLineWidth": 1,
+      "middleBandOpacity": 1,
+      "middleBandVisible": true,
+      "inputStatusLineVisible": true,
+      "precision": "system",
+      "priceScaleLabelsVisible": true,
+      "rsiColor": "#2962ff",
+      "rsiLineStyle": "solid",
+      "rsiLineWidth": 1,
+      "rsiOpacity": 1,
+      "rsiMaColor": "#f5b800",
+      "rsiMaLineStyle": "solid",
+      "rsiMaLineWidth": 1,
+      "rsiMaOpacity": 1,
+      "rsiMaVisible": true,
+      "rsiVisible": true,
+      "smoothingLength": 14,
+      "smoothingType": "sma",
+      "source": "close",
+      "statusLineValuesVisible": true,
+      "upperBand": 70,
+      "upperBandColor": "#787b86",
+      "upperBandLineStyle": "dashed",
+      "upperBandLineWidth": 1,
+      "upperBandOpacity": 1,
+      "upperBandVisible": true,
+      "length": 14
+    },
+    "stoch": {
+      "backgroundFillColor": "#2196f3",
+      "backgroundFillOpacity": 0.08,
+      "backgroundFillVisible": true,
+      "dColor": "#ff6d00",
+      "dLineStyle": "solid",
+      "dLineWidth": 1,
+      "dOpacity": 1,
+      "dSmoothing": 3,
+      "dVisible": true,
+      "inputStatusLineVisible": true,
+      "kColor": "#2962ff",
+      "kLineStyle": "solid",
+      "kLineWidth": 1,
+      "kOpacity": 1,
+      "kSmoothing": 3,
+      "kVisible": true,
+      "length": 14,
+      "lowerBand": 20,
+      "lowerBandColor": "#787b86",
+      "lowerBandLineStyle": "dashed",
+      "lowerBandLineWidth": 1,
+      "lowerBandOpacity": 1,
+      "lowerBandVisible": true,
+      "middleBand": 50,
+      "middleBandColor": "#94a3b8",
+      "middleBandLineStyle": "dashed",
+      "middleBandLineWidth": 1,
+      "middleBandOpacity": 1,
+      "middleBandVisible": false,
+      "precision": "system",
+      "priceScaleLabelsVisible": true,
+      "statusLineValuesVisible": true,
+      "upperBand": 80,
+      "upperBandColor": "#787b86",
+      "upperBandLineStyle": "dashed",
+      "upperBandLineWidth": 1,
+      "upperBandOpacity": 1,
+      "upperBandVisible": true
+    },
+    "tsi": {
+      "longLength": 25,
+      "shortLength": 13,
+      "signalLength": 13,
+      "timeframe": "chart",
+      "waitForTimeframeClose": true,
+      "tsiVisible": true,
+      "tsiColor": "#2962ff",
+      "tsiLineStyle": "solid",
+      "tsiLineWidth": 1,
+      "tsiOpacity": 1,
+      "signalVisible": true,
+      "signalColor": "#e91e63",
+      "signalLineStyle": "solid",
+      "signalLineWidth": 1,
+      "signalOpacity": 1,
+      "zeroLineVisible": true,
+      "zeroLineColor": "#787b86",
+      "zeroLineStyle": "dashed",
+      "zeroLineWidth": 1,
+      "zeroLineOpacity": 1,
+      "precision": "system",
+      "priceScaleLabelsVisible": true,
+      "statusLineValuesVisible": true,
+      "inputStatusLineVisible": true
+    },
+    "vi": {
+      "length": 120,
+      "timeframe": "chart",
+      "waitForTimeframeClose": true,
+      "plusVisible": true,
+      "plusColor": "#2962ff",
+      "plusLineStyle": "solid",
+      "plusLineWidth": 1,
+      "plusOpacity": 1,
+      "minusVisible": true,
+      "minusColor": "#e91e63",
+      "minusLineStyle": "solid",
+      "minusLineWidth": 1,
+      "minusOpacity": 1,
+      "precision": "system",
+      "priceScaleLabelsVisible": true,
+      "statusLineValuesVisible": true,
+      "inputStatusLineVisible": true
+    },
+    "vwap": {
+      "anchorPeriod": "session",
+      "bandCalculationMode": "standard_deviation",
+      "band1Multiplier": 1,
+      "band1Visible": true,
+      "band1FillColor": "#4caf50",
+      "band1FillOpacity": 0.08,
+      "band1FillVisible": true,
+      "band1LowerColor": "#4caf50",
+      "band1LowerLineStyle": "solid",
+      "band1LowerLineWidth": 1,
+      "band1LowerOpacity": 1,
+      "band1LowerVisible": true,
+      "band1UpperColor": "#4caf50",
+      "band1UpperLineStyle": "solid",
+      "band1UpperLineWidth": 1,
+      "band1UpperOpacity": 1,
+      "band1UpperVisible": true,
+      "band2Multiplier": 2,
+      "band2Visible": false,
+      "band3Multiplier": 3,
+      "band3Visible": false,
+      "hideOnDailyOrAbove": false,
+      "inputsInStatusLine": true,
+      "offset": 0,
+      "precision": "system",
+      "priceScaleLabelsVisible": true,
+      "source": "hlc3",
+      "statusLineValuesVisible": true,
+      "timeframe": "chart",
+      "vwapColor": "#2962ff",
+      "vwapLineStyle": "solid",
+      "vwapLineWidth": 1,
+      "vwapOpacity": 1,
+      "vwapVisible": true,
+      "waitForTimeframeClose": true
+    },
+    "vol": {
+      "colorBasedOnPreviousClose": false,
+      "inputsInStatusLine": true,
+      "labelsOnPriceScale": true,
+      "maChecked": false,
+      "maColor": "#91a7ff",
+      "maLineStyle": "solid",
+      "maLineWidth": 2,
+      "maOpacity": 1,
+      "maLength": 20,
+      "precision": "system",
+      "valuesInStatusLine": true,
+      "volumeChecked": true,
+      "volumeDownColor": "#ef5350",
+      "volumeDownOpacity": 0.55,
+      "volumeUpColor": "#26a69a",
+      "volumeUpOpacity": 0.55
+    },
+    "ui": {
+      "activeTab": "input",
+      "selectedKey": "MA"
+    }
+  },
+  "fractalframe:rightWidgetActiveDrawer:v1": "drawings",
+  "fractalframe:bottomDrawerOpen:v1": "0",
+  "fractalframe:bottomDrawerHeightPx:v1": "300",
+  "fractalframe.chart.macdPaneHeight": "231",
+  "fractalframe.chart.viPaneHeight": "220",
+  "fractalframe.drawingsDrawer.selectedTool": "fibRetracement"
 }

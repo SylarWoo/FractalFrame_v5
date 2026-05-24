@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { readString, writeString } from '../persistence/jsonStorage'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../settings/SettingsSwatches'
@@ -768,6 +768,16 @@ function FibRetracementStylePanel() {
   const [priceVisible, setPriceVisible] = useState(true)
   const [levelVisible, setLevelVisible] = useState(true)
   const [textVisible, setTextVisible] = useState(true)
+  const [horizontalLineThickness, setHorizontalLineThickness] = useState(1)
+  const [horizontalLineThicknessOpen, setHorizontalLineThicknessOpen] = useState(false)
+  const [horizontalLineStyle, setHorizontalLineStyle] = useState<'solid' | 'dashed' | 'dotted'>('solid')
+  const [horizontalLineStyleOpen, setHorizontalLineStyleOpen] = useState(false)
+  const [extendLeft, setExtendLeft] = useState(false)
+  const [extendRight, setExtendRight] = useState(false)
+  const [extendOpen, setExtendOpen] = useState(false)
+  const horizontalLineThicknessRef = useRef<HTMLDivElement | null>(null)
+  const horizontalLineStyleRef = useRef<HTMLDivElement | null>(null)
+  const extendRef = useRef<HTMLDivElement | null>(null)
   const [levelDisplay, setLevelDisplay] = useState('value')
   const [labelAlign, setLabelAlign] = useState('center')
   const [labelVAlign, setLabelVAlign] = useState('top')
@@ -778,6 +788,65 @@ function FibRetracementStylePanel() {
   const updateLevel = (index: number, patch: Partial<typeof fibLevelDefaults[number]>) => {
     setLevels((current) => current.map((level, levelIndex) => levelIndex === index ? { ...level, ...patch } : level))
   }
+
+  useEffect(() => {
+    if (!horizontalLineThicknessOpen) return
+    const closeOnOutside = (event: MouseEvent) => {
+      if (horizontalLineThicknessRef.current?.contains(event.target as Node)) return
+      setHorizontalLineThicknessOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setHorizontalLineThicknessOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutside, true)
+    document.addEventListener('keydown', closeOnEscape, true)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside, true)
+      document.removeEventListener('keydown', closeOnEscape, true)
+    }
+  }, [horizontalLineThicknessOpen])
+
+  useEffect(() => {
+    if (!horizontalLineStyleOpen) return
+    const closeOnOutside = (event: MouseEvent) => {
+      if (horizontalLineStyleRef.current?.contains(event.target as Node)) return
+      setHorizontalLineStyleOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setHorizontalLineStyleOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutside, true)
+    document.addEventListener('keydown', closeOnEscape, true)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside, true)
+      document.removeEventListener('keydown', closeOnEscape, true)
+    }
+  }, [horizontalLineStyleOpen])
+
+  useEffect(() => {
+    if (!extendOpen) return
+    const closeOnOutside = (event: MouseEvent) => {
+      if (extendRef.current?.contains(event.target as Node)) return
+      setExtendOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setExtendOpen(false)
+    }
+    document.addEventListener('mousedown', closeOnOutside, true)
+    document.addEventListener('keydown', closeOnEscape, true)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside, true)
+      document.removeEventListener('keydown', closeOnEscape, true)
+    }
+  }, [extendOpen])
+
+  const extendLabel = extendLeft && extendRight
+    ? '双向'
+    : extendLeft
+      ? '向左'
+      : extendRight
+        ? '向右'
+        : '不要扩大'
 
   return (
     <div className="ff-drawing-fib-style-v1">
@@ -799,24 +868,104 @@ function FibRetracementStylePanel() {
       <div className="ff-drawing-fib-top-row-v1 ff-drawing-fib-top-row-v1--horizontal">
         <span className="ff-drawing-tline-tv-label-v1">水平线</span>
         <div className="ff-drawing-fib-horizontal-controls-v1">
-          <button aria-label="水平线样式" className="ff-drawing-fib-line-preview-v1" type="button">
-            <span />
-          </button>
-          <button aria-label="水平线端点" className="ff-drawing-fib-line-end-v1" type="button">
-            <span />
-          </button>
+          <div className="ff-drawing-fib-line-width-picker-v1" ref={horizontalLineThicknessRef}>
+            <button
+              aria-expanded={horizontalLineThicknessOpen}
+              aria-label="水平线粗细"
+              className="ff-drawing-fib-line-preview-v1"
+              data-open={horizontalLineThicknessOpen ? 'true' : undefined}
+              onClick={() => setHorizontalLineThicknessOpen((current) => !current)}
+              style={{ '--ff-drawing-fib-line-size': `${horizontalLineThickness}px` } as CSSProperties}
+              type="button"
+            >
+              <span />
+            </button>
+            {horizontalLineThicknessOpen ? (
+              <div className="ff-drawing-fib-line-width-menu-v1">
+                {[1, 2, 3, 4].map((size) => (
+                  <button
+                    className="ff-drawing-fib-line-width-option-v1"
+                    data-active={horizontalLineThickness === size ? 'true' : undefined}
+                    key={size}
+                    onClick={() => {
+                      setHorizontalLineThickness(size)
+                      setHorizontalLineThicknessOpen(false)
+                    }}
+                    style={{ '--ff-drawing-fib-line-size': `${size}px` } as CSSProperties}
+                    type="button"
+                  >
+                    <span />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="ff-drawing-fib-line-style-picker-v1" ref={horizontalLineStyleRef}>
+            <button
+              aria-expanded={horizontalLineStyleOpen}
+              aria-label="水平线线型"
+              className="ff-drawing-fib-line-end-v1"
+              data-open={horizontalLineStyleOpen ? 'true' : undefined}
+              data-line-style={horizontalLineStyle}
+              onClick={() => setHorizontalLineStyleOpen((current) => !current)}
+              type="button"
+            >
+              <span />
+            </button>
+            {horizontalLineStyleOpen ? (
+              <div className="ff-drawing-fib-line-style-menu-v1">
+                {[
+                  { label: '线形图', value: 'solid' as const },
+                  { label: '短虚线', value: 'dashed' as const },
+                  { label: '点虚线', value: 'dotted' as const },
+                ].map((option) => (
+                  <button
+                    className="ff-drawing-fib-line-style-option-v1"
+                    data-active={horizontalLineStyle === option.value ? 'true' : undefined}
+                    data-line-style={option.value}
+                    key={option.value}
+                    onClick={() => {
+                      setHorizontalLineStyle(option.value)
+                      setHorizontalLineStyleOpen(false)
+                    }}
+                    type="button"
+                  >
+                    <span className="ff-drawing-fib-line-style-option-v1__line" />
+                    <span>{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
       <div className="ff-drawing-fib-extend-row-v1">
         <span className="ff-drawing-tline-tv-label-v1">延伸</span>
-        <OpenableSelect
-          ariaLabel="延伸"
-          className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-fib-extend-select-v1"
-          onChange={() => undefined}
-          options={[{ label: '不要扩大', value: 'none' }, { label: '向左', value: 'left' }, { label: '向右', value: 'right' }, { label: '双向', value: 'both' }]}
-          value="none"
-        />
+        <div className="ff-drawing-fib-extend-picker-v1" data-open={extendOpen ? 'true' : undefined} ref={extendRef}>
+          <button
+            aria-expanded={extendOpen}
+            aria-label="延伸"
+            className="ff-drawing-fib-extend-button-v1 ff-openable-control"
+            onClick={() => setExtendOpen((current) => !current)}
+            type="button"
+          >
+            <span>{extendLabel}</span>
+            <span aria-hidden="true" className="ff-drawing-fib-extend-chevron-v1">{'\u2304'}</span>
+          </button>
+          {extendOpen ? (
+            <div className="ff-drawing-fib-extend-menu-v1">
+              <button className="ff-drawing-fib-extend-option-v1" onClick={() => setExtendLeft((current) => !current)} type="button">
+                <span className="ff-drawing-fib-extend-box-v1" data-checked={extendLeft ? 'true' : undefined} />
+                <span>左侧延长线</span>
+              </button>
+              <button className="ff-drawing-fib-extend-option-v1" onClick={() => setExtendRight((current) => !current)} type="button">
+                <span className="ff-drawing-fib-extend-box-v1" data-checked={extendRight ? 'true' : undefined} />
+                <span>右侧延长线</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="ff-drawing-fib-levels-v1">
@@ -847,7 +996,17 @@ function FibRetracementStylePanel() {
           <span className="ff-drawing-tline-tv-check-box-v1" />
         </label>
         <span className="ff-drawing-tline-tv-label-v1">背景</span>
-        <SettingsColorSwatch checkerboard color={background.hex} onChange={setBackground} value={background} />
+        <div className="ff-drawing-fib-opacity-control-v1">
+          <input
+            aria-label="背景透明度"
+            max={100}
+            min={0}
+            onChange={(event) => setBackground((current) => ({ ...current, opacity: Number(event.target.value) / 100 }))}
+            type="range"
+            value={Math.round(background.opacity * 100)}
+          />
+          <span>{`${Math.round(background.opacity * 100)}%`}</span>
+        </div>
       </div>
 
       <div className="ff-drawing-fib-check-line-v1">
@@ -875,7 +1034,7 @@ function FibRetracementStylePanel() {
         <OpenableSelect ariaLabel="水平位" className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-fib-small-select-v1" onChange={setLevelDisplay} options={[{ label: '数值', value: 'value' }, { label: '百分比', value: 'percent' }]} value={levelDisplay} />
       </div>
 
-      <div className="ff-drawing-fib-select-line-v1">
+      <div className="ff-drawing-fib-select-line-v1 ff-drawing-fib-select-line-v1--plain-label">
         <span className="ff-drawing-fib-empty-check-v1" />
         <span className="ff-drawing-tline-tv-label-v1">标签</span>
         <OpenableSelect ariaLabel="标签位置" className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-fib-small-select-v1" onChange={setLabelAlign} options={[{ label: '左侧', value: 'left' }, { label: '中心', value: 'center' }, { label: '右侧', value: 'right' }]} value={labelAlign} />
@@ -892,7 +1051,7 @@ function FibRetracementStylePanel() {
         <OpenableSelect ariaLabel="文本垂直位置" className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-fib-small-select-v1" onChange={setTextVAlign} options={[{ label: '顶部', value: 'top' }, { label: '中间', value: 'middle' }, { label: '底部', value: 'bottom' }]} value={textVAlign} />
       </div>
 
-      <div className="ff-drawing-fib-select-line-v1">
+      <div className="ff-drawing-fib-select-line-v1 ff-drawing-fib-select-line-v1--plain-label">
         <span className="ff-drawing-fib-empty-check-v1" />
         <span className="ff-drawing-tline-tv-label-v1">字体大小</span>
         <OpenableSelect ariaLabel="字体大小" className="ff-drawing-tline-tv-openable-select-v1 ff-drawing-fib-small-select-v1" onChange={setFontSize} options={[{ label: '10', value: '10' }, { label: '12', value: '12' }, { label: '14', value: '14' }, { label: '16', value: '16' }, { label: '18', value: '18' }, { label: '20', value: '20' }]} value={fontSize} />
