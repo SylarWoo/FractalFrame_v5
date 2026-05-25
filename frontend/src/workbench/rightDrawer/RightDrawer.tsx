@@ -5,7 +5,7 @@ import '../mt5DataCenter/Mt5DataCenterPanel.css'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
 import { formatSymbolStatus, normalizeStoredStatus, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
-import { clearStorePanelPersistence, getInitialSymbolSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveStoreV5ListSymbols, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
+import { clearStorePanelPersistence, getInitialSymbolSnapshot, mergeSymbolRowsWithSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
 import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
 import { storeTableAggregatePeriods } from './rightDrawerStoreTables'
 import { useRightDrawerResize } from './useRightDrawerResize'
@@ -21,7 +21,6 @@ import { RightDrawerSettingsHost } from './RightDrawerSettingsHost'
 import type { RightDrawerProps } from './RightDrawerTypes'
 import {
   fetchStoreV5Status,
-  fetchStoreV5Symbols,
   fetchMt5Symbols,
 } from '../../services/mt5/mt5SymbolsApi'
 import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
@@ -59,6 +58,7 @@ export function RightDrawer({
     readPersistedStoreTableSelection(initialSharedSelection.symbol || initialSnapshot?.selectedSymbol || '', storePanelPersistenceEnabled),
   )
   const autoOpenedStoreTableRef = useRef('')
+  const symbolDetailsLoadedRef = useRef(new Set<string>())
   const open = activeDrawer != null
   const {
     columnWidths,
@@ -172,25 +172,34 @@ export function RightDrawer({
   useEffect(() => {
     let cancelled = false
 
-    const loadLocalSymbols = async () => {
+    const loadCachedMt5Symbols = async () => {
       try {
         setLoading(true)
         setError('')
-        setStatus('正在读取本地 StoreV5...')
-        const payload = await fetchStoreV5Symbols()
+        setStatus(initialSnapshot?.symbols.length ? initialSnapshot.status : '正在读取 MT5 品种缓存...')
+        const payload = await fetchMt5Symbols({ limit: 50000, refresh: false })
         if (cancelled) return
-        const rows = Array.isArray(payload.symbols) ? payload.symbols : []
+        const rows = mergeSymbolRowsWithSnapshot(
+          Array.isArray(payload.symbols) ? payload.symbols : [],
+          initialSnapshot?.symbols ?? [],
+        )
         const nextSelectedSymbol =
           selectedSymbol && rows.some((row) => row.symbol === selectedSymbol)
             ? selectedSymbol
             : rows[0]?.symbol ?? ''
         setSymbols(rows)
         setSelectedSymbol(nextSelectedSymbol)
-        saveStoreV5ListSymbols(rows.map((row) => row.symbol), storePanelPersistenceEnabled)
-        const nextStatus = rows.length
-          ? `本地 StoreV5 已载入 ${rows.length} 个品种。`
-          : '本地 StoreV5 暂无品种。需要导入时点击 Scan MT5。'
+        const nextStatus = formatSymbolStatus(
+          payload.totalCount ?? payload.count ?? rows.length,
+          rows.length,
+          payload.scanReport ?? payload.cache?.lastScanReport,
+        )
         setStatus(nextStatus)
+        saveSymbolSnapshot({
+          selectedSymbol: nextSelectedSymbol,
+          status: nextStatus,
+          symbols: rows,
+        })
         if (nextSelectedSymbol) {
           const localStatus = await fetchStoreV5Status(nextSelectedSymbol)
           if (cancelled) return
@@ -200,24 +209,54 @@ export function RightDrawer({
           setLocalStoreStatus(null)
           setSelectedStoreTableKey('')
         }
-        saveSymbolSnapshot({
-          selectedSymbol: nextSelectedSymbol,
-          status: nextStatus,
-          symbols: rows,
-        })
       } catch (err) {
         if (cancelled) return
         const message = err instanceof Error ? err.message : String(err)
         setError(message)
-        setStatus(`本地 StoreV5 读取失败：${message}`)
+        setStatus(initialSnapshot?.symbols.length
+          ? `${initialSnapshot.status} MT5 缓存刷新失败：${message}`
+          : `MT5 品种缓存读取失败：${message}`)
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
 
-    void loadLocalSymbols()
+    void loadCachedMt5Symbols()
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (!selectedSymbol || symbolDetailsLoadedRef.current.has(selectedSymbol)) return
+    const currentRow = symbols.find((row) => row.symbol === selectedSymbol)
+    if (currentRow?.sessions) return
+
+    let cancelled = false
+    symbolDetailsLoadedRef.current.add(selectedSymbol)
+
+    const loadSelectedSymbolDetails = async () => {
+      try {
+        const payload = await fetchMt5Symbols({ includeSessions: true, limit: 20, query: selectedSymbol, refresh: false })
+        if (cancelled) return
+        const detailRow = (Array.isArray(payload.symbols) ? payload.symbols : []).find((row) => row.symbol === selectedSymbol)
+        if (!detailRow) return
+        setSymbols((current) => {
+          const next = current.map((row) => row.symbol === selectedSymbol ? { ...row, ...detailRow } : row)
+          const merged = next.some((row) => row.symbol === selectedSymbol) ? next : [detailRow, ...next]
+          saveSymbolSnapshot({
+            selectedSymbol,
+            status,
+            symbols: merged,
+          })
+          return merged
+        })
+      } catch {
+        symbolDetailsLoadedRef.current.delete(selectedSymbol)
+      }
+    }
+
+    void loadSelectedSymbolDetails()
+    return () => { cancelled = true }
+  }, [selectedSymbol, status, symbols])
 
   function handleToggleStorePanelPersistence(enabled: boolean) {
     setStorePanelPersistenceEnabled(enabled)
@@ -237,7 +276,7 @@ export function RightDrawer({
 
     try {
       const payload = await fetchMt5Symbols({ limit: 50000, refresh })
-      const rows = Array.isArray(payload.symbols) ? payload.symbols : []
+        const rows = mergeSymbolRowsWithSnapshot(Array.isArray(payload.symbols) ? payload.symbols : [], symbols)
       const merge = payload.scanReport ?? payload.cache?.lastScanReport
       const nextSelectedSymbol =
         selectedSymbol && rows.some((row) => row.symbol === selectedSymbol)
@@ -265,8 +304,6 @@ export function RightDrawer({
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      setSymbols([])
-      setSelectedSymbol('')
       setError(message)
       setStatus(`扫描失败：${message}`)
     } finally {

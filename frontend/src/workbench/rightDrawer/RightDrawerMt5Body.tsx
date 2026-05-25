@@ -15,10 +15,10 @@ type ColumnWidths = Record<SymbolTableColumnKey, number>
 type WatchlistColumnWidths = Record<WatchlistTableColumnKey, number>
 type Progress = { hasEstimate: boolean; width: number }
 type SymbolDisplay = { chineseName: string; assetType: string; description: string }
-type SelectedMarketStatus = { lastTime?: number | null; timezone: string }
+type SelectedMarketStatus = { isOpen: boolean; lastTime?: number | null; timezone: string }
 
 const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
-  { key: 'details', label: '细节' },
+  { key: 'details', label: '详情' },
   { key: 'store', label: '仓库' },
   { key: 'watchlist', label: '自选列表' },
   { key: 'settings', label: '设置' },
@@ -109,7 +109,7 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
     watchlistRealtimeReady, watchlistRows, watchlistColumnWidths, watchlistTableHeight,
     watchlistTableWrapRef, watchlistTicks,
   } = props
-  const selectedMarketStatus = useSelectedMarketStatus(localStoreStatus)
+  const selectedMarketStatus = useSelectedMarketStatus(localStoreStatus, watchlistTicks[selectedSymbol], watchlistRealtimeEnabled)
 
   return (
     <div className="ff-right-drawer__body">
@@ -218,9 +218,25 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
   )
 }
 
-function useSelectedMarketStatus(localStoreStatus: StoreV5CheckPayload | null): SelectedMarketStatus {
+function resolveTickTimeSeconds(tick: Mt5RealtimeTick | undefined) {
+  if (!tick) return null
+  if (typeof tick.timeMsc === 'number' && Number.isFinite(tick.timeMsc)) return Math.floor(tick.timeMsc / 1000)
+  if (typeof tick.time === 'number' && Number.isFinite(tick.time)) return Math.floor(tick.time > 10_000_000_000 ? tick.time / 1000 : tick.time)
+  const publishedAt = typeof tick.publishedAt === 'string' ? Date.parse(tick.publishedAt) : Number.NaN
+  return Number.isFinite(publishedAt) ? Math.floor(publishedAt / 1000) : null
+}
+
+function isRecentRealtimeTick(tickSeconds: number | null, staleSeconds = 300) {
+  if (typeof tickSeconds !== 'number') return false
+  return Math.floor(Date.now() / 1000) - tickSeconds <= staleSeconds
+}
+
+function useSelectedMarketStatus(localStoreStatus: StoreV5CheckPayload | null, realtimeTick: Mt5RealtimeTick | undefined, realtimeEnabled: boolean): SelectedMarketStatus {
+  const realtimeTickSeconds = resolveTickTimeSeconds(realtimeTick)
+  const realtimeOpen = realtimeEnabled && isRecentRealtimeTick(realtimeTickSeconds)
   const [marketStatus, setMarketStatus] = useState<SelectedMarketStatus>(() => ({
-    lastTime: resolveLocalM1LastTime(localStoreStatus),
+    isOpen: realtimeOpen,
+    lastTime: realtimeOpen ? realtimeTickSeconds : resolveLocalM1LastTime(localStoreStatus),
     timezone: readChartTimezone(),
   }))
 
@@ -237,22 +253,25 @@ function useSelectedMarketStatus(localStoreStatus: StoreV5CheckPayload | null): 
   }, [])
 
   useEffect(() => {
-    setMarketStatus((current) => ({ ...current, lastTime: resolveLocalM1LastTime(localStoreStatus) }))
-  }, [localStoreStatus])
+    setMarketStatus((current) => ({
+      ...current,
+      isOpen: realtimeOpen,
+      lastTime: realtimeOpen ? realtimeTickSeconds : resolveLocalM1LastTime(localStoreStatus),
+    }))
+  }, [localStoreStatus, realtimeOpen, realtimeTickSeconds])
 
   return marketStatus
 }
 
 function MarketStatusLine({ marketStatus }: { marketStatus: SelectedMarketStatus }) {
-  const isOpen = false
   const lastUpdated = typeof marketStatus.lastTime === 'number' ? marketStatus.lastTime * 1000 : null
   const formatted = lastUpdated ? formatMarketStatusTime(lastUpdated, marketStatus.timezone) : ''
   const timezoneText = formatMarketStatusTimezone(marketStatus.timezone)
 
   return (
-    <div className="ff-import-market-status" data-status="closed" title="Local StoreV5 data">
-      <span className="ff-import-market-status__bar" />
-      <span className="ff-import-market-status__label">{isOpen ? '开市' : '休市'}</span>
+    <div className="ff-import-market-status" data-status={marketStatus.isOpen ? 'open' : 'closed'} title={marketStatus.isOpen ? 'Realtime tick' : 'Local StoreV5 data'}>
+      <span className={marketStatus.isOpen ? 'ff-import-market-status__dot' : 'ff-import-market-status__bar'} />
+      <span className="ff-import-market-status__label">{marketStatus.isOpen ? '开市' : '休市'}</span>
       {formatted && (
         <span className="ff-import-market-status__muted">最后更新于{timezoneText} {formatted}</span>
       )}

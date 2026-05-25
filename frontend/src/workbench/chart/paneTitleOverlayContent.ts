@@ -172,7 +172,7 @@ function readMarketStatusTitleChunks(symbol: string): PaneTitleChunk[] {
         translateY: '3px',
         width: '10px',
       },
-      { color: '#00897b', fontSize: '12px', gapBefore: 3, text: '开市', translateY: '-1px' },
+      { color: '#00897b', fontSize: '12px', gapBefore: 3, text: '开市', translateY: '0px' },
     ]
   }
   if (status.status === 'closed') {

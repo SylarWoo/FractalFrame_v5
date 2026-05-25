@@ -41,6 +41,12 @@ function isCoordinate(value: Partial<Coordinate> | Partial<Coordinate>[]): value
   return !Array.isArray(value)
 }
 
+export function resolveCountdownEndTimestamp(latestTimestamp: number, periodMs: number, nowMs = Date.now()) {
+  const latestEndTimestamp = latestTimestamp + periodMs
+  if (latestEndTimestamp > nowMs) return latestEndTimestamp
+  return Math.floor(nowMs / periodMs) * periodMs + periodMs
+}
+
 export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, period, symbol }: UseCurrentCandleCountdownOptions) {
   const [settingVisible, setSettingVisible] = useState(() => readCurrentCandleCountdownActive(symbol))
   const [state, setState] = useState<CurrentCandleCountdownState>({ axisWidth: 70, color: '#26a69a', price: '', text: '', top: 0, visible: false })
@@ -95,7 +101,8 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
       const axisDom = chart.getDom('candle_pane', DomPosition.YAxis)
       const axisRect = axisDom?.getBoundingClientRect()
       const axisWidth = axisRect?.width ?? Number.NaN
-      const endTimestamp = timestamp + periodSeconds * 1000
+      const periodMs = periodSeconds * 1000
+      const endTimestamp = resolveCountdownEndTimestamp(timestamp, periodMs)
       if (!Number.isFinite(y) || !Number.isFinite(axisWidth)) {
         setState((current) => current.visible ? { ...current, visible: false } : current)
         return

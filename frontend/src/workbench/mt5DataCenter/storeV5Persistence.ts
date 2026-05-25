@@ -68,6 +68,35 @@ export function saveSymbolSnapshot(snapshot: Omit<SymbolSnapshot, 'savedAt'>) {
   writeJson(storageKeys.importCenterSymbolSnapshot, { ...snapshot, savedAt: new Date().toISOString() })
 }
 
+function mergeDefinedSymbolRowValues(base: Mt5SymbolRow, patch: Mt5SymbolRow): Mt5SymbolRow {
+  const merged = { ...base } as Record<string, unknown>
+  Object.entries(patch).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return
+    merged[key] = value
+  })
+  return merged as Mt5SymbolRow
+}
+
+export function mergeSymbolRowsWithSnapshot(rows: Mt5SymbolRow[], cachedRows: Mt5SymbolRow[] = []) {
+  const cachedBySymbol = new Map(cachedRows.map((row) => [row.symbol, row]))
+  const seen = new Set<string>()
+  const mergedRows = rows
+    .filter((row) => typeof row.symbol === 'string' && row.symbol)
+    .map((row) => {
+      seen.add(row.symbol)
+      const cached = cachedBySymbol.get(row.symbol)
+      return cached ? mergeDefinedSymbolRowValues(cached, row) : row
+    })
+
+  cachedRows.forEach((row) => {
+    if (!row.symbol || seen.has(row.symbol)) return
+    seen.add(row.symbol)
+    mergedRows.push(row)
+  })
+
+  return mergedRows
+}
+
 export function readStorePanelPersistenceEnabled() {
   return readBooleanFlag(storageKeys.importCenterStorePanelPersistenceEnabled, true)
 }

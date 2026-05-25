@@ -5,7 +5,7 @@ import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
 import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
-import { useChartRealtimeTicks } from './useChartRealtimeTicks'
+import { chartRealtimeDataChangedEvent, useChartRealtimeTicks } from './useChartRealtimeTicks'
 import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
 import { useChartStepLoad } from './useChartStepLoad'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
@@ -482,11 +482,13 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       })
     }
 
-    const actions = [ActionType.OnZoom, ActionType.OnScroll, ActionType.OnVisibleRangeChange]
+    const actions = [ActionType.OnDataReady, ActionType.OnZoom, ActionType.OnScroll, ActionType.OnVisibleRangeChange]
     actions.forEach((action) => chart.subscribeAction(action, scheduleRefresh))
+    window.addEventListener(chartRealtimeDataChangedEvent, scheduleRefresh)
     return () => {
       window.cancelAnimationFrame(frame)
       actions.forEach((action) => chart.unsubscribeAction(action, scheduleRefresh))
+      window.removeEventListener(chartRealtimeDataChangedEvent, scheduleRefresh)
     }
   }, [chartInstanceRef, loadState.loading, period])
 

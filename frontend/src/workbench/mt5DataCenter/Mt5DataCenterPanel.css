@@ -148,10 +148,11 @@
 
 .ff-import-market-status__dot {
   flex: 0 0 auto;
-  width: 7px;
-  height: 7px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: #00b386;
+  transform: translateY(-1px);
 }
 
 .ff-import-market-status__bar {

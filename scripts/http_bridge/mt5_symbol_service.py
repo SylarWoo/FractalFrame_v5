@@ -9,6 +9,7 @@ from .mt5_m1_rows import mt5_rates_to_rows
 
 SYMBOL_CACHE_FILE = "symbol_universe_info.json"
 SYMBOL_REPORT_FILE = "symbol_universe_scan_report.json"
+SESSION_EXPORT_RELATIVE_PATH = Path("FractalFrame") / "mt5_symbol_sessions.json"
 MT5_TIMEFRAME_NAMES = {
     "M1": "TIMEFRAME_M1",
     "M5": "TIMEFRAME_M5",
@@ -113,6 +114,12 @@ def symbol_row(info: Any, scanned_at: str) -> dict[str, Any]:
         "currencyMargin": str(get("currency_margin") or ""),
         "tradeMode": safe_int(get("trade_mode")),
         "tradeCalcMode": safe_int(get("trade_calc_mode")),
+        "tradeExeMode": safe_int(get("trade_exemode")),
+        "orderMode": safe_int(get("order_mode")),
+        "fillingMode": safe_int(get("filling_mode")),
+        "expirationMode": safe_int(get("expiration_mode")),
+        "expirationTime": safe_int(get("expiration_time")),
+        "orderGtcMode": safe_int(get("order_gtc_mode")),
         "tradeContractSize": safe_float(get("trade_contract_size")),
         "volumeMin": safe_float(get("volume_min")),
         "volumeMax": safe_float(get("volume_max")),
@@ -120,10 +127,143 @@ def symbol_row(info: Any, scanned_at: str) -> dict[str, Any]:
         "tradeTickSize": safe_float(get("trade_tick_size")),
         "tradeTickValue": safe_float(get("trade_tick_value")),
         "tradeStopsLevel": safe_int(get("trade_stops_level")),
+        "swapMode": safe_int(get("swap_mode")),
+        "swapLong": safe_float(get("swap_long")),
+        "swapShort": safe_float(get("swap_short")),
+        "swapRollover3Days": safe_int(get("swap_rollover3days")),
         "seenAt": scanned_at,
         "lastSeenAt": scanned_at,
         "missingFromLatestScan": False,
     }
+
+
+def format_session_time(value: Any) -> str:
+    if value is None:
+        return ""
+    if hasattr(value, "hour") and hasattr(value, "minute"):
+        return f"{int(value.hour):02d}:{int(value.minute):02d}"
+    text = str(value)
+    if " " in text:
+        text = text.rsplit(" ", 1)[-1]
+    return text[:5] if len(text) >= 5 else text
+
+
+def format_session_range(session: Any) -> str:
+    if not session:
+        return ""
+    try:
+        start, end = session[0], session[1]
+    except Exception:
+        return ""
+    start_text = format_session_time(start)
+    end_text = format_session_time(end)
+    return f"{start_text}-{end_text}" if start_text and end_text else ""
+
+
+def collect_symbol_sessions(mt5: Any, symbol: str) -> dict[str, list[str]]:
+    sessions: dict[str, list[str]] = {"quote": [], "trade": []}
+    session_functions = {
+        "quote": getattr(mt5, "symbol_info_session_quote", None),
+        "trade": getattr(mt5, "symbol_info_session_trade", None),
+    }
+    for key, session_fn in session_functions.items():
+        if not callable(session_fn):
+            continue
+        for day in range(7):
+            ranges: list[str] = []
+            for session_index in range(16):
+                try:
+                    raw_session = session_fn(symbol, day, session_index)
+                except Exception:
+                    raw_session = None
+                if raw_session is None:
+                    break
+                text = format_session_range(raw_session)
+                if text:
+                    ranges.append(text)
+            sessions[key].append(", ".join(ranges))
+    return sessions
+
+
+def normalize_session_export_sessions(value: Any) -> dict[str, list[str]] | None:
+    if not isinstance(value, dict):
+        return None
+    output: dict[str, list[str]] = {"quote": [], "trade": []}
+    for key in ("quote", "trade"):
+        raw = value.get(key)
+        if isinstance(raw, list):
+            output[key] = [str(item) if item is not None else "" for item in raw[:7]]
+    return output
+
+
+def read_session_export_payload(mt5: Any | None = None) -> dict[str, Any] | None:
+    candidates: list[Path] = []
+    terminal_info = None
+    if mt5 is not None:
+        try:
+            terminal_info = mt5.terminal_info()
+        except Exception:
+            terminal_info = None
+    raw_info = namedtuple_to_dict(terminal_info)
+    common_data_path = raw_info.get("commondata_path")
+    data_path = raw_info.get("data_path")
+    if common_data_path:
+        candidates.append(Path(str(common_data_path)) / "Files" / SESSION_EXPORT_RELATIVE_PATH)
+    if data_path:
+        candidates.append(Path(str(data_path)) / "MQL5" / "Files" / SESSION_EXPORT_RELATIVE_PATH)
+    candidates.append(Path("runtime_data") / "instruments" / "mt5" / SESSION_EXPORT_RELATIVE_PATH)
+
+    for path in candidates:
+        payload = read_json(path)
+        if isinstance(payload, dict):
+            payload["_path"] = str(path)
+            return payload
+    return None
+
+
+def attach_exported_symbol_sessions(mt5: Any | None, rows: list[dict[str, Any]]) -> bool:
+    payload = read_session_export_payload(mt5)
+    symbols = payload.get("symbols") if isinstance(payload, dict) else None
+    if not isinstance(symbols, dict):
+        return False
+    attached = False
+    for row in rows:
+        symbol = str(row.get("symbol") or "")
+        sessions = normalize_session_export_sessions(symbols.get(symbol))
+        if sessions is None:
+            continue
+        row["sessions"] = sessions
+        row["sessionsSource"] = "mql5_export"
+        row["sessionsUpdatedAt"] = payload.get("generatedAt")
+        row["sessionsPath"] = payload.get("_path")
+        attached = True
+    return attached
+
+
+def attach_symbol_sessions(mt5: Any, rows: list[dict[str, Any]]) -> None:
+    if attach_exported_symbol_sessions(mt5, rows):
+        return
+    for row in rows:
+        symbol = str(row.get("symbol") or "")
+        if not symbol:
+            continue
+        row["sessions"] = collect_symbol_sessions(mt5, symbol)
+
+
+def refresh_symbol_rows_from_mt5(mt5: Any, rows: list[dict[str, Any]]) -> None:
+    scanned_at = utc_now_iso()
+    for index, row in enumerate(rows):
+        symbol = str(row.get("symbol") or "")
+        if not symbol:
+            continue
+        try:
+            mt5.symbol_select(symbol, True)
+            info = mt5.symbol_info(symbol)
+        except Exception:
+            info = None
+        if info is None:
+            continue
+        rows[index] = {**row, **symbol_row(info, scanned_at)}
 
 
 def read_json(path: Path) -> dict[str, Any] | None:
@@ -449,7 +589,7 @@ def filter_symbols(symbols: list[dict[str, Any]], query: str, market: str, limit
     return rows
 
 
-def scan_mt5_symbols(cache_root: Path, query: str, market: str, limit: int) -> dict[str, Any]:
+def scan_mt5_symbols(cache_root: Path, query: str, market: str, limit: int, include_sessions: bool = False) -> dict[str, Any]:
     published_at = utc_now_iso()
     base_fail = {
         "ok": False,
@@ -523,6 +663,8 @@ def scan_mt5_symbols(cache_root: Path, query: str, market: str, limit: int) -> d
         write_json(cache_root / SYMBOL_REPORT_FILE, report)
 
         rows = filter_symbols(all_rows, query=query, market=market, limit=limit)
+        if include_sessions:
+            attach_symbol_sessions(mt5, rows)
         return {
             "ok": True,
             "status": "mt5_symbol_universe_incremental_cache_ready_v1",
@@ -550,7 +692,7 @@ def scan_mt5_symbols(cache_root: Path, query: str, market: str, limit: int) -> d
                 pass
 
 
-def read_symbol_cache(cache_root: Path, query: str, market: str, limit: int) -> dict[str, Any]:
+def read_symbol_cache(cache_root: Path, query: str, market: str, limit: int, include_sessions: bool = False) -> dict[str, Any]:
     published_at = utc_now_iso()
     cache_path = cache_root / SYMBOL_CACHE_FILE
     payload = read_json(cache_path)
@@ -569,6 +711,17 @@ def read_symbol_cache(cache_root: Path, query: str, market: str, limit: int) -> 
 
     all_symbols = payload.get("symbols") if isinstance(payload.get("symbols"), list) else []
     rows = filter_symbols(all_symbols, query=query, market=market, limit=limit)
+    if include_sessions and rows:
+        try:
+            import MetaTrader5 as mt5
+            if mt5.initialize():
+                try:
+                    refresh_symbol_rows_from_mt5(mt5, rows)
+                    attach_symbol_sessions(mt5, rows)
+                finally:
+                    mt5.shutdown()
+        except Exception:
+            pass
     return {
         "ok": True,
         "status": "mt5_symbol_universe_cache_ready_v1",

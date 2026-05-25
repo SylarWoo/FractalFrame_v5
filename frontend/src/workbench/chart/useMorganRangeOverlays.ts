@@ -82,5 +82,4 @@ export function applyMorganRangeOverlays(chart: Chart, period: string, overlayId
     createRange(candles[index], candles[index - 1], atr[index - 1], widthBars)
   }
 
-  createRange(candles[lastBucketIndex], candles[lastBucketIndex], atr[lastBucketIndex], futureBars, futureWidthPx + startBoundaryOffsetPx)
 }

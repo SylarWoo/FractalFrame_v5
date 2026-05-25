@@ -34,6 +34,13 @@ export function useWatchlistRealtime({
   } = useWatchlistRealtimeLog(initialRealtimeSnapshot.log ?? [])
   const [watchlistTicks, setWatchlistTicks] = useState<Record<string, Mt5RealtimeTick>>(() => initialRealtimeSnapshot.ticks ?? {})
   const [watchlistLastTickAt, setWatchlistLastTickAt] = useState(() => initialRealtimeSnapshot.lastTickAt ?? '')
+  const latestRealtimeSnapshotRef = useRef({
+    lastTickAt: watchlistLastTickAt,
+    log: watchlistRealtimeLog,
+    ticks: watchlistTicks,
+  })
+  const realtimeSnapshotPersistedAtRef = useRef(0)
+  const realtimeSnapshotPersistTimerRef = useRef(0)
   const restoredRealtimeLoggedRef = useRef(false)
   const realtimeSymbols = useMemo(() => {
     return [...new Set([...watchlistSymbols, foregroundRealtimeSymbol].filter(Boolean))]
@@ -45,12 +52,38 @@ export function useWatchlistRealtime({
   }, [watchlistRealtimeEnabled])
 
   useEffect(() => {
-    savePersistedRealtimeSnapshot({
+    latestRealtimeSnapshotRef.current = {
       lastTickAt: watchlistLastTickAt,
       log: watchlistRealtimeLog,
       ticks: watchlistTicks,
-    })
+    }
+
+    const persist = () => {
+      realtimeSnapshotPersistTimerRef.current = 0
+      realtimeSnapshotPersistedAtRef.current = Date.now()
+      savePersistedRealtimeSnapshot(latestRealtimeSnapshotRef.current)
+    }
+
+    const elapsed = Date.now() - realtimeSnapshotPersistedAtRef.current
+    if (elapsed >= 5_000) {
+      persist()
+      return
+    }
+
+    if (realtimeSnapshotPersistTimerRef.current !== 0) window.clearTimeout(realtimeSnapshotPersistTimerRef.current)
+    realtimeSnapshotPersistTimerRef.current = window.setTimeout(persist, 5_000 - elapsed)
+
+    return () => {
+      if (realtimeSnapshotPersistTimerRef.current !== 0) {
+        window.clearTimeout(realtimeSnapshotPersistTimerRef.current)
+        realtimeSnapshotPersistTimerRef.current = 0
+      }
+    }
   }, [watchlistLastTickAt, watchlistRealtimeLog, watchlistTicks])
+
+  useEffect(() => () => {
+    savePersistedRealtimeSnapshot(latestRealtimeSnapshotRef.current)
+  }, [])
 
   useEffect(() => {
     if (!watchlistRealtimeEnabled) {

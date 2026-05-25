@@ -48,6 +48,49 @@ export function formatDetailValue(value: string | number | boolean | null | unde
   return String(value)
 }
 
+function formatSessionDay(value: string | undefined) {
+  return value && value.trim() ? value : '-'
+}
+
+function formatSessionPair(row: Mt5SymbolRow, dayIndex: number) {
+  const quote = formatSessionDay(row.sessions?.quote?.[dayIndex])
+  const trade = formatSessionDay(row.sessions?.trade?.[dayIndex])
+  if (quote === trade) return quote
+  return `行情 ${quote} / 交易 ${trade}`
+}
+
+function formatMt5Bitmask(value: number | null | undefined, labels: Array<[number, string]>) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  const selected = labels.filter(([bit]) => (value & bit) === bit).map(([, label]) => label)
+  return selected.length ? selected.join('，') : value
+}
+
+function formatTradeMode(value: number | null | undefined) {
+  if (value === 0) return '禁用'
+  if (value === 1) return '只允许多头'
+  if (value === 2) return '只允许空头'
+  if (value === 3) return '只允许平仓'
+  if (value === 4) return '完全访问'
+  return value
+}
+
+function formatTradeExecution(value: number | null | undefined) {
+  if (value === 0) return '请求'
+  if (value === 1) return '即时'
+  if (value === 2) return '市价'
+  if (value === 3) return '交易所'
+  return value
+}
+
+function formatSwapMode(value: number | null | undefined) {
+  if (value === 0) return '禁用'
+  if (value === 1) return '点模式'
+  if (value === 2) return '货币'
+  if (value === 3) return '利息'
+  if (value === 4) return '保证金币种'
+  return value
+}
+
 export function formatCount(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('en-US') : '-'
 }
@@ -247,16 +290,35 @@ export function resolveStoreOperationProgress(
 }
 
 export function selectedDetailRows(row: Mt5SymbolRow): DetailRow[] {
+  const spread = row.spreadFloat ? `${formatDetailValue(row.spread)} 浮动` : row.spread
   return [
-    ['分类', row.category || row.market, '小数位', row.digits],
-    ['合约量', row.tradeContractSize, '点差', row.spreadFloat ? '浮动' : row.spread],
-    ['止损级别', row.tradeStopsLevel, '预付款货币', row.currencyMargin],
-    ['盈利货币', row.currencyProfit, '基础货币', row.currencyBase],
-    ['计算', row.tradeCalcMode, '图表模式', row.tradeMode],
-    ['交易模式', row.tradeMode, '执行模式', row.tradeCalcMode],
-    ['最小手数', row.volumeMin, '最大手数', row.volumeMax],
-    ['手数步进', row.volumeStep, 'Tick Size', row.tradeTickSize],
+    ['分类', row.category || row.source || row.market, '市场', row.market],
+    ['名称', row.name, '描述', row.description],
+    ['小数位', row.digits, '点', row.point],
+    ['点差', spread, '止损级别', row.tradeStopsLevel],
+    ['合约量', row.tradeContractSize, '计算', row.tradeCalcMode],
+    ['基础货币', row.currencyBase, '盈利货币', row.currencyProfit],
+    ['预付款货币', row.currencyMargin, '图表模式', row.tradeMode],
+    ['交易', formatTradeMode(row.tradeMode), '执行模式', formatTradeExecution(row.tradeExeMode)],
+    ['最小量', row.volumeMin, '最大量', row.volumeMax],
+    ['步长', row.volumeStep, 'Tick Size', row.tradeTickSize],
     ['Tick Value', row.tradeTickValue, '可见', row.visible],
+    ['自定义', row.custom, '选择', row.select],
+    ['最后扫描', row.lastSeenAt || row.seenAt, '最新缺失', row.missingFromLatestScan],
+    ['成交指令', formatMt5Bitmask(row.fillingMode, [[1, 'FOK'], [2, 'IOC'], [4, 'BOC']]), '到期', formatMt5Bitmask(row.expirationMode, [[1, 'GTC'], [2, '日'], [4, '指定'], [8, '指定日']])],
+    ['订单', formatMt5Bitmask(row.orderMode, [[1, '买入'], [2, '卖出'], [4, '买入限价'], [8, '卖出限价'], [16, '买入止损'], [32, '卖出止损'], [64, '止损限价']]), 'GTC 模式', row.orderGtcMode],
+    ['库存费类型', formatSwapMode(row.swapMode), '买入库存费', row.swapLong],
+    ['卖出库存费', row.swapShort, '3 日库存费', row.swapRollover3Days],
+    ['到期时间', row.expirationTime],
+    ['交易期间', row.sessionsSource ? `行情 / 交易 · ${row.sessionsSource}` : '未导出'],
+    ['时段更新时间', row.sessionsUpdatedAt, '时段文件', row.sessionsPath],
+    ['星期日', formatSessionPair(row, 0)],
+    ['星期一', formatSessionPair(row, 1)],
+    ['星期二', formatSessionPair(row, 2)],
+    ['星期三', formatSessionPair(row, 3)],
+    ['星期四', formatSessionPair(row, 4)],
+    ['星期五', formatSessionPair(row, 5)],
+    ['星期六', formatSessionPair(row, 6)],
     ['路径', row.path],
   ]
 }

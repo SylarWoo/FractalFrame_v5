@@ -7,7 +7,10 @@ export type Mt5SymbolRow = {
   source?: string
   market?: string
   visible?: boolean
+  select?: boolean | null
+  custom?: boolean | null
   digits?: number | null
+  point?: number | null
   spread?: number | null
   spreadFloat?: boolean | null
   currencyBase?: string
@@ -22,6 +25,26 @@ export type Mt5SymbolRow = {
   tradeTickSize?: number | null
   tradeTickValue?: number | null
   tradeStopsLevel?: number | null
+  seenAt?: string
+  lastSeenAt?: string
+  missingFromLatestScan?: boolean | null
+  tradeExeMode?: number | null
+  orderMode?: number | null
+  fillingMode?: number | null
+  expirationMode?: number | null
+  expirationTime?: number | null
+  orderGtcMode?: number | null
+  swapMode?: number | null
+  swapLong?: number | null
+  swapShort?: number | null
+  swapRollover3Days?: number | null
+  sessions?: {
+    quote?: string[]
+    trade?: string[]
+  }
+  sessionsPath?: string
+  sessionsSource?: string
+  sessionsUpdatedAt?: string
 }
 
 export type Mt5SymbolsPayload = {

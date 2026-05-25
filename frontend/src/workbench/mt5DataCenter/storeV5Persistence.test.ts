@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { storageKeys } from '../persistence/storageKeys'
 import {
+  mergeSymbolRowsWithSnapshot,
   publishSharedSelection,
   readImportCenterSelectedTab,
   readPersistedRealtimeSnapshot,
@@ -74,5 +75,14 @@ describe('storeV5Persistence', () => {
     expect(readSharedSelection()).toEqual({ symbol: 'XAUUSDm', period: 'H4' })
     expect(events).toContain(watchlistChangedEvent)
     expect(events).toContain(shortcutMenuChangedEvent)
+  })
+
+  it('keeps cached MT5 symbol details when local store rows are sparse', () => {
+    expect(mergeSymbolRowsWithSnapshot(
+      [{ symbol: 'XAUUSDm' }],
+      [{ currencyBase: 'XAU', currencyProfit: 'USD', description: 'Gold vs US Dollar', digits: 3, path: 'Standard\\Forex\\XAUUSDm', symbol: 'XAUUSDm' }],
+    )).toEqual([
+      { currencyBase: 'XAU', currencyProfit: 'USD', description: 'Gold vs US Dollar', digits: 3, path: 'Standard\\Forex\\XAUUSDm', symbol: 'XAUUSDm' },
+    ])
   })
 })

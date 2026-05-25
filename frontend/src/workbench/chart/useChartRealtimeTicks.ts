@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import type { Chart } from 'klinecharts'
 import { queryMt5Tick } from '../../services/mt5/mt5SymbolsApi'
+import { saveMarketStatusTitleSnapshotFromRealtimeTick } from '../mt5DataCenter/marketStatusTitleState'
 import { readWatchlistRealtimeEnabled, realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
 import { applyPriceVolumePrecision } from './chartStyleAppliers'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
@@ -23,6 +24,12 @@ type UseChartRealtimeTicksOptions = {
   period: string
   symbol: string
   totalRows?: number | null
+}
+
+export const chartRealtimeDataChangedEvent = 'ff:chart-realtime-data-changed'
+
+function dispatchChartRealtimeDataChanged() {
+  window.dispatchEvent(new Event(chartRealtimeDataChangedEvent))
 }
 
 function estimateTurnover(high: number, low: number, close: number, volume: number) {
@@ -50,15 +57,23 @@ function replaceOrAppendRealRow(rows: ReturnType<Chart['getDataList']>, nextRow:
   return [...realRows, nextRow]
 }
 
-function commitRealtimeRow(chart: Chart, rows: ReturnType<Chart['getDataList']>, nextRow: ReturnType<Chart['getDataList']>[number], period: string) {
+function commitRealtimeRow(
+  chart: Chart,
+  rows: ReturnType<Chart['getDataList']>,
+  nextRow: ReturnType<Chart['getDataList']>[number],
+  period: string,
+  onCommitted?: () => void,
+) {
   if (rows.length !== stripFuturePlaceholders(rows).length) {
     chart.applyNewData(replaceOrAppendRealRow(rows, nextRow), false, () => {
       applyRightPlaceholderOffset(chart, period)
+      onCommitted?.()
     })
     return
   }
   chart.updateData(nextRow, () => {
     applyRightPlaceholderOffset(chart, period)
+    onCommitted?.()
   })
 }
 
@@ -115,6 +130,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
 
       const applyRealtimeTick = (detail: Partial<Mt5RealtimeTickEventDetail> | null) => {
         if (!detail || normalizeRealtimeSymbol(detail.symbol) !== normalizedSymbol) return
+        saveMarketStatusTitleSnapshotFromRealtimeTick(detail as Mt5RealtimeTickEventDetail)
         latestTick = detail
         const activeChart = chartInstanceRef.current
         if (!activeChart) return
@@ -152,7 +168,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
             volume: nextVolume,
             turnover: estimateTurnover(nextHigh, nextLow, last, nextVolume),
           }
-          activeChart.updateData(nextRow)
+          activeChart.updateData(nextRow, dispatchChartRealtimeDataChanged)
           applyPriceVolumePrecision(activeChart, symbol)
         }
 
@@ -163,7 +179,17 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
 
         if (!isDirectM1) {
           if (bucketTimestamp > latest.timestamp + periodMs) {
-            updateLatestPrice()
+            const nextRow = {
+              timestamp: bucketTimestamp,
+              open: latest.close,
+              high: last,
+              low: last,
+              close: last,
+              volume: 0,
+              turnover: 0,
+            }
+            commitRealtimeRow(activeChart, currentData, nextRow, period, dispatchChartRealtimeDataChanged)
+            applyPriceVolumePrecision(activeChart, symbol)
             return
           }
 
@@ -177,7 +203,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
               volume: 0,
               turnover: 0,
             }
-            commitRealtimeRow(activeChart, currentData, nextRow, period)
+            commitRealtimeRow(activeChart, currentData, nextRow, period, dispatchChartRealtimeDataChanged)
             applyPriceVolumePrecision(activeChart, symbol)
           }
           return
@@ -194,7 +220,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
             volume: tickVolume,
             turnover: estimateTurnover(last, last, last, tickVolume),
           }
-          commitRealtimeRow(activeChart, currentData, nextRow, period)
+          commitRealtimeRow(activeChart, currentData, nextRow, period, dispatchChartRealtimeDataChanged)
           applyPriceVolumePrecision(activeChart, symbol)
           return
         }
@@ -212,7 +238,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
             close: last,
             volume: nextVolume,
             turnover: estimateTurnover(nextHigh, nextLow, last, nextVolume),
-          })
+          }, dispatchChartRealtimeDataChanged)
           applyPriceVolumePrecision(activeChart, symbol)
         }
       }
