@@ -270,7 +270,17 @@ def read_json(path: Path) -> dict[str, Any] | None:
     try:
         if not path.is_file():
             return None
-        data = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_bytes()
+        text: str | None = None
+        for encoding in ("utf-8", "utf-8-sig", "utf-16", "utf-16-le", "utf-16-be", "mbcs"):
+            try:
+                text = raw.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        if text is None:
+            return None
+        data = json.loads(text)
         return data if isinstance(data, dict) else None
     except Exception:
         return None

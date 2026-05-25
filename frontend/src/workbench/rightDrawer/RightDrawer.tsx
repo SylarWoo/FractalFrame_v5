@@ -7,6 +7,7 @@ import { formatSymbolStatus, normalizeStoredStatus, periodFromStoreTableKey, sto
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
 import { clearStorePanelPersistence, getInitialSymbolSnapshot, mergeSymbolRowsWithSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
 import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
+import { saveMarketStatusTitleSnapshotFromSymbolSession } from '../mt5DataCenter/marketStatusTitleState'
 import { storeTableAggregatePeriods } from './rightDrawerStoreTables'
 import { useRightDrawerResize } from './useRightDrawerResize'
 import { useRightDrawerSelection } from './useRightDrawerSelection'
@@ -25,6 +26,11 @@ import {
 } from '../../services/mt5/mt5SymbolsApi'
 import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 
+function hasLoadedSymbolSessions(row: Mt5SymbolRow | undefined) {
+  if (!row?.sessions) return false
+  if (row.sessionsSource) return true
+  return [...(row.sessions.quote ?? []), ...(row.sessions.trade ?? [])].some((value) => String(value ?? '').trim())
+}
 
 export function RightDrawer({
   activeDrawer,
@@ -177,7 +183,7 @@ export function RightDrawer({
         setLoading(true)
         setError('')
         setStatus(initialSnapshot?.symbols.length ? initialSnapshot.status : '正在读取 MT5 品种缓存...')
-        const payload = await fetchMt5Symbols({ limit: 50000, refresh: false })
+        const payload = await fetchMt5Symbols({ includeSessions: true, limit: 50000, refresh: false })
         if (cancelled) return
         const rows = mergeSymbolRowsWithSnapshot(
           Array.isArray(payload.symbols) ? payload.symbols : [],
@@ -226,9 +232,12 @@ export function RightDrawer({
   }, [])
 
   useEffect(() => {
-    if (!selectedSymbol || symbolDetailsLoadedRef.current.has(selectedSymbol)) return
+    if (!selectedSymbol) return
     const currentRow = symbols.find((row) => row.symbol === selectedSymbol)
-    if (currentRow?.sessions) return
+    if (currentRow) saveMarketStatusTitleSnapshotFromSymbolSession(currentRow)
+    if (hasLoadedSymbolSessions(currentRow)) return
+    symbolDetailsLoadedRef.current.delete(selectedSymbol)
+    if (symbolDetailsLoadedRef.current.has(selectedSymbol)) return
 
     let cancelled = false
     symbolDetailsLoadedRef.current.add(selectedSymbol)
@@ -275,7 +284,7 @@ export function RightDrawer({
     setStatus(refresh ? '正在扫描 MT5 品种...' : '正在读取 MT5 品种缓存...')
 
     try {
-      const payload = await fetchMt5Symbols({ limit: 50000, refresh })
+      const payload = await fetchMt5Symbols({ includeSessions: true, limit: 50000, refresh })
         const rows = mergeSymbolRowsWithSnapshot(Array.isArray(payload.symbols) ? payload.symbols : [], symbols)
       const merge = payload.scanReport ?? payload.cache?.lastScanReport
       const nextSelectedSymbol =

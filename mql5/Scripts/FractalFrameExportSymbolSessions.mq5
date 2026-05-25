@@ -17,7 +17,7 @@ string JsonEscape(const string value)
       else if(ch == '\r') result += "\\r";
       else if(ch == '\n') result += "\\n";
       else if(ch == '\t') result += "\\t";
-      else result += ShortToString(ch);
+      else result += StringSubstr(value, i, 1);
    }
    return result;
 }
@@ -63,7 +63,7 @@ bool SymbolRequested(const string symbol, const string requested)
 void OnStart()
 {
    string folder = "FractalFrame";
-   int flags = FILE_WRITE | FILE_TXT | FILE_UTF8;
+   int flags = FILE_WRITE | FILE_TXT;
    if(InpUseCommonFiles)
    {
       flags |= FILE_COMMON;

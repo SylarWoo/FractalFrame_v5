@@ -292,8 +292,9 @@ export function resolveStoreOperationProgress(
 export function selectedDetailRows(row: Mt5SymbolRow): DetailRow[] {
   const spread = row.spreadFloat ? `${formatDetailValue(row.spread)} 浮动` : row.spread
   return [
+    ['名称', row.name],
+    ['描述', row.description],
     ['分类', row.category || row.source || row.market, '市场', row.market],
-    ['名称', row.name, '描述', row.description],
     ['小数位', row.digits, '点', row.point],
     ['点差', spread, '止损级别', row.tradeStopsLevel],
     ['合约量', row.tradeContractSize, '计算', row.tradeCalcMode],
@@ -304,14 +305,16 @@ export function selectedDetailRows(row: Mt5SymbolRow): DetailRow[] {
     ['步长', row.volumeStep, 'Tick Size', row.tradeTickSize],
     ['Tick Value', row.tradeTickValue, '可见', row.visible],
     ['自定义', row.custom, '选择', row.select],
-    ['最后扫描', row.lastSeenAt || row.seenAt, '最新缺失', row.missingFromLatestScan],
-    ['成交指令', formatMt5Bitmask(row.fillingMode, [[1, 'FOK'], [2, 'IOC'], [4, 'BOC']]), '到期', formatMt5Bitmask(row.expirationMode, [[1, 'GTC'], [2, '日'], [4, '指定'], [8, '指定日']])],
-    ['订单', formatMt5Bitmask(row.orderMode, [[1, '买入'], [2, '卖出'], [4, '买入限价'], [8, '卖出限价'], [16, '买入止损'], [32, '卖出止损'], [64, '止损限价']]), 'GTC 模式', row.orderGtcMode],
+    ['最新缺失', row.missingFromLatestScan, 'GTC 模式', row.orderGtcMode],
     ['库存费类型', formatSwapMode(row.swapMode), '买入库存费', row.swapLong],
     ['卖出库存费', row.swapShort, '3 日库存费', row.swapRollover3Days],
+    ['成交指令', formatMt5Bitmask(row.fillingMode, [[1, 'FOK'], [2, 'IOC'], [4, 'BOC']])],
+    ['订单', formatMt5Bitmask(row.orderMode, [[1, '买入'], [2, '卖出'], [4, '买入限价'], [8, '卖出限价'], [16, '买入止损'], [32, '卖出止损'], [64, '止损限价']])],
+    ['到期', formatMt5Bitmask(row.expirationMode, [[1, 'GTC'], [2, '日'], [4, '指定'], [8, '指定日']])],
     ['到期时间', row.expirationTime],
     ['交易期间', row.sessionsSource ? `行情 / 交易 · ${row.sessionsSource}` : '未导出'],
-    ['时段更新时间', row.sessionsUpdatedAt, '时段文件', row.sessionsPath],
+    ['时段更新时间', row.sessionsUpdatedAt],
+    ['时段文件', row.sessionsPath],
     ['星期日', formatSessionPair(row, 0)],
     ['星期一', formatSessionPair(row, 1)],
     ['星期二', formatSessionPair(row, 2)],
@@ -320,6 +323,7 @@ export function selectedDetailRows(row: Mt5SymbolRow): DetailRow[] {
     ['星期五', formatSessionPair(row, 5)],
     ['星期六', formatSessionPair(row, 6)],
     ['路径', row.path],
+    ['最后扫描', row.lastSeenAt || row.seenAt],
   ]
 }
 

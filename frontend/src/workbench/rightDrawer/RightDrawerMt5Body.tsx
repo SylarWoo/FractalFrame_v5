@@ -109,7 +109,7 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
     watchlistRealtimeReady, watchlistRows, watchlistColumnWidths, watchlistTableHeight,
     watchlistTableWrapRef, watchlistTicks,
   } = props
-  const selectedMarketStatus = useSelectedMarketStatus(localStoreStatus, watchlistTicks[selectedSymbol], watchlistRealtimeEnabled)
+  const selectedMarketStatus = useSelectedMarketStatus(selectedRow, localStoreStatus, watchlistTicks[selectedSymbol], watchlistRealtimeEnabled)
 
   return (
     <div className="ff-right-drawer__body">
@@ -231,12 +231,43 @@ function isRecentRealtimeTick(tickSeconds: number | null, staleSeconds = 300) {
   return Math.floor(Date.now() / 1000) - tickSeconds <= staleSeconds
 }
 
-function useSelectedMarketStatus(localStoreStatus: StoreV5CheckPayload | null, realtimeTick: Mt5RealtimeTick | undefined, realtimeEnabled: boolean): SelectedMarketStatus {
+function parseSessionMinute(value: string) {
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) return null
+  const hour = Number(match[1])
+  const minute = Number(match[2])
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
+  return hour * 60 + minute
+}
+
+function isMinuteInSessionRange(range: string, currentMinute: number) {
+  const [rawStart, rawEnd] = range.split('-')
+  if (!rawStart || !rawEnd) return false
+  const start = parseSessionMinute(rawStart)
+  const end = parseSessionMinute(rawEnd)
+  if (start == null || end == null) return false
+  if (start === 0 && end === 0) return true
+  if (start < end) return currentMinute >= start && currentMinute < end
+  return currentMinute >= start || currentMinute < end
+}
+
+function resolveSessionOpen(row: Mt5SymbolRow | null, now = new Date()) {
+  const tradeSessions = row?.sessions?.trade
+  if (!Array.isArray(tradeSessions)) return null
+  const daySessions = tradeSessions[now.getUTCDay()]
+  if (!daySessions || !daySessions.trim()) return false
+  const currentMinute = now.getUTCHours() * 60 + now.getUTCMinutes()
+  return daySessions.split(',').some((range) => isMinuteInSessionRange(range.trim(), currentMinute))
+}
+
+function useSelectedMarketStatus(selectedRow: Mt5SymbolRow | null, localStoreStatus: StoreV5CheckPayload | null, realtimeTick: Mt5RealtimeTick | undefined, realtimeEnabled: boolean): SelectedMarketStatus {
+  const sessionOpen = resolveSessionOpen(selectedRow)
   const realtimeTickSeconds = resolveTickTimeSeconds(realtimeTick)
   const realtimeOpen = realtimeEnabled && isRecentRealtimeTick(realtimeTickSeconds)
+  const isOpen = sessionOpen ?? realtimeOpen
   const [marketStatus, setMarketStatus] = useState<SelectedMarketStatus>(() => ({
-    isOpen: realtimeOpen,
-    lastTime: realtimeOpen ? realtimeTickSeconds : resolveLocalM1LastTime(localStoreStatus),
+    isOpen,
+    lastTime: sessionOpen != null ? Math.floor(Date.now() / 1000) : (realtimeOpen ? realtimeTickSeconds : resolveLocalM1LastTime(localStoreStatus)),
     timezone: readChartTimezone(),
   }))
 
@@ -255,10 +286,10 @@ function useSelectedMarketStatus(localStoreStatus: StoreV5CheckPayload | null, r
   useEffect(() => {
     setMarketStatus((current) => ({
       ...current,
-      isOpen: realtimeOpen,
-      lastTime: realtimeOpen ? realtimeTickSeconds : resolveLocalM1LastTime(localStoreStatus),
+      isOpen,
+      lastTime: sessionOpen != null ? Math.floor(Date.now() / 1000) : (realtimeOpen ? realtimeTickSeconds : resolveLocalM1LastTime(localStoreStatus)),
     }))
-  }, [localStoreStatus, realtimeOpen, realtimeTickSeconds])
+  }, [isOpen, localStoreStatus, realtimeOpen, realtimeTickSeconds, sessionOpen])
 
   return marketStatus
 }
