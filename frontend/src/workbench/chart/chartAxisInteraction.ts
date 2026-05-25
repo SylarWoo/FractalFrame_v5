@@ -23,8 +23,10 @@ type AxisRange = {
   realRange: number
 }
 
-export const chartYAxisUnlockPaneIds = ['candle_pane']
+export const candlePaneId = 'candle_pane'
+export const chartYAxisUnlockPaneIds: string[] = []
 export const indicatorYAxisAutoScalePaneIds = ['rsi_pane', 'stoch_pane', 'macd_pane', 'tsi_pane', 'vi_pane']
+export const allYAxisAutoScalePaneIds = [candlePaneId, ...indicatorYAxisAutoScalePaneIds]
 export const chartManualYAxisPaneIds = [...indicatorYAxisAutoScalePaneIds]
 export const chartManualYAxisRangeChangeEvent = 'ff:chart-manual-y-axis-range-change'
 const manualYAxisDragSpeed = 2.8
@@ -54,6 +56,14 @@ export function resetIndicatorYAxisAutoScale(chart: Chart, paneIds: string[] = i
 
 export function scheduleResetIndicatorYAxisAutoScale(chart: Chart, paneIds?: string[]) {
   window.requestAnimationFrame(() => resetIndicatorYAxisAutoScale(chart, paneIds))
+}
+
+export function resetYAxisAutoScaleFlags(chart: Chart, paneIds: string[] = allYAxisAutoScalePaneIds) {
+  resetIndicatorYAxisAutoScale(chart, paneIds)
+}
+
+export function scheduleResetYAxisAutoScaleFlags(chart: Chart, paneIds?: string[]) {
+  window.requestAnimationFrame(() => resetYAxisAutoScaleFlags(chart, paneIds))
 }
 
 export function installYAxisDragOptimization(chart: Chart) {

@@ -16,7 +16,7 @@ import {
   resolveInitialLimit,
 } from './chartCoreDataUtils'
 import { applyPriceVolumePrecision, resetYAxisAutoScale } from './chartStyleAppliers'
-import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
+import { scheduleResetYAxisAutoScaleFlags } from './chartAxisInteraction'
 import {
   captureChartViewportSnapshot,
   markChartViewportPersistenceReady,
@@ -272,17 +272,15 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
         resetYAxisAutoScale(chart)
-        scheduleResetIndicatorYAxisAutoScale(chart)
+        scheduleResetYAxisAutoScaleFlags(chart)
         scrollJumpTargetIntoView(chart, options.jumpTimestamp)
         applySessionBreakIndicator(chart, options.symbol, options.period)
-        scheduleUnlockYAxisManualDrag(chart)
         window.setTimeout(() => {
           if (options.shouldIgnore()) return
           resetYAxisAutoScale(chart)
-          scheduleResetIndicatorYAxisAutoScale(chart)
+          scheduleResetYAxisAutoScaleFlags(chart)
           scrollJumpTargetIntoView(chart, options.jumpTimestamp)
           applySessionBreakIndicator(chart, options.symbol, options.period)
-          scheduleUnlockYAxisManualDrag(chart)
           markChartViewportPersistenceReady(chart, options.symbol, options.period)
         }, 0)
           options.setLoadState({
@@ -321,10 +319,10 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
         resetYAxisAutoScale(chart)
-        scheduleResetIndicatorYAxisAutoScale(chart)
+        scheduleResetYAxisAutoScaleFlags(chart)
         applySessionBreakIndicator(chart, options.symbol, options.period)
-        scheduleUnlockYAxisManualDrag(chart)
         restoreViewportAfterLoad(chart, options)
+        scheduleResetYAxisAutoScaleFlags(chart)
         options.setLoadState({
           error: false,
           loadedPeriod: options.period,

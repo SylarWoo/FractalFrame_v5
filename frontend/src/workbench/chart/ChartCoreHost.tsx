@@ -2,9 +2,10 @@ import { useEffect, useRef } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
-import { scheduleResetIndicatorYAxisAutoScale, scheduleUnlockYAxisManualDrag } from './chartAxisInteraction'
+import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
+import { useChartRealtimeTicks } from './useChartRealtimeTicks'
 import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
 import { useChartStepLoad } from './useChartStepLoad'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
@@ -114,6 +115,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     loadState.rows > 0 &&
     loadState.loadedSymbol === symbol &&
     loadState.loadedPeriod === period
+  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol })
   const candleCountdown = useCurrentCandleCountdown({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol })
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const stochPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
@@ -174,12 +176,12 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           rsiPaneHeightObserverRef.current?.disconnect()
           rsiPaneHeightObserverRef.current = null
           chart.removeIndicator(rsiPaneId, 'RSI')
-          scheduleUnlockYAxisManualDrag(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           return
         }
         if (chart.getIndicatorByPaneId(rsiPaneId, 'RSI')) {
           chart.overrideIndicator({ name: 'RSI', calcParams: [indicatorCommand.settings] }, rsiPaneId, observeRsiPaneHeight)
-          scheduleUnlockYAxisManualDrag(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           return
         }
         chart.createIndicator(
@@ -189,17 +191,17 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeRsiPaneHeight()
             refreshChartDrawings()
-            scheduleUnlockYAxisManualDrag(chart)
+            scheduleResetIndicatorYAxisAutoScale(chart)
           },
         )
-        scheduleUnlockYAxisManualDrag(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
       } else {
         const size = chart.getSize(rsiPaneId)
         if (size?.height) writeStoredPaneHeight(rsiPaneHeightStorageKey, size.height)
         rsiPaneHeightObserverRef.current?.disconnect()
         rsiPaneHeightObserverRef.current = null
         chart.removeIndicator(rsiPaneId, 'RSI')
-        scheduleUnlockYAxisManualDrag(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
       }
     }
 
@@ -213,12 +215,12 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           stochPaneHeightObserverRef.current?.disconnect()
           stochPaneHeightObserverRef.current = null
           chart.removeIndicator(stochPaneId, 'Stoch')
-          scheduleUnlockYAxisManualDrag(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           return
         }
         if (chart.getIndicatorByPaneId(stochPaneId, 'Stoch')) {
           chart.overrideIndicator({ name: 'Stoch', calcParams: [indicatorCommand.settings] }, stochPaneId, observeStochPaneHeight)
-          scheduleUnlockYAxisManualDrag(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           return
         }
         chart.createIndicator(
@@ -228,17 +230,17 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeStochPaneHeight()
             refreshChartDrawings()
-            scheduleUnlockYAxisManualDrag(chart)
+            scheduleResetIndicatorYAxisAutoScale(chart)
           },
         )
-        scheduleUnlockYAxisManualDrag(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
       } else {
         const size = chart.getSize(stochPaneId)
         if (size?.height) writeStoredPaneHeight(stochPaneHeightStorageKey, size.height)
         stochPaneHeightObserverRef.current?.disconnect()
         stochPaneHeightObserverRef.current = null
         chart.removeIndicator(stochPaneId, 'Stoch')
-        scheduleUnlockYAxisManualDrag(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
       }
     }
 
@@ -252,13 +254,13 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           macdPaneHeightObserverRef.current?.disconnect()
           macdPaneHeightObserverRef.current = null
           chart.removeIndicator(macdPaneId, 'MACD')
-          scheduleUnlockYAxisManualDrag(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           return
         }
         if (chart.getIndicatorByPaneId(macdPaneId, 'MACD')) {
           chart.overrideIndicator({ name: 'MACD', calcParams: [indicatorCommand.settings] }, macdPaneId, observeMacdPaneHeight)
           scheduleResetIndicatorYAxisAutoScale(chart, [macdPaneId])
-          scheduleUnlockYAxisManualDrag(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           return
         }
         chart.createIndicator(
@@ -269,17 +271,17 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
             observeMacdPaneHeight()
             refreshChartDrawings()
             scheduleResetIndicatorYAxisAutoScale(chart, [macdPaneId])
-            scheduleUnlockYAxisManualDrag(chart)
+            scheduleResetIndicatorYAxisAutoScale(chart)
           },
         )
-        scheduleUnlockYAxisManualDrag(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
       } else {
         const size = chart.getSize(macdPaneId)
         if (size?.height) writeStoredPaneHeight(macdPaneHeightStorageKey, size.height)
         macdPaneHeightObserverRef.current?.disconnect()
         macdPaneHeightObserverRef.current = null
         chart.removeIndicator(macdPaneId, 'MACD')
-        scheduleUnlockYAxisManualDrag(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
       }
     }
 
@@ -293,12 +295,12 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           tsiPaneHeightObserverRef.current?.disconnect()
           tsiPaneHeightObserverRef.current = null
           chart.removeIndicator(tsiPaneId, 'TSI')
-          scheduleUnlockYAxisManualDrag(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           return
         }
         if (chart.getIndicatorByPaneId(tsiPaneId, 'TSI')) {
           chart.overrideIndicator({ name: 'TSI', calcParams: [indicatorCommand.settings] }, tsiPaneId, observeTsiPaneHeight)
-          scheduleUnlockYAxisManualDrag(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           return
         }
         chart.createIndicator(
@@ -308,17 +310,17 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeTsiPaneHeight()
             refreshChartDrawings()
-            scheduleUnlockYAxisManualDrag(chart)
+            scheduleResetIndicatorYAxisAutoScale(chart)
           },
         )
-        scheduleUnlockYAxisManualDrag(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
       } else {
         const size = chart.getSize(tsiPaneId)
         if (size?.height) writeStoredPaneHeight(tsiPaneHeightStorageKey, size.height)
         tsiPaneHeightObserverRef.current?.disconnect()
         tsiPaneHeightObserverRef.current = null
         chart.removeIndicator(tsiPaneId, 'TSI')
-        scheduleUnlockYAxisManualDrag(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
       }
     }
 
@@ -332,12 +334,12 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           viPaneHeightObserverRef.current?.disconnect()
           viPaneHeightObserverRef.current = null
           chart.removeIndicator(viPaneId, 'VI')
-          scheduleUnlockYAxisManualDrag(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           return
         }
         if (chart.getIndicatorByPaneId(viPaneId, 'VI')) {
           chart.overrideIndicator({ name: 'VI', calcParams: [indicatorCommand.settings] }, viPaneId, observeViPaneHeight)
-          scheduleUnlockYAxisManualDrag(chart)
+          scheduleResetIndicatorYAxisAutoScale(chart)
           return
         }
         chart.createIndicator(
@@ -347,17 +349,17 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           () => {
             observeViPaneHeight()
             refreshChartDrawings()
-            scheduleUnlockYAxisManualDrag(chart)
+            scheduleResetIndicatorYAxisAutoScale(chart)
           },
         )
-        scheduleUnlockYAxisManualDrag(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
       } else {
         const size = chart.getSize(viPaneId)
         if (size?.height) writeStoredPaneHeight(viPaneHeightStorageKey, size.height)
         viPaneHeightObserverRef.current?.disconnect()
         viPaneHeightObserverRef.current = null
         chart.removeIndicator(viPaneId, 'VI')
-        scheduleUnlockYAxisManualDrag(chart)
+        scheduleResetIndicatorYAxisAutoScale(chart)
       }
     }
 

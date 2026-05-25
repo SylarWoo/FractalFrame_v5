@@ -28,7 +28,7 @@ export const chartSettingDefaults = {
   statusCandleChangeVisible: true,
   statusCandleVolumeVisible: true,
   statusCandleTimeVisible: true,
-  statusMarketStatusVisible: false,
+  statusMarketStatusVisible: true,
   currentCandleCountdownVisible: true,
   rightPlaceholderVisible: false,
   statusIndicatorTitleVisible: true,
