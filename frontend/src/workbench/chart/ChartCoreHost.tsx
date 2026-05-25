@@ -17,9 +17,10 @@ import { ensureTradingViewDpoIndicator } from './tradingViewDpoIndicator'
 import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
 import { ensureTradingViewStochIndicator } from './tradingViewStochIndicator'
 import { ensureTradingViewTsiIndicator } from './tradingViewTsiIndicator'
+import { ensureTradingViewVdoIndicator } from './tradingViewVdoIndicator'
 import { ensureTradingViewViIndicator } from './tradingViewViIndicator'
 import { ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
-import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import { readString, writeString } from '../persistence/jsonStorage'
 import './ChartCoreHost.css'
@@ -28,12 +29,14 @@ const rsiPaneId = 'rsi_pane'
 const stochPaneId = 'stoch_pane'
 const macdPaneId = 'macd_pane'
 const dpoPaneId = 'dpo_pane'
+const vdoPaneId = 'vdo_pane'
 const tsiPaneId = 'tsi_pane'
 const viPaneId = 'vi_pane'
 const rsiPaneHeightStorageKey = 'fractalframe.chart.rsiPaneHeight'
 const stochPaneHeightStorageKey = 'fractalframe.chart.stochPaneHeight'
 const macdPaneHeightStorageKey = 'fractalframe.chart.macdPaneHeight'
 const dpoPaneHeightStorageKey = 'fractalframe.chart.dpoPaneHeight'
+const vdoPaneHeightStorageKey = 'fractalframe.chart.vdoPaneHeight'
 const tsiPaneHeightStorageKey = 'fractalframe.chart.tsiPaneHeight'
 const viPaneHeightStorageKey = 'fractalframe.chart.viPaneHeight'
 const defaultRsiPaneHeight = 128
@@ -79,6 +82,7 @@ export type ChartIndicatorCommand = {
   | { name: 'RSI'; settings?: RsiIndicatorSettings }
   | { name: 'Stoch'; settings?: StochIndicatorSettings }
   | { name: 'TSI'; settings?: TsiIndicatorSettings }
+  | { name: 'VDO'; settings?: VdoIndicatorSettings }
   | { name: 'VI'; settings?: ViIndicatorSettings }
   | { name: 'VWAP'; settings?: VwapIndicatorSettings }
   | { name: 'Vol'; settings?: VolIndicatorSettings }
@@ -134,6 +138,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const stochPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const macdPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const dpoPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const vdoPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const tsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const viPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const mainVolumeOverlayRef = useRef<ReturnType<typeof installMainVolumeOverlay> | null>(null)
@@ -173,6 +178,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const observeStochPaneHeight = () => observeIndicatorPaneHeight(stochPaneId, stochPaneHeightStorageKey, stochPaneHeightObserverRef)
   const observeMacdPaneHeight = () => observeIndicatorPaneHeight(macdPaneId, macdPaneHeightStorageKey, macdPaneHeightObserverRef)
   const observeDpoPaneHeight = () => observeIndicatorPaneHeight(dpoPaneId, dpoPaneHeightStorageKey, dpoPaneHeightObserverRef)
+  const observeVdoPaneHeight = () => observeIndicatorPaneHeight(vdoPaneId, vdoPaneHeightStorageKey, vdoPaneHeightObserverRef)
   const observeTsiPaneHeight = () => observeIndicatorPaneHeight(tsiPaneId, tsiPaneHeightStorageKey, tsiPaneHeightObserverRef)
   const observeViPaneHeight = () => observeIndicatorPaneHeight(viPaneId, viPaneHeightStorageKey, viPaneHeightObserverRef)
   const isIndicatorVisibleInCurrentPeriod = (name: ChartIndicatorCommand['name']) => isStoredVisibilityRangePeriodVisible(`indicator:${name}`, period)
@@ -335,6 +341,45 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         dpoPaneHeightObserverRef.current?.disconnect()
         dpoPaneHeightObserverRef.current = null
         chart.removeIndicator(dpoPaneId, 'DPO')
+        scheduleResetIndicatorYAxisAutoScale(chart)
+      }
+    }
+
+    if (indicatorCommand.name === 'VDO') {
+      ensureTradingViewVdoIndicator()
+
+      if (indicatorCommand.action === 'load') {
+        if (!isIndicatorVisibleInCurrentPeriod('VDO')) {
+          const size = chart.getSize(vdoPaneId)
+          if (size?.height) writeStoredPaneHeight(vdoPaneHeightStorageKey, size.height)
+          vdoPaneHeightObserverRef.current?.disconnect()
+          vdoPaneHeightObserverRef.current = null
+          chart.removeIndicator(vdoPaneId, 'VDO')
+          scheduleResetIndicatorYAxisAutoScale(chart)
+          return
+        }
+        if (chart.getIndicatorByPaneId(vdoPaneId, 'VDO')) {
+          chart.overrideIndicator({ name: 'VDO', calcParams: [indicatorCommand.settings] }, vdoPaneId, observeVdoPaneHeight)
+          scheduleResetIndicatorYAxisAutoScale(chart)
+          return
+        }
+        chart.createIndicator(
+          { name: 'VDO', calcParams: [indicatorCommand.settings] },
+          false,
+          { id: vdoPaneId, height: readStoredPaneHeight(vdoPaneHeightStorageKey), minHeight: minRsiPaneHeight },
+          () => {
+            observeVdoPaneHeight()
+            refreshChartDrawings()
+            scheduleResetIndicatorYAxisAutoScale(chart)
+          },
+        )
+        scheduleResetIndicatorYAxisAutoScale(chart)
+      } else {
+        const size = chart.getSize(vdoPaneId)
+        if (size?.height) writeStoredPaneHeight(vdoPaneHeightStorageKey, size.height)
+        vdoPaneHeightObserverRef.current?.disconnect()
+        vdoPaneHeightObserverRef.current = null
+        chart.removeIndicator(vdoPaneId, 'VDO')
         scheduleResetIndicatorYAxisAutoScale(chart)
       }
     }

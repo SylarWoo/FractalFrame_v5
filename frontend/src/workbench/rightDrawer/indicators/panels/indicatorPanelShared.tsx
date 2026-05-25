@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type {
   MacdIndicatorSettings,
@@ -14,6 +14,7 @@ import type {
   RsiSource,
   StochIndicatorSettings,
   TsiIndicatorSettings,
+  VdoIndicatorSettings,
   ViIndicatorSettings,
   VwapAnchorPeriod,
   VwapBandCalculationMode,
@@ -235,6 +236,13 @@ export function updateDpoSettings(
   return { ...current, ...patch }
 }
 
+export function updateVdoSettings(
+  current: VdoIndicatorSettings,
+  patch: Partial<VdoIndicatorSettings>,
+): VdoIndicatorSettings {
+  return { ...current, ...patch }
+}
+
 export function CheckControl({
   checked,
   label,
@@ -266,8 +274,10 @@ export function NumberBox({
   value: number
 }) {
   const [text, setText] = useState(String(value))
+  const focusedRef = useRef(false)
 
   useEffect(() => {
+    if (focusedRef.current) return
     setText(String(value))
   }, [value])
 
@@ -279,6 +289,8 @@ export function NumberBox({
 
   return (
     <input
+      className="ff-indicators-number-box-v1"
+      inputMode="decimal"
       max={max}
       min={min}
       onChange={(event) => {
@@ -287,6 +299,7 @@ export function NumberBox({
         commitText(nextText)
       }}
       onBlur={() => {
+        focusedRef.current = false
         const nextValue = Number(text)
         if (text === '' || text === '-' || text === '+' || !Number.isFinite(nextValue)) {
           setText(String(value))
@@ -296,8 +309,11 @@ export function NumberBox({
         setText(String(clampedValue))
         onChange(clampedValue)
       }}
+      onFocus={() => {
+        focusedRef.current = true
+      }}
       step={step}
-      type="number"
+      type="text"
       value={text}
     />
   )

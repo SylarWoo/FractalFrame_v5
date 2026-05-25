@@ -49,6 +49,10 @@ export type DpoIndicatorSettings = {
   zeroLineVisible: boolean
 }
 
+export type VdoIndicatorSettings = DpoIndicatorSettings & {
+  emaSmoothing: number
+}
+
 export type MacdIndicatorSettings = {
   source: RsiSource
   fastLength: number
@@ -323,6 +327,7 @@ export type PersistedIndicatorsState = {
     RSI?: boolean
     Stoch?: boolean
     TSI?: boolean
+    VDO?: boolean
     VI?: boolean
     VWAP?: boolean
     Vol?: boolean
@@ -334,6 +339,7 @@ export type PersistedIndicatorsState = {
   rsi: RsiIndicatorSettings
   stoch: StochIndicatorSettings
   tsi: TsiIndicatorSettings
+  vdo: VdoIndicatorSettings
   vi: ViIndicatorSettings
   vwap: VwapIndicatorSettings
   vol: VolIndicatorSettings
@@ -611,6 +617,18 @@ export const defaultDpoIndicatorSettings: DpoIndicatorSettings = {
   zeroLineOpacity: 1,
   zeroLineValue: 0,
   zeroLineVisible: true,
+}
+
+export const defaultVdoIndicatorSettings: VdoIndicatorSettings = {
+  ...defaultDpoIndicatorSettings,
+  backgroundVisible: true,
+  downLineValue: -0.236,
+  downLineVisible: true,
+  dpoColor: '#2962ff',
+  emaSmoothing: 0,
+  length: 120,
+  upLineValue: 0.236,
+  upLineVisible: true,
 }
 
 export const defaultVwapIndicatorSettings: VwapIndicatorSettings = {
@@ -895,6 +913,15 @@ export function normalizeMrSettings(input?: Partial<MrIndicatorSettings>): MrInd
     labelsOnPriceScale: merged.labelsOnPriceScale !== false,
     precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
     valuesInStatusLine: merged.valuesInStatusLine !== false,
+  }
+}
+
+export function normalizeVdoSettings(input?: Partial<VdoIndicatorSettings>): VdoIndicatorSettings {
+  const merged = { ...defaultVdoIndicatorSettings, ...(input ?? {}) }
+  const emaSmoothing = Math.round(Number(merged.emaSmoothing))
+  return {
+    ...normalizeDpoSettings(merged),
+    emaSmoothing: Number.isFinite(emaSmoothing) ? Math.max(0, Math.min(emaSmoothing, 500)) : defaultVdoIndicatorSettings.emaSmoothing,
   }
 }
 

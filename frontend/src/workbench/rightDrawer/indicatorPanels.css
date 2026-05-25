@@ -284,10 +284,24 @@
   grid-template-columns: 64px max-content max-content;
 }
 
+.ff-indicators-dpo-style-panel-v1__precision-row {
+  grid-template-columns: 64px max-content;
+  justify-content: start;
+  gap: 8px;
+}
+
+.ff-indicators-dpo-style-panel-v1__precision-row .ff-indicators-input-panel-v1__control,
+.ff-indicators-dpo-style-panel-v1__precision-row .ff-openable-select {
+  width: 120px;
+  max-width: 120px;
+}
+
 .ff-indicators-dpo-style-panel-v1__zero-value,
 .ff-indicators-dpo-style-panel-v1__zero-value input[type='number'],
+.ff-indicators-dpo-style-panel-v1__zero-value .ff-indicators-number-box-v1,
 .ff-indicators-dpo-style-panel-v1__level-value,
-.ff-indicators-dpo-style-panel-v1__level-value input[type='number'] {
+.ff-indicators-dpo-style-panel-v1__level-value input[type='number'],
+.ff-indicators-dpo-style-panel-v1__level-value .ff-indicators-number-box-v1 {
   width: 80px;
   max-width: 80px;
 }

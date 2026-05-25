@@ -21,6 +21,7 @@ import type {
   RsiIndicatorSettings,
   StochIndicatorSettings,
   TsiIndicatorSettings,
+  VdoIndicatorSettings,
   ViIndicatorSettings,
   VolIndicatorSettings,
   VwapIndicatorSettings,
@@ -31,7 +32,7 @@ type IndicatorsDrawerProps = {
   indicatorShortcutKeys: string[]
   loadedIndicatorKeys: string[]
   onIndicatorShortcutKeysChange: (keys: string[]) => void
-  onLoadIndicator?: (name: SupportedChartIndicator, settings?: DpoIndicatorSettings | MacdIndicatorSettings | MaIndicatorSettings | MrIndicatorSettings | RsiIndicatorSettings | StochIndicatorSettings | TsiIndicatorSettings | ViIndicatorSettings | VolIndicatorSettings | VwapIndicatorSettings) => void
+  onLoadIndicator?: (name: SupportedChartIndicator, settings?: DpoIndicatorSettings | MacdIndicatorSettings | MaIndicatorSettings | MrIndicatorSettings | RsiIndicatorSettings | StochIndicatorSettings | TsiIndicatorSettings | VdoIndicatorSettings | ViIndicatorSettings | VolIndicatorSettings | VwapIndicatorSettings) => void
   onUnloadIndicator?: (name: SupportedChartIndicator) => void
 }
 
@@ -47,6 +48,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
   const [rsiSettings, setRsiSettings] = useState<RsiIndicatorSettings>(() => initialPersisted.rsi)
   const [stochSettings, setStochSettings] = useState<StochIndicatorSettings>(() => initialPersisted.stoch)
   const [tsiSettings, setTsiSettings] = useState<TsiIndicatorSettings>(() => initialPersisted.tsi)
+  const [vdoSettings, setVdoSettings] = useState<VdoIndicatorSettings>(() => initialPersisted.vdo)
   const [viSettings, setViSettings] = useState<ViIndicatorSettings>(() => initialPersisted.vi)
   const [vwapSettings, setVwapSettings] = useState<VwapIndicatorSettings>(() => initialPersisted.vwap)
   const [volSettings, setVolSettings] = useState<VolIndicatorSettings>(() => initialPersisted.vol)
@@ -58,7 +60,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
   useEffect(() => {
     if (!persistenceEnabled) return
     writePersistedIndicatorsState({
-      loaded: { DPO: loadedKeySet.has('DPO'), MA: loadedKeySet.has('MA'), MACD: loadedKeySet.has('MACD'), MR: loadedKeySet.has('MR'), RSI: loadedKeySet.has('RSI'), Stoch: loadedKeySet.has('Stoch'), TSI: loadedKeySet.has('TSI'), VI: loadedKeySet.has('VI'), VWAP: loadedKeySet.has('VWAP'), Vol: loadedKeySet.has('Vol') },
+      loaded: { DPO: loadedKeySet.has('DPO'), MA: loadedKeySet.has('MA'), MACD: loadedKeySet.has('MACD'), MR: loadedKeySet.has('MR'), RSI: loadedKeySet.has('RSI'), Stoch: loadedKeySet.has('Stoch'), TSI: loadedKeySet.has('TSI'), VDO: loadedKeySet.has('VDO'), VI: loadedKeySet.has('VI'), VWAP: loadedKeySet.has('VWAP'), Vol: loadedKeySet.has('Vol') },
       dpo: dpoSettings,
       ma: maSettings,
       macd: macdSettings,
@@ -66,12 +68,13 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
       rsi: rsiSettings,
       stoch: stochSettings,
       tsi: tsiSettings,
+      vdo: vdoSettings,
       vi: viSettings,
       vwap: vwapSettings,
       vol: volSettings,
       ui: { activeTab: settingsTab, selectedKey },
     })
-  }, [dpoSettings, loadedIndicatorKeys, macdSettings, maSettings, mrSettings, persistenceEnabled, rsiSettings, selectedKey, settingsTab, stochSettings, tsiSettings, viSettings, volSettings, vwapSettings])
+  }, [dpoSettings, loadedIndicatorKeys, macdSettings, maSettings, mrSettings, persistenceEnabled, rsiSettings, selectedKey, settingsTab, stochSettings, tsiSettings, vdoSettings, viSettings, volSettings, vwapSettings])
 
   function handleSettingsChange(next: RsiIndicatorSettings) {
     setRsiSettings(next)
@@ -108,6 +111,11 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
     if (loadedKeySet.has('TSI')) onLoadIndicator?.('TSI', next)
   }
 
+  function handleVdoSettingsChange(next: VdoIndicatorSettings) {
+    setVdoSettings(next)
+    if (loadedKeySet.has('VDO')) onLoadIndicator?.('VDO', next)
+  }
+
   function handleViSettingsChange(next: ViIndicatorSettings) {
     setViSettings(next)
     if (loadedKeySet.has('VI')) onLoadIndicator?.('VI', next)
@@ -124,6 +132,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
     if (key === 'MACD') return macdSettings
     if (key === 'DPO') return dpoSettings
     if (key === 'TSI') return tsiSettings
+    if (key === 'VDO') return vdoSettings
     if (key === 'VI') return viSettings
     if (key === 'MA') return maSettings
     if (key === 'MR') return mrSettings
@@ -147,7 +156,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
       return
     }
     writePersistedIndicatorsState({
-      loaded: { DPO: loadedKeySet.has('DPO'), MA: loadedKeySet.has('MA'), MACD: loadedKeySet.has('MACD'), MR: loadedKeySet.has('MR'), RSI: loadedKeySet.has('RSI'), Stoch: loadedKeySet.has('Stoch'), TSI: loadedKeySet.has('TSI'), VI: loadedKeySet.has('VI'), VWAP: loadedKeySet.has('VWAP'), Vol: loadedKeySet.has('Vol') },
+      loaded: { DPO: loadedKeySet.has('DPO'), MA: loadedKeySet.has('MA'), MACD: loadedKeySet.has('MACD'), MR: loadedKeySet.has('MR'), RSI: loadedKeySet.has('RSI'), Stoch: loadedKeySet.has('Stoch'), TSI: loadedKeySet.has('TSI'), VDO: loadedKeySet.has('VDO'), VI: loadedKeySet.has('VI'), VWAP: loadedKeySet.has('VWAP'), Vol: loadedKeySet.has('Vol') },
       dpo: dpoSettings,
       ma: maSettings,
       macd: macdSettings,
@@ -155,6 +164,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
       rsi: rsiSettings,
       stoch: stochSettings,
       tsi: tsiSettings,
+      vdo: vdoSettings,
       vi: viSettings,
       vwap: vwapSettings,
       vol: volSettings,
@@ -247,6 +257,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
               onSettingsChange={handleSettingsChange}
               onStochSettingsChange={handleStochSettingsChange}
               onTsiSettingsChange={handleTsiSettingsChange}
+              onVdoSettingsChange={handleVdoSettingsChange}
               onViSettingsChange={handleViSettingsChange}
               onVolSettingsChange={handleVolSettingsChange}
               onVwapSettingsChange={handleVwapSettingsChange}
@@ -255,6 +266,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, loadedIndicatorKeys, o
               settings={rsiSettings}
               stochSettings={stochSettings}
               tsiSettings={tsiSettings}
+              vdoSettings={vdoSettings}
               viSettings={viSettings}
               volSettings={volSettings}
               vwapSettings={vwapSettings}

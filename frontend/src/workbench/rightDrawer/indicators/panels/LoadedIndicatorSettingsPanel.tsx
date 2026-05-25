@@ -7,6 +7,7 @@ import type {
   RsiIndicatorSettings,
   StochIndicatorSettings,
   TsiIndicatorSettings,
+  VdoIndicatorSettings,
   ViIndicatorSettings,
   VolIndicatorSettings,
   VwapIndicatorSettings,
@@ -26,6 +27,8 @@ import {
   StochStylePanel,
   TsiInputPanel,
   TsiStylePanel,
+  VdoInputPanel,
+  VdoStylePanel,
   ViInputPanel,
   ViStylePanel,
   VolInputPanel,
@@ -44,6 +47,7 @@ export function LoadedIndicatorSettingsPanel({
   onSettingsChange,
   onStochSettingsChange,
   onTsiSettingsChange,
+  onVdoSettingsChange,
   onViSettingsChange,
   onVolSettingsChange,
   onVwapSettingsChange,
@@ -52,6 +56,7 @@ export function LoadedIndicatorSettingsPanel({
   settings,
   stochSettings,
   tsiSettings,
+  vdoSettings,
   viSettings,
   volSettings,
   vwapSettings,
@@ -65,6 +70,7 @@ export function LoadedIndicatorSettingsPanel({
   onSettingsChange: (settings: RsiIndicatorSettings) => void
   onStochSettingsChange: (settings: StochIndicatorSettings) => void
   onTsiSettingsChange: (settings: TsiIndicatorSettings) => void
+  onVdoSettingsChange: (settings: VdoIndicatorSettings) => void
   onViSettingsChange: (settings: ViIndicatorSettings) => void
   onVolSettingsChange: (settings: VolIndicatorSettings) => void
   onVwapSettingsChange: (settings: VwapIndicatorSettings) => void
@@ -73,6 +79,7 @@ export function LoadedIndicatorSettingsPanel({
   settings: RsiIndicatorSettings
   stochSettings: StochIndicatorSettings
   tsiSettings: TsiIndicatorSettings
+  vdoSettings: VdoIndicatorSettings
   viSettings: ViIndicatorSettings
   volSettings: VolIndicatorSettings
   vwapSettings: VwapIndicatorSettings
@@ -89,6 +96,8 @@ export function LoadedIndicatorSettingsPanel({
       {selectedKey === 'DPO' && settingsTab === 'style' ? <DpoStylePanel onSettingsChange={onDpoSettingsChange} settings={dpoSettings} /> : null}
       {selectedKey === 'TSI' && settingsTab === 'input' ? <TsiInputPanel onSettingsChange={onTsiSettingsChange} settings={tsiSettings} /> : null}
       {selectedKey === 'TSI' && settingsTab === 'style' ? <TsiStylePanel onSettingsChange={onTsiSettingsChange} settings={tsiSettings} /> : null}
+      {selectedKey === 'VDO' && settingsTab === 'input' ? <VdoInputPanel onSettingsChange={onVdoSettingsChange} settings={vdoSettings} /> : null}
+      {selectedKey === 'VDO' && settingsTab === 'style' ? <VdoStylePanel onSettingsChange={onVdoSettingsChange} settings={vdoSettings} /> : null}
       {selectedKey === 'VI' && settingsTab === 'input' ? <ViInputPanel onSettingsChange={onViSettingsChange} settings={viSettings} /> : null}
       {selectedKey === 'VI' && settingsTab === 'style' ? <ViStylePanel onSettingsChange={onViSettingsChange} settings={viSettings} /> : null}
       {selectedKey === 'MA' && settingsTab === 'input' ? <MaInputPanel onSettingsChange={onMaSettingsChange} settings={maSettings} /> : null}

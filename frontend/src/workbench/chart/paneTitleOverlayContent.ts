@@ -1,10 +1,12 @@
 ﻿import type { Chart, KLineData } from 'klinecharts'
 import {
+  defaultDpoIndicatorSettings,
   defaultMacdIndicatorSettings,
   defaultMaIndicatorSettings,
   defaultRsiIndicatorSettings,
   defaultStochIndicatorSettings,
   defaultTsiIndicatorSettings,
+  defaultVdoIndicatorSettings,
   defaultViIndicatorSettings,
   defaultVolIndicatorSettings,
   defaultVwapIndicatorSettings,
@@ -54,9 +56,11 @@ type IndicatorLike = {
 export const titlePaneSpecs = [
   { paneId: 'candle_pane', name: 'candle' },
   { paneId: 'macd_pane', name: 'MACD' },
+  { paneId: 'dpo_pane', name: 'DPO' },
   { paneId: 'rsi_pane', name: 'RSI' },
   { paneId: 'stoch_pane', name: 'Stoch' },
   { paneId: 'tsi_pane', name: 'TSI' },
+  { paneId: 'vdo_pane', name: 'VDO' },
   { paneId: 'vi_pane', name: 'VI' },
 ] as const
 
@@ -276,6 +280,16 @@ function createStochParts(chart: Chart, indicator: IndicatorLike, crosshairIndex
   return parts
 }
 
+function createDpoParts(chart: Chart, indicator: IndicatorLike, crosshairIndex: number | null): PaneTitlePart[] {
+  const settings = mergeSettings(defaultDpoIndicatorSettings, indicator.calcParams?.[0])
+  const row = readIndicatorRow(chart, indicator, crosshairIndex)
+  const parts: PaneTitlePart[] = [titlePart(`DPO${booleanValue(settings.inputsInStatusLine, true) && readStatusInputsVisible() ? ` ${settings.length}` : ''}`)]
+  if (booleanValue(settings.valuesInStatusLine, true) && readStatusValuesVisible()) {
+    if (booleanValue(settings.dpoVisible, true)) parts.push(titlePart(`DPO ${formatNumber(row.dpo, settings.precision, 2)}`, colorWithAlpha(stringValue(settings.dpoColor, '#43a047'), opacityValue(settings.dpoOpacity, 1))))
+  }
+  return parts
+}
+
 function createTsiParts(chart: Chart, indicator: IndicatorLike, crosshairIndex: number | null): PaneTitlePart[] {
   const settings = mergeSettings(defaultTsiIndicatorSettings, indicator.calcParams?.[0])
   const row = readIndicatorRow(chart, indicator, crosshairIndex)
@@ -283,6 +297,16 @@ function createTsiParts(chart: Chart, indicator: IndicatorLike, crosshairIndex: 
   if (booleanValue(settings.statusLineValuesVisible, true) && readStatusValuesVisible()) {
     if (booleanValue(settings.tsiVisible, true)) parts.push(titlePart(`TSI ${formatNumber(row.tsi, settings.precision, 2)}`, colorWithAlpha(stringValue(settings.tsiColor, '#2962ff'), opacityValue(settings.tsiOpacity, 1))))
     if (booleanValue(settings.signalVisible, true)) parts.push(titlePart(`Signal ${formatNumber(row.signal, settings.precision, 2)}`, colorWithAlpha(stringValue(settings.signalColor, '#ff6d00'), opacityValue(settings.signalOpacity, 1))))
+  }
+  return parts
+}
+
+function createVdoParts(chart: Chart, indicator: IndicatorLike, crosshairIndex: number | null): PaneTitlePart[] {
+  const settings = mergeSettings(defaultVdoIndicatorSettings, indicator.calcParams?.[0])
+  const row = readIndicatorRow(chart, indicator, crosshairIndex)
+  const parts: PaneTitlePart[] = [titlePart(`VDO${booleanValue(settings.inputsInStatusLine, true) && readStatusInputsVisible() ? ` ${settings.length} ${settings.emaSmoothing}` : ''}`)]
+  if (booleanValue(settings.valuesInStatusLine, true) && readStatusValuesVisible()) {
+    if (booleanValue(settings.dpoVisible, true)) parts.push(titlePart(`VDO ${formatNumber(row.vdo, settings.precision, 4)}`, colorWithAlpha(stringValue(settings.dpoColor, '#2962ff'), opacityValue(settings.dpoOpacity, 1))))
   }
   return parts
 }
@@ -363,9 +387,11 @@ function createIndicatorParts(chart: Chart, paneId: string, name: string, crossh
   const indicator = indicatorFromChart(chart, paneId, name)
   if (!indicator) return []
   if (name === 'MACD') return createMacdParts(chart, indicator, crosshairIndex)
+  if (name === 'DPO') return createDpoParts(chart, indicator, crosshairIndex)
   if (name === 'RSI') return createRsiParts(chart, indicator, crosshairIndex)
   if (name === 'Stoch') return createStochParts(chart, indicator, crosshairIndex)
   if (name === 'TSI') return createTsiParts(chart, indicator, crosshairIndex)
+  if (name === 'VDO') return createVdoParts(chart, indicator, crosshairIndex)
   if (name === 'VI') return createViParts(chart, indicator, crosshairIndex)
   return []
 }
