@@ -115,7 +115,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     loadState.rows > 0 &&
     loadState.loadedSymbol === symbol &&
     loadState.loadedPeriod === period
-  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol })
+  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol, totalRows })
   const candleCountdown = useCurrentCandleCountdown({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol })
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const stochPaneHeightObserverRef = useRef<ResizeObserver | null>(null)

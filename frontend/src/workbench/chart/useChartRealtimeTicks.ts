@@ -6,6 +6,8 @@ import type { StoreV5QueryRow } from '../../services/mt5/mt5SymbolsApi'
 import { readWatchlistRealtimeEnabled, realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
 import { applyPriceVolumePrecision } from './chartStyleAppliers'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
+import { applyNewDataWithFuturePlaceholders } from './chartFuturePlaceholders'
+import { resolveHasMoreOlder } from './chartCoreDataUtils'
 
 type UseChartRealtimeTicksOptions = {
   chartInstanceRef: MutableRefObject<Chart | null>
@@ -113,7 +115,7 @@ function resolvePeriodStartTimestamp(timestampMs: number, periodSeconds: number)
   return Math.floor(timestampMs / periodMs) * periodMs
 }
 
-export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, period, symbol }: UseChartRealtimeTicksOptions) {
+export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, period, symbol, totalRows }: UseChartRealtimeTicksOptions) {
   const [realtimeEnabled, setRealtimeEnabled] = useState(readWatchlistRealtimeEnabled)
 
   useEffect(() => {
@@ -141,7 +143,13 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       if (!chart || rows.length === 0) return
       const currentRows = chart.getDataList()
       if (!shouldApplyRows(currentRows, rows)) return
-      chart.applyNewData(rows, false, () => {
+      const hasMoreOlder = resolveHasMoreOlder({
+        loadedRows: rows.length,
+        pageSize: mt5RealtimeInitialBarsLimit,
+        receivedRows: rows.length,
+        totalRows,
+      })
+      applyNewDataWithFuturePlaceholders(chart, rows, period, hasMoreOlder, () => {
         applyPriceVolumePrecision(chart, symbol)
         dispatchChartRealtimeDataChanged()
       })
@@ -228,5 +236,5 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       if (bindTimer !== 0) window.clearTimeout(bindTimer)
       window.removeEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
     }
-  }, [chartInstanceRef, dataReady, period, realtimeEnabled, symbol])
+  }, [chartInstanceRef, dataReady, period, realtimeEnabled, symbol, totalRows])
 }
