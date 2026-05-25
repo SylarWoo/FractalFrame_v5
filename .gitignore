@@ -18,3 +18,6 @@ runtime_data/
 # JetBrains / PyCharm
 .idea/
 *.iml
+
+# FractalFrame local dev runtime state
+frontend/.fractalframe-dev/

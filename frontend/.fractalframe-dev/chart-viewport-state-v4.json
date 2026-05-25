@@ -1,36 +1,36 @@
 {
   "fractalframe:chartViewport:v4:latest": {
-    "barSpace": 4.0129787919667335,
-    "dataLength": 5001,
-    "offsetRightDistance": 430.6273215089809,
-    "rightTimestamp": 1779689700000,
-    "savedAt": "2026-05-25T06:15:37.279Z",
-    "visibleTo": 5001,
+    "barSpace": 2.6697669179658483,
+    "dataLength": 5014,
+    "offsetRightDistance": 0,
+    "rightTimestamp": 1779254700000,
+    "savedAt": "2026-05-25T08:16:29.550Z",
+    "visibleTo": 4151,
     "yAxisRange": {
-      "from": 4402.434109527986,
-      "range": 228.51882313134593,
-      "realFrom": 4402.434109527986,
-      "realRange": 228.51882313134593,
-      "realTo": 4630.952932659332,
-      "to": 4630.952932659332
+      "from": 4345.638437489629,
+      "range": 251.15436710915128,
+      "realFrom": 4345.638437489629,
+      "realRange": 251.15436710915128,
+      "realTo": 4596.79280459878,
+      "to": 4596.79280459878
     },
     "symbol": "XAUUSDm",
     "period": "M5"
   },
   "fractalframe:chartViewport:v4:global:M5": {
-    "barSpace": 4.0129787919667335,
-    "dataLength": 5001,
-    "offsetRightDistance": 430.6273215089809,
-    "rightTimestamp": 1779689700000,
-    "savedAt": "2026-05-25T06:15:37.279Z",
-    "visibleTo": 5001,
+    "barSpace": 2.6697669179658483,
+    "dataLength": 5014,
+    "offsetRightDistance": 0,
+    "rightTimestamp": 1779254700000,
+    "savedAt": "2026-05-25T08:16:29.550Z",
+    "visibleTo": 4151,
     "yAxisRange": {
-      "from": 4402.434109527986,
-      "range": 228.51882313134593,
-      "realFrom": 4402.434109527986,
-      "realRange": 228.51882313134593,
-      "realTo": 4630.952932659332,
-      "to": 4630.952932659332
+      "from": 4345.638437489629,
+      "range": 251.15436710915128,
+      "realFrom": 4345.638437489629,
+      "realRange": 251.15436710915128,
+      "realTo": 4596.79280459878,
+      "to": 4596.79280459878
     },
     "symbol": "XAUUSDm",
     "period": "M5"
