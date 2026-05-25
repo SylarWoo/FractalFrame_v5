@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   readSettingsBooleanValue,
+  readSettingsStringValue,
   readSettingsSymbolState,
   writeSettingsSymbolStateValue,
 } from '../settingsSymbolState'
@@ -39,6 +40,31 @@ export function SettingsCheckRow({
       />
       <span>{children}</span>
     </div>
+  )
+}
+
+export function SettingsCheckboxInput({
+  checked = false,
+  onCheckedChange,
+  storageKey,
+}: {
+  checked?: boolean
+  onCheckedChange?: (checked: boolean) => void
+  storageKey: string
+}) {
+  const [isChecked, setIsChecked] = useState(() => readSettingsBooleanValue(storageKey, checked))
+
+  return (
+    <input
+      checked={isChecked}
+      onChange={(event) => {
+        const next = event.currentTarget.checked
+        setIsChecked(next)
+        writeSettingsSymbolStateValue(storageKey, next)
+        onCheckedChange?.(next)
+      }}
+      type="checkbox"
+    />
   )
 }
 
@@ -125,5 +151,29 @@ export function SettingsMultiCheckSelect({
         </div>
       )}
     </div>
+  )
+}
+
+export function SettingsTextInput({
+  ariaLabel,
+  defaultValue,
+  storageKey,
+}: {
+  ariaLabel: string
+  defaultValue: string
+  storageKey: string
+}) {
+  const [value, setValue] = useState(() => readSettingsStringValue(storageKey, defaultValue))
+
+  return (
+    <input
+      aria-label={ariaLabel}
+      onChange={(event) => {
+        const next = event.currentTarget.value
+        setValue(next)
+        writeSettingsSymbolStateValue(storageKey, next)
+      }}
+      value={value}
+    />
   )
 }

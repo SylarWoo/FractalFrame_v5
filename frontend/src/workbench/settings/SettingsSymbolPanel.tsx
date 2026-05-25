@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { readSettingsNumberStringValue, readSettingsStringValue, writeSettingsSymbolStateValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from './chartSettingsSchema'
+import { SettingsCheckboxInput } from './SettingsSharedControls'
 import { SettingsColorSwatch } from './SettingsSwatches'
 import './SettingsSymbolPanel.css'
 
@@ -19,13 +20,13 @@ export function SettingsSymbolPanel() {
       <section className="ff-settings-symbol-group">
         <div className="ff-settings-symbol-kicker">K线图</div>
         <div className="ff-settings-symbol-checkline">
-          <input type="checkbox" />
+          <SettingsCheckboxInput storageKey="candle.colorBasedOnPreviousClose" />
           <span>K线颜色基于前一收盘价</span>
         </div>
         {colorRows.map(({ label, rowKey, up, down }) => (
           <div className="ff-settings-symbol-color-row" key={label}>
             <div className="ff-settings-symbol-check-target">
-              <input type="checkbox" defaultChecked />
+              <SettingsCheckboxInput checked storageKey={`${rowKey}.visible`} />
               <span>{label}</span>
             </div>
             <div className="ff-settings-symbol-swatches">
@@ -40,7 +41,7 @@ export function SettingsSymbolPanel() {
         <div className="ff-settings-symbol-kicker">数据修改</div>
         <div className="ff-settings-symbol-field">
           <span>时段</span>
-          <OpenableSelect ariaLabel="时段" defaultValue="electronic" options={[
+          <OpenableSelect ariaLabel="时段" defaultValue="electronic" storageKey="session.type" options={[
             { label: '电子交易时间', value: 'electronic' },
             { label: 'Regular', value: 'regular' },
           ]} />
@@ -50,9 +51,9 @@ export function SettingsSymbolPanel() {
           <SettingsColorSwatch checkerboard storageKey="session.background" />
         </div>
         <div className="ff-settings-symbol-field">
-          <span>精确度</span>
+          <span>精度</span>
           <OpenableSelect
-            ariaLabel="精确度"
+            ariaLabel="精度"
             defaultValue={chartSettingDefaults.pricePrecision}
             onChange={(value) => {
               setPricePrecision(value)

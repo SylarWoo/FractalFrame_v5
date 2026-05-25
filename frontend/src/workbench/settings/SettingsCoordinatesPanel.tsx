@@ -3,7 +3,7 @@ import { OpenableSelect } from '../controls/OpenableSelect'
 import { readSettingsStringValue, readSettingsSymbolState, writeSettingsSymbolStateValue } from '../settingsSymbolState'
 import { chartSettingKeys } from './chartSettingsSchema'
 import { SettingsColorPair, SettingsLineSwatch } from './SettingsSwatches'
-import { SettingsCheckRow, SettingsMultiCheckSelect } from './SettingsSharedControls'
+import { SettingsCheckboxInput, SettingsCheckRow, SettingsMultiCheckSelect } from './SettingsSharedControls'
 import './SettingsCoordinatesPanel.css'
 
 export function SettingsCoordinatesPanel() {
@@ -19,27 +19,27 @@ export function SettingsCoordinatesPanel() {
         <div className="ff-settings-symbol-kicker">价格坐标</div>
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--price-control">
           <span>货币和单位</span>
-          <OpenableSelect ariaLabel="货币和单位" defaultValue="always" options={[
+          <OpenableSelect ariaLabel="货币和单位" defaultValue="always" storageKey="coordinates.currencyUnit.mode" options={[
             { label: '总是显示', value: 'always' },
             { label: '隐藏', value: 'hidden' },
           ]} />
         </div>
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--wide-select">
           <span>坐标模式（A和L）</span>
-          <OpenableSelect ariaLabel="坐标模式" defaultValue="on-move" options={[
+          <OpenableSelect ariaLabel="坐标模式" defaultValue="on-move" storageKey="coordinates.axisMode" options={[
             { label: '鼠标移动时可见', value: 'on-move' },
             { label: '总是可见', value: 'always' },
             { label: '隐藏', value: 'hidden' },
           ]} />
         </div>
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--lock ff-settings-coordinate-row--price-control">
-          <input type="checkbox" />
+          <SettingsCheckboxInput storageKey="coordinates.priceToBarRatio.locked" />
           <span>锁定价格对K线比例</span>
           <input disabled value="32.1366597" readOnly />
         </div>
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--price-control">
           <span>坐标放置</span>
-          <OpenableSelect ariaLabel="坐标放置" defaultValue="auto" options={[
+          <OpenableSelect ariaLabel="坐标放置" defaultValue="auto" storageKey="coordinates.placement" options={[
             { label: '自动', value: 'auto' },
             { label: '左侧', value: 'left' },
             { label: '右侧', value: 'right' },
@@ -49,9 +49,9 @@ export function SettingsCoordinatesPanel() {
 
       <section className="ff-settings-coordinates-group">
         <div className="ff-settings-symbol-kicker">价格标签和价格线</div>
-        <SettingsCheckRow checked>无重叠标签</SettingsCheckRow>
+        <SettingsCheckRow checked storageKey="coordinates.labels.noOverlap">无重叠标签</SettingsCheckRow>
         <div className="ff-settings-coordinate-check-help">
-          <input defaultChecked type="checkbox" />
+          <SettingsCheckboxInput checked storageKey="coordinates.labels.plusButton.visible" />
           <span>加号按钮</span>
           <button type="button">?</button>
         </div>
@@ -67,18 +67,18 @@ export function SettingsCoordinatesPanel() {
               { label: '线形图', value: 'line' },
             ]}
           />
-          <SettingsLineSwatch inheritCandleColors />
+          <SettingsLineSwatch color="#26a69a" storageKey="coordinates.symbolLabel.line" />
         </div>
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--nested">
           <span />
-          <OpenableSelect ariaLabel="商品代码位置" defaultValue="axis" options={[
+          <OpenableSelect ariaLabel="商品代码位置" defaultValue="axis" storageKey="coordinates.symbolLabel.position" options={[
             { label: '根据坐标值', value: 'axis' },
             { label: '最后价格', value: 'last' },
           ]} />
         </div>
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
           <span>前一天收盘</span>
-          <OpenableSelect ariaLabel="前一天收盘" defaultValue="hidden" options={[
+          <OpenableSelect ariaLabel="前一天收盘" defaultValue="hidden" storageKey="coordinates.prevClose.mode" options={[
             { label: '隐藏', value: 'hidden' },
             { label: '显示', value: 'visible' },
           ]} />
@@ -86,7 +86,7 @@ export function SettingsCoordinatesPanel() {
         </div>
         <div className="ff-settings-coordinate-row">
           <span>指标和财务数据</span>
-          <OpenableSelect ariaLabel="指标和财务数据" defaultValue="hidden" options={[
+          <OpenableSelect ariaLabel="指标和财务数据" defaultValue="hidden" storageKey="coordinates.indicatorFinancial.mode" options={[
             { label: '隐藏', value: 'hidden' },
             { label: '显示', value: 'visible' },
           ]} />
@@ -123,7 +123,7 @@ export function SettingsCoordinatesPanel() {
         </div>
         <div className="ff-settings-coordinate-row ff-settings-coordinate-row--sample">
           <span>Bid和Ask</span>
-          <OpenableSelect ariaLabel="Bid和Ask" defaultValue="hidden" options={[
+          <OpenableSelect ariaLabel="Bid和Ask" defaultValue="hidden" storageKey="coordinates.bidAsk.mode" options={[
             { label: '隐藏', value: 'hidden' },
             { label: '显示', value: 'visible' },
           ]} />
@@ -169,7 +169,7 @@ export function SettingsCoordinatesPanel() {
             value={hourFormat}
           />
         </div>
-        <SettingsCheckRow storageKey={chartSettingKeys.rightPlaceholderVisible}>{'\u53f3\u4fa7\u5360\u4f4d\u7b26'}</SettingsCheckRow>
+        <SettingsCheckRow storageKey={chartSettingKeys.rightPlaceholderVisible}>右侧占位符</SettingsCheckRow>
       </section>
     </div>
   )

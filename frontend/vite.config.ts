@@ -53,11 +53,17 @@ function persistentDevStatePlugin(): Plugin {
           })
           req.on('end', () => {
             try {
-              const payload = JSON.parse(body) as { key?: string; remove?: boolean; value?: unknown }
+              const payload = JSON.parse(body) as { key?: string; merge?: Record<string, unknown>; remove?: boolean; value?: unknown }
               if (!payload.key) throw new Error('Missing key')
               const state = readState()
               if (payload.remove) {
                 delete state[payload.key]
+              } else if (payload.merge && typeof payload.merge === 'object' && !Array.isArray(payload.merge)) {
+                const current = state[payload.key]
+                state[payload.key] = {
+                  ...(current && typeof current === 'object' && !Array.isArray(current) ? current as Record<string, unknown> : {}),
+                  ...payload.merge,
+                }
               } else {
                 state[payload.key] = payload.value
               }

@@ -39,6 +39,27 @@ function writeDevState(key: string, value: unknown) {
   }
 }
 
+function writeDevStateObjectPatch(key: string, propertyKey: string, value: unknown) {
+  const current = devStateCache.get(key)
+  if (current && typeof current === 'object' && !Array.isArray(current)) {
+    devStateCache.set(key, { ...(current as Record<string, unknown>), [propertyKey]: value })
+  }
+  devStateLoadedKeys.add(key)
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') return
+  const endpoint = resolvePersistentStateEndpoint()
+  if (!endpoint) return
+  try {
+    void fetch(endpoint, {
+      body: JSON.stringify({ key, merge: { [propertyKey]: value } }),
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      method: 'POST',
+    })
+  } catch {
+    // The dev endpoint is not available in production builds; localStorage remains the fallback.
+  }
+}
+
 function removeDevState(key: string) {
   devStateCache.delete(key)
   devStateLoadedKeys.add(key)
@@ -93,6 +114,27 @@ export function writeJson(key: string, value: unknown) {
   } catch {
     return false
   }
+}
+
+export function writeJsonObjectValue(key: string, propertyKey: string, value: unknown) {
+  let nextValue: Record<string, unknown>
+  try {
+    const raw = window.localStorage.getItem(key)
+    const current = raw ? JSON.parse(raw) as unknown : {}
+    nextValue = {
+      ...(current && typeof current === 'object' && !Array.isArray(current) ? (current as Record<string, unknown>) : {}),
+      [propertyKey]: value,
+    }
+    window.localStorage.setItem(key, JSON.stringify(nextValue))
+  } catch {
+    const devValue = readDevState(key)
+    nextValue = {
+      ...(devValue && typeof devValue === 'object' && !Array.isArray(devValue) ? (devValue as Record<string, unknown>) : {}),
+      [propertyKey]: value,
+    }
+  }
+  writeDevStateObjectPatch(key, propertyKey, value)
+  return true
 }
 
 export function readString(key: string, fallback = '') {

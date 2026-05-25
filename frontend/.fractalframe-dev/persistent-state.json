@@ -2,14 +2,14 @@
   "fractalframe:mt5ImportCenterWatchlistRealtimeSnapshot:v1": {
     "lastTickAt": "15:38:54",
     "log": [
-      "23:17:40  Realtime stopped",
-      "23:15:44  Realtime stopped",
-      "22:40:37  Realtime stopped",
-      "22:33:25  Realtime stopped",
-      "22:30:27  Realtime stopped",
-      "22:27:10  Realtime stopped",
-      "22:26:41  Realtime stopped",
-      "22:26:25  Realtime stopped"
+      "09:10:00  Realtime stopped",
+      "09:09:53  Realtime stopped",
+      "09:09:41  Realtime stopped",
+      "09:09:23  Realtime stopped",
+      "09:08:10  Realtime stopped",
+      "09:05:53  Realtime stopped",
+      "09:05:45  Realtime stopped",
+      "23:17:40  Realtime stopped"
     ],
     "ticks": {
       "1INCHUSDm": {
@@ -242,7 +242,7 @@
   "fractalframe:mt5ImportCenterWatchlistRealtimeEnabled:v1": "0",
   "fractalframe:mt5ImportCenterQuery:v1": "",
   "fractalframe:mt5ImportCenterSelectedTab:v1": "watchlist",
-  "fractalframe:rightWidgetDrawerWidthPx:v1": "444",
+  "fractalframe:rightWidgetDrawerWidthPx:v1": "392",
   "fractalframe:indicatorShortcutKeys:v1": [
     "RSI",
     "Stoch",
@@ -534,8 +534,8 @@
   },
   "fractalframe:bottomDrawerOpen:v1": "0",
   "fractalframe:bottomDrawerHeightPx:v1": "300",
-  "fractalframe.chart.macdPaneHeight": "257",
-  "fractalframe.chart.viPaneHeight": "254",
+  "fractalframe.chart.macdPaneHeight": "244",
+  "fractalframe.chart.viPaneHeight": "280",
   "fractalframe.drawingsDrawer.selectedTool": "morganRange",
   "fractalframe.objectTree.groups.v1": [],
   "fractalframe.drawings.ruler.items": [],
@@ -1815,7 +1815,7 @@
         ]
       }
     ],
-    "savedAt": "2026-05-24T15:17:41.058Z"
+    "savedAt": "2026-05-25T01:09:53.538Z"
   },
   "fractalframe:mt5ImportCenterTopPaneHeightPx:v1": "180",
   "fractalframe.drawings.fibRetracement.items": [],
@@ -2110,37 +2110,37 @@
   },
   "fractalframe.drawingsDrawer.cursorMode": "crosshair",
   "fractalframe:chartViewport:v4:global:M5": {
-    "barSpace": 2.060362084253798,
-    "dataLength": 6000,
+    "barSpace": 4.481396184561223,
+    "dataLength": 3000,
     "offsetRightDistance": 0,
-    "rightTimestamp": 1778697000000,
-    "savedAt": "2026-05-24T16:04:49.598Z",
-    "visibleTo": 4038,
+    "rightTimestamp": 1779309000000,
+    "savedAt": "2026-05-25T01:17:57.158Z",
+    "visibleTo": 2442,
     "yAxisRange": {
-      "from": 4584.990306942505,
-      "range": 182.1921864859387,
-      "realFrom": 4584.990306942505,
-      "realRange": 182.1921864859387,
-      "realTo": 4767.182493428444,
-      "to": 4767.182493428444
+      "from": 4391.864264039368,
+      "range": 203.21436184970025,
+      "realFrom": 4391.864264039368,
+      "realRange": 203.21436184970025,
+      "realTo": 4595.0786258890685,
+      "to": 4595.0786258890685
     },
     "symbol": "XAUUSDm",
     "period": "M5"
   },
   "fractalframe:chartViewport:v4:latest": {
-    "barSpace": 2.060362084253798,
-    "dataLength": 6000,
+    "barSpace": 4.481396184561223,
+    "dataLength": 3000,
     "offsetRightDistance": 0,
-    "rightTimestamp": 1778697000000,
-    "savedAt": "2026-05-24T16:04:49.598Z",
-    "visibleTo": 4038,
+    "rightTimestamp": 1779309000000,
+    "savedAt": "2026-05-25T01:17:57.158Z",
+    "visibleTo": 2442,
     "yAxisRange": {
-      "from": 4584.990306942505,
-      "range": 182.1921864859387,
-      "realFrom": 4584.990306942505,
-      "realRange": 182.1921864859387,
-      "realTo": 4767.182493428444,
-      "to": 4767.182493428444
+      "from": 4391.864264039368,
+      "range": 203.21436184970025,
+      "realFrom": 4391.864264039368,
+      "realRange": 203.21436184970025,
+      "realTo": 4595.0786258890685,
+      "to": 4595.0786258890685
     },
     "symbol": "XAUUSDm",
     "period": "M5"
@@ -2234,5 +2234,22 @@
     },
     "symbol": "XAUUSDm",
     "period": "H3"
+  },
+  "fractalframe:settingsSymbolPanel:v1": {
+    "events.sessionBreak.visible": true,
+    "events.sessionBreak.color": {
+      "hex": "#93b7f4",
+      "lineStyle": "dashed",
+      "opacity": 1,
+      "thickness": 1
+    },
+    "layout.crosshair.color": {
+      "hex": "#434651",
+      "lineStyle": "dashed",
+      "opacity": 1,
+      "thickness": 1
+    },
+    "time.timezone": "Asia/Shanghai",
+    "status.candleVolume.visible": false
   }
 }

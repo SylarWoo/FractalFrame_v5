@@ -6,6 +6,7 @@ import {
   removeStorageItem,
   writeBooleanFlag,
   writeJson,
+  writeJsonObjectValue,
   writeString,
 } from './jsonStorage'
 
@@ -52,5 +53,15 @@ describe('jsonStorage', () => {
 
     expect(removeStorageItem('text')).toBe(true)
     expect(readString('text', 'fallback')).toBe('fallback')
+  })
+
+  it('patches object values without dropping existing properties', () => {
+    writeJson('settings', { 'events.sessionBreak.visible': true })
+
+    expect(writeJsonObjectValue('settings', 'layout.crosshair.color', { hex: '#434651' })).toBe(true)
+    expect(readJson('settings', {})).toEqual({
+      'events.sessionBreak.visible': true,
+      'layout.crosshair.color': { hex: '#434651' },
+    })
   })
 })

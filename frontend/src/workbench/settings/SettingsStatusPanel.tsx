@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { readSettingsBooleanValue, readSettingsStringValue, writeSettingsSymbolStateValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from './chartSettingsSchema'
-import { SettingsCheckRow } from './SettingsSharedControls'
+import { SettingsCheckboxInput, SettingsCheckRow } from './SettingsSharedControls'
 import './SettingsStatusPanel.css'
 
 export function SettingsStatusPanel() {
@@ -13,7 +13,7 @@ export function SettingsStatusPanel() {
     <div className="ff-settings-status-panel">
       <section className="ff-settings-status-group">
         <div className="ff-settings-symbol-kicker">商品</div>
-        <SettingsCheckRow>Logo</SettingsCheckRow>
+        <SettingsCheckRow storageKey="status.logo.visible">Logo</SettingsCheckRow>
         <div className="ff-settings-status-row">
           <input
             checked={titleVisible}
@@ -45,7 +45,7 @@ export function SettingsStatusPanel() {
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleChangeVisible}>K线变化值</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleVolumeVisible}>成交量</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleTimeVisible}>K线时间</SettingsCheckRow>
-        <SettingsCheckRow storageKey={chartSettingKeys.statusMarketStatusVisible}>{'\u5f00\u5e02\u72b6\u6001'}</SettingsCheckRow>
+        <SettingsCheckRow storageKey={chartSettingKeys.statusMarketStatusVisible}>开市状态</SettingsCheckRow>
       </section>
 
       <section className="ff-settings-status-group">
@@ -54,7 +54,7 @@ export function SettingsStatusPanel() {
         <SettingsCheckRow checked inset storageKey={chartSettingKeys.statusIndicatorInputsVisible}>输入</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusIndicatorValuesVisible}>数值</SettingsCheckRow>
         <div className="ff-settings-status-row">
-          <input defaultChecked type="checkbox" />
+          <SettingsCheckboxInput checked storageKey="status.indicatorBackground.visible" />
           <span>背景</span>
           <div className="ff-settings-status-opacity" aria-hidden="true">
             <span />

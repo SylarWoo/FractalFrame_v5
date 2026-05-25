@@ -1,4 +1,4 @@
-import { readJson, writeJson } from './persistence/jsonStorage'
+import { readJson, writeJsonObjectValue } from './persistence/jsonStorage'
 import { storageKeys } from './persistence/storageKeys'
 import { dispatchWorkbenchEvent, workbenchEvents } from './persistence/workbenchEvents'
 
@@ -10,9 +10,8 @@ export function readSettingsSymbolState(): Record<string, unknown> {
 }
 
 export function writeSettingsSymbolStateValue(key: string, value: unknown) {
-  const current = readSettingsSymbolState()
-  const written = writeJson(settingsSymbolStorageKey, { ...current, [key]: value })
-  if (written) dispatchWorkbenchEvent(settingsSymbolChangedEvent)
+  writeJsonObjectValue(settingsSymbolStorageKey, key, value)
+  dispatchWorkbenchEvent(settingsSymbolChangedEvent)
 }
 
 export function readSettingsStringValue(storageKey: string, fallback: string) {
