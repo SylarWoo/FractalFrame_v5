@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
+import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import type { SymbolTableColumnKey } from '../mt5DataCenter/SymbolTable'
 import type { WatchlistTableColumnKey } from '../mt5DataCenter/WatchlistTable'
 import { SymbolTable } from '../mt5DataCenter/SymbolTable'
@@ -7,8 +8,12 @@ import { WatchlistTable } from '../mt5DataCenter/WatchlistTable'
 import type { Mt5RealtimeTick, Mt5SymbolRow, StoreV5CheckPayload, Mt5M1CheckJobPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
 import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
 import { millisecondsUntilNextMarketSessionCheck, readMarketStatusTitleSnapshot, saveMarketStatusTitleSnapshotFromSymbolSession } from '../mt5DataCenter/marketStatusTitleState'
-import { formatDetailValue, selectedDetailRows } from '../mt5DataCenter/storeV5StatusFormat'
+import { formatDetailValue, periodFromStoreTableKey, selectedDetailRows } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
+import { readJson } from '../persistence/jsonStorage'
+import { storageKeys } from '../persistence/storageKeys'
+import { workbenchEvents } from '../persistence/workbenchEvents'
+import type { ChartPageTarget } from '../chart/ChartCoreHost'
 
 type ColumnWidths = Record<SymbolTableColumnKey, number>
 type WatchlistColumnWidths = Record<WatchlistTableColumnKey, number>
@@ -19,7 +24,7 @@ const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
   { key: 'details', label: '详情' },
   { key: 'store', label: '仓库' },
   { key: 'watchlist', label: '自选列表' },
-  { key: 'settings', label: '设置' },
+  { key: 'settings', label: '历史分页' },
 ]
 
 type RightDrawerMt5BodyProps = {
@@ -41,6 +46,7 @@ type RightDrawerMt5BodyProps = {
   onDeleteSelectedAggregates: () => void
   onLoadSymbols: (refresh: boolean) => void
   onOpenStoreTableRow: (row: StoreTableRow) => void
+  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }) => void
   onOpenWatchlistPeriod: (row: StoreTableRow) => void
   onPullStore: () => void
   onRefreshStoreStatus: () => void
@@ -146,6 +152,14 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
                 <LoadRow label="添加快捷菜单：" loaded={shortcutMenuEnabled} onSetLoaded={props.onSetShortcutMenuLoaded} />
               </div>
             </div>
+            {(watchlistDirectPeriods.length > 0 || watchlistAggregatedPeriods.length > 0) && (
+              <SelectedSymbolPeriodSelector
+                aggregatedPeriods={watchlistAggregatedPeriods}
+                directPeriods={watchlistDirectPeriods}
+                onOpenPeriod={props.onOpenWatchlistPeriod}
+                selectedStoreTableKey={selectedStoreTableKey}
+              />
+            )}
             <div className="ff-import-selected-tabs" role="tablist" aria-label="MT5 symbol panels">
               {selectedPanelTabs.map((tab) => (
                 <button aria-selected={selectedPanelTab === tab.key} className="ff-import-selected-tabs__item" data-active={selectedPanelTab === tab.key} key={tab.key} onClick={() => props.onSetSelectedPanelTab(tab.key)} role="tab" type="button">{tab.label}</button>
@@ -190,16 +204,12 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
               <WatchlistTable
                 columnWidths={watchlistColumnWidths}
                 onColumnResizePointerDown={props.onWatchlistColumnResizePointerDown}
-                onOpenWatchlistPeriod={props.onOpenWatchlistPeriod}
                 onResizePointerDown={props.onResizeWatchlistPointerDown}
                 onResetColumnWidth={props.onResetWatchlistColumnWidth}
                 onResetHeight={props.onResetWatchlistHeight}
                 onSelectSymbol={props.onSelectSymbol}
                 onToggleRealtime={props.onToggleRealtime}
-                selectedStoreTableKey={selectedStoreTableKey}
                 selectedSymbol={selectedSymbol}
-                watchlistAggregatedPeriods={watchlistAggregatedPeriods}
-                watchlistDirectPeriods={watchlistDirectPeriods}
                 watchlistRealtimeEnabled={watchlistRealtimeEnabled}
                 watchlistRealtimeLog={watchlistRealtimeLog}
                 watchlistRealtimeReady={watchlistRealtimeReady}
@@ -207,6 +217,14 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
                 watchlistTableHeight={watchlistTableHeight}
                 watchlistTableWrapRef={watchlistTableWrapRef}
                 watchlistTicks={watchlistTicks}
+              />
+            )}
+            {selectedPanelTab === 'settings' && (
+              <SelectedSymbolRealtimePages
+                onOpenChart={props.onOpenChart}
+                selectedStoreTableKey={selectedStoreTableKey}
+                selectedSymbol={selectedSymbol}
+                storeRows={[...watchlistDirectPeriods, ...watchlistAggregatedPeriods, ...visibleStoreTableRows]}
               />
             )}
           </section>
@@ -252,6 +270,284 @@ function MarketStatusLine({ status }: { status: { label: string; status: 'open' 
     </div>
   )
 }
+
+function SelectedSymbolPeriodSelector({
+  aggregatedPeriods,
+  directPeriods,
+  onOpenPeriod,
+  selectedStoreTableKey,
+}: {
+  aggregatedPeriods: StoreTableRow[]
+  directPeriods: StoreTableRow[]
+  onOpenPeriod: (row: StoreTableRow) => void
+  selectedStoreTableKey: string
+}) {
+  return (
+    <div className="ff-watchlist-periods ff-import-selected-periods" aria-label="Selected symbol available periods">
+      {directPeriods.length > 0 && (
+        <section className="ff-watchlist-periods__group">
+          <h4>Direct source</h4>
+          <div className="ff-watchlist-periods__buttons">
+            {directPeriods.map((row) => (
+              <button
+                data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
+                key={`${row.kind}-${row.period}`}
+                onClick={() => onOpenPeriod(row)}
+                title={`${row.period} · ${row.count} rows · ${row.updated}`}
+                type="button"
+              >
+                {row.period}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+      {aggregatedPeriods.length > 0 && (
+        <section className="ff-watchlist-periods__group">
+          <h4>Aggregated source</h4>
+          <div className="ff-watchlist-periods__buttons">
+            {aggregatedPeriods.map((row) => (
+              <button
+                data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
+                key={`${row.kind}-${row.period}`}
+                onClick={() => onOpenPeriod(row)}
+                title={`${row.period} · ${row.count} rows · ${row.updated}`}
+                type="button"
+              >
+                {row.period}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+type RealtimePageSnapshot = {
+  builtAt?: string
+  localRows?: number
+  mt5Rows?: number
+  page?: number
+  pageSize?: number
+  period?: string
+  rows?: number
+  symbol?: string
+  timeFrom?: number | null
+  timeTo?: number | null
+  type?: string
+}
+
+type RealtimePageRow = {
+  index: number
+  limit: number
+  realtime: boolean
+  rows: number
+  timeFrom?: number | null
+  timeTo?: number | null
+}
+
+function readRealtimePageSnapshot() {
+  return readJson<RealtimePageSnapshot | null>(storageKeys.realtimePageSnapshot, null)
+}
+
+function formatPageDateTime(seconds: number | null | undefined) {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return '-'
+  return new Intl.DateTimeFormat('zh-CN', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(seconds * 1000))
+}
+
+function formatPageRows(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('en-US') : '-'
+}
+
+function parseRowsCount(value: string | number | null | undefined) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  const parsed = Number(String(value ?? '').replace(/[^\d]/g, ''))
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+const historicalPageSize = 30000
+const realtimePageSize = 25000
+
+function SelectedSymbolRealtimePages({
+  onOpenChart,
+  selectedStoreTableKey,
+  selectedSymbol,
+  storeRows,
+}: {
+  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }) => void
+  selectedStoreTableKey: string
+  selectedSymbol: string
+  storeRows: StoreTableRow[]
+}) {
+  const [snapshot, setSnapshot] = useState(readRealtimePageSnapshot)
+  const [selectedPage, setSelectedPage] = useState(1)
+  const [pages, setPages] = useState<RealtimePageRow[]>([])
+  const selectedPeriod = periodFromStoreTableKey(selectedStoreTableKey)
+  const selectedStoreRow = storeRows.find((row) => `${row.kind}-${row.period}` === selectedStoreTableKey)
+    ?? storeRows.find((row) => row.period.toUpperCase() === selectedPeriod)
+  const totalRows = parseRowsCount(selectedStoreRow?.rowsCount ?? selectedStoreRow?.count)
+  const visibleSnapshot = snapshot
+    && snapshot.symbol === selectedSymbol
+    && (!selectedPeriod || snapshot.period?.toUpperCase() === selectedPeriod)
+    ? snapshot
+    : null
+
+  useEffect(() => {
+    const sync = () => setSnapshot(readRealtimePageSnapshot())
+    window.addEventListener(workbenchEvents.realtimePageSnapshotChanged, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(workbenchEvents.realtimePageSnapshotChanged, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+
+  useEffect(() => {
+    let disposed = false
+    setSelectedPage(1)
+    setPages([])
+    const period = visibleSnapshot?.period || selectedPeriod
+    if (!selectedSymbol || !period) return
+
+    const buildPages = async () => {
+      const nextPages: RealtimePageRow[] = []
+      let anchorTimeTo: number | null = null
+
+      if (visibleSnapshot && typeof visibleSnapshot.timeFrom === 'number') {
+        nextPages.push({
+          index: 1,
+          limit: visibleSnapshot.pageSize ?? realtimePageSize,
+          realtime: true,
+          rows: visibleSnapshot.rows ?? Math.min(totalRows ?? realtimePageSize, realtimePageSize),
+          timeFrom: visibleSnapshot.timeFrom,
+          timeTo: visibleSnapshot.timeTo,
+        })
+        anchorTimeTo = visibleSnapshot.timeFrom - 1
+        setPages([...nextPages])
+      } else {
+        const page1Limit = Math.min(totalRows ?? realtimePageSize, realtimePageSize)
+        const rows = await loadStoreV5KLineData({ symbol: selectedSymbol, period, limit: page1Limit })
+        if (disposed) return
+        const first = rows[0]
+        const last = rows[rows.length - 1]
+        nextPages.push({
+          index: 1,
+          limit: page1Limit,
+          realtime: true,
+          rows: rows.length,
+          timeFrom: typeof first?.timestamp === 'number' ? Math.floor(first.timestamp / 1000) : null,
+          timeTo: typeof last?.timestamp === 'number' ? Math.floor(last.timestamp / 1000) : null,
+        })
+        anchorTimeTo = typeof first?.timestamp === 'number' ? Math.floor(first.timestamp / 1000) - 1 : null
+        setPages([...nextPages])
+      }
+
+      if (anchorTimeTo == null) return
+      const historyRows = totalRows != null
+        ? Math.max(0, totalRows - (nextPages[0]?.rows ?? 0))
+        : historicalPageSize
+      const historyPageCount = totalRows != null
+        ? Math.ceil(historyRows / historicalPageSize)
+        : 1
+
+      for (let index = 0; index < historyPageCount; index += 1) {
+        const remaining = totalRows != null
+          ? historyRows - index * historicalPageSize
+          : historicalPageSize
+        const limit = Math.min(historicalPageSize, remaining)
+        if (limit <= 0) break
+        const rows = await loadStoreV5KLineData({ symbol: selectedSymbol, period, limit, timeTo: anchorTimeTo })
+        if (disposed) return
+        if (!rows.length) break
+        const first = rows[0]
+        const last = rows[rows.length - 1]
+        nextPages.push({
+          index: nextPages.length + 1,
+          limit,
+          realtime: false,
+          rows: rows.length,
+          timeFrom: typeof first?.timestamp === 'number' ? Math.floor(first.timestamp / 1000) : null,
+          timeTo: typeof last?.timestamp === 'number' ? Math.floor(last.timestamp / 1000) : anchorTimeTo,
+        })
+        setPages([...nextPages])
+        if (typeof first?.timestamp !== 'number' || rows.length < limit) break
+        anchorTimeTo = Math.floor(first.timestamp / 1000) - 1
+      }
+    }
+
+    buildPages().catch(() => {
+      if (!disposed) setPages([])
+    })
+
+    return () => {
+      disposed = true
+    }
+  }, [selectedPeriod, selectedSymbol, totalRows, visibleSnapshot?.period, visibleSnapshot?.symbol, visibleSnapshot?.timeFrom, visibleSnapshot?.timeTo, visibleSnapshot?.rows, visibleSnapshot?.pageSize])
+
+  const openPage = (page: RealtimePageRow) => {
+    const period = visibleSnapshot?.period || selectedPeriod
+    if (!period) return
+    setSelectedPage(page.index)
+    onOpenChart?.({
+      symbol: selectedSymbol,
+      period,
+      totalRows: page.rows,
+      reloadId: Date.now(),
+      page: {
+        index: page.index,
+        limit: page.limit,
+        realtime: page.realtime,
+        timeTo: page.timeTo,
+      },
+    })
+  }
+
+  return (
+    <div className="ff-import-selected-settings" role="tabpanel">
+      <div className="ff-import-selected-settings__title">历史分页</div>
+      <table className="ff-import-page-table">
+        <thead>
+          <tr>
+            <th>页</th>
+            <th>行数</th>
+            <th>范围</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pages.length ? (
+            pages.map((page) => (
+              <tr
+                data-selected={selectedPage === page.index}
+                key={page.index}
+                onClick={() => openPage(page)}
+              >
+                <td>第 {page.index} 页</td>
+                <td>{formatPageRows(page.rows)}</td>
+                <td>{formatPageDateTime(page.timeFrom)} ~ {page.realtime ? '当前' : formatPageDateTime(page.timeTo)}</td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={3}>{selectedSymbol} {selectedPeriod || ''} 暂无实时分页，打开实时图表后生成。</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <div className="ff-import-selected-settings__meta">
+        第 1 页使用实时页，后续每页 {formatPageRows(historicalPageSize)} 根；当前总数 {formatPageRows(totalRows)}。
+      </div>
+    </div>
+  )
+}
+
 function LoadRow({ label, loaded, onSetLoaded }: { label: string; loaded: boolean; onSetLoaded: (loaded: boolean) => void }) {
   return (
     <div className="ff-import-load-row">

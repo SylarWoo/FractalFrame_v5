@@ -68,7 +68,6 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
     loadStoreV5KLineData(options)
       .then((data) => {
         if (disposed) return
-
         const merged = stepLoad.direction === 'left'
           ? mergeKLineData(data, stripFuturePlaceholders(chart.getDataList()))
           : mergeKLineData(stripFuturePlaceholders(chart.getDataList()), data)

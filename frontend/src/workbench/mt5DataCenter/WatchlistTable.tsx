@@ -2,11 +2,7 @@ import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import type { Mt5RealtimeTick, Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 import { formatGlobalPrice, formatGlobalPriceDelta } from '../chart/globalPricePrecision'
 import { resolveMt5SymbolDisplay } from '../rightDrawer/mt5SymbolDisplay'
-import {
-  formatMarketChange,
-  formatMarketPercent,
-} from './storeV5StatusFormat'
-import type { StoreTableRow } from './storeV5StatusFormat'
+import { formatMarketChange, formatMarketPercent } from './storeV5StatusFormat'
 import './WatchlistTable.css'
 
 export type WatchlistTableColumnKey = 'symbol' | 'name' | 'assetType' | 'last' | 'change'
@@ -16,16 +12,12 @@ type WatchlistTableColumnWidths = Record<WatchlistTableColumnKey, number>
 type WatchlistTableProps = {
   columnWidths: WatchlistTableColumnWidths
   onColumnResizePointerDown: (event: ReactPointerEvent<HTMLSpanElement>, column: WatchlistTableColumnKey) => void
-  onOpenWatchlistPeriod: (row: StoreTableRow) => void
   onResizePointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void
   onResetColumnWidth: (column: WatchlistTableColumnKey) => void
   onResetHeight: () => void
   onSelectSymbol: (symbol: string) => void
   onToggleRealtime: () => void
-  selectedStoreTableKey: string
   selectedSymbol: string
-  watchlistAggregatedPeriods: StoreTableRow[]
-  watchlistDirectPeriods: StoreTableRow[]
   watchlistRealtimeEnabled: boolean
   watchlistRealtimeLog: string[]
   watchlistRealtimeReady: boolean
@@ -38,16 +30,12 @@ type WatchlistTableProps = {
 export function WatchlistTable({
   columnWidths,
   onColumnResizePointerDown,
-  onOpenWatchlistPeriod,
   onResizePointerDown,
   onResetColumnWidth,
   onResetHeight,
   onSelectSymbol,
   onToggleRealtime,
-  selectedStoreTableKey,
   selectedSymbol,
-  watchlistAggregatedPeriods,
-  watchlistDirectPeriods,
   watchlistRealtimeEnabled,
   watchlistRealtimeLog,
   watchlistRealtimeReady,
@@ -88,8 +76,8 @@ export function WatchlistTable({
           <thead>
             <tr>
               {renderResizableHeader('SYMBOL', 'symbol')}
-              {renderResizableHeader('\u4e2d\u6587\u540d\u79f0', 'name')}
-              {renderResizableHeader('\u8d44\u4ea7\u7c7b\u578b', 'assetType')}
+              {renderResizableHeader('中文名称', 'name')}
+              {renderResizableHeader('资产类型', 'assetType')}
               {renderResizableHeader('LAST', 'last')}
               {renderResizableHeader('CHG', 'change')}
               <th>CHG%</th>
@@ -133,46 +121,6 @@ export function WatchlistTable({
         aria-label="Resize watchlist table"
         tabIndex={0}
       />
-      {(watchlistDirectPeriods.length > 0 || watchlistAggregatedPeriods.length > 0) && (
-        <div className="ff-watchlist-periods" aria-label="Watchlist available periods">
-          {watchlistDirectPeriods.length > 0 && (
-            <section className="ff-watchlist-periods__group">
-              <h4>Direct source</h4>
-              <div className="ff-watchlist-periods__buttons">
-                {watchlistDirectPeriods.map((row) => (
-                  <button
-                    data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
-                    key={`${row.kind}-${row.period}`}
-                    onClick={() => onOpenWatchlistPeriod(row)}
-                    title={`${row.period} · ${row.count} rows · ${row.updated}`}
-                    type="button"
-                  >
-                    {row.period}
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-          {watchlistAggregatedPeriods.length > 0 && (
-            <section className="ff-watchlist-periods__group">
-              <h4>Aggregated source</h4>
-              <div className="ff-watchlist-periods__buttons">
-                {watchlistAggregatedPeriods.map((row) => (
-                  <button
-                    data-active={selectedStoreTableKey === `${row.kind}-${row.period}`}
-                    key={`${row.kind}-${row.period}`}
-                    onClick={() => onOpenWatchlistPeriod(row)}
-                    title={`${row.period} · ${row.count} rows · ${row.updated}`}
-                    type="button"
-                  >
-                    {row.period}
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-      )}
       <div className="ff-watchlist-realtime-controls">
         <button
           className="ff-watchlist-realtime-toggle"

@@ -232,6 +232,10 @@
   border-bottom: 1px solid #cbd5e1;
 }
 
+.ff-import-selected-periods {
+  margin-top: 10px;
+}
+
 .ff-import-selected-tabs__item {
   position: relative;
   height: 34px;
@@ -298,4 +302,99 @@
 .ff-import-selected-detail__wide-value {
   grid-column: span 3;
   text-align: left !important;
+}
+
+.ff-import-selected-settings {
+  min-width: 0;
+  margin-top: 8px;
+}
+
+.ff-import-selected-settings__title {
+  height: 26px;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 26px;
+}
+
+.ff-import-page-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  border-top: 1px solid #dbe3ef;
+  border-left: 1px solid #dbe3ef;
+  font-size: 12px;
+}
+
+.ff-import-page-table th,
+.ff-import-page-table td {
+  height: 28px;
+  min-width: 0;
+  overflow: hidden;
+  border-right: 1px solid #dbe3ef;
+  border-bottom: 1px solid #dbe3ef;
+  padding: 4px 8px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ff-import-page-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 500;
+}
+
+.ff-import-page-table td {
+  color: #0f172a;
+  font-weight: 500;
+}
+
+.ff-import-page-table tbody tr {
+  cursor: pointer;
+}
+
+.ff-import-page-table tbody tr:hover td {
+  background: #f8fafc;
+}
+
+.ff-import-page-table tbody tr[data-selected='true'] td {
+  background: #dbeafe;
+}
+
+.ff-import-page-table tbody tr[data-selected='true']:hover td {
+  background: #dbeafe;
+}
+
+.ff-import-page-table tbody tr[data-selected='true'] td:first-child {
+  position: relative;
+  color: #0b55d9;
+}
+
+.ff-import-page-table tbody tr[data-selected='true'] td:first-child::before {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: #2f6df6;
+  content: '';
+}
+
+.ff-import-page-table th:nth-child(1),
+.ff-import-page-table td:nth-child(1) {
+  width: 68px;
+}
+
+.ff-import-page-table th:nth-child(2),
+.ff-import-page-table td:nth-child(2) {
+  width: 80px;
+}
+
+.ff-import-selected-settings__meta {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 16px;
 }

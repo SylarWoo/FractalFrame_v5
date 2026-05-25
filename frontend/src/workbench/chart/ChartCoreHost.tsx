@@ -50,11 +50,19 @@ type ChartCoreHostProps = {
   jump?: { id: number; timestamp?: number } | null
   limit?: number
   onLoadStateChange?: (state: ChartLoadState) => void
+  page?: ChartPageTarget | null
   period: string
   reloadId?: number
   stepLoad?: { direction: 'left' | 'right'; id: number } | null
   symbol: string
   totalRows?: number | null
+}
+
+export type ChartPageTarget = {
+  index: number
+  limit: number
+  realtime: boolean
+  timeTo?: number | null
 }
 
 export type ChartIndicatorCommand = {
@@ -108,14 +116,14 @@ function refreshPane(chart: unknown, paneId: string) {
   })
 }
 
-export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLoadStateChange, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
+export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLoadStateChange, page, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
-  const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, period, reloadId, symbol, totalRows })
+  const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, page, period, reloadId, symbol, totalRows })
   const realtimeDataReady = !loadState.loading &&
     loadState.rows > 0 &&
     loadState.loadedSymbol === symbol &&
     loadState.loadedPeriod === period
-  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol, totalRows })
+  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady && page?.realtime !== false, period, symbol, totalRows })
   const candleCountdown = useCurrentCandleCountdown({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol })
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const stochPaneHeightObserverRef = useRef<ResizeObserver | null>(null)

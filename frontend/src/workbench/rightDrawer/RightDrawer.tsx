@@ -442,6 +442,7 @@ export function RightDrawer({
             onWatchlistColumnResizePointerDown={handleWatchlistColumnResizePointerDown}
             onDeleteLocalStore={handleDeleteLocalStore} onDeleteSelectedAggregates={handleDeleteSelectedAggregates}
             onLoadSymbols={loadSymbols}
+            onOpenChart={onOpenChart}
             onOpenStoreTableRow={handleOpenStoreTableRow} onOpenWatchlistPeriod={handleOpenWatchlistPeriod}
             onPullStore={handlePullStore} onRefreshStoreStatus={handleRefreshStoreStatus}
             onRepairM1Gaps={handleRefreshStoreStatus}

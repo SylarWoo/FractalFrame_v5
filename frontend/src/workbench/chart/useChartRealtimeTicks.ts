@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import type { Chart, KLineData } from 'klinecharts'
+import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import { queryMt5Rates } from '../../services/mt5/mt5SymbolsApi'
 import type { StoreV5QueryRow } from '../../services/mt5/mt5SymbolsApi'
 import { readWatchlistRealtimeEnabled, realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
+import { writeJson } from '../persistence/jsonStorage'
+import { storageKeys } from '../persistence/storageKeys'
+import { dispatchWorkbenchEvent, workbenchEvents } from '../persistence/workbenchEvents'
 import { applyPriceVolumePrecision } from './chartStyleAppliers'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { applyNewDataWithFuturePlaceholders } from './chartFuturePlaceholders'
-import { resolveHasMoreOlder } from './chartCoreDataUtils'
+import { mergeKLineData } from './chartCoreDataUtils'
 
 type UseChartRealtimeTicksOptions = {
   chartInstanceRef: MutableRefObject<Chart | null>
@@ -29,9 +33,40 @@ type Mt5RealtimeTickEventDetail = {
 
 export const chartRealtimeDataChangedEvent = 'ff:chart-realtime-data-changed'
 const mt5RealtimeInitialBarsLimit = 5000
+const realtimeLocalBackfillLimit = 20000
+const realtimePageMaxRows = mt5RealtimeInitialBarsLimit + realtimeLocalBackfillLimit
 
 function dispatchChartRealtimeDataChanged() {
   window.dispatchEvent(new Event(chartRealtimeDataChangedEvent))
+}
+
+function saveRealtimePageSnapshot({
+  localRows,
+  period,
+  rows,
+  symbol,
+}: {
+  localRows: number
+  period: string
+  rows: KLineData[]
+  symbol: string
+}) {
+  const first = rows[0]
+  const last = rows[rows.length - 1]
+  writeJson(storageKeys.realtimePageSnapshot, {
+    builtAt: new Date().toISOString(),
+    localRows,
+    mt5Rows: Math.max(0, rows.length - localRows),
+    page: 1,
+    pageSize: realtimePageMaxRows,
+    period,
+    rows: rows.length,
+    symbol,
+    timeFrom: typeof first?.timestamp === 'number' ? Math.floor(first.timestamp / 1000) : null,
+    timeTo: typeof last?.timestamp === 'number' ? Math.floor(last.timestamp / 1000) : null,
+    type: 'realtime',
+  })
+  dispatchWorkbenchEvent(workbenchEvents.realtimePageSnapshotChanged)
 }
 
 function normalizeTimeframe(period: string) {
@@ -115,7 +150,7 @@ function resolvePeriodStartTimestamp(timestampMs: number, periodSeconds: number)
   return Math.floor(timestampMs / periodMs) * periodMs
 }
 
-export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, period, symbol, totalRows }: UseChartRealtimeTicksOptions) {
+export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, period, symbol }: UseChartRealtimeTicksOptions) {
   const [realtimeEnabled, setRealtimeEnabled] = useState(readWatchlistRealtimeEnabled)
 
   useEffect(() => {
@@ -138,18 +173,12 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
     const normalizedSymbol = normalizeSymbol(symbol)
     const periodSeconds = resolvePeriodSeconds(period)
 
-    const applyMt5Rows = (rows: KLineData[]) => {
+    const applyRealtimePageRows = (rows: KLineData[]) => {
       const chart = chartInstanceRef.current
       if (!chart || rows.length === 0) return
       const currentRows = chart.getDataList()
       if (!shouldApplyRows(currentRows, rows)) return
-      const hasMoreOlder = resolveHasMoreOlder({
-        loadedRows: rows.length,
-        pageSize: mt5RealtimeInitialBarsLimit,
-        receivedRows: rows.length,
-        totalRows,
-      })
-      applyNewDataWithFuturePlaceholders(chart, rows, period, hasMoreOlder, () => {
+      applyNewDataWithFuturePlaceholders(chart, rows, period, false, () => {
         applyPriceVolumePrecision(chart, symbol)
         dispatchChartRealtimeDataChanged()
       })
@@ -167,7 +196,26 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
           const rows = (payload.rows ?? [])
             .map(rowToKLine)
             .filter((row): row is KLineData => row != null)
-          applyMt5Rows(rows)
+          const firstMt5Timestamp = rows[0]?.timestamp
+          if (typeof firstMt5Timestamp !== 'number' || !Number.isFinite(firstMt5Timestamp)) {
+            applyRealtimePageRows(rows)
+            return
+          }
+          return loadStoreV5KLineData({
+            symbol,
+            period,
+            limit: realtimeLocalBackfillLimit,
+            timeTo: Math.floor(firstMt5Timestamp / 1000) - 1,
+          })
+            .then((localRows) => {
+              const realtimePageRows = mergeKLineData(localRows, rows).slice(-realtimePageMaxRows)
+              saveRealtimePageSnapshot({ localRows: localRows.length, period, rows: realtimePageRows, symbol })
+              applyRealtimePageRows(realtimePageRows)
+            })
+            .catch(() => {
+              saveRealtimePageSnapshot({ localRows: 0, period, rows, symbol })
+              applyRealtimePageRows(rows)
+            })
         })
         .catch(() => {})
         .finally(() => {
@@ -236,5 +284,5 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       if (bindTimer !== 0) window.clearTimeout(bindTimer)
       window.removeEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
     }
-  }, [chartInstanceRef, dataReady, period, realtimeEnabled, symbol, totalRows])
+  }, [chartInstanceRef, dataReady, period, realtimeEnabled, symbol])
 }

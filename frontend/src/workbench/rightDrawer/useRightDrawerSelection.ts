@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { Mt5SymbolRow, StoreV5CheckPayload } from '../../services/mt5/mt5SymbolsApi'
+import type { ChartPageTarget } from '../chart/ChartCoreHost'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
 import { storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
 import {
@@ -37,7 +38,7 @@ type UseRightDrawerSelectionOptions = {
   setStoreCheckError: Dispatch<SetStateAction<string>>
   setStoreActionStatus: Dispatch<SetStateAction<string>>
   autoOpenedStoreTableRef: RefObject<string>
-  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number }) => void
+  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }) => void
 }
 
 export function useRightDrawerSelection({

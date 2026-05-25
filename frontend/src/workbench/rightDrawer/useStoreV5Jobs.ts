@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import type { ChartPageTarget } from '../chart/ChartCoreHost'
 import {
   cancelStoreV5PullJob,
   cleanStoreV5DirectM1,
@@ -35,7 +36,7 @@ type UseStoreV5JobsOptions = {
   selectedRowSymbol: string
   selectedStoreTableKey: string
   storePanelPersistenceEnabled: boolean
-  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number }) => void
+  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }) => void
 }
 
 export function useStoreV5Jobs({

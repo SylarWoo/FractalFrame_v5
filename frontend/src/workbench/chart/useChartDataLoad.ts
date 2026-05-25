@@ -24,6 +24,7 @@ import {
   restoreChartViewportSnapshot,
   type ChartViewportSnapshot,
 } from './chartViewportPersistence'
+import type { ChartPageTarget } from './ChartCoreHost'
 
 export type ChartLoadStateCore = {
   error: boolean
@@ -39,6 +40,7 @@ type UseChartDataLoadOptions = {
   chartInstanceRef: MutableRefObject<Chart | null>
   jump?: { id: number; timestamp?: number } | null
   limit?: number
+  page?: ChartPageTarget | null
   period: string
   reloadId?: number
   symbol: string
@@ -49,6 +51,7 @@ export function useChartDataLoad({
   chartInstanceRef,
   jump,
   limit,
+  page,
   period,
   reloadId,
   symbol,
@@ -113,7 +116,7 @@ export function useChartDataLoad({
     })
 
     chart.setLoadDataCallback(({ type, data, callback }) => {
-      if (shouldIgnore() || type !== LoadDataType.Forward || !data) {
+      if (shouldIgnore() || page || type !== LoadDataType.Forward || !data) {
         callback([], false)
         return
       }
@@ -168,7 +171,9 @@ export function useChartDataLoad({
     })
 
     const setFallbackTimer = (timer: number) => { fallbackTimer = timer }
-    if (jump?.timestamp != null) {
+    if (page && page.realtime === false) {
+      loadPagedWindow(chart, { inheritedViewport, page, period, setFallbackTimer, setLoadState, shouldIgnore, symbol })
+    } else if (jump?.timestamp != null) {
       loadJumpWindow(chart, { inheritedViewport, jumpTimestamp: jump.timestamp, period, setFallbackTimer, setLoadState, shouldIgnore, symbol })
     } else {
       loadInitialWindow(chart, { inheritedViewport, period, requestedRows, setFallbackTimer, setLoadState, shouldIgnore, symbol, totalRows })
@@ -180,7 +185,7 @@ export function useChartDataLoad({
       chart.setLoadDataCallback(({ callback }) => callback([], false))
       if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer)
     }
-  }, [chartInstanceRef, jump?.id, jump?.timestamp, limit, period, reloadId, symbol, totalRows])
+  }, [chartInstanceRef, jump?.id, jump?.timestamp, limit, page?.index, page?.limit, page?.realtime, page?.timeTo, period, reloadId, symbol, totalRows])
 
   return { loadState, setLoadState }
 }
@@ -299,6 +304,50 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
       chartError('[StoreV5Datafeed] request jump failed', error)
       applyNewDataWithFuturePlaceholders(chart, [], options.period, false)
       options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: jumpDisplayWindowBars, rows: 0 })
+    })
+}
+
+function loadPagedWindow(chart: Chart, options: LoadOptions & { page: ChartPageTarget }) {
+  const limit = Math.max(1, Math.round(options.page.limit))
+  const timeTo = typeof options.page.timeTo === 'number' && Number.isFinite(options.page.timeTo)
+    ? options.page.timeTo
+    : undefined
+  chartInfo('[StoreV5Datafeed] request page start', {
+    symbol: options.symbol,
+    period: options.period,
+    page: options.page.index,
+    limit,
+    timeTo,
+  })
+  loadStoreV5KLineData({ symbol: options.symbol, period: options.period, limit, timeTo })
+    .then((data) => {
+      if (options.shouldIgnore()) return
+      chartInfo('[StoreV5Datafeed] callback page done', { rows: data.length, page: options.page.index })
+      applyNewDataWithFuturePlaceholders(chart, data, options.period, false)
+      applyPriceVolumePrecision(chart, options.symbol)
+      options.setFallbackTimer(window.setTimeout(() => {
+        if (options.shouldIgnore()) return
+        resetYAxisAutoScale(chart)
+        scheduleResetYAxisAutoScaleFlags(chart)
+        applySessionBreakIndicator(chart, options.symbol, options.period)
+        chart.scrollToRealTime(0)
+        scheduleResetYAxisAutoScaleFlags(chart)
+        options.setLoadState({
+          error: false,
+          loadedPeriod: options.period,
+          loadedSymbol: options.symbol,
+          loadingMore: false,
+          loading: false,
+          requestedRows: limit,
+          rows: stripFuturePlaceholders(chart.getDataList()).length || data.length,
+        })
+      }, 0))
+    })
+    .catch((error: unknown) => {
+      if (options.shouldIgnore()) return
+      chartError('[StoreV5Datafeed] request page failed', error)
+      applyNewDataWithFuturePlaceholders(chart, [], options.period, false)
+      options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: limit, rows: 0 })
     })
 }
 

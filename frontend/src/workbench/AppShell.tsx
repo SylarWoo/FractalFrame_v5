@@ -3,7 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { bottomPanels } from './bottomDrawer/bottomPanels'
 import { BottomWorkspace } from './bottomDrawer/BottomWorkspace'
 import { ChartCoreHost } from './chart/ChartCoreHost'
-import type { ChartLoadState } from './chart/ChartCoreHost'
+import type { ChartLoadState, ChartPageTarget } from './chart/ChartCoreHost'
 import type { ChartIndicatorCommand } from './chart/ChartCoreHost'
 import {
   LEFT_RAIL_BRUSH_SVGREPO_ICON_48,
@@ -238,7 +238,7 @@ export function AppShell() {
     loaded: loadedIndicatorKeys.includes(key),
     name: indicatorShortcutLabels[key] ?? key,
   }))
-  const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null; reloadId?: number }>(() => {
+  const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }>(() => {
     const shared = readSharedSelection()
     return {
       symbol: shared.symbol,
@@ -577,6 +577,7 @@ export function AppShell() {
             indicatorCommand={chartIndicatorCommand}
             jump={chartJump}
             onLoadStateChange={setChartLoadState}
+            page={chartTarget.page}
             period={chartTarget.period}
             reloadId={chartTarget.reloadId}
             stepLoad={chartStepLoad}

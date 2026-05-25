@@ -1,4 +1,5 @@
 import type { MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from './indicatorPersistence'
+import type { ChartPageTarget } from '../chart/ChartCoreHost'
 
 export type RightDrawerId = 'drawings' | 'objectTree' | 'indicators' | 'mt5' | 'settings'
 
@@ -21,5 +22,5 @@ export type RightDrawerProps = {
   onResize: (width: number) => void
   onToggleDrawer: (drawer: RightDrawerId) => void
   onUnloadIndicator?: (name: SupportedChartIndicatorName) => void
-  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number }) => void
+  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }) => void
 }
