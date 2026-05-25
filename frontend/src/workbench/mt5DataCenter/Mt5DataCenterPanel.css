@@ -309,6 +309,14 @@
   margin-top: 8px;
 }
 
+.ff-import-selected-settings__head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .ff-import-selected-settings__title {
   height: 26px;
   color: #0f172a;
@@ -317,13 +325,48 @@
   line-height: 26px;
 }
 
+.ff-import-selected-settings__head button {
+  height: 24px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 10px;
+}
+
+.ff-import-selected-settings__head button:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.ff-import-selected-settings__head button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.ff-import-page-table-wrap {
+  min-height: 120px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-top: 1px solid #dbe3ef;
+  border-left: 1px solid #dbe3ef;
+  border-right: 1px solid #dbe3ef;
+  background: #ffffff;
+}
+
 .ff-import-page-table {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  border-top: 1px solid #dbe3ef;
-  border-left: 1px solid #dbe3ef;
   font-size: 12px;
+}
+
+.ff-import-page-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .ff-import-page-table th,
@@ -390,6 +433,34 @@
 .ff-import-page-table th:nth-child(2),
 .ff-import-page-table td:nth-child(2) {
   width: 80px;
+}
+
+.ff-import-page-table-splitter {
+  position: relative;
+  height: 8px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.ff-import-page-table-splitter::before {
+  position: absolute;
+  top: 3px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: #dbe3ef;
+  content: '';
+}
+
+.ff-import-page-table-splitter:hover::before,
+body[data-fractalframe-history-page-resizing='true'] .ff-import-page-table-splitter::before {
+  background: #94a3b8;
+}
+
+body[data-fractalframe-history-page-resizing='true'],
+body[data-fractalframe-history-page-resizing='true'] * {
+  cursor: ns-resize !important;
+  user-select: none;
 }
 
 .ff-import-selected-settings__meta {

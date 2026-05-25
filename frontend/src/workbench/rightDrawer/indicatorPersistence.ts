@@ -2,6 +2,7 @@ import { readBooleanFlag, readJson, removeStorageItem, writeBooleanFlag, writeJs
 import {
   defaultMaIndicatorSettings,
   defaultRsiIndicatorSettings,
+  normalizeDpoSettings,
   normalizeIndicatorSettingsTab,
   normalizeMacdSettings,
   normalizeMrSettings,
@@ -14,6 +15,7 @@ import {
 import type { PersistedIndicatorsState } from './indicatorSettingsSchema'
 
 export type {
+  DpoIndicatorSettings,
   IndicatorSettingsTab,
   MacdIndicatorSettings,
   MacdMaType,
@@ -40,6 +42,7 @@ export type {
 } from './indicatorSettingsSchema'
 
 export {
+  defaultDpoIndicatorSettings,
   defaultMacdIndicatorSettings,
   defaultMaIndicatorSettings,
   defaultMrIndicatorSettings,
@@ -66,6 +69,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
   const parsed = readJson<Partial<PersistedIndicatorsState> | null>(persistedStateKey, null)
   return {
     loaded: {
+      DPO: parsed?.loaded?.DPO === true,
       MA: parsed?.loaded?.MA === true,
       MACD: parsed?.loaded?.MACD === true,
       MR: parsed?.loaded?.MR === true,
@@ -76,6 +80,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
       VWAP: parsed?.loaded?.VWAP === true,
       Vol: parsed?.loaded?.Vol === true,
     },
+    dpo: normalizeDpoSettings(parsed?.dpo),
     ma: {
       ...defaultMaIndicatorSettings,
       ...(parsed?.ma ?? {}),

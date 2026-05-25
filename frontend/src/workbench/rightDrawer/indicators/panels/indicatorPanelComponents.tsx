@@ -4,6 +4,7 @@ export { MaInputPanel, MaStylePanel } from './MaSettingsPanels'
 import { OpenableSelect } from '../../../controls/OpenableSelect'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../../../settings/SettingsSwatches'
 import type {
+  DpoIndicatorSettings,
   MacdIndicatorSettings,
   MacdMaType,
   RsiPrecision,
@@ -25,6 +26,7 @@ import {
   precisionOptions,
   rsiSourceOptions,
   stochText,
+  updateDpoSettings,
   updateMacdSettings,
   updateStochSettings,
   updateTsiSettings,
@@ -701,5 +703,181 @@ export function MrInputPanel() {
 export function MrStylePanel() {
   return (
     <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">默认</div>
+  )
+}
+
+export function DpoInputPanel({
+  onSettingsChange,
+  settings,
+}: {
+  onSettingsChange: (settings: DpoIndicatorSettings) => void
+  settings: DpoIndicatorSettings
+}) {
+  const patch = (next: Partial<DpoIndicatorSettings>) => onSettingsChange(updateDpoSettings(settings, next))
+
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-dpo-panel-v1" role="tabpanel">
+      <section className="ff-indicators-input-panel-v1__section">
+        <label className="ff-indicators-input-panel-v1__row">
+          <span className="ff-indicators-input-panel-v1__label">长度</span>
+          <span className="ff-indicators-input-panel-v1__control">
+            <NumberBox min={1} onChange={(length) => patch({ length })} value={settings.length} />
+          </span>
+        </label>
+        <label className="ff-indicators-vwap-panel-v1__check-row">
+          <input checked={settings.centered} onChange={(event) => patch({ centered: event.target.checked })} type="checkbox" />
+          <span>居中</span>
+          <InfoBadge title="当前只保存 UI 状态，后续接计算。" />
+        </label>
+      </section>
+      <section className="ff-indicators-input-panel-v1__section">
+        <h3 className="ff-indicators-input-panel-v1__section-title">计算</h3>
+        <label className="ff-indicators-input-panel-v1__row">
+          <span className="ff-indicators-input-panel-v1__label">时间周期</span>
+          <span className="ff-indicators-input-panel-v1__control">
+            <OpenableSelect
+              ariaLabel="DPO timeframe"
+              onChange={(value) => patch({ timeframe: value as VwapTimeframe })}
+              options={vwapTimeframeOptions}
+              value={settings.timeframe}
+            />
+          </span>
+          <InfoBadge title="当前只保存 UI 状态，后续接计算。" />
+        </label>
+        <label className="ff-indicators-vwap-panel-v1__check-row">
+          <input checked={settings.waitForTimeframeClose} onChange={(event) => patch({ waitForTimeframeClose: event.target.checked })} type="checkbox" />
+          <span>等待时间周期结束</span>
+        </label>
+      </section>
+    </div>
+  )
+}
+
+export function DpoStylePanel({
+  onSettingsChange,
+  settings,
+}: {
+  onSettingsChange: (settings: DpoIndicatorSettings) => void
+  settings: DpoIndicatorSettings
+}) {
+  const patch = (next: Partial<DpoIndicatorSettings>) => onSettingsChange(updateDpoSettings(settings, next))
+
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-style-panel-v1 ff-indicators-dpo-style-panel-v1" role="tabpanel">
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.dpoVisible} label="DPO" onChange={(dpoVisible) => patch({ dpoVisible })} />
+        <SettingsLineSwatch
+          color={settings.dpoColor}
+          lineStyle={settings.dpoLineStyle}
+          onChange={(value) => patch({
+            dpoColor: value.hex,
+            dpoLineStyle: value.lineStyle,
+            dpoLineWidth: value.thickness,
+            dpoOpacity: value.opacity,
+          })}
+          thickness={settings.dpoLineWidth}
+          value={{
+            hex: settings.dpoColor,
+            lineStyle: settings.dpoLineStyle,
+            opacity: settings.dpoOpacity,
+            thickness: settings.dpoLineWidth,
+          }}
+        />
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.zeroLineVisible} label="零线" onChange={(zeroLineVisible) => patch({ zeroLineVisible })} />
+        <SettingsLineSwatch
+          color={settings.zeroLineColor}
+          lineStyle={settings.zeroLineStyle}
+          onChange={(value) => patch({
+            zeroLineColor: value.hex,
+            zeroLineStyle: value.lineStyle,
+            zeroLineWidth: value.thickness,
+            zeroLineOpacity: value.opacity,
+          })}
+          thickness={settings.zeroLineWidth}
+          value={{
+            hex: settings.zeroLineColor,
+            lineStyle: settings.zeroLineStyle,
+            opacity: settings.zeroLineOpacity,
+            thickness: settings.zeroLineWidth,
+          }}
+        />
+        <span className="ff-indicators-input-panel-v1__control ff-indicators-dpo-style-panel-v1__zero-value">
+          <NumberBox min={-500} onChange={(zeroLineValue) => patch({ zeroLineValue })} value={settings.zeroLineValue} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.upLineVisible} label="up" onChange={(upLineVisible) => patch({ upLineVisible })} />
+        <SettingsLineSwatch
+          color={settings.upLineColor}
+          lineStyle={settings.upLineStyle}
+          onChange={(value) => patch({
+            upLineColor: value.hex,
+            upLineStyle: value.lineStyle,
+            upLineWidth: value.thickness,
+            upLineOpacity: value.opacity,
+          })}
+          thickness={settings.upLineWidth}
+          value={{
+            hex: settings.upLineColor,
+            lineStyle: settings.upLineStyle,
+            opacity: settings.upLineOpacity,
+            thickness: settings.upLineWidth,
+          }}
+        />
+        <span className="ff-indicators-input-panel-v1__control ff-indicators-dpo-style-panel-v1__level-value">
+          <NumberBox min={-500} onChange={(upLineValue) => patch({ upLineValue })} value={settings.upLineValue} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.downLineVisible} label="down" onChange={(downLineVisible) => patch({ downLineVisible })} />
+        <SettingsLineSwatch
+          color={settings.downLineColor}
+          lineStyle={settings.downLineStyle}
+          onChange={(value) => patch({
+            downLineColor: value.hex,
+            downLineStyle: value.lineStyle,
+            downLineWidth: value.thickness,
+            downLineOpacity: value.opacity,
+          })}
+          thickness={settings.downLineWidth}
+          value={{
+            hex: settings.downLineColor,
+            lineStyle: settings.downLineStyle,
+            opacity: settings.downLineOpacity,
+            thickness: settings.downLineWidth,
+          }}
+        />
+        <span className="ff-indicators-input-panel-v1__control ff-indicators-dpo-style-panel-v1__level-value">
+          <NumberBox min={-500} onChange={(downLineValue) => patch({ downLineValue })} value={settings.downLineValue} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.backgroundVisible} label="背景" onChange={(backgroundVisible) => patch({ backgroundVisible })} />
+        <SettingsColorSwatch
+          checkerboard
+          color={settings.backgroundColor}
+          onChange={(value) => patch({ backgroundColor: value.hex, backgroundOpacity: value.opacity })}
+          value={{ hex: settings.backgroundColor, opacity: settings.backgroundOpacity }}
+        />
+      </div>
+      <h3 className="ff-indicators-style-panel-v1__subhead">输出值</h3>
+      <label className="ff-indicators-input-panel-v1__row">
+        <span className="ff-indicators-input-panel-v1__label">精确度</span>
+        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
+          <OpenableSelect
+            ariaLabel="DPO precision"
+            onChange={(value) => patch({ precision: value as RsiPrecision })}
+            options={vwapPrecisionOptions}
+            value={settings.precision}
+          />
+        </span>
+      </label>
+      <CheckControl checked={settings.labelsOnPriceScale} label="价格坐标上的标签" onChange={(labelsOnPriceScale) => patch({ labelsOnPriceScale })} />
+      <CheckControl checked={settings.valuesInStatusLine} label="状态行中的值" onChange={(valuesInStatusLine) => patch({ valuesInStatusLine })} />
+      <h3 className="ff-indicators-style-panel-v1__subhead">输入值</h3>
+      <CheckControl checked={settings.inputsInStatusLine} label="状态行中的输入" onChange={(inputsInStatusLine) => patch({ inputsInStatusLine })} />
+    </div>
   )
 }

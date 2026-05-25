@@ -10,7 +10,7 @@ import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
 import { millisecondsUntilNextMarketSessionCheck, readMarketStatusTitleSnapshot, saveMarketStatusTitleSnapshotFromSymbolSession } from '../mt5DataCenter/marketStatusTitleState'
 import { formatDetailValue, periodFromStoreTableKey, selectedDetailRows } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
-import { readJson } from '../persistence/jsonStorage'
+import { readJson, readString, writeJson, writeString } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
 import { workbenchEvents } from '../persistence/workbenchEvents'
 import type { ChartPageTarget } from '../chart/ChartCoreHost'
@@ -375,6 +375,40 @@ function parseRowsCount(value: string | number | null | undefined) {
 
 const historicalPageSize = 30000
 const realtimePageSize = 25000
+const defaultPageTableHeight = 220
+const minPageTableHeight = 120
+const maxPageTableHeight = 520
+
+type PersistedPageIndex = {
+  builtAt: string
+  pageSize: number
+  pages: RealtimePageRow[]
+  period: string
+  symbol: string
+  totalRows: number | null
+}
+
+function pageCacheKey(symbol: string, period: string) {
+  return `${symbol.trim().toUpperCase()}:${period.trim().toUpperCase()}`
+}
+
+function readPageIndexCache() {
+  return readJson<Record<string, PersistedPageIndex>>(storageKeys.realtimePageIndexCache, {})
+}
+
+function writePageIndexCache(key: string, value: PersistedPageIndex) {
+  writeJson(storageKeys.realtimePageIndexCache, {
+    ...readPageIndexCache(),
+    [key]: value,
+  })
+}
+
+function readPageTableHeight() {
+  const parsed = Number(readString(storageKeys.realtimePageTableHeightPx))
+  return Number.isFinite(parsed)
+    ? Math.max(minPageTableHeight, Math.min(Math.round(parsed), maxPageTableHeight))
+    : defaultPageTableHeight
+}
 
 function SelectedSymbolRealtimePages({
   onOpenChart,
@@ -390,10 +424,13 @@ function SelectedSymbolRealtimePages({
   const [snapshot, setSnapshot] = useState(readRealtimePageSnapshot)
   const [selectedPage, setSelectedPage] = useState(1)
   const [pages, setPages] = useState<RealtimePageRow[]>([])
+  const [building, setBuilding] = useState(false)
+  const [pageTableHeight, setPageTableHeight] = useState(readPageTableHeight)
   const selectedPeriod = periodFromStoreTableKey(selectedStoreTableKey)
   const selectedStoreRow = storeRows.find((row) => `${row.kind}-${row.period}` === selectedStoreTableKey)
     ?? storeRows.find((row) => row.period.toUpperCase() === selectedPeriod)
   const totalRows = parseRowsCount(selectedStoreRow?.rowsCount ?? selectedStoreRow?.count)
+  const cacheKey = selectedSymbol && selectedPeriod ? pageCacheKey(selectedSymbol, selectedPeriod) : ''
   const visibleSnapshot = snapshot
     && snapshot.symbol === selectedSymbol
     && (!selectedPeriod || snapshot.period?.toUpperCase() === selectedPeriod)
@@ -411,13 +448,19 @@ function SelectedSymbolRealtimePages({
   }, [])
 
   useEffect(() => {
-    let disposed = false
     setSelectedPage(1)
-    setPages([])
-    const period = visibleSnapshot?.period || selectedPeriod
-    if (!selectedSymbol || !period) return
+    if (!cacheKey) {
+      setPages([])
+      return
+    }
+    setPages(readPageIndexCache()[cacheKey]?.pages ?? [])
+  }, [cacheKey])
 
-    const buildPages = async () => {
+  const buildPages = async () => {
+    const period = visibleSnapshot?.period || selectedPeriod
+    if (!selectedSymbol || !period || !cacheKey || building) return
+    setBuilding(true)
+    try {
       const nextPages: RealtimePageRow[] = []
       let anchorTimeTo: number | null = null
 
@@ -431,11 +474,9 @@ function SelectedSymbolRealtimePages({
           timeTo: visibleSnapshot.timeTo,
         })
         anchorTimeTo = visibleSnapshot.timeFrom - 1
-        setPages([...nextPages])
       } else {
         const page1Limit = Math.min(totalRows ?? realtimePageSize, realtimePageSize)
         const rows = await loadStoreV5KLineData({ symbol: selectedSymbol, period, limit: page1Limit })
-        if (disposed) return
         const first = rows[0]
         const last = rows[rows.length - 1]
         nextPages.push({
@@ -447,50 +488,85 @@ function SelectedSymbolRealtimePages({
           timeTo: typeof last?.timestamp === 'number' ? Math.floor(last.timestamp / 1000) : null,
         })
         anchorTimeTo = typeof first?.timestamp === 'number' ? Math.floor(first.timestamp / 1000) - 1 : null
-        setPages([...nextPages])
       }
 
-      if (anchorTimeTo == null) return
-      const historyRows = totalRows != null
-        ? Math.max(0, totalRows - (nextPages[0]?.rows ?? 0))
-        : historicalPageSize
-      const historyPageCount = totalRows != null
-        ? Math.ceil(historyRows / historicalPageSize)
-        : 1
-
-      for (let index = 0; index < historyPageCount; index += 1) {
-        const remaining = totalRows != null
-          ? historyRows - index * historicalPageSize
+      if (anchorTimeTo != null) {
+        const historyRows = totalRows != null
+          ? Math.max(0, totalRows - (nextPages[0]?.rows ?? 0))
           : historicalPageSize
-        const limit = Math.min(historicalPageSize, remaining)
-        if (limit <= 0) break
-        const rows = await loadStoreV5KLineData({ symbol: selectedSymbol, period, limit, timeTo: anchorTimeTo })
-        if (disposed) return
-        if (!rows.length) break
-        const first = rows[0]
-        const last = rows[rows.length - 1]
-        nextPages.push({
-          index: nextPages.length + 1,
-          limit,
-          realtime: false,
-          rows: rows.length,
-          timeFrom: typeof first?.timestamp === 'number' ? Math.floor(first.timestamp / 1000) : null,
-          timeTo: typeof last?.timestamp === 'number' ? Math.floor(last.timestamp / 1000) : anchorTimeTo,
-        })
-        setPages([...nextPages])
-        if (typeof first?.timestamp !== 'number' || rows.length < limit) break
-        anchorTimeTo = Math.floor(first.timestamp / 1000) - 1
+        const historyPageCount = totalRows != null
+          ? Math.ceil(historyRows / historicalPageSize)
+          : 1
+
+        for (let index = 0; index < historyPageCount; index += 1) {
+          const remaining = totalRows != null
+            ? historyRows - index * historicalPageSize
+            : historicalPageSize
+          const limit = Math.min(historicalPageSize, remaining)
+          if (limit <= 0) break
+          const rows = await loadStoreV5KLineData({ symbol: selectedSymbol, period, limit, timeTo: anchorTimeTo })
+          if (!rows.length) break
+          const first = rows[0]
+          const last = rows[rows.length - 1]
+          nextPages.push({
+            index: nextPages.length + 1,
+            limit,
+            realtime: false,
+            rows: rows.length,
+            timeFrom: typeof first?.timestamp === 'number' ? Math.floor(first.timestamp / 1000) : null,
+            timeTo: typeof last?.timestamp === 'number' ? Math.floor(last.timestamp / 1000) : anchorTimeTo,
+          })
+          if (typeof first?.timestamp !== 'number' || rows.length < limit) break
+          anchorTimeTo = Math.floor(first.timestamp / 1000) - 1
+        }
+      }
+
+      writePageIndexCache(cacheKey, {
+        builtAt: new Date().toISOString(),
+        pageSize: historicalPageSize,
+        pages: nextPages,
+        period,
+        symbol: selectedSymbol,
+        totalRows,
+      })
+      setSelectedPage(1)
+      setPages(nextPages)
+    } finally {
+      setBuilding(false)
+    }
+  }
+
+  const startResizePageTable = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const startY = event.clientY
+    const startHeight = pageTableHeight
+    let latestHeight = startHeight
+    const pointerId = event.pointerId
+    const target = event.currentTarget
+    target.setPointerCapture(pointerId)
+    document.body.dataset.fractalframeHistoryPageResizing = 'true'
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextHeight = Math.max(minPageTableHeight, Math.min(startHeight + (moveEvent.clientY - startY), maxPageTableHeight))
+      latestHeight = Math.round(nextHeight)
+      setPageTableHeight(latestHeight)
+    }
+
+    const handlePointerUp = () => {
+      delete document.body.dataset.fractalframeHistoryPageResizing
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      writeString(storageKeys.realtimePageTableHeightPx, String(latestHeight))
+      try {
+        target.releasePointerCapture(pointerId)
+      } catch {
+        // Ignore if the pointer capture was already released.
       }
     }
 
-    buildPages().catch(() => {
-      if (!disposed) setPages([])
-    })
-
-    return () => {
-      disposed = true
-    }
-  }, [selectedPeriod, selectedSymbol, totalRows, visibleSnapshot?.period, visibleSnapshot?.symbol, visibleSnapshot?.timeFrom, visibleSnapshot?.timeTo, visibleSnapshot?.rows, visibleSnapshot?.pageSize])
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp, { once: true })
+  }
 
   const openPage = (page: RealtimePageRow) => {
     const period = visibleSnapshot?.period || selectedPeriod
@@ -512,35 +588,54 @@ function SelectedSymbolRealtimePages({
 
   return (
     <div className="ff-import-selected-settings" role="tabpanel">
-      <div className="ff-import-selected-settings__title">历史分页</div>
-      <table className="ff-import-page-table">
-        <thead>
-          <tr>
-            <th>页</th>
-            <th>行数</th>
-            <th>范围</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pages.length ? (
-            pages.map((page) => (
-              <tr
-                data-selected={selectedPage === page.index}
-                key={page.index}
-                onClick={() => openPage(page)}
-              >
-                <td>第 {page.index} 页</td>
-                <td>{formatPageRows(page.rows)}</td>
-                <td>{formatPageDateTime(page.timeFrom)} ~ {page.realtime ? '当前' : formatPageDateTime(page.timeTo)}</td>
-              </tr>
-            ))
-          ) : (
+      <div className="ff-import-selected-settings__head">
+        <div className="ff-import-selected-settings__title">历史分页</div>
+        <button disabled={building || !selectedPeriod} onClick={buildPages} type="button">
+          {building ? '更新中' : '更新'}
+        </button>
+      </div>
+      <div className="ff-import-page-table-wrap" style={{ height: `${pageTableHeight}px` }}>
+        <table className="ff-import-page-table">
+          <thead>
             <tr>
-              <td colSpan={3}>{selectedSymbol} {selectedPeriod || ''} 暂无实时分页，打开实时图表后生成。</td>
+              <th>页</th>
+              <th>行数</th>
+              <th>范围</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pages.length ? (
+              pages.map((page) => (
+                <tr
+                  data-selected={selectedPage === page.index}
+                  key={page.index}
+                  onClick={() => openPage(page)}
+                >
+                  <td>第 {page.index} 页</td>
+                  <td>{formatPageRows(page.rows)}</td>
+                  <td>{formatPageDateTime(page.timeFrom)} ~ {page.realtime ? '当前' : formatPageDateTime(page.timeTo)}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={3}>{selectedSymbol} {selectedPeriod || ''} 暂无分页缓存，点击更新生成。</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      <div
+        className="ff-import-page-table-splitter"
+        onDoubleClick={() => {
+          setPageTableHeight(defaultPageTableHeight)
+          writeString(storageKeys.realtimePageTableHeightPx, String(defaultPageTableHeight))
+        }}
+        onPointerDown={startResizePageTable}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize history page list"
+        tabIndex={0}
+      />
       <div className="ff-import-selected-settings__meta">
         第 1 页使用实时页，后续每页 {formatPageRows(historicalPageSize)} 根；当前总数 {formatPageRows(totalRows)}。
       </div>

@@ -13,12 +13,13 @@ import { applyMorganRangeOverlays, clearMorganRangeOverlays } from './useMorganR
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
 import { ensureTradingViewMrIndicator } from './tradingViewMrIndicator'
+import { ensureTradingViewDpoIndicator } from './tradingViewDpoIndicator'
 import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
 import { ensureTradingViewStochIndicator } from './tradingViewStochIndicator'
 import { ensureTradingViewTsiIndicator } from './tradingViewTsiIndicator'
 import { ensureTradingViewViIndicator } from './tradingViewViIndicator'
 import { ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
-import type { MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import { readString, writeString } from '../persistence/jsonStorage'
 import './ChartCoreHost.css'
@@ -26,11 +27,13 @@ import './ChartCoreHost.css'
 const rsiPaneId = 'rsi_pane'
 const stochPaneId = 'stoch_pane'
 const macdPaneId = 'macd_pane'
+const dpoPaneId = 'dpo_pane'
 const tsiPaneId = 'tsi_pane'
 const viPaneId = 'vi_pane'
 const rsiPaneHeightStorageKey = 'fractalframe.chart.rsiPaneHeight'
 const stochPaneHeightStorageKey = 'fractalframe.chart.stochPaneHeight'
 const macdPaneHeightStorageKey = 'fractalframe.chart.macdPaneHeight'
+const dpoPaneHeightStorageKey = 'fractalframe.chart.dpoPaneHeight'
 const tsiPaneHeightStorageKey = 'fractalframe.chart.tsiPaneHeight'
 const viPaneHeightStorageKey = 'fractalframe.chart.viPaneHeight'
 const defaultRsiPaneHeight = 128
@@ -71,6 +74,7 @@ export type ChartIndicatorCommand = {
 } & (
   | { name: 'MA'; settings?: MaIndicatorSettings }
   | { name: 'MACD'; settings?: MacdIndicatorSettings }
+  | { name: 'DPO'; settings?: DpoIndicatorSettings }
   | { name: 'MR'; settings?: MrIndicatorSettings }
   | { name: 'RSI'; settings?: RsiIndicatorSettings }
   | { name: 'Stoch'; settings?: StochIndicatorSettings }
@@ -123,11 +127,13 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     loadState.rows > 0 &&
     loadState.loadedSymbol === symbol &&
     loadState.loadedPeriod === period
-  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady && page?.realtime !== false, period, symbol, totalRows })
-  const candleCountdown = useCurrentCandleCountdown({ chartInstanceRef, dataReady: realtimeDataReady, period, symbol })
+  const realtimePageActive = page?.realtime !== false
+  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady && realtimePageActive, period, symbol, totalRows })
+  const candleCountdown = useCurrentCandleCountdown({ chartInstanceRef, dataReady: realtimeDataReady && realtimePageActive, period, symbol })
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const stochPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const macdPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const dpoPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const tsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const viPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const mainVolumeOverlayRef = useRef<ReturnType<typeof installMainVolumeOverlay> | null>(null)
@@ -166,6 +172,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const observeRsiPaneHeight = () => observeIndicatorPaneHeight(rsiPaneId, rsiPaneHeightStorageKey, rsiPaneHeightObserverRef)
   const observeStochPaneHeight = () => observeIndicatorPaneHeight(stochPaneId, stochPaneHeightStorageKey, stochPaneHeightObserverRef)
   const observeMacdPaneHeight = () => observeIndicatorPaneHeight(macdPaneId, macdPaneHeightStorageKey, macdPaneHeightObserverRef)
+  const observeDpoPaneHeight = () => observeIndicatorPaneHeight(dpoPaneId, dpoPaneHeightStorageKey, dpoPaneHeightObserverRef)
   const observeTsiPaneHeight = () => observeIndicatorPaneHeight(tsiPaneId, tsiPaneHeightStorageKey, tsiPaneHeightObserverRef)
   const observeViPaneHeight = () => observeIndicatorPaneHeight(viPaneId, viPaneHeightStorageKey, viPaneHeightObserverRef)
   const isIndicatorVisibleInCurrentPeriod = (name: ChartIndicatorCommand['name']) => isStoredVisibilityRangePeriodVisible(`indicator:${name}`, period)
@@ -289,6 +296,45 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
         macdPaneHeightObserverRef.current?.disconnect()
         macdPaneHeightObserverRef.current = null
         chart.removeIndicator(macdPaneId, 'MACD')
+        scheduleResetIndicatorYAxisAutoScale(chart)
+      }
+    }
+
+    if (indicatorCommand.name === 'DPO') {
+      ensureTradingViewDpoIndicator()
+
+      if (indicatorCommand.action === 'load') {
+        if (!isIndicatorVisibleInCurrentPeriod('DPO')) {
+          const size = chart.getSize(dpoPaneId)
+          if (size?.height) writeStoredPaneHeight(dpoPaneHeightStorageKey, size.height)
+          dpoPaneHeightObserverRef.current?.disconnect()
+          dpoPaneHeightObserverRef.current = null
+          chart.removeIndicator(dpoPaneId, 'DPO')
+          scheduleResetIndicatorYAxisAutoScale(chart)
+          return
+        }
+        if (chart.getIndicatorByPaneId(dpoPaneId, 'DPO')) {
+          chart.overrideIndicator({ name: 'DPO', calcParams: [indicatorCommand.settings] }, dpoPaneId, observeDpoPaneHeight)
+          scheduleResetIndicatorYAxisAutoScale(chart)
+          return
+        }
+        chart.createIndicator(
+          { name: 'DPO', calcParams: [indicatorCommand.settings] },
+          false,
+          { id: dpoPaneId, height: readStoredPaneHeight(dpoPaneHeightStorageKey), minHeight: minRsiPaneHeight },
+          () => {
+            observeDpoPaneHeight()
+            refreshChartDrawings()
+            scheduleResetIndicatorYAxisAutoScale(chart)
+          },
+        )
+        scheduleResetIndicatorYAxisAutoScale(chart)
+      } else {
+        const size = chart.getSize(dpoPaneId)
+        if (size?.height) writeStoredPaneHeight(dpoPaneHeightStorageKey, size.height)
+        dpoPaneHeightObserverRef.current?.disconnect()
+        dpoPaneHeightObserverRef.current = null
+        chart.removeIndicator(dpoPaneId, 'DPO')
         scheduleResetIndicatorYAxisAutoScale(chart)
       }
     }

@@ -174,6 +174,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
     const periodSeconds = resolvePeriodSeconds(period)
 
     const applyRealtimePageRows = (rows: KLineData[]) => {
+      if (disposed) return
       const chart = chartInstanceRef.current
       if (!chart || rows.length === 0) return
       const currentRows = chart.getDataList()
@@ -193,6 +194,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
         limit: mt5RealtimeInitialBarsLimit,
       })
         .then((payload) => {
+          if (disposed) return
           const rows = (payload.rows ?? [])
             .map(rowToKLine)
             .filter((row): row is KLineData => row != null)
@@ -208,11 +210,13 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
             timeTo: Math.floor(firstMt5Timestamp / 1000) - 1,
           })
             .then((localRows) => {
+              if (disposed) return
               const realtimePageRows = mergeKLineData(localRows, rows).slice(-realtimePageMaxRows)
               saveRealtimePageSnapshot({ localRows: localRows.length, period, rows: realtimePageRows, symbol })
               applyRealtimePageRows(realtimePageRows)
             })
             .catch(() => {
+              if (disposed) return
               saveRealtimePageSnapshot({ localRows: 0, period, rows, symbol })
               applyRealtimePageRows(rows)
             })

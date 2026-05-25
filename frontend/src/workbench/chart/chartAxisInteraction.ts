@@ -25,7 +25,7 @@ type AxisRange = {
 
 export const candlePaneId = 'candle_pane'
 export const chartYAxisUnlockPaneIds: string[] = []
-export const indicatorYAxisAutoScalePaneIds = ['rsi_pane', 'stoch_pane', 'macd_pane', 'tsi_pane', 'vi_pane']
+export const indicatorYAxisAutoScalePaneIds = ['rsi_pane', 'stoch_pane', 'macd_pane', 'dpo_pane', 'tsi_pane', 'vi_pane']
 export const allYAxisAutoScalePaneIds = [candlePaneId, ...indicatorYAxisAutoScalePaneIds]
 export const chartManualYAxisPaneIds = [...indicatorYAxisAutoScalePaneIds]
 export const chartManualYAxisRangeChangeEvent = 'ff:chart-manual-y-axis-range-change'

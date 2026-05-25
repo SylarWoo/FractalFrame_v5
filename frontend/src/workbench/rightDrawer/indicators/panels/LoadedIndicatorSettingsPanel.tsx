@@ -1,5 +1,6 @@
 import { VisibilityRangePanel } from '../../../visibilityRange/VisibilityRangePanel'
 import type {
+  DpoIndicatorSettings,
   IndicatorSettingsTab,
   MacdIndicatorSettings,
   MaIndicatorSettings,
@@ -15,6 +16,8 @@ import {
   MacdStylePanel,
   MaInputPanel,
   MaStylePanel,
+  DpoInputPanel,
+  DpoStylePanel,
   MrInputPanel,
   MrStylePanel,
   RsiInputPanel,
@@ -32,8 +35,10 @@ import {
 } from './indicatorPanelComponents'
 
 export function LoadedIndicatorSettingsPanel({
+  dpoSettings,
   macdSettings,
   maSettings,
+  onDpoSettingsChange,
   onMacdSettingsChange,
   onMaSettingsChange,
   onSettingsChange,
@@ -51,8 +56,10 @@ export function LoadedIndicatorSettingsPanel({
   volSettings,
   vwapSettings,
 }: {
+  dpoSettings: DpoIndicatorSettings
   macdSettings: MacdIndicatorSettings
   maSettings: MaIndicatorSettings
+  onDpoSettingsChange: (settings: DpoIndicatorSettings) => void
   onMacdSettingsChange: (settings: MacdIndicatorSettings) => void
   onMaSettingsChange: (settings: MaIndicatorSettings) => void
   onSettingsChange: (settings: RsiIndicatorSettings) => void
@@ -78,6 +85,8 @@ export function LoadedIndicatorSettingsPanel({
       {selectedKey === 'Stoch' && settingsTab === 'style' ? <StochStylePanel onSettingsChange={onStochSettingsChange} settings={stochSettings} /> : null}
       {selectedKey === 'MACD' && settingsTab === 'input' ? <MacdInputPanel onSettingsChange={onMacdSettingsChange} settings={macdSettings} /> : null}
       {selectedKey === 'MACD' && settingsTab === 'style' ? <MacdStylePanel onSettingsChange={onMacdSettingsChange} settings={macdSettings} /> : null}
+      {selectedKey === 'DPO' && settingsTab === 'input' ? <DpoInputPanel onSettingsChange={onDpoSettingsChange} settings={dpoSettings} /> : null}
+      {selectedKey === 'DPO' && settingsTab === 'style' ? <DpoStylePanel onSettingsChange={onDpoSettingsChange} settings={dpoSettings} /> : null}
       {selectedKey === 'TSI' && settingsTab === 'input' ? <TsiInputPanel onSettingsChange={onTsiSettingsChange} settings={tsiSettings} /> : null}
       {selectedKey === 'TSI' && settingsTab === 'style' ? <TsiStylePanel onSettingsChange={onTsiSettingsChange} settings={tsiSettings} /> : null}
       {selectedKey === 'VI' && settingsTab === 'input' ? <ViInputPanel onSettingsChange={onViSettingsChange} settings={viSettings} /> : null}

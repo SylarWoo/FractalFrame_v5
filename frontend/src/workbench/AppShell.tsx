@@ -27,7 +27,7 @@ import {
 } from './leftRailV4Icons'
 import { RightDrawer } from './rightDrawer/RightDrawer'
 import { readIndicatorPersistenceEnabled, readPersistedIndicatorsState, writePersistedIndicatorsState } from './rightDrawer/indicatorPersistence'
-import type { MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from './rightDrawer/indicatorPersistence'
+import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from './rightDrawer/indicatorPersistence'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
 import { objectTreeDrawingsChangedEvent } from './rightDrawer/objectTree/objectTreeModel'
 import type { ObjectTreeDrawingItem } from './rightDrawer/objectTree/objectTreeTypes'
@@ -70,6 +70,7 @@ const indicatorShortcutLabels: Record<string, string> = {
   RSI: '相对强弱指数',
   Stoch: '随机指标',
   MACD: '平滑异同移动线',
+  DPO: '非趋势价格摆动指标',
   TSI: '真实强弱指数',
   VI: '漩涡指标',
   MA: '移动均线',
@@ -85,6 +86,7 @@ function readInitialLoadedIndicatorKeys() {
   if (persisted.loaded.RSI) keys.push('RSI')
   if (persisted.loaded.Stoch) keys.push('Stoch')
   if (persisted.loaded.MACD) keys.push('MACD')
+  if (persisted.loaded.DPO) keys.push('DPO')
   if (persisted.loaded.TSI) keys.push('TSI')
   if (persisted.loaded.VI) keys.push('VI')
   if (persisted.loaded.MA) keys.push('MA')
@@ -104,6 +106,7 @@ function getPersistedIndicatorSettings(name: ChartIndicatorCommand['name']) {
   const persisted = readPersistedIndicatorsState()
   if (name === 'MA') return persisted.ma
   if (name === 'MACD') return persisted.macd
+  if (name === 'DPO') return persisted.dpo
   if (name === 'MR') return persisted.mr
   if (name === 'VWAP') return persisted.vwap
   if (name === 'Vol') return persisted.vol
@@ -117,6 +120,7 @@ function createLoadIndicatorCommand(name: ChartIndicatorCommand['name']): ChartI
   const persisted = readPersistedIndicatorsState()
   if (name === 'MA') return { action: 'load', id: Date.now(), name, settings: persisted.ma }
   if (name === 'MACD') return { action: 'load', id: Date.now(), name, settings: persisted.macd }
+  if (name === 'DPO') return { action: 'load', id: Date.now(), name, settings: persisted.dpo }
   if (name === 'MR') return { action: 'load', id: Date.now(), name, settings: persisted.mr }
   if (name === 'VWAP') return { action: 'load', id: Date.now(), name, settings: persisted.vwap }
   if (name === 'Vol') return { action: 'load', id: Date.now(), name, settings: persisted.vol }
@@ -253,6 +257,7 @@ export function AppShell() {
     if (persisted.loaded.RSI) return { action: 'load', id: Date.now(), name: 'RSI', settings: persisted.rsi }
     if (persisted.loaded.Stoch) return { action: 'load', id: Date.now(), name: 'Stoch', settings: persisted.stoch }
     if (persisted.loaded.MACD) return { action: 'load', id: Date.now(), name: 'MACD', settings: persisted.macd }
+    if (persisted.loaded.DPO) return { action: 'load', id: Date.now(), name: 'DPO', settings: persisted.dpo }
     if (persisted.loaded.TSI) return { action: 'load', id: Date.now(), name: 'TSI', settings: persisted.tsi }
     if (persisted.loaded.VI) return { action: 'load', id: Date.now(), name: 'VI', settings: persisted.vi }
     if (persisted.loaded.MA) return { action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma }
@@ -298,6 +303,7 @@ export function AppShell() {
     if (persisted.loaded.RSI && chartIndicatorCommand?.name !== 'RSI') scheduled.push({ action: 'load', id: Date.now(), name: 'RSI', settings: persisted.rsi })
     if (persisted.loaded.Stoch && chartIndicatorCommand?.name !== 'Stoch') scheduled.push({ action: 'load', id: Date.now(), name: 'Stoch', settings: persisted.stoch })
     if (persisted.loaded.MACD && chartIndicatorCommand?.name !== 'MACD') scheduled.push({ action: 'load', id: Date.now(), name: 'MACD', settings: persisted.macd })
+    if (persisted.loaded.DPO && chartIndicatorCommand?.name !== 'DPO') scheduled.push({ action: 'load', id: Date.now(), name: 'DPO', settings: persisted.dpo })
     if (persisted.loaded.TSI && chartIndicatorCommand?.name !== 'TSI') scheduled.push({ action: 'load', id: Date.now(), name: 'TSI', settings: persisted.tsi })
     if (persisted.loaded.VI && chartIndicatorCommand?.name !== 'VI') scheduled.push({ action: 'load', id: Date.now(), name: 'VI', settings: persisted.vi })
     if (persisted.loaded.MA && chartIndicatorCommand?.name !== 'MA') scheduled.push({ action: 'load', id: Date.now(), name: 'MA', settings: persisted.ma })
@@ -320,7 +326,7 @@ export function AppShell() {
     if (restoredLoadedIndicatorsContextRef.current === contextKey) return
     restoredLoadedIndicatorsContextRef.current = contextKey
     loadedIndicatorKeys.forEach((key, index) => {
-      if (key !== 'MA' && key !== 'MACD' && key !== 'MR' && key !== 'RSI' && key !== 'Stoch' && key !== 'TSI' && key !== 'VI' && key !== 'VWAP' && key !== 'Vol') return
+      if (key !== 'DPO' && key !== 'MA' && key !== 'MACD' && key !== 'MR' && key !== 'RSI' && key !== 'Stoch' && key !== 'TSI' && key !== 'VI' && key !== 'VWAP' && key !== 'Vol') return
       window.setTimeout(() => {
         setChartIndicatorCommand({ ...createLoadIndicatorCommand(key), id: Date.now() })
       }, index * 45)
@@ -361,6 +367,7 @@ export function AppShell() {
     writePersistedIndicatorsState({
       ...persisted,
       loaded: {
+        DPO: loadedIndicatorKeys.includes('DPO'),
         MA: loadedIndicatorKeys.includes('MA'),
         MACD: loadedIndicatorKeys.includes('MACD'),
         MR: loadedIndicatorKeys.includes('MR'),
@@ -376,7 +383,7 @@ export function AppShell() {
 
   function refreshLoadedIndicatorsVisibility(targetKey?: string) {
     const keys = loadedIndicatorKeys.filter((key): key is ChartIndicatorCommand['name'] => {
-      const supported = key === 'MA' || key === 'MACD' || key === 'MR' || key === 'RSI' || key === 'Stoch' || key === 'TSI' || key === 'VI' || key === 'VWAP' || key === 'Vol'
+      const supported = key === 'DPO' || key === 'MA' || key === 'MACD' || key === 'MR' || key === 'RSI' || key === 'Stoch' || key === 'TSI' || key === 'VI' || key === 'VWAP' || key === 'Vol'
       return supported && (!targetKey || key === targetKey)
     })
     keys.forEach((key, index) => {
@@ -465,10 +472,12 @@ export function AppShell() {
     window.addEventListener('pointerup', handlePointerUp, { once: true })
   }
 
-  function handleLoadIndicator(name: ChartIndicatorCommand['name'], settings?: MacdIndicatorSettings | MaIndicatorSettings | MrIndicatorSettings | RsiIndicatorSettings | StochIndicatorSettings | TsiIndicatorSettings | ViIndicatorSettings | VolIndicatorSettings | VwapIndicatorSettings) {
+  function handleLoadIndicator(name: ChartIndicatorCommand['name'], settings?: DpoIndicatorSettings | MacdIndicatorSettings | MaIndicatorSettings | MrIndicatorSettings | RsiIndicatorSettings | StochIndicatorSettings | TsiIndicatorSettings | ViIndicatorSettings | VolIndicatorSettings | VwapIndicatorSettings) {
     setLoadedIndicatorKeys((current) => current.includes(name) ? current : [...current, name])
     if (name === 'MA') {
       setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as MaIndicatorSettings })
+    } else if (name === 'DPO') {
+      setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as DpoIndicatorSettings })
     } else if (name === 'MACD') {
       setChartIndicatorCommand({ action: 'load', id: Date.now(), name, settings: settings as MacdIndicatorSettings })
     } else if (name === 'MR') {
@@ -492,6 +501,8 @@ export function AppShell() {
     setLoadedIndicatorKeys((current) => current.filter((key) => key !== name))
     if (name === 'MA') {
       setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
+    } else if (name === 'DPO') {
+      setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
     } else if (name === 'MACD') {
       setChartIndicatorCommand({ action: 'unload', id: Date.now(), name })
     } else if (name === 'MR') {
@@ -512,7 +523,7 @@ export function AppShell() {
   }
 
   function handleToggleIndicatorShortcutLoad(name: string) {
-    if (name !== 'MA' && name !== 'MACD' && name !== 'MR' && name !== 'RSI' && name !== 'Stoch' && name !== 'TSI' && name !== 'VI' && name !== 'VWAP' && name !== 'Vol') return
+    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MR' && name !== 'RSI' && name !== 'Stoch' && name !== 'TSI' && name !== 'VI' && name !== 'VWAP' && name !== 'Vol') return
     if (loadedIndicatorKeys.includes(name)) {
       handleUnloadIndicator(name)
       return

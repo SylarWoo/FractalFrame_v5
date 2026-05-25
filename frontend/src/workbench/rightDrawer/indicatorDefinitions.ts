@@ -1,11 +1,12 @@
 import type { IndicatorTableRow } from './IndicatorsTable'
 
-export type SupportedChartIndicator = 'MA' | 'MACD' | 'MR' | 'RSI' | 'Stoch' | 'TSI' | 'VI' | 'VWAP' | 'Vol'
+export type SupportedChartIndicator = 'DPO' | 'MA' | 'MACD' | 'MR' | 'RSI' | 'Stoch' | 'TSI' | 'VI' | 'VWAP' | 'Vol'
 
 export const indicatorRows: IndicatorTableRow[] = [
   { key: 'RSI', name: '相对强弱指数', type: '副图指标', description: 'Relative Strength Index' },
   { key: 'Stoch', name: '随机指标', type: '副图指标', description: 'Stochastic' },
   { key: 'MACD', name: '平滑异同移动平均线', type: '副图指标', description: 'Moving Average Convergence Divergence' },
+  { key: 'DPO', name: '非趋势价格摆动指标', type: '副图指标', description: 'Detrended Price Oscillator' },
   { key: 'TSI', name: '真实强弱指数', type: '副图指标', description: 'True Strength Index' },
   { key: 'VI', name: '漩涡指标', type: '副图指标', description: 'Vortex Indicator' },
   { key: 'MA', name: '移动平均线', type: '主图指标', description: 'Moving Average' },
@@ -15,7 +16,7 @@ export const indicatorRows: IndicatorTableRow[] = [
 ]
 
 export function isSupportedChartIndicator(key: string): key is SupportedChartIndicator {
-  return key === 'MA' || key === 'MACD' || key === 'MR' || key === 'RSI' || key === 'Stoch' || key === 'TSI' || key === 'VI' || key === 'VWAP' || key === 'Vol'
+  return key === 'DPO' || key === 'MA' || key === 'MACD' || key === 'MR' || key === 'RSI' || key === 'Stoch' || key === 'TSI' || key === 'VI' || key === 'VWAP' || key === 'Vol'
 }
 
 export function resolveInitialSelectedKey(value: string) {

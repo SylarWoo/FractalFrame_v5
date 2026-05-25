@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react'
+
 import type {
   MacdIndicatorSettings,
   MacdMaType,
+  DpoIndicatorSettings,
   MaIndicatorSettings,
   MaMarkerMode,
   MaSource,
@@ -225,6 +228,13 @@ export function updateViSettings(
   return { ...current, ...patch }
 }
 
+export function updateDpoSettings(
+  current: DpoIndicatorSettings,
+  patch: Partial<DpoIndicatorSettings>,
+): DpoIndicatorSettings {
+  return { ...current, ...patch }
+}
+
 export function CheckControl({
   checked,
   label,
@@ -255,17 +265,40 @@ export function NumberBox({
   step?: number
   value: number
 }) {
+  const [text, setText] = useState(String(value))
+
+  useEffect(() => {
+    setText(String(value))
+  }, [value])
+
+  const commitText = (nextText: string) => {
+    const nextValue = Number(nextText)
+    if (nextText === '' || nextText === '-' || nextText === '+' || !Number.isFinite(nextValue)) return
+    onChange(Math.max(min, Math.min(max, nextValue)))
+  }
+
   return (
     <input
       max={max}
       min={min}
       onChange={(event) => {
-        const nextValue = Number(event.target.value)
-        onChange(Number.isFinite(nextValue) ? nextValue : min)
+        const nextText = event.target.value
+        setText(nextText)
+        commitText(nextText)
+      }}
+      onBlur={() => {
+        const nextValue = Number(text)
+        if (text === '' || text === '-' || text === '+' || !Number.isFinite(nextValue)) {
+          setText(String(value))
+          return
+        }
+        const clampedValue = Math.max(min, Math.min(max, nextValue))
+        setText(String(clampedValue))
+        onChange(clampedValue)
       }}
       step={step}
       type="number"
-      value={value}
+      value={text}
     />
   )
 }

@@ -1,9 +1,9 @@
-import type { MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from './indicatorPersistence'
+import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from './indicatorPersistence'
 import type { ChartPageTarget } from '../chart/ChartCoreHost'
 
 export type RightDrawerId = 'drawings' | 'objectTree' | 'indicators' | 'mt5' | 'settings'
 
-export type SupportedChartIndicatorName = 'MA' | 'MACD' | 'MR' | 'RSI' | 'Stoch' | 'TSI' | 'VI' | 'VWAP' | 'Vol'
+export type SupportedChartIndicatorName = 'DPO' | 'MA' | 'MACD' | 'MR' | 'RSI' | 'Stoch' | 'TSI' | 'VI' | 'VWAP' | 'Vol'
 
 export type IndicatorShortcutItem = {
   key: string
@@ -18,7 +18,7 @@ export type RightDrawerProps = {
   loadedIndicatorKeys: string[]
   onClose: () => void
   onIndicatorShortcutKeysChange: (keys: string[]) => void
-  onLoadIndicator?: (name: SupportedChartIndicatorName, settings?: MacdIndicatorSettings | MaIndicatorSettings | MrIndicatorSettings | RsiIndicatorSettings | StochIndicatorSettings | TsiIndicatorSettings | ViIndicatorSettings | VolIndicatorSettings | VwapIndicatorSettings) => void
+  onLoadIndicator?: (name: SupportedChartIndicatorName, settings?: DpoIndicatorSettings | MacdIndicatorSettings | MaIndicatorSettings | MrIndicatorSettings | RsiIndicatorSettings | StochIndicatorSettings | TsiIndicatorSettings | ViIndicatorSettings | VolIndicatorSettings | VwapIndicatorSettings) => void
   onResize: (width: number) => void
   onToggleDrawer: (drawer: RightDrawerId) => void
   onUnloadIndicator?: (name: SupportedChartIndicatorName) => void

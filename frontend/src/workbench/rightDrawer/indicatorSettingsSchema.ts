@@ -12,6 +12,43 @@ export type VwapSource = 'hlc3' | 'close' | 'open' | 'high' | 'low' | 'hl2' | 'o
 export type VwapTimeframe = 'chart' | '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d'
 export type MacdMaType = 'ema' | 'sma'
 
+export type DpoIndicatorSettings = {
+  backgroundColor: string
+  backgroundOpacity: number
+  backgroundVisible: boolean
+  centered: boolean
+  dpoColor: string
+  dpoLineStyle: RsiLineStyle
+  dpoLineWidth: number
+  dpoOpacity: number
+  dpoVisible: boolean
+  downLineColor: string
+  downLineStyle: RsiLineStyle
+  downLineWidth: number
+  downLineOpacity: number
+  downLineValue: number
+  downLineVisible: boolean
+  inputsInStatusLine: boolean
+  labelsOnPriceScale: boolean
+  length: number
+  precision: RsiPrecision
+  timeframe: VwapTimeframe
+  upLineColor: string
+  upLineStyle: RsiLineStyle
+  upLineWidth: number
+  upLineOpacity: number
+  upLineValue: number
+  upLineVisible: boolean
+  valuesInStatusLine: boolean
+  waitForTimeframeClose: boolean
+  zeroLineColor: string
+  zeroLineStyle: RsiLineStyle
+  zeroLineWidth: number
+  zeroLineOpacity: number
+  zeroLineValue: number
+  zeroLineVisible: boolean
+}
+
 export type MacdIndicatorSettings = {
   source: RsiSource
   fastLength: number
@@ -279,6 +316,7 @@ export type RsiIndicatorSettings = {
 
 export type PersistedIndicatorsState = {
   loaded: {
+    DPO?: boolean
     MA?: boolean
     MACD?: boolean
     MR?: boolean
@@ -289,6 +327,7 @@ export type PersistedIndicatorsState = {
     VWAP?: boolean
     Vol?: boolean
   }
+  dpo: DpoIndicatorSettings
   ma: MaIndicatorSettings
   macd: MacdIndicatorSettings
   mr: MrIndicatorSettings
@@ -535,6 +574,43 @@ export const defaultMrIndicatorSettings: MrIndicatorSettings = {
   labelsOnPriceScale: true,
   precision: 'system',
   valuesInStatusLine: true,
+}
+
+export const defaultDpoIndicatorSettings: DpoIndicatorSettings = {
+  backgroundColor: '#26a69a',
+  backgroundOpacity: 0.08,
+  backgroundVisible: false,
+  centered: false,
+  dpoColor: '#43a047',
+  dpoLineStyle: 'solid',
+  dpoLineWidth: 1,
+  dpoOpacity: 1,
+  dpoVisible: true,
+  downLineColor: '#ef5350',
+  downLineStyle: 'dashed',
+  downLineWidth: 1,
+  downLineOpacity: 1,
+  downLineValue: 0,
+  downLineVisible: false,
+  inputsInStatusLine: true,
+  labelsOnPriceScale: true,
+  length: 21,
+  precision: 'system',
+  timeframe: 'chart',
+  upLineColor: '#26a69a',
+  upLineStyle: 'dashed',
+  upLineWidth: 1,
+  upLineOpacity: 1,
+  upLineValue: 0,
+  upLineVisible: false,
+  valuesInStatusLine: true,
+  waitForTimeframeClose: true,
+  zeroLineColor: '#787b86',
+  zeroLineStyle: 'dashed',
+  zeroLineWidth: 1,
+  zeroLineOpacity: 1,
+  zeroLineValue: 0,
+  zeroLineVisible: true,
 }
 
 export const defaultVwapIndicatorSettings: VwapIndicatorSettings = {
@@ -819,5 +895,54 @@ export function normalizeMrSettings(input?: Partial<MrIndicatorSettings>): MrInd
     labelsOnPriceScale: merged.labelsOnPriceScale !== false,
     precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
     valuesInStatusLine: merged.valuesInStatusLine !== false,
+  }
+}
+
+export function normalizeDpoSettings(input?: Partial<DpoIndicatorSettings>): DpoIndicatorSettings {
+  const merged = { ...defaultDpoIndicatorSettings, ...(input ?? {}) }
+  const backgroundOpacity = Number(merged.backgroundOpacity)
+  const length = Math.round(Number(merged.length))
+  const dpoLineWidth = Math.round(Number(merged.dpoLineWidth))
+  const dpoOpacity = Number(merged.dpoOpacity)
+  const downLineWidth = Math.round(Number(merged.downLineWidth))
+  const downLineOpacity = Number(merged.downLineOpacity)
+  const downLineValue = Number(merged.downLineValue)
+  const upLineWidth = Math.round(Number(merged.upLineWidth))
+  const upLineOpacity = Number(merged.upLineOpacity)
+  const upLineValue = Number(merged.upLineValue)
+  const zeroLineWidth = Math.round(Number(merged.zeroLineWidth))
+  const zeroLineOpacity = Number(merged.zeroLineOpacity)
+  const zeroLineValue = Number(merged.zeroLineValue)
+  return {
+    ...merged,
+    backgroundOpacity: Number.isFinite(backgroundOpacity) ? Math.max(0, Math.min(backgroundOpacity, 1)) : defaultDpoIndicatorSettings.backgroundOpacity,
+    backgroundVisible: merged.backgroundVisible === true,
+    centered: merged.centered === true,
+    dpoLineStyle: merged.dpoLineStyle === 'dashed' || merged.dpoLineStyle === 'dotted' ? merged.dpoLineStyle : 'solid',
+    dpoLineWidth: Number.isFinite(dpoLineWidth) ? Math.max(1, Math.min(dpoLineWidth, 4)) : defaultDpoIndicatorSettings.dpoLineWidth,
+    dpoOpacity: Number.isFinite(dpoOpacity) ? Math.max(0, Math.min(dpoOpacity, 1)) : defaultDpoIndicatorSettings.dpoOpacity,
+    dpoVisible: merged.dpoVisible !== false,
+    downLineStyle: merged.downLineStyle === 'solid' || merged.downLineStyle === 'dotted' ? merged.downLineStyle : 'dashed',
+    downLineWidth: Number.isFinite(downLineWidth) ? Math.max(1, Math.min(downLineWidth, 4)) : defaultDpoIndicatorSettings.downLineWidth,
+    downLineOpacity: Number.isFinite(downLineOpacity) ? Math.max(0, Math.min(downLineOpacity, 1)) : defaultDpoIndicatorSettings.downLineOpacity,
+    downLineValue: Number.isFinite(downLineValue) ? downLineValue : defaultDpoIndicatorSettings.downLineValue,
+    downLineVisible: merged.downLineVisible === true,
+    inputsInStatusLine: merged.inputsInStatusLine !== false,
+    labelsOnPriceScale: merged.labelsOnPriceScale !== false,
+    length: Number.isFinite(length) ? Math.max(1, Math.min(length, 500)) : defaultDpoIndicatorSettings.length,
+    precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
+    timeframe: ['chart', '1m', '5m', '15m', '30m', '1h', '4h', '1d'].includes(merged.timeframe) ? merged.timeframe : 'chart',
+    upLineStyle: merged.upLineStyle === 'solid' || merged.upLineStyle === 'dotted' ? merged.upLineStyle : 'dashed',
+    upLineWidth: Number.isFinite(upLineWidth) ? Math.max(1, Math.min(upLineWidth, 4)) : defaultDpoIndicatorSettings.upLineWidth,
+    upLineOpacity: Number.isFinite(upLineOpacity) ? Math.max(0, Math.min(upLineOpacity, 1)) : defaultDpoIndicatorSettings.upLineOpacity,
+    upLineValue: Number.isFinite(upLineValue) ? upLineValue : defaultDpoIndicatorSettings.upLineValue,
+    upLineVisible: merged.upLineVisible === true,
+    valuesInStatusLine: merged.valuesInStatusLine !== false,
+    waitForTimeframeClose: merged.waitForTimeframeClose !== false,
+    zeroLineStyle: merged.zeroLineStyle === 'solid' || merged.zeroLineStyle === 'dotted' ? merged.zeroLineStyle : 'dashed',
+    zeroLineWidth: Number.isFinite(zeroLineWidth) ? Math.max(1, Math.min(zeroLineWidth, 4)) : defaultDpoIndicatorSettings.zeroLineWidth,
+    zeroLineOpacity: Number.isFinite(zeroLineOpacity) ? Math.max(0, Math.min(zeroLineOpacity, 1)) : defaultDpoIndicatorSettings.zeroLineOpacity,
+    zeroLineValue: Number.isFinite(zeroLineValue) ? zeroLineValue : defaultDpoIndicatorSettings.zeroLineValue,
+    zeroLineVisible: merged.zeroLineVisible !== false,
   }
 }

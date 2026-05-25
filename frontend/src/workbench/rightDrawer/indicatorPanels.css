@@ -280,6 +280,18 @@
   grid-template-columns: 128px max-content;
 }
 
+.ff-indicators-dpo-style-panel-v1 .ff-indicators-style-row-v1 {
+  grid-template-columns: 64px max-content max-content;
+}
+
+.ff-indicators-dpo-style-panel-v1__zero-value,
+.ff-indicators-dpo-style-panel-v1__zero-value input[type='number'],
+.ff-indicators-dpo-style-panel-v1__level-value,
+.ff-indicators-dpo-style-panel-v1__level-value input[type='number'] {
+  width: 80px;
+  max-width: 80px;
+}
+
 .ff-indicators-vwap-style-panel-v1 .ff-indicators-style-row-v1__check {
   white-space: nowrap;
 }
