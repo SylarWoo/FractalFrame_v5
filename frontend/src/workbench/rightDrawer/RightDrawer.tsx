@@ -65,6 +65,7 @@ export function RightDrawer({
   const autoOpenedStoreTableRef = useRef('')
   const symbolDetailsLoadedRef = useRef(new Set<string>())
   const open = activeDrawer != null
+  const [renderedActiveDrawer, setRenderedActiveDrawer] = useState<RightDrawerProps['activeDrawer']>(activeDrawer)
   const {
     columnWidths,
     handleColumnResizePointerDown,
@@ -165,6 +166,19 @@ export function RightDrawer({
     setLocalStoreStatus,
     onOpenChart,
   })
+
+  useEffect(() => {
+    if (!activeDrawer) {
+      setRenderedActiveDrawer(null)
+      return
+    }
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        setRenderedActiveDrawer(activeDrawer)
+      })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeDrawer])
 
   useEffect(() => {
     saveImportCenterQuery(query)
@@ -399,16 +413,16 @@ export function RightDrawer({
 
   return (
     <RightDrawerFrame activeDrawer={activeDrawer} onClose={onClose} onResize={onResize} onResizePointerDown={handleResizePointerDown} onToggleDrawer={onToggleDrawer} open={open} topPaneHeight={topPaneHeight}>
-        {activeDrawer === 'drawings' ? (
+        {renderedActiveDrawer === 'drawings' ? (
           <DrawingsDrawer />
-        ) : activeDrawer === 'objectTree' ? (
+        ) : renderedActiveDrawer === 'objectTree' ? (
           <ObjectTreeDrawer />
-        ) : activeDrawer === 'settings' ? (
+        ) : renderedActiveDrawer === 'settings' ? (
           <RightDrawerSettingsHost
             selectedTab={selectedSettingsPanelTab}
             onSelectedTabChange={setSelectedSettingsPanelTab}
           />
-        ) : activeDrawer === 'indicators' ? (
+        ) : renderedActiveDrawer === 'indicators' ? (
           <IndicatorsDrawer
             indicatorShortcutKeys={indicatorShortcutKeys}
             loadedIndicatorKeys={loadedIndicatorKeys}
@@ -416,7 +430,7 @@ export function RightDrawer({
             onLoadIndicator={onLoadIndicator}
             onUnloadIndicator={onUnloadIndicator}
           />
-        ) : (
+        ) : renderedActiveDrawer === 'mt5' ? (
           <RightDrawerMt5Body
             canAggregateStoreV5={canAggregateStoreV5}
             columnWidths={columnWidths} error={error} loading={loading}
@@ -460,7 +474,7 @@ export function RightDrawer({
             watchlistRows={watchlistRows} watchlistTableHeight={watchlistTableHeight}
             watchlistTableWrapRef={watchlistTableWrapRef} watchlistTicks={watchlistTicks}
           />
-        )}
+        ) : null}
     </RightDrawerFrame>
   )
 }

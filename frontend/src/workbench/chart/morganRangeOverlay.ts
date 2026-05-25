@@ -66,8 +66,12 @@ function ensureMorganNoHitFigures() {
       if (styles.style === LineType.Dashed && Array.isArray(styles.dashedValue)) {
         ctx.setLineDash(styles.dashedValue)
       }
-      ctx.moveTo(start.x, start.y)
-      ctx.lineTo(end.x, end.y)
+      const lineWidth = normalizeCanvasLineWidth(styles.size)
+      const startPoint = alignMorganLinePoint(start, end, lineWidth)
+      const endPoint = alignMorganLinePoint(end, start, lineWidth)
+      ctx.lineWidth = lineWidth
+      ctx.moveTo(startPoint.x, startPoint.y)
+      ctx.lineTo(endPoint.x, endPoint.y)
       ctx.stroke()
       ctx.restore()
     },
@@ -315,4 +319,17 @@ function isMorganScreenPoint(value: Partial<ScreenPoint> | undefined): value is 
 function normalizeCanvasLineWidth(value: unknown) {
   const width = Number(value)
   return Number.isFinite(width) ? Math.max(1, width) : 1
+}
+
+function alignMorganStrokePixel(value: number, lineWidth: number) {
+  return lineWidth % 2 === 1 ? Math.round(value) + 0.5 : Math.round(value)
+}
+
+function alignMorganLinePoint(point: ScreenPoint, paired: ScreenPoint, lineWidth: number): ScreenPoint {
+  const horizontal = Math.abs(point.y - paired.y) < 0.5
+  const vertical = Math.abs(point.x - paired.x) < 0.5
+  return {
+    x: vertical ? alignMorganStrokePixel(point.x, lineWidth) : point.x,
+    y: horizontal ? alignMorganStrokePixel(point.y, lineWidth) : point.y,
+  }
 }

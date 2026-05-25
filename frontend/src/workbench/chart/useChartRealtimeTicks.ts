@@ -5,6 +5,7 @@ import { queryMt5Rates } from '../../services/mt5/mt5SymbolsApi'
 import type { StoreV5QueryRow } from '../../services/mt5/mt5SymbolsApi'
 import { readWatchlistRealtimeEnabled, realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
 import { applyPriceVolumePrecision } from './chartStyleAppliers'
+import { resolvePeriodSeconds } from './chartTimeFormatting'
 
 type UseChartRealtimeTicksOptions = {
   chartInstanceRef: MutableRefObject<Chart | null>
@@ -97,6 +98,21 @@ function resolveTickLast(detail: Partial<Mt5RealtimeTickEventDetail>) {
   return detail.ask
 }
 
+function resolveTickTimestampMs(detail: Partial<Mt5RealtimeTickEventDetail>) {
+  if (typeof detail.timeMsc === 'number' && Number.isFinite(detail.timeMsc)) {
+    return detail.timeMsc < 1_000_000_000_000 ? detail.timeMsc * 1000 : detail.timeMsc
+  }
+  if (typeof detail.time === 'number' && Number.isFinite(detail.time)) {
+    return detail.time < 1_000_000_000_000 ? detail.time * 1000 : detail.time
+  }
+  return Date.now()
+}
+
+function resolvePeriodStartTimestamp(timestampMs: number, periodSeconds: number) {
+  const periodMs = periodSeconds * 1000
+  return Math.floor(timestampMs / periodMs) * periodMs
+}
+
 export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, period, symbol }: UseChartRealtimeTicksOptions) {
   const [realtimeEnabled, setRealtimeEnabled] = useState(readWatchlistRealtimeEnabled)
 
@@ -118,6 +134,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
     let bindTimer = 0
     let inFlight = false
     const normalizedSymbol = normalizeSymbol(symbol)
+    const periodSeconds = resolvePeriodSeconds(period)
 
     const applyMt5Rows = (rows: KLineData[]) => {
       const chart = chartInstanceRef.current
@@ -160,17 +177,35 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       const rows = chart.getDataList()
       const latest = rows[rows.length - 1]
       if (!latest) return
-      const high = Math.max(Number(latest.high), last)
-      const low = Math.min(Number(latest.low), last)
-      const volume = Number(latest.volume ?? 0)
-      chart.updateData({
-        ...latest,
-        high,
-        low,
-        close: last,
-        volume,
-        turnover: estimateTurnover(high, low, last, volume),
-      }, () => {
+      const latestTimestamp = Number(latest.timestamp)
+      const tickTimestamp = resolveTickTimestampMs(detail)
+      const tickPeriodStart = resolvePeriodStartTimestamp(tickTimestamp, periodSeconds)
+      const shouldAppendNewBar = Number.isFinite(tickPeriodStart) &&
+        Number.isFinite(latestTimestamp) &&
+        tickPeriodStart > latestTimestamp
+      const nextOpen = shouldAppendNewBar ? Number(latest.close) : Number(latest.open)
+      const high = shouldAppendNewBar ? Math.max(nextOpen, last) : Math.max(Number(latest.high), last)
+      const low = shouldAppendNewBar ? Math.min(nextOpen, last) : Math.min(Number(latest.low), last)
+      const volume = shouldAppendNewBar ? 0 : Number(latest.volume ?? 0)
+      const nextRow = shouldAppendNewBar
+        ? {
+            timestamp: tickPeriodStart,
+            open: nextOpen,
+            high,
+            low,
+            close: last,
+            volume,
+            turnover: estimateTurnover(high, low, last, volume),
+          }
+        : {
+            ...latest,
+            high,
+            low,
+            close: last,
+            volume,
+            turnover: estimateTurnover(high, low, last, volume),
+          }
+      chart.updateData(nextRow, () => {
         applyPriceVolumePrecision(chart, symbol)
         dispatchChartRealtimeDataChanged()
       })

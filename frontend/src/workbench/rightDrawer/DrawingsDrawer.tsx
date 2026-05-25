@@ -254,8 +254,8 @@ export function DrawingsDrawer() {
     : rulerStyle
 
   function selectTool(key: DrawingToolKey) {
-    if (selectedDrawing?.tool !== key && selectedDrawing?.objectId && (key === 'horizontalLine' || key === 'trendLine' || key === 'ruler' || key === 'fibRetracement')) {
-      publishObjectTreeDrawingCommand({ action: 'deselect', id: selectedDrawing.objectId })
+    if (selectedKey !== key) {
+      publishObjectTreeDrawingCommand({ action: 'deselectAll' })
       setSelectedDrawing(null)
     }
     setSelectedKey(key)
