@@ -6,16 +6,14 @@ import { StoreV5Panel } from '../mt5DataCenter/StoreV5Panel'
 import { WatchlistTable } from '../mt5DataCenter/WatchlistTable'
 import type { Mt5RealtimeTick, Mt5SymbolRow, StoreV5CheckPayload, Mt5M1CheckJobPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
 import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
-import { formatDetailValue, resolveLocalM1LastTime, selectedDetailRows } from '../mt5DataCenter/storeV5StatusFormat'
+import { millisecondsUntilNextMarketSessionCheck, readMarketStatusTitleSnapshot, saveMarketStatusTitleSnapshotFromSymbolSession } from '../mt5DataCenter/marketStatusTitleState'
+import { formatDetailValue, selectedDetailRows } from '../mt5DataCenter/storeV5StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
-import { readChartTimezone } from '../chart/chartTimeFormatting'
-import { settingsSymbolChangedEvent } from '../settingsSymbolState'
 
 type ColumnWidths = Record<SymbolTableColumnKey, number>
 type WatchlistColumnWidths = Record<WatchlistTableColumnKey, number>
 type Progress = { hasEstimate: boolean; width: number }
 type SymbolDisplay = { chineseName: string; assetType: string; description: string }
-type SelectedMarketStatus = { isOpen: boolean; lastTime?: number | null; timezone: string }
 
 const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
   { key: 'details', label: '详情' },
@@ -109,7 +107,7 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
     watchlistRealtimeReady, watchlistRows, watchlistColumnWidths, watchlistTableHeight,
     watchlistTableWrapRef, watchlistTicks,
   } = props
-  const selectedMarketStatus = useSelectedMarketStatus(selectedRow, localStoreStatus, watchlistTicks[selectedSymbol], watchlistRealtimeEnabled)
+  const selectedMarketStatus = useSelectedMarketStatus(selectedRow)
 
   return (
     <div className="ff-right-drawer__body">
@@ -141,7 +139,7 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
               <div className="ff-import-selected-head__text">
                 <h3>{selectedRow.symbol} · {selectedDisplay.chineseName}</h3>
                 <p>{selectedDisplay.assetType}</p>
-                <MarketStatusLine marketStatus={selectedMarketStatus} />
+                {selectedMarketStatus && <MarketStatusLine status={selectedMarketStatus} />}
               </div>
               <div className="ff-import-selected-head__actions">
                 <LoadRow label="添加自选列表：" loaded={selectedIsInWatchlist} onSetLoaded={props.onSetSelectedWatchlistLoaded} />
@@ -218,137 +216,42 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
   )
 }
 
-function resolveTickTimeSeconds(tick: Mt5RealtimeTick | undefined) {
-  if (!tick) return null
-  if (typeof tick.timeMsc === 'number' && Number.isFinite(tick.timeMsc)) return Math.floor(tick.timeMsc / 1000)
-  if (typeof tick.time === 'number' && Number.isFinite(tick.time)) return Math.floor(tick.time > 10_000_000_000 ? tick.time / 1000 : tick.time)
-  const publishedAt = typeof tick.publishedAt === 'string' ? Date.parse(tick.publishedAt) : Number.NaN
-  return Number.isFinite(publishedAt) ? Math.floor(publishedAt / 1000) : null
-}
-
-function isRecentRealtimeTick(tickSeconds: number | null, staleSeconds = 300) {
-  if (typeof tickSeconds !== 'number') return false
-  return Math.floor(Date.now() / 1000) - tickSeconds <= staleSeconds
-}
-
-function parseSessionMinute(value: string) {
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/)
-  if (!match) return null
-  const hour = Number(match[1])
-  const minute = Number(match[2])
-  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
-  return hour * 60 + minute
-}
-
-function isMinuteInSessionRange(range: string, currentMinute: number) {
-  const [rawStart, rawEnd] = range.split('-')
-  if (!rawStart || !rawEnd) return false
-  const start = parseSessionMinute(rawStart)
-  const end = parseSessionMinute(rawEnd)
-  if (start == null || end == null) return false
-  if (start === 0 && end === 0) return true
-  if (start < end) return currentMinute >= start && currentMinute < end
-  return currentMinute >= start || currentMinute < end
-}
-
-function resolveSessionOpen(row: Mt5SymbolRow | null, now = new Date()) {
-  const tradeSessions = row?.sessions?.trade
-  if (!Array.isArray(tradeSessions)) return null
-  const daySessions = tradeSessions[now.getUTCDay()]
-  if (!daySessions || !daySessions.trim()) return false
-  const currentMinute = now.getUTCHours() * 60 + now.getUTCMinutes()
-  return daySessions.split(',').some((range) => isMinuteInSessionRange(range.trim(), currentMinute))
-}
-
-function useSelectedMarketStatus(selectedRow: Mt5SymbolRow | null, localStoreStatus: StoreV5CheckPayload | null, realtimeTick: Mt5RealtimeTick | undefined, realtimeEnabled: boolean): SelectedMarketStatus {
-  const sessionOpen = resolveSessionOpen(selectedRow)
-  const realtimeTickSeconds = resolveTickTimeSeconds(realtimeTick)
-  const realtimeOpen = realtimeEnabled && isRecentRealtimeTick(realtimeTickSeconds)
-  const isOpen = sessionOpen ?? realtimeOpen
-  const [marketStatus, setMarketStatus] = useState<SelectedMarketStatus>(() => ({
-    isOpen,
-    lastTime: sessionOpen != null ? Math.floor(Date.now() / 1000) : (realtimeOpen ? realtimeTickSeconds : resolveLocalM1LastTime(localStoreStatus)),
-    timezone: readChartTimezone(),
-  }))
+function useSelectedMarketStatus(selectedRow: Mt5SymbolRow | null) {
+  const [status, setStatus] = useState(() => (
+    selectedRow?.symbol ? readMarketStatusTitleSnapshot(selectedRow.symbol)?.status ?? null : null
+  ))
 
   useEffect(() => {
-    const syncTimezone = () => {
-      setMarketStatus((current) => ({ ...current, timezone: readChartTimezone() }))
+    if (!selectedRow?.symbol) {
+      setStatus(null)
+      return
     }
-    window.addEventListener(settingsSymbolChangedEvent, syncTimezone)
-    window.addEventListener('storage', syncTimezone)
+
+    let timer = 0
+    const sync = () => {
+      const snapshot = saveMarketStatusTitleSnapshotFromSymbolSession(selectedRow)
+      setStatus(snapshot?.status ?? null)
+      const delay = millisecondsUntilNextMarketSessionCheck(selectedRow)
+      if (delay != null) timer = window.setTimeout(sync, delay)
+    }
+
+    sync()
     return () => {
-      window.removeEventListener(settingsSymbolChangedEvent, syncTimezone)
-      window.removeEventListener('storage', syncTimezone)
+      if (timer !== 0) window.clearTimeout(timer)
     }
-  }, [])
+  }, [selectedRow])
 
-  useEffect(() => {
-    setMarketStatus((current) => ({
-      ...current,
-      isOpen,
-      lastTime: sessionOpen != null ? Math.floor(Date.now() / 1000) : (realtimeOpen ? realtimeTickSeconds : resolveLocalM1LastTime(localStoreStatus)),
-    }))
-  }, [isOpen, localStoreStatus, realtimeOpen, realtimeTickSeconds, sessionOpen])
-
-  return marketStatus
+  return status
 }
 
-function MarketStatusLine({ marketStatus }: { marketStatus: SelectedMarketStatus }) {
-  const lastUpdated = typeof marketStatus.lastTime === 'number' ? marketStatus.lastTime * 1000 : null
-  const formatted = lastUpdated ? formatMarketStatusTime(lastUpdated, marketStatus.timezone) : ''
-  const timezoneText = formatMarketStatusTimezone(marketStatus.timezone)
-
+function MarketStatusLine({ status }: { status: { label: string; status: 'open' | 'closed' } }) {
   return (
-    <div className="ff-import-market-status" data-status={marketStatus.isOpen ? 'open' : 'closed'} title={marketStatus.isOpen ? 'Realtime tick' : 'Local StoreV5 data'}>
-      <span className={marketStatus.isOpen ? 'ff-import-market-status__dot' : 'ff-import-market-status__bar'} />
-      <span className="ff-import-market-status__label">{marketStatus.isOpen ? '开市' : '休市'}</span>
-      {formatted && (
-        <span className="ff-import-market-status__muted">最后更新于{timezoneText} {formatted}</span>
-      )}
+    <div className="ff-import-market-status" data-status={status.status}>
+      <span className={status.status === 'open' ? 'ff-import-market-status__dot' : 'ff-import-market-status__bar'} />
+      <span className="ff-import-market-status__label">{status.label}</span>
     </div>
   )
 }
-
-function formatMarketStatusTime(timestamp: number, timezone: string) {
-  try {
-    const parts: Record<string, string> = {}
-    new Intl.DateTimeFormat('zh-CN', {
-      day: '2-digit',
-      hour: '2-digit',
-      hour12: false,
-      minute: '2-digit',
-      month: '2-digit',
-      timeZone: timezone,
-      year: 'numeric',
-    }).formatToParts(new Date(timestamp)).forEach(({ type, value }) => {
-      if (type === 'year') parts.year = value
-      if (type === 'month') parts.month = value
-      if (type === 'day') parts.day = value
-      if (type === 'hour') parts.hour = value === '24' ? '00' : value
-      if (type === 'minute') parts.minute = value
-    })
-    return `${parts.year ?? '1970'}/${parts.month ?? '01'}/${parts.day ?? '01'} ${parts.hour ?? '00'}:${parts.minute ?? '00'}`
-  } catch {
-    return formatMarketStatusTime(timestamp, 'UTC')
-  }
-}
-
-function formatMarketStatusTimezone(timezone: string) {
-  if (timezone === 'Asia/Shanghai') return 'GMT+8'
-  if (timezone === 'UTC') return 'UTC'
-  try {
-    const part = new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit',
-      timeZone: timezone,
-      timeZoneName: 'shortOffset',
-    }).formatToParts(new Date()).find((item) => item.type === 'timeZoneName')
-    return part?.value || timezone
-  } catch {
-    return timezone
-  }
-}
-
 function LoadRow({ label, loaded, onSetLoaded }: { label: string; loaded: boolean; onSetLoaded: (loaded: boolean) => void }) {
   return (
     <div className="ff-import-load-row">
@@ -381,3 +284,4 @@ function SelectedDetails({ selectedRow }: { selectedRow: Mt5SymbolRow }) {
     </div>
   )
 }
+

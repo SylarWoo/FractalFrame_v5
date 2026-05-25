@@ -128,18 +128,18 @@
 }
 
 .ff-import-market-status {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
-  min-height: 18px;
+  height: 18px;
   margin-top: 4px;
-  overflow: visible;
+  padding: 0 4px;
+  border-radius: 3px;
   color: #374151;
   font-size: 12px;
   font-weight: 700;
-  line-height: 16px;
-  white-space: normal;
+  line-height: 18px;
+  vertical-align: middle;
 }
 
 .ff-import-market-status[data-status='open'] {
@@ -161,21 +161,13 @@
   height: 4px;
   border-radius: 999px;
   background: #111827;
+  transform: translateY(0);
 }
 
-.ff-import-market-status__label,
-.ff-import-market-status__muted {
-  min-width: 0;
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-}
-
-.ff-import-market-status__muted {
-  flex: 1 1 auto;
-  color: #6b7280;
-  font-weight: 600;
-  overflow-wrap: anywhere;
+.ff-import-market-status__label {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
 }
 
 .ff-import-load-row {

@@ -31,9 +31,8 @@ function writeDevState(key: string, value: unknown) {
     void fetch(endpoint, {
       body: JSON.stringify({ key, value }),
       headers: { 'Content-Type': 'application/json' },
-      keepalive: true,
       method: 'POST',
-    })
+    }).catch(() => {})
   } catch {
     // The dev endpoint is not available in production builds; localStorage remains the fallback.
   }
@@ -52,9 +51,8 @@ function writeDevStateObjectPatch(key: string, propertyKey: string, value: unkno
     void fetch(endpoint, {
       body: JSON.stringify({ key, merge: { [propertyKey]: value } }),
       headers: { 'Content-Type': 'application/json' },
-      keepalive: true,
       method: 'POST',
-    })
+    }).catch(() => {})
   } catch {
     // The dev endpoint is not available in production builds; localStorage remains the fallback.
   }
@@ -70,9 +68,8 @@ function removeDevState(key: string) {
     void fetch(endpoint, {
       body: JSON.stringify({ key, remove: true }),
       headers: { 'Content-Type': 'application/json' },
-      keepalive: true,
       method: 'POST',
-    })
+    }).catch(() => {})
   } catch {
     // The dev endpoint is not available in production builds; localStorage remains the fallback.
   }

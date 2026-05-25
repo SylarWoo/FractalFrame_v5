@@ -1,4 +1,4 @@
-import type { Chart, KLineData } from 'klinecharts'
+﻿import type { Chart, KLineData } from 'klinecharts'
 import {
   defaultMacdIndicatorSettings,
   defaultMaIndicatorSettings,
@@ -31,6 +31,8 @@ export type PaneTitleChunk = {
   fontSize?: string
   gapBefore?: number
   height?: string
+  paddingLeft?: string
+  paddingRight?: string
   position?: string
   text: string
   translateX?: string
@@ -157,7 +159,6 @@ function readIndicatorTitleVisible() {
 }
 
 function readMarketStatusTitleChunks(symbol: string): PaneTitleChunk[] {
-  if (!readSettingsBooleanValue(chartSettingKeys.statusMarketStatusVisible, chartSettingDefaults.statusMarketStatusVisible)) return []
   const status = readMarketStatusTitleSnapshot(symbol)?.status
   if (!status) return []
   if (status.status === 'open') {
@@ -168,20 +169,16 @@ function readMarketStatusTitleChunks(symbol: string): PaneTitleChunk[] {
         gapBefore: 8,
         height: '10px',
         text: '',
-        translateX: '-1px',
         translateY: '3px',
         width: '10px',
       },
-      { color: '#00897b', fontSize: '12px', gapBefore: 3, text: '开市', translateY: '0px' },
+      { color: '#00897b', fontSize: '12px', gapBefore: 3, paddingRight: '5px', text: '开市', translateX: '2px', translateY: '0px' },
     ]
   }
-  if (status.status === 'closed') {
-    return [
-      { alignSelf: 'center', backgroundColor: '#111827', gapBefore: 8, height: '3px', text: '', translateY: '-2px', width: '10px' },
-      { color: '#111827', fontSize: '12px', gapBefore: 3, text: '休市', translateX: '1px', translateY: '-1.5px' },
-    ]
-  }
-  return []
+  return [
+    { alignSelf: 'center', backgroundColor: '#111827', gapBefore: 8, height: '3px', text: '', translateY: '-1px', width: '10px' },
+    { color: '#111827', fontSize: '12px', gapBefore: 3, text: '休市', translateX: '1px' },
+  ]
 }
 
 function createCandleParts(chart: Chart, context: PaneTitleContext, crosshairIndex: number | null): PaneTitlePart[] {
@@ -387,3 +384,4 @@ export function readCrosshairDataIndex(payload: unknown) {
   const nested = numberValue(crosshair.dataIndex)
   return nested == null ? null : Math.round(nested)
 }
+

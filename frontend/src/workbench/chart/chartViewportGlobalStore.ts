@@ -72,9 +72,8 @@ function writeDevServerJson(key: string, value: unknown) {
     void fetch(devViewportStateEndpoint, {
       body: JSON.stringify({ key, value }),
       headers: { 'Content-Type': 'application/json' },
-      keepalive: true,
       method: 'POST',
-    })
+    }).catch(() => {})
   } catch {
     // Production preview does not provide the dev endpoint; localStorage still handles it.
   }

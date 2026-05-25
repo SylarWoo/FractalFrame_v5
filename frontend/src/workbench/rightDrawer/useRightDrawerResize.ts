@@ -86,7 +86,7 @@ export function useRightDrawerResize({ drawerWidth, onResize }: UseRightDrawerRe
     const startY = event.clientY
     const startHeight = topPaneHeight
     const drawer = event.currentTarget.closest('.ff-right-drawer')
-    const maxHeight = Math.max(220, (drawer?.clientHeight ?? 760) - 190)
+    const maxHeight = Math.min(360, Math.max(220, (drawer?.clientHeight ?? 760) - 190))
     const ownerDocument = event.currentTarget.ownerDocument
     const handle = event.currentTarget
 
@@ -301,7 +301,7 @@ export function useRightDrawerResize({ drawerWidth, onResize }: UseRightDrawerRe
   }
 
   function resetTopPaneHeight() {
-    setTopPaneHeight(430)
+    setTopPaneHeight(300)
   }
 
   return {

@@ -85,9 +85,10 @@ function persistentDevStatePlugin(): Plugin {
 }
 
 function chartViewportDevStatePlugin(): Plugin {
-  const viewportStateKeyPrefix = 'fractalframe:chartViewport:v3'
-  const stateFile = path.resolve(__dirname, '.fractalframe-dev', 'chart-viewport-state-v3.json')
+  const viewportStateKeyPrefixes = ['fractalframe:chartViewport:v4', 'fractalframe:chartViewport:v3']
+  const stateFile = path.resolve(__dirname, '.fractalframe-dev', 'chart-viewport-state-v4.json')
   const { readState, writeState } = createJsonStateStore(stateFile)
+  const isSupportedViewportStateKey = (key: string) => viewportStateKeyPrefixes.some((prefix) => key.startsWith(prefix))
 
   return {
     name: 'fractalframe-chart-viewport-dev-state',
@@ -101,7 +102,7 @@ function chartViewportDevStatePlugin(): Plugin {
         const requestUrl = new URL(req.url, 'http://127.0.0.1')
         if (req.method === 'GET') {
           const key = requestUrl.searchParams.get('key')
-          if (key && !key.startsWith(viewportStateKeyPrefix)) {
+          if (key && !isSupportedViewportStateKey(key)) {
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({ value: null }))
             return
@@ -120,7 +121,7 @@ function chartViewportDevStatePlugin(): Plugin {
             try {
               const payload = JSON.parse(body) as { key?: string; value?: unknown }
               if (!payload.key) throw new Error('Missing key')
-              if (!payload.key.startsWith(viewportStateKeyPrefix)) throw new Error('Unsupported key')
+              if (!isSupportedViewportStateKey(payload.key)) throw new Error('Unsupported key')
               const state = readState()
               state[payload.key] = payload.value
               writeState(state)

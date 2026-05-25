@@ -25,12 +25,12 @@ export function clampDrawerWidth(width: number) {
 }
 
 export function getInitialTopPaneHeight() {
-  const fallbackHeight = 430
+  const fallbackHeight = 300
 
   try {
     const raw = readString(storageKeys.importCenterTopPaneHeightPx)
     const value = raw === '' ? fallbackHeight : Number(raw)
-    return Math.max(180, Math.min(760, Math.round(value)))
+    return Math.max(180, Math.min(360, Math.round(value)))
   } catch {
     return fallbackHeight
   }

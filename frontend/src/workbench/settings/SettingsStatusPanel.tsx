@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { readSettingsBooleanValue, readSettingsStringValue, writeSettingsSymbolStateValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from './chartSettingsSchema'
@@ -12,7 +12,7 @@ export function SettingsStatusPanel() {
   return (
     <div className="ff-settings-status-panel">
       <section className="ff-settings-status-group">
-        <div className="ff-settings-symbol-kicker">商品</div>
+        <div className="ff-settings-symbol-kicker">鍟嗗搧</div>
         <SettingsCheckRow storageKey="status.logo.visible">Logo</SettingsCheckRow>
         <div className="ff-settings-status-row">
           <input
@@ -45,7 +45,6 @@ export function SettingsStatusPanel() {
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleChangeVisible}>K线变化值</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleVolumeVisible}>成交量</SettingsCheckRow>
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusCandleTimeVisible}>K线时间</SettingsCheckRow>
-        <SettingsCheckRow checked storageKey={chartSettingKeys.statusMarketStatusVisible}>开市状态</SettingsCheckRow>
       </section>
 
       <section className="ff-settings-status-group">
@@ -55,7 +54,7 @@ export function SettingsStatusPanel() {
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusIndicatorValuesVisible}>数值</SettingsCheckRow>
         <div className="ff-settings-status-row">
           <SettingsCheckboxInput checked storageKey="status.indicatorBackground.visible" />
-          <span>背景</span>
+          <span>鑳屾櫙</span>
           <div className="ff-settings-status-opacity" aria-hidden="true">
             <span />
           </div>

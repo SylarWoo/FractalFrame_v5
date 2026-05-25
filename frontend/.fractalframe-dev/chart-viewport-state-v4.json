@@ -1,0 +1,74 @@
+{
+  "fractalframe:chartViewport:v4:latest": {
+    "barSpace": 4.599986618551009,
+    "dataLength": 5000,
+    "offsetRightDistance": 275.8551036079535,
+    "rightTimestamp": 1779688800000,
+    "savedAt": "2026-05-25T06:02:51.070Z",
+    "visibleTo": 5000,
+    "yAxisRange": {
+      "from": 4433.1787792364,
+      "range": 191.28688525193866,
+      "realFrom": 4433.1787792364,
+      "realRange": 191.28688525193866,
+      "realTo": 4624.465664488339,
+      "to": 4624.465664488339
+    },
+    "symbol": "XAUUSDm",
+    "period": "M5"
+  },
+  "fractalframe:chartViewport:v4:global:M5": {
+    "barSpace": 4.599986618551009,
+    "dataLength": 5000,
+    "offsetRightDistance": 275.8551036079535,
+    "rightTimestamp": 1779688800000,
+    "savedAt": "2026-05-25T06:02:51.070Z",
+    "visibleTo": 5000,
+    "yAxisRange": {
+      "from": 4433.1787792364,
+      "range": 191.28688525193866,
+      "realFrom": 4433.1787792364,
+      "realRange": 191.28688525193866,
+      "realTo": 4624.465664488339,
+      "to": 4624.465664488339
+    },
+    "symbol": "XAUUSDm",
+    "period": "M5"
+  },
+  "fractalframe:chartViewport:v4:global:M15": {
+    "barSpace": 4.407673702594963,
+    "dataLength": 15000,
+    "offsetRightDistance": 245.39481542768613,
+    "rightTimestamp": 1779686100000,
+    "savedAt": "2026-05-25T05:15:58.841Z",
+    "visibleTo": 15000,
+    "yAxisRange": {
+      "from": 4473.911423268386,
+      "range": 160.02895811161306,
+      "realFrom": 4473.911423268386,
+      "realRange": 160.02895811161306,
+      "realTo": 4633.940381379999,
+      "to": 4633.940381379999
+    },
+    "symbol": "XAUUSDm",
+    "period": "M15"
+  },
+  "fractalframe:chartViewport:v4:global:H4": {
+    "barSpace": 7.522118457673357,
+    "dataLength": 5000,
+    "offsetRightDistance": 228.1239147555449,
+    "rightTimestamp": 1779681600000,
+    "savedAt": "2026-05-25T06:00:36.571Z",
+    "visibleTo": 5000,
+    "yAxisRange": {
+      "from": 4373.260279124578,
+      "range": 286.3172288867152,
+      "realFrom": 4373.260279124578,
+      "realRange": 286.3172288867154,
+      "realTo": 4659.5775080112935,
+      "to": 4659.5775080112935
+    },
+    "symbol": "XAUUSDm",
+    "period": "H4"
+  }
+}

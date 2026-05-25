@@ -1,4 +1,4 @@
-import type { Mt5MarketStatus, Mt5RealtimeTick, Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
+import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 import { readJson, writeJson } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
 import { dispatchWorkbenchEvent, workbenchEvents } from '../persistence/workbenchEvents'
@@ -7,9 +7,22 @@ export const marketStatusTitleChangedEvent = workbenchEvents.marketStatusTitleCh
 
 export type MarketStatusTitleSnapshot = {
   savedAt: string
-  status: Mt5MarketStatus
+  status: {
+    label: string
+    nextCheckAt?: string | null
+    reason: 'session_schedule'
+    status: 'open' | 'closed'
+  }
   symbol: string
 }
+
+type SessionRange = {
+  endMinute: number
+  startMinute: number
+}
+
+const minutesPerDay = 24 * 60
+const minutesPerWeek = 7 * minutesPerDay
 
 function normalizeSymbol(symbol: string) {
   return symbol.trim().toUpperCase()
@@ -24,24 +37,85 @@ function parseSessionMinute(value: string) {
   return hour * 60 + minute
 }
 
-function isMinuteInSessionRange(range: string, currentMinute: number) {
-  const [rawStart, rawEnd] = range.split('-')
-  if (!rawStart || !rawEnd) return false
-  const start = parseSessionMinute(rawStart)
-  const end = parseSessionMinute(rawEnd)
-  if (start == null || end == null) return false
-  if (start === 0 && end === 0) return true
-  if (start < end) return currentMinute >= start && currentMinute < end
-  return currentMinute >= start || currentMinute < end
+function parseSessionRange(value: string): SessionRange | null {
+  const [rawStart, rawEnd] = value.split('-')
+  if (!rawStart || !rawEnd) return null
+  const startMinute = parseSessionMinute(rawStart)
+  const endMinute = parseSessionMinute(rawEnd)
+  if (startMinute == null || endMinute == null) return null
+  return { endMinute, startMinute }
 }
 
-function isNowInsideTradeSession(row: Mt5SymbolRow, now = new Date()) {
+function currentUtcWeekMinute(now: Date) {
+  return now.getUTCDay() * minutesPerDay + now.getUTCHours() * 60 + now.getUTCMinutes()
+}
+
+function tradeSessionIntervals(row: Mt5SymbolRow) {
   const tradeSessions = row.sessions?.trade
-  if (!Array.isArray(tradeSessions)) return null
-  const daySessions = tradeSessions[now.getUTCDay()]
-  if (!daySessions || !daySessions.trim()) return false
-  const currentMinute = now.getUTCHours() * 60 + now.getUTCMinutes()
-  return daySessions.split(',').some((range) => isMinuteInSessionRange(range.trim(), currentMinute))
+  if (!Array.isArray(tradeSessions)) return []
+
+  const intervals: Array<{ end: number; start: number }> = []
+  tradeSessions.forEach((daySessions, day) => {
+    if (!daySessions || !daySessions.trim()) return
+    daySessions.split(',').forEach((rawRange) => {
+      const range = parseSessionRange(rawRange.trim())
+      if (!range) return
+      const dayStart = day * minutesPerDay
+      if (range.startMinute === 0 && range.endMinute === 0) {
+        intervals.push({ start: dayStart, end: dayStart + minutesPerDay })
+        return
+      }
+      const start = dayStart + range.startMinute
+      const end = dayStart + range.endMinute + (range.startMinute >= range.endMinute ? minutesPerDay : 0)
+      intervals.push({ start, end })
+    })
+  })
+  return intervals
+}
+
+function shiftedIntervals(row: Mt5SymbolRow) {
+  const intervals = tradeSessionIntervals(row)
+  return [-minutesPerWeek, 0, minutesPerWeek].flatMap((shift) => (
+    intervals.map((interval) => ({ start: interval.start + shift, end: interval.end + shift }))
+  ))
+}
+
+function nextBoundaryMinute(row: Mt5SymbolRow, now = new Date()) {
+  const nowMinute = currentUtcWeekMinute(now)
+  const intervals = shiftedIntervals(row)
+  if (!intervals.length) return null
+
+  const active = intervals.find((interval) => nowMinute >= interval.start && nowMinute < interval.end)
+  if (active) return active.end
+
+  const future = intervals
+    .filter((interval) => interval.start > nowMinute)
+    .sort((left, right) => left.start - right.start)[0]
+  return future?.start ?? null
+}
+
+export function resolveMarketStatusFromSymbolSession(row: Mt5SymbolRow, now = new Date()) {
+  const intervals = shiftedIntervals(row)
+  if (!row.symbol || !intervals.length) return null
+  const nowMinute = currentUtcWeekMinute(now)
+  const isOpen = intervals.some((interval) => nowMinute >= interval.start && nowMinute < interval.end)
+  const boundaryMinute = nextBoundaryMinute(row, now)
+  const nextCheckAt = boundaryMinute == null
+    ? null
+    : new Date(now.getTime() + Math.max(0, boundaryMinute - nowMinute) * 60_000).toISOString()
+  return {
+    label: isOpen ? '开市' : '休市',
+    nextCheckAt,
+    reason: 'session_schedule' as const,
+    status: isOpen ? 'open' as const : 'closed' as const,
+  }
+}
+
+export function millisecondsUntilNextMarketSessionCheck(row: Mt5SymbolRow, now = new Date()) {
+  const boundaryMinute = nextBoundaryMinute(row, now)
+  if (boundaryMinute == null) return null
+  const delay = (boundaryMinute - currentUtcWeekMinute(now)) * 60_000
+  return Math.max(1_000, delay + 1_000)
 }
 
 export function readMarketStatusTitleSnapshot(symbol: string): MarketStatusTitleSnapshot | null {
@@ -52,57 +126,21 @@ export function readMarketStatusTitleSnapshot(symbol: string): MarketStatusTitle
   return snapshot?.status ? snapshot : null
 }
 
-export function saveMarketStatusTitleSnapshot(symbol: string, status: Mt5MarketStatus | null | undefined) {
-  const key = normalizeSymbol(symbol)
-  if (!key || !status) return
+export function saveMarketStatusTitleSnapshotFromSymbolSession(row: Mt5SymbolRow) {
+  const key = normalizeSymbol(row.symbol)
+  if (!key) return null
+  const status = resolveMarketStatusFromSymbolSession(row)
+  if (!status) return null
   const snapshots = readJson<Record<string, MarketStatusTitleSnapshot>>(storageKeys.marketStatusTitleSnapshots, {})
+  const snapshot: MarketStatusTitleSnapshot = {
+    savedAt: new Date().toISOString(),
+    status,
+    symbol: row.symbol,
+  }
   const written = writeJson(storageKeys.marketStatusTitleSnapshots, {
     ...snapshots,
-    [key]: {
-      savedAt: new Date().toISOString(),
-      status,
-      symbol,
-    },
+    [key]: snapshot,
   })
   if (written) dispatchWorkbenchEvent(marketStatusTitleChangedEvent)
-}
-
-export function saveMarketStatusTitleSnapshotFromSymbolSession(row: Mt5SymbolRow) {
-  if (!row.symbol) return
-  const sessionOpen = isNowInsideTradeSession(row)
-  if (sessionOpen == null) return
-  const nowSeconds = Math.floor(Date.now() / 1000)
-  saveMarketStatusTitleSnapshot(row.symbol, {
-    status: sessionOpen ? 'open' : 'closed',
-    label: sessionOpen ? '\u5f00\u5e02' : '\u4f11\u5e02',
-    serverTime: nowSeconds,
-    serverTimeIso: new Date(nowSeconds * 1000).toISOString().replace('.000Z', 'Z'),
-    reason: 'session_schedule',
-  })
-}
-
-function resolveTickTimeSeconds(tick: Mt5RealtimeTick) {
-  if (typeof tick.timeMsc === 'number' && Number.isFinite(tick.timeMsc)) {
-    return Math.floor(tick.timeMsc / 1000)
-  }
-  if (typeof tick.time === 'number' && Number.isFinite(tick.time)) {
-    return Math.floor(tick.time > 10_000_000_000 ? tick.time / 1000 : tick.time)
-  }
-  const publishedAt = typeof tick.publishedAt === 'string' ? Date.parse(tick.publishedAt) : Number.NaN
-  return Number.isFinite(publishedAt) ? Math.floor(publishedAt / 1000) : Math.floor(Date.now() / 1000)
-}
-
-export function saveMarketStatusTitleSnapshotFromRealtimeTick(tick: Mt5RealtimeTick) {
-  if (!tick.symbol) return
-  if (readMarketStatusTitleSnapshot(tick.symbol)?.status?.reason === 'session_schedule') return
-
-  const tickSeconds = resolveTickTimeSeconds(tick)
-  saveMarketStatusTitleSnapshot(tick.symbol, {
-    status: 'open',
-    label: '\u5f00\u5e02',
-    lastTickTime: tickSeconds,
-    lastTickTimeMsc: tickSeconds * 1000,
-    tickAgeSeconds: Math.max(0, Math.floor(Date.now() / 1000) - tickSeconds),
-    reason: 'realtime_tick',
-  })
+  return snapshot
 }

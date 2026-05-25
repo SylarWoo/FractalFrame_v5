@@ -4,7 +4,6 @@ import { ActionType, DomPosition } from 'klinecharts'
 import type { Chart, Coordinate } from 'klinecharts'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
 import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
-import { marketStatusTitleChangedEvent } from '../mt5DataCenter/marketStatusTitleState'
 import { readCandleBarStyle, resolveCandleValueColor } from './chartStyleReaders'
 import { formatGlobalPrice } from './globalPricePrecision'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
@@ -55,13 +54,11 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
     const syncVisible = () => setSettingVisible(readCurrentCandleCountdownActive(symbol))
     window.addEventListener(settingsSymbolChangedEvent, syncVisible)
     window.addEventListener(realtimeEnabledChangedEvent, syncVisible)
-    window.addEventListener(marketStatusTitleChangedEvent, syncVisible)
     window.addEventListener('storage', syncVisible)
     syncVisible()
     return () => {
       window.removeEventListener(settingsSymbolChangedEvent, syncVisible)
       window.removeEventListener(realtimeEnabledChangedEvent, syncVisible)
-      window.removeEventListener(marketStatusTitleChangedEvent, syncVisible)
       window.removeEventListener('storage', syncVisible)
     }
   }, [symbol])

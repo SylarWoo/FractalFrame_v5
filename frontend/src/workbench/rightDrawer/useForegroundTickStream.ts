@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createMt5TicksEventSource } from '../../services/mt5/mt5SymbolsApi'
 import type { Mt5RealtimeTick } from '../../services/mt5/mt5SymbolsApi'
-import { saveMarketStatusTitleSnapshotFromRealtimeTick } from '../mt5DataCenter/marketStatusTitleState'
 import { mergeWatchlistRealtimeTicks } from './watchlistRealtimeUtils'
 
 type UseForegroundTickStreamOptions = {
@@ -53,7 +52,6 @@ export function useForegroundTickStream({
         setTicks((current) => mergeWatchlistRealtimeTicks(current, ticks))
         ticks.forEach((tick) => {
           if (!tick.symbol) return
-          saveMarketStatusTitleSnapshotFromRealtimeTick(tick)
           window.dispatchEvent(new CustomEvent('fractalframe:mt5RealtimeTick', { detail: tick }))
         })
         if (updatedSymbols.length) setLastTickAt(new Date().toLocaleTimeString())

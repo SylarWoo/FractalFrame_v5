@@ -81,31 +81,3 @@ export type Mt5RealtimeTick = {
   changePercent?: number | null
   publishedAt?: string
 }
-
-export type Mt5MarketStatusValue = 'open' | 'closed' | 'unknown'
-
-export type Mt5MarketStatus = {
-  status: Mt5MarketStatusValue
-  label?: string
-  lastM1Time?: number | null
-  lastM1TimeMsc?: number | null
-  lastM1Iso?: string | null
-  lastTickTime?: number | null
-  lastTickTimeMsc?: number | null
-  serverTime?: number | null
-  serverTimeIso?: string | null
-  ageSeconds?: number | null
-  tickAgeSeconds?: number | null
-  staleSeconds?: number | null
-  tradeMode?: number | null
-  reason?: string
-}
-
-export type Mt5MarketStatusPayload = {
-  ok: boolean
-  status: string
-  symbol?: string
-  marketStatus?: Mt5MarketStatus | null
-  error?: string
-  publishedAt?: string
-}

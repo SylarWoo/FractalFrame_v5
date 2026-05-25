@@ -15,7 +15,6 @@ export {
   fetchStoreV5Status,
   fetchStoreV5Symbols,
   pullStoreV5,
-  queryMt5MarketStatus,
   queryMt5Rates,
   queryMt5Tick,
   queryStoreV5Ohlcv,

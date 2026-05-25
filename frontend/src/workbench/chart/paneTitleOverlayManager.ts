@@ -26,6 +26,8 @@ function renderPart(part: PaneTitlePart) {
     if (chunk.fontSize) chunkSpan.style.fontSize = chunk.fontSize
     if (chunk.gapBefore != null) chunkSpan.style.marginLeft = `${chunk.gapBefore}px`
     if (chunk.height) chunkSpan.style.height = chunk.height
+    if (chunk.paddingLeft) chunkSpan.style.paddingLeft = chunk.paddingLeft
+    if (chunk.paddingRight) chunkSpan.style.paddingRight = chunk.paddingRight
     if (chunk.position) chunkSpan.style.position = chunk.position
     if (chunk.width) chunkSpan.style.width = chunk.width
     if (chunk.width || chunk.height) {
