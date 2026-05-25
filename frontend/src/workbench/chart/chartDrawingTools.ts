@@ -1,15 +1,12 @@
-import { DomPosition, registerOverlay } from 'klinecharts'
+import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { drawingMainPaneId } from '../drawing/drawingPaneModel'
 import {
   fibRetracementOverlayName,
-  horizontalLineOverlayName,
-  rulerOverlayName,
-  trendLineOverlayName,
 } from '../drawing/drawingOverlayModel'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import { clearStoredFibRetracementDrawings } from '../rightDrawer/drawingObjectPersistence'
-import { isDrawingToolCommandEvent, publishDrawingToolState } from '../rightDrawer/drawingToolCommands'
+import { publishDrawingToolState } from '../rightDrawer/drawingToolCommands'
 import { isObjectTreeDrawingCommandEvent, publishObjectTreeDrawings } from '../rightDrawer/objectTree/objectTreeModel'
 import {
   normalizeDrawingTextStyle,
@@ -37,13 +34,6 @@ import {
   getSelectedHorizontalLineIds as getSelectedHorizontalLineIdsFromState,
   getSelectedTrendLineIds as getSelectedTrendLineIdsFromState,
 } from './chartDrawingSelectionQueries'
-import {
-  ensureHorizontalLineTextFigure,
-  ensureRulerCenterTextFigure,
-  ensureTrendLineHitFigure,
-  ensureTrendLineStatsBoxFigure,
-  ensureTrendLineTextFigure,
-} from './chartDrawingFigures'
 import type {
   HorizontalLineExtendData,
   MixedDrawingMoveState,
@@ -51,102 +41,27 @@ import type {
   TrendLineExtendData,
 } from './chartDrawingTypes'
 import { normalizeLineStyle } from './chartDrawingStyle'
-import { createHorizontalLinePointFigures, createHorizontalLineYAxisFigures } from './horizontalLineOverlayFigures'
 import { createHorizontalLineOverlayFactory } from './horizontalLineOverlayController'
 import { createTrendLineOverlayFactory } from './trendLineOverlayController'
-import { createTrendLinePointFigures, createTrendLineYAxisFigures } from './trendLineOverlayFigures'
 import { createRulerOverlayFactory, type PendingRulerOptions } from './rulerOverlayController'
-import { createRulerPointFigures, createRulerYAxisFigures } from './rulerOverlayFigures'
-import { createFibRetracementPointFigures, createFibRetracementYAxisFigures } from './fibRetracementOverlayFigures'
 import { createRulerToolCommandHandler } from './chartRulerToolCommands'
-import { createQuickMeasureController, ensureQuickMeasureOverlay } from './quickMeasureOverlay'
-import { createMorganRangeController, ensureMorganRangeOverlay } from './morganRangeOverlay'
+import { createQuickMeasureController } from './quickMeasureOverlay'
+import { createMorganRangeController } from './morganRangeOverlay'
 import { createChartDrawingHitTester } from './chartDrawingHitTesting'
 import { createTrendLinePendingStartHandleController } from './trendLinePendingStartHandle'
 import { installChartDrawingLifecycle } from './chartDrawingLifecycle'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingVisibilityEvents'
+import { ensureChartDrawingOverlays } from './chartDrawingOverlayRegistry'
+import { routeChartDrawingCommand } from './chartDrawingCommandRouter'
 
-let horizontalLineOverlayRegistered = false
-let trendLineOverlayRegistered = false
-let rulerOverlayRegistered = false
-let fibRetracementOverlayRegistered = false
 const candlePaneId = drawingMainPaneId
 const trendLineOverlayZLevel = -1
 export { chartDrawingVisibilityRefreshEvent }
 const horizontalLineHandleDragThreshold = 3
 const trendLineEndpointDragThreshold = 3
 
-function ensureHorizontalLineOverlay() {
-  if (horizontalLineOverlayRegistered) return
-  ensureHorizontalLineTextFigure()
-  horizontalLineOverlayRegistered = true
-  registerOverlay({
-    name: horizontalLineOverlayName,
-    totalStep: 2,
-    needDefaultPointFigure: false,
-    needDefaultXAxisFigure: false,
-    needDefaultYAxisFigure: false,
-    createPointFigures: createHorizontalLinePointFigures,
-    createYAxisFigures: createHorizontalLineYAxisFigures,
-  })
-}
-
-function ensureTrendLineOverlay() {
-  if (trendLineOverlayRegistered) return
-  ensureTrendLineHitFigure()
-  ensureTrendLineTextFigure()
-  ensureTrendLineStatsBoxFigure()
-  trendLineOverlayRegistered = true
-  registerOverlay({
-    name: trendLineOverlayName,
-    totalStep: 3,
-    needDefaultPointFigure: true,
-    needDefaultXAxisFigure: false,
-    needDefaultYAxisFigure: false,
-    createPointFigures: createTrendLinePointFigures,
-    createYAxisFigures: createTrendLineYAxisFigures,
-  })
-}
-
-function ensureRulerOverlay() {
-  if (rulerOverlayRegistered) return
-  ensureQuickMeasureOverlay()
-  ensureRulerCenterTextFigure()
-  ensureTrendLineHitFigure()
-  ensureTrendLineStatsBoxFigure()
-  rulerOverlayRegistered = true
-  registerOverlay({
-    name: rulerOverlayName,
-    totalStep: 3,
-    needDefaultPointFigure: true,
-    needDefaultXAxisFigure: false,
-    needDefaultYAxisFigure: false,
-    createPointFigures: createRulerPointFigures,
-    createYAxisFigures: createRulerYAxisFigures,
-  })
-}
-
-function ensureFibRetracementOverlay() {
-  if (fibRetracementOverlayRegistered) return
-  ensureTrendLineHitFigure()
-  fibRetracementOverlayRegistered = true
-  registerOverlay({
-    name: fibRetracementOverlayName,
-    totalStep: 3,
-    needDefaultPointFigure: true,
-    needDefaultXAxisFigure: false,
-    needDefaultYAxisFigure: false,
-    createPointFigures: createFibRetracementPointFigures,
-    createYAxisFigures: createFibRetracementYAxisFigures,
-  })
-}
-
 export function installChartDrawingTools(chart: Chart, getPeriod: () => string = () => '') {
-  ensureHorizontalLineOverlay()
-  ensureTrendLineOverlay()
-  ensureRulerOverlay()
-  ensureFibRetracementOverlay()
-  ensureMorganRangeOverlay()
+  ensureChartDrawingOverlays()
   let pendingOverlayId: string | null = null
   let pendingTrendLineOverlayId: string | null = null
   let pendingRulerOverlayId: string | null = null
@@ -931,27 +846,15 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   })
 
   const handleCommand = (event: Event) => {
-    if (!isDrawingToolCommandEvent(event)) return
-    if (event.detail.tool === 'morganRange') {
-      if (event.detail.action === 'start') morganRangeController?.start()
-      if (event.detail.action === 'release') morganRangeController?.release()
-      publishDrawingToolState({
-        armed: event.detail.action === 'start',
-        locked: true,
-        selected: false,
-        showPriceLabel: false,
-        tool: 'morganRange',
-      })
-      return
-    }
-    if (event.detail.tool === 'ruler' && event.detail.action === 'updateQuickMeasureEnabled') {
-      quickMeasureController?.setEnabled(event.detail.enabled === true)
-      return
-    }
-    if (event.detail.tool === 'trendLine') handleTrendLineCommand(event.detail)
-    else if (event.detail.tool === 'ruler') handleRulerCommand(event.detail)
-    else if (event.detail.tool === 'fibRetracement') handleFibCommand(event.detail)
-    else handleHorizontalLineCommand(event.detail)
+    routeChartDrawingCommand(event, {
+      handleFibCommand,
+      handleHorizontalLineCommand,
+      handleRulerCommand,
+      handleTrendLineCommand,
+      releaseMorganRange: () => morganRangeController?.release(),
+      setQuickMeasureEnabled: (enabled) => quickMeasureController?.setEnabled(enabled),
+      startMorganRange: () => morganRangeController?.start(),
+    })
   }
   const handleObjectTreeDrawingCommand = createDrawingObjectTreeCommandHandler({
     chart,

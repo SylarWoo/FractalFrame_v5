@@ -1,15 +1,29 @@
-import { DomPosition, registerOverlay } from 'klinecharts'
+import { DomPosition, LineType, PolygonType, registerFigure, registerOverlay } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { knownDrawingPaneIds } from '../drawing/drawingPaneModel'
 import { createFibRetracementPointFigures } from './fibRetracementOverlayFigures'
 import { readMorganRangeFibExtendData } from './morganRangePreset'
-import type { RulerExtendData } from './chartDrawingTypes'
+import type { HorizontalLineFigure, RulerExtendData, ScreenPoint } from './chartDrawingTypes'
 
 const morganRangeOverlayName = 'ffMorganRange'
 const morganRangeZLevel = 9
+const morganNoHitLineFigureName = 'ffMorganNoHitLine'
+const morganNoHitRectFigureName = 'ffMorganNoHitRect'
 let morganRangeOverlayRegistered = false
+let morganNoHitFiguresRegistered = false
 
 type MorganRangePoint = { dataIndex?: number; timestamp?: number; value?: number }
+type MorganLineAttrs = { coordinates?: Array<Partial<ScreenPoint>> }
+type MorganLineStyles = { color?: string; dashedValue?: number[]; size?: number; style?: LineType | string }
+type MorganRectAttrs = { height?: number; width?: number; x?: number; y?: number }
+type MorganRectStyles = {
+  borderColor?: string
+  borderDashedValue?: number[]
+  borderSize?: number
+  borderStyle?: LineType | string
+  color?: string | CanvasGradient
+  style?: PolygonType | string
+}
 
 export type StaticMorganRangeOverlayOptions = {
   futureWidthPx?: number
@@ -22,6 +36,7 @@ export type StaticMorganRangeOverlayOptions = {
 export function ensureMorganRangeOverlay() {
   if (morganRangeOverlayRegistered) return
   morganRangeOverlayRegistered = true
+  ensureMorganNoHitFigures()
   registerOverlay({
     name: morganRangeOverlayName,
     totalStep: 2,
@@ -30,6 +45,59 @@ export function ensureMorganRangeOverlay() {
     needDefaultYAxisFigure: false,
     createPointFigures: createMorganRangePointFigures,
     createYAxisFigures: () => [],
+  })
+}
+
+function ensureMorganNoHitFigures() {
+  if (morganNoHitFiguresRegistered) return
+  morganNoHitFiguresRegistered = true
+  registerFigure<MorganLineAttrs, MorganLineStyles>({
+    name: morganNoHitLineFigureName,
+    checkEventOn: () => false,
+    draw: (ctx, attrs, styles) => {
+      const start = attrs.coordinates?.[0]
+      const end = attrs.coordinates?.[1]
+      if (!isMorganScreenPoint(start) || !isMorganScreenPoint(end)) return
+      ctx.save()
+      ctx.beginPath()
+      ctx.strokeStyle = styles.color ?? '#787b86'
+      ctx.lineWidth = normalizeCanvasLineWidth(styles.size)
+      ctx.setLineDash([])
+      if (styles.style === LineType.Dashed && Array.isArray(styles.dashedValue)) {
+        ctx.setLineDash(styles.dashedValue)
+      }
+      ctx.moveTo(start.x, start.y)
+      ctx.lineTo(end.x, end.y)
+      ctx.stroke()
+      ctx.restore()
+    },
+  })
+  registerFigure<MorganRectAttrs, MorganRectStyles>({
+    name: morganNoHitRectFigureName,
+    checkEventOn: () => false,
+    draw: (ctx, attrs, styles) => {
+      const x = Number(attrs.x)
+      const y = Number(attrs.y)
+      const width = Number(attrs.width)
+      const height = Number(attrs.height)
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) return
+      if (width <= 0 || height <= 0) return
+      ctx.save()
+      if (styles.style === PolygonType.Stroke || styles.style === PolygonType.StrokeFill) {
+        ctx.strokeStyle = styles.borderColor ?? '#787b86'
+        ctx.lineWidth = normalizeCanvasLineWidth(styles.borderSize)
+        ctx.setLineDash([])
+        if (styles.borderStyle === LineType.Dashed && Array.isArray(styles.borderDashedValue)) {
+          ctx.setLineDash(styles.borderDashedValue)
+        }
+        ctx.strokeRect(x, y, width, height)
+      }
+      if (styles.style !== PolygonType.Stroke) {
+        ctx.fillStyle = styles.color ?? '#787b86'
+        ctx.fillRect(x, y, width, height)
+      }
+      ctx.restore()
+    },
   })
 }
 
@@ -198,6 +266,7 @@ export function createMorganRangeController({
 }
 
 function createMorganRangePointFigures(params: Parameters<typeof createFibRetracementPointFigures>[0]) {
+  ensureMorganNoHitFigures()
   const extendData = params.overlay.extendData as (RulerExtendData & { futureWidthPx?: number; startOffsetPx?: number }) | undefined
   const futureWidthPx = Number(extendData?.futureWidthPx)
   const startOffsetPx = Number(extendData?.startOffsetPx)
@@ -214,7 +283,7 @@ function createMorganRangePointFigures(params: Parameters<typeof createFibRetrac
     }
   }
 
-  return createFibRetracementPointFigures({
+  const figures = createFibRetracementPointFigures({
     ...params,
     coordinates,
     overlay: {
@@ -228,4 +297,22 @@ function createMorganRangePointFigures(params: Parameters<typeof createFibRetrac
       visible: true,
     },
   })
+  return makeMorganFiguresNonInteractive(figures)
+}
+
+function makeMorganFiguresNonInteractive(figures: HorizontalLineFigure[]) {
+  return figures.flatMap((figure) => {
+    if (figure.type === 'rect') return [{ ...figure, type: morganNoHitRectFigureName, ignoreEvent: true }]
+    if (figure.type === 'line') return [{ ...figure, type: morganNoHitLineFigureName, ignoreEvent: true }]
+    return []
+  })
+}
+
+function isMorganScreenPoint(value: Partial<ScreenPoint> | undefined): value is ScreenPoint {
+  return Number.isFinite(value?.x) && Number.isFinite(value?.y)
+}
+
+function normalizeCanvasLineWidth(value: unknown) {
+  const width = Number(value)
+  return Number.isFinite(width) ? Math.max(1, width) : 1
 }
