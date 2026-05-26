@@ -1,7 +1,7 @@
 import { readBooleanFlag, readJson, writeBooleanFlag, writeJson } from '../persistence/jsonStorage'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 
-export type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange' | 'cursor'
+export type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange' | 'emojiSticker' | 'cursor'
 
 export type DrawingTextStyle = {
   alignH: 'left' | 'center' | 'right'

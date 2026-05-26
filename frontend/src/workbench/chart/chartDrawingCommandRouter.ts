@@ -5,6 +5,7 @@ export type ChartDrawingCommandRouterOptions = {
   handleFibCommand: (command: DrawingToolCommand) => void
   handleHorizontalLineCommand: (command: DrawingToolCommand) => void
   handleRulerCommand: (command: DrawingToolCommand) => void
+  handleStickerCommand: (command: DrawingToolCommand) => void
   handleTrendLineCommand: (command: DrawingToolCommand) => void
   releaseMorganRange: () => void
   setQuickMeasureEnabled: (enabled: boolean) => void
@@ -27,6 +28,10 @@ export function routeChartDrawingCommand(event: Event, options: ChartDrawingComm
   }
   if (event.detail.tool === 'ruler' && event.detail.action === 'updateQuickMeasureEnabled') {
     options.setQuickMeasureEnabled(event.detail.enabled === true)
+    return
+  }
+  if (event.detail.tool === 'emojiSticker') {
+    options.handleStickerCommand(event.detail)
     return
   }
   if (event.detail.tool === 'trendLine') options.handleTrendLineCommand(event.detail)

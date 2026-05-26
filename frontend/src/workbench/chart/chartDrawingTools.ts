@@ -7,6 +7,7 @@ import {
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import { clearStoredFibRetracementDrawings } from '../rightDrawer/drawingObjectPersistence'
 import { publishDrawingToolState } from '../rightDrawer/drawingToolCommands'
+import type { DrawingToolCommand } from '../rightDrawer/drawingToolCommands'
 import { isObjectTreeDrawingCommandEvent, publishObjectTreeDrawings } from '../rightDrawer/objectTree/objectTreeModel'
 import {
   normalizeDrawingTextStyle,
@@ -47,6 +48,7 @@ import { createRulerOverlayFactory, type PendingRulerOptions } from './rulerOver
 import { createRulerToolCommandHandler } from './chartRulerToolCommands'
 import { createQuickMeasureController } from './quickMeasureOverlay'
 import { createMorganRangeController } from './morganRangeOverlay'
+import { createStickerOverlayController } from './stickerOverlay'
 import { createChartDrawingHitTester } from './chartDrawingHitTesting'
 import { createTrendLinePendingStartHandleController } from './trendLinePendingStartHandle'
 import { installChartDrawingLifecycle } from './chartDrawingLifecycle'
@@ -171,6 +173,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   let paneInteractionController: ReturnType<typeof createChartDrawingPaneInteractionController> | null = null
   let quickMeasureController: ReturnType<typeof createQuickMeasureController> | null = null
   let morganRangeController: ReturnType<typeof createMorganRangeController> | null = null
+  let stickerController: ReturnType<typeof createStickerOverlayController> | null = null
   const applyDrawingVisibility = () => drawingVisibilityController?.applyDrawingVisibility()
   const applyHorizontalLineVisibility = () => drawingVisibilityController?.applyHorizontalLineVisibility()
   const isHorizontalLineVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isHorizontalLineVisibleInCurrentPeriod(objectId) ?? true
@@ -756,6 +759,11 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       })
     },
   })
+  stickerController = createStickerOverlayController({
+    chart,
+    fallbackPaneId: candlePaneId,
+    onState: publishDrawingToolState,
+  })
 
   ensurePaneInteractionListeners()
 
@@ -845,11 +853,40 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     tool: 'fibRetracement',
   })
 
+  const handleStickerCommand = (command: DrawingToolCommand) => {
+    if (command.action === 'start') {
+      stickerController?.start({
+        color: command.stickerColor,
+        locked: command.locked === true,
+        size: command.stickerSize,
+        symbol: command.stickerSymbol,
+      })
+      return
+    }
+    if (command.action === 'release') {
+      stickerController?.release()
+      return
+    }
+    if (command.action === 'deleteSelected') {
+      stickerController?.deleteSelected()
+      return
+    }
+    if (command.action === 'updateSelectedStickerStyle') {
+      stickerController?.updateOptions({
+        color: command.stickerColor,
+        locked: command.locked,
+        size: command.stickerSize,
+        symbol: command.stickerSymbol,
+      })
+    }
+  }
+
   const handleCommand = (event: Event) => {
     routeChartDrawingCommand(event, {
       handleFibCommand,
       handleHorizontalLineCommand,
       handleRulerCommand,
+      handleStickerCommand,
       handleTrendLineCommand,
       releaseMorganRange: () => morganRangeController?.release(),
       setQuickMeasureEnabled: (enabled) => quickMeasureController?.setEnabled(enabled),
@@ -960,6 +997,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     if (pendingFibOverlayId) chart.removeOverlay({ id: pendingFibOverlayId })
     hidePendingTrendStartHandle()
     morganRangeController?.cleanup()
+    stickerController?.cleanup()
     cleanupLifecycle()
     paneInteractionController?.cleanup()
     quickMeasureController?.cleanup()

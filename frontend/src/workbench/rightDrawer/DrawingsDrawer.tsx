@@ -3,8 +3,8 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { readString, writeString } from '../persistence/jsonStorage'
 import { readChartCursorMode, writeChartCursorMode, type ChartCursorMode } from '../chart/chartCursorMode'
-import { SettingsLineSwatch } from '../settings/SettingsSwatches'
-import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
+import { SettingsColorSwatch, SettingsLineSwatch } from '../settings/SettingsSwatches'
+import type { SettingsLineSwatchValue, SettingsSwatchValue } from '../settings/SettingsSwatches'
 import {
   createDefaultDrawingLineStyle,
   createDefaultDrawingTextStyle,
@@ -44,7 +44,7 @@ import {
 } from './FibRetracementStylePanel'
 import './drawings/styles/DrawingsDrawer.css'
 
-type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange' | 'cursor'
+type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange' | 'emojiSticker' | 'cursor'
 type DrawingTab = 'style' | 'text' | 'coords'
 type CursorMode = ChartCursorMode
 
@@ -76,6 +76,9 @@ type SelectedDrawingState = {
   price?: number
   rulerStyle?: DrawingRulerStyle
   showPriceLabel: boolean
+  stickerColor?: string
+  stickerSize?: number
+  stickerSymbol?: string
   textStyle?: DrawingTextStyle
   tool: DrawingToolKey
   trendPointPrices?: [number | undefined, number | undefined]
@@ -92,8 +95,30 @@ const drawingTools: DrawingTool[] = [
   { key: 'ruler', label: '\u6807\u5c3a', tabs: ['style', 'text', 'coords'] },
   { key: 'fibRetracement', label: '\u6590\u6ce2\u90a3\u5951\u56de\u64a4', tabs: ['style', 'coords'] },
   { key: 'morganRange', label: '\u6469\u6839\u533a\u95f4' },
+  { key: 'emojiSticker', label: '\u8868\u60c5\u8d34\u7eb8', tabs: ['style'] },
   { key: 'cursor', label: '\u5149\u6807' },
 ]
+
+const emojiStickerCategories = [
+  { key: 'recent', icon: '\u25f7', label: '\u6700\u8fd1\u4f7f\u7528', items: ['9\ufe0f\u20e3', '\ud83d\ude00'] },
+  { key: 'faces', icon: '\u263a', label: '\u7b11\u8138\u548c\u4eba\u50cf', items: ['\ud83d\ude00', '\ud83d\ude03', '\ud83d\ude04', '\ud83d\ude01', '\ud83d\ude06', '\ud83d\ude05', '\ud83d\ude02', '\ud83e\udd23', '\ud83d\ude0a', '\ud83d\ude07', '\ud83d\ude42', '\ud83d\ude43', '\ud83d\ude09', '\ud83d\ude0c', '\ud83d\ude0d', '\ud83e\udd70', '\ud83d\ude18', '\ud83d\ude17', '\ud83d\ude19', '\ud83d\ude1a', '\ud83d\ude0b', '\ud83d\ude1b', '\ud83d\ude1d', '\ud83d\ude1c', '\ud83e\udd2a', '\ud83e\udd28', '\ud83e\udd13', '\ud83d\ude0e', '\ud83e\udd73', '\ud83e\udd79', '\ud83d\ude22', '\ud83d\ude2d', '\ud83d\ude21', '\ud83d\ude08', '\ud83d\udc7f', '\ud83e\udd21', '\ud83d\udca9', '\ud83d\udc7b', '\ud83d\udc80', '\ud83d\udc7d', '\ud83e\udd16', '\ud83d\ude40', '\ud83d\ude4c', '\ud83d\udc4f', '\ud83d\udc4d', '\ud83d\udc4e', '\ud83d\udc4a', '\u270c\ufe0f', '\ud83e\udd1d'] },
+  { key: 'animals', icon: '\ud83e\udd84', label: '\u52a8\u7269\u548c\u81ea\u7136', items: ['\ud83e\udd84', '\ud83d\ude3a', '\ud83d\ude38', '\ud83d\ude39', '\ud83d\ude3b', '\ud83d\ude3c', '\ud83d\ude3d', '\ud83d\ude40', '\ud83d\ude3f', '\ud83d\ude3e', '\ud83d\udc36', '\ud83d\udc31', '\ud83d\udc2d', '\ud83d\udc39', '\ud83d\udc30', '\ud83e\udd8a', '\ud83d\udc3b', '\ud83d\udc3c', '\ud83d\udc28', '\ud83d\udc2f', '\ud83e\udd81', '\ud83d\udc2e', '\ud83d\udc37', '\ud83d\udc38', '\ud83d\udc35', '\ud83d\udc14', '\ud83d\udc27', '\ud83d\udc26', '\ud83e\udd86', '\ud83e\udd85', '\ud83e\udd89', '\ud83e\udd87'] },
+  { key: 'food', icon: '\ud83c\udf72', label: '\u98df\u7269\u548c\u996e\u6599', items: ['\ud83c\udf72', '\ud83c\udf54', '\ud83c\udf5f', '\ud83c\udf55', '\ud83c\udf2d', '\ud83c\udf2e', '\ud83c\udf2f', '\ud83e\udd59', '\ud83e\udd57', '\ud83c\udf7f', '\ud83e\uddc2', '\ud83e\udd53', '\ud83c\udf73', '\ud83e\udd5e', '\ud83c\udf5e', '\ud83e\udd50', '\ud83e\udd68', '\ud83c\udf4e', '\ud83c\udf4c', '\ud83c\udf49', '\ud83c\udf47', '\ud83c\udf53', '\ud83e\udd64', '\u2615'] },
+  { key: 'sports', icon: '\ud83c\udfc0', label: '\u6d3b\u52a8', items: ['\ud83c\udfc0', '\u26bd', '\ud83c\udfc8', '\u26be', '\ud83c\udfbe', '\ud83c\udfd0', '\ud83c\udfc9', '\ud83c\udfb1', '\ud83e\ude80', '\ud83c\udfaf', '\ud83c\udfb2', '\ud83c\udfae', '\ud83c\udfb0', '\ud83c\udfb8', '\ud83e\udd41', '\ud83c\udfa7', '\ud83c\udfac', '\ud83c\udfa8', '\ud83c\udfc6', '\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49', '\ud83c\udf96\ufe0f', '\ud83c\udff5\ufe0f'] },
+  { key: 'travel', icon: '\ud83d\ude80', label: '\u65c5\u884c\u548c\u5730\u70b9', items: ['\ud83d\ude80', '\u2708\ufe0f', '\ud83d\ude81', '\ud83d\ude82', '\ud83d\ude97', '\ud83d\ude95', '\ud83d\ude99', '\ud83d\ude8c', '\ud83d\ude9a', '\ud83c\udfcd\ufe0f', '\ud83d\udef8', '\u26f5', '\ud83d\udea2', '\u26fd', '\ud83d\udea6', '\ud83d\udea7', '\ud83c\udfd4\ufe0f', '\ud83c\udfd6\ufe0f', '\ud83c\udf0b', '\ud83c\udf03', '\ud83c\udf09', '\ud83c\udfdf\ufe0f', '\ud83c\udfe6', '\ud83d\uddfa\ufe0f'] },
+  { key: 'objects', icon: '\ud83d\udca1', label: '\u7269\u4ef6', items: ['\ud83d\udca1', '\ud83d\udcbb', '\ud83d\udcf1', '\u231a', '\ud83d\udcf7', '\ud83c\udfa5', '\ud83d\udd0d', '\ud83d\udd12', '\ud83d\udd11', '\ud83d\udd28', '\u2699\ufe0f', '\ud83e\uddf2', '\ud83e\uddea', '\ud83d\udcc8', '\ud83d\udcc9', '\ud83d\udcb0', '\ud83d\udcb5', '\ud83d\udc8e', '\ud83d\udccc', '\ud83d\udce2', '\ud83d\udd14', '\u23f0', '\ud83d\udce6', '\ud83d\udee1\ufe0f'] },
+  { key: 'symbols', icon: '\u2764\ufe0f', label: '\u7b26\u53f7', items: ['\u2764\ufe0f', '\ud83d\udc9b', '\ud83d\udc9a', '\ud83d\udc99', '\ud83d\udc9c', '\ud83d\udda4', '\ud83d\udcaf', '\u2705', '\u274c', '\u26a0\ufe0f', '\u2b50', '\u2728', '\u26a1', '\ud83d\udd25', '\ud83d\udd34', '\ud83d\udd35', '\ud83d\udfe2', '\ud83d\udfe1', '\u2b06\ufe0f', '\u2b07\ufe0f', '\u2197\ufe0f', '\u2198\ufe0f', '\u267b\ufe0f', '\u3030\ufe0f'] },
+  { key: 'flags', icon: '\ud83c\udff3\ufe0f', label: '\u65d7\u5e1c', items: ['\ud83c\udff3\ufe0f', '\ud83c\udff4', '\ud83c\udfc1', '\ud83d\udea9', '\ud83c\udde8\ud83c\uddf3', '\ud83c\uddfa\ud83c\uddf8', '\ud83c\udde7\ud83c\uddf7', '\ud83c\udde9\ud83c\uddea', '\ud83c\uddeb\ud83c\uddf7', '\ud83c\uddec\ud83c\udde7', '\ud83c\uddef\ud83c\uddf5', '\ud83c\uddf0\ud83c\uddf7', '\ud83c\uddf8\ud83c\uddec', '\ud83c\uddea\ud83c\uddfa', '\ud83c\uddf2\ud83c\uddfd', '\ud83c\udde6\ud83c\uddfa'] },
+] as const
+
+const stickerIconCategories = [
+  { key: 'arrows', icon: '\u2197', label: '\u7bad\u5934', items: ['\u2191', '\u2193', '\u2190', '\u2192', '\u2197', '\u2198', '\u2196', '\u2199', '\u21d1', '\u21d3', '\u21d0', '\u21d2', '\u27f0', '\u27f1', '\u21ba', '\u21bb', '\u2b06', '\u2b07', '\u2b05', '\u27a1', '\u2b08', '\u2b0a', '\u2b09', '\u2b0b'] },
+  { key: 'signals', icon: '\u25b2', label: '\u4ea4\u6613\u6807\u8bb0', items: ['\u25b2', '\u25bc', '\u25b3', '\u25bd', '\u25c6', '\u25c7', '\u25cf', '\u25cb', '\u25a0', '\u25a1', '\u25b6', '\u25c0', '\u2715', '\u2713', '\u002b', '\u2212', 'TP', 'SL', 'BUY', 'SELL', 'LONG', 'SHORT', 'BOS', 'CHOCH'] },
+  { key: 'shapes', icon: '\u25a3', label: '\u5f62\u72b6', items: ['\u25a0', '\u25a1', '\u25ad', '\u25af', '\u25b0', '\u25b1', '\u25c6', '\u25c7', '\u25cf', '\u25cb', '\u25ce', '\u25cc', '\u25b2', '\u25bc', '\u25c0', '\u25b6', '\u2605', '\u2606', '\u25c9', '\u25cd', '\u25e6', '\u25aa', '\u25ab', '\u25ac'] },
+  { key: 'math', icon: '\u00b1', label: '\u6570\u5b66\u7b26\u53f7', items: ['\u00b1', '\u00d7', '\u00f7', '\u2248', '\u2260', '\u2264', '\u2265', '\u221e', '\u0394', '\u03a3', '\u03c0', '\u03bc', '\u03b1', '\u03b2', '\u03b3', '\u03bb', '\u03c3', '\u03c9', '\u2192', '\u21d2', '\u2227', '\u2228', '\u2229', '\u222a'] },
+] as const
+
+type EmojiStickerMode = 'emoji' | 'sticker' | 'icon'
 
 const tabLabels: Record<DrawingTab, string> = {
   coords: '\u5750\u6807',
@@ -103,6 +128,11 @@ const tabLabels: Record<DrawingTab, string> = {
 
 function normalizeToolKey(value: string): DrawingToolKey {
   return drawingTools.some((tool) => tool.key === value) ? value as DrawingToolKey : 'horizontalLine'
+}
+
+function normalizeStickerSizeInput(value: unknown) {
+  const size = Number(value)
+  return Number.isFinite(size) ? Math.max(12, Math.min(Math.round(size), 96)) : 28
 }
 
 function readInitialSelectedTool() {
@@ -182,6 +212,12 @@ export function DrawingsDrawer() {
   const [quickMeasureEnabled, setQuickMeasureEnabled] = useState(readQuickMeasureEnabled)
   const [cursorMode, setCursorMode] = useState<CursorMode>(readChartCursorMode)
   const [topHeight, setTopHeight] = useState(defaultTopHeight)
+  const [selectedEmojiCategory, setSelectedEmojiCategory] = useState<(typeof emojiStickerCategories)[number]['key']>('faces')
+  const [selectedStickerIconCategory, setSelectedStickerIconCategory] = useState<(typeof stickerIconCategories)[number]['key']>('arrows')
+  const [emojiStickerMode, setEmojiStickerMode] = useState<EmojiStickerMode>('icon')
+  const [selectedEmoji, setSelectedEmoji] = useState('\u25c6')
+  const [stickerColor, setStickerColor] = useState('#111827')
+  const [stickerSize, setStickerSize] = useState(28)
   const selectedTool = drawingTools.find((tool) => tool.key === selectedKey) ?? drawingTools[0]
   const selectedPersisted = persistedTools[selectedKey] !== false
   const selectedLocked = selectedDrawing?.tool === selectedKey ? selectedDrawing.locked : lockedTools[selectedKey] === true
@@ -287,6 +323,11 @@ export function DrawingsDrawer() {
         setSelectedKey(event.detail.tool)
         writeString(selectedToolStorageKey, event.detail.tool)
       }
+      if (event.detail.tool === 'emojiSticker') {
+        if (typeof event.detail.stickerSymbol === 'string') setSelectedEmoji(event.detail.stickerSymbol)
+        if (typeof event.detail.stickerColor === 'string') setStickerColor(event.detail.stickerColor)
+        if (typeof event.detail.stickerSize === 'number') setStickerSize(event.detail.stickerSize)
+      }
       setSelectedDrawing((current) => {
         if (!event.detail.selected) {
           return current?.tool === event.detail.tool ? null : current
@@ -313,6 +354,9 @@ export function DrawingsDrawer() {
           price: event.detail.price,
           rulerStyle: event.detail.rulerStyle,
           showPriceLabel: event.detail.showPriceLabel,
+          stickerColor: event.detail.stickerColor,
+          stickerSize: event.detail.stickerSize,
+          stickerSymbol: event.detail.stickerSymbol,
           textStyle: event.detail.textStyle,
           tool: event.detail.tool,
           trendPointPrices: event.detail.trendPointPrices,
@@ -442,6 +486,17 @@ export function DrawingsDrawer() {
       })
       return
     }
+    if (selectedKey === 'emojiSticker') {
+      publishDrawingToolCommand({
+        action: 'start',
+        locked: selectedLocked,
+        stickerColor,
+        stickerSize,
+        stickerSymbol: selectedEmoji,
+        tool: 'emojiSticker',
+      })
+      return
+    }
     if (selectedKey !== 'horizontalLine') return
     publishDrawingToolCommand({
       action: 'start',
@@ -519,7 +574,7 @@ export function DrawingsDrawer() {
 
   function releaseSelectedTool() {
     setArmedKey(null)
-    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler' && selectedKey !== 'fibRetracement' && selectedKey !== 'morganRange') return
+    if (selectedKey !== 'horizontalLine' && selectedKey !== 'trendLine' && selectedKey !== 'ruler' && selectedKey !== 'fibRetracement' && selectedKey !== 'morganRange' && selectedKey !== 'emojiSticker') return
     publishDrawingToolCommand({
       action: 'release',
       tool: selectedKey,
@@ -539,10 +594,10 @@ export function DrawingsDrawer() {
   }
 
   function deleteSelectedDrawing() {
-    const targetTool = selectedDrawing?.tool === 'horizontalLine' || selectedDrawing?.tool === 'trendLine' || selectedDrawing?.tool === 'ruler' || selectedDrawing?.tool === 'fibRetracement'
+    const targetTool = selectedDrawing?.tool === 'horizontalLine' || selectedDrawing?.tool === 'trendLine' || selectedDrawing?.tool === 'ruler' || selectedDrawing?.tool === 'fibRetracement' || selectedDrawing?.tool === 'emojiSticker'
       ? selectedDrawing.tool
       : selectedKey
-    if (targetTool !== 'horizontalLine' && targetTool !== 'trendLine' && targetTool !== 'ruler' && targetTool !== 'fibRetracement') return
+    if (targetTool !== 'horizontalLine' && targetTool !== 'trendLine' && targetTool !== 'ruler' && targetTool !== 'fibRetracement' && targetTool !== 'emojiSticker') return
     publishDrawingToolCommand({
       action: 'deleteSelected',
       tool: targetTool,
@@ -578,6 +633,38 @@ export function DrawingsDrawer() {
       lineStyle: value,
       tool: selectedKey,
     })
+  }
+
+  function updateSelectedStickerStyle(next: { color?: string; size?: number; symbol?: string }) {
+    const nextColor = next.color ?? stickerColor
+    const nextSize = normalizeStickerSizeInput(next.size ?? stickerSize)
+    const nextSymbol = next.symbol ?? selectedEmoji
+    setStickerColor(nextColor)
+    setStickerSize(nextSize)
+    setSelectedEmoji(nextSymbol)
+    setSelectedDrawing((current) => current?.tool === 'emojiSticker'
+      ? { ...current, stickerColor: nextColor, stickerSize: nextSize, stickerSymbol: nextSymbol }
+      : current)
+    publishDrawingToolCommand({
+      action: 'updateSelectedStickerStyle',
+      locked: selectedLocked,
+      stickerColor: nextColor,
+      stickerSize: nextSize,
+      stickerSymbol: nextSymbol,
+      tool: 'emojiSticker',
+    })
+  }
+
+  function setSelectedStickerColor(value: SettingsSwatchValue) {
+    updateSelectedStickerStyle({ color: value.hex })
+  }
+
+  function setSelectedStickerSize(value: number) {
+    updateSelectedStickerStyle({ size: value })
+  }
+
+  function setSelectedStickerSymbol(symbol: string) {
+    updateSelectedStickerStyle({ symbol })
   }
 
   function setSelectedTextStyle(value: DrawingTextStyle) {
@@ -750,6 +837,43 @@ export function DrawingsDrawer() {
                 />
               </div>
             </div>
+          ) : selectedKey === 'emojiSticker' ? (
+            <>
+              <DrawingToolActionControls
+                armed={armedKey === selectedKey}
+                locked={selectedLocked}
+                onArm={armSelectedTool}
+                onDelete={deleteSelectedDrawing}
+                onRelease={releaseSelectedTool}
+                onToggleLock={() => setLockedTools((current) => ({ ...current, [selectedKey]: !selectedLocked }))}
+                selected={selectedDrawing?.tool === selectedKey}
+                toolLabel={selectedTool.label}
+              />
+              <div className="ff-drawing-hline-settings-v1">
+                <DrawingToolTabs
+                  activeKey="style"
+                  ariaLabel={`${selectedTool.label} settings`}
+                  onChange={() => undefined}
+                  tabs={[{ key: 'style', label: tabLabels.style }]}
+                  renderPanel={() => (
+                    <EmojiStickerPanel
+                      activeCategory={selectedEmojiCategory}
+                      activeIconCategory={selectedStickerIconCategory}
+                      mode={emojiStickerMode}
+                      selectedColor={stickerColor}
+                      selectedEmoji={selectedEmoji}
+                      selectedSize={stickerSize}
+                      onCategoryChange={setSelectedEmojiCategory}
+                      onColorChange={setSelectedStickerColor}
+                      onEmojiSelect={setSelectedStickerSymbol}
+                      onIconCategoryChange={setSelectedStickerIconCategory}
+                      onModeChange={setEmojiStickerMode}
+                      onSizeChange={setSelectedStickerSize}
+                    />
+                  )}
+                />
+              </div>
+            </>
           ) : (
             <>
               <DrawingToolActionControls
@@ -821,6 +945,109 @@ export function DrawingsDrawer() {
         </div>
       </div>
     </section>
+  )
+}
+
+function EmojiStickerPanel({
+  activeCategory,
+  activeIconCategory,
+  mode,
+  onCategoryChange,
+  onColorChange,
+  onEmojiSelect,
+  onIconCategoryChange,
+  onModeChange,
+  onSizeChange,
+  selectedColor,
+  selectedEmoji,
+  selectedSize,
+}: {
+  activeCategory: (typeof emojiStickerCategories)[number]['key']
+  activeIconCategory: (typeof stickerIconCategories)[number]['key']
+  mode: EmojiStickerMode
+  onCategoryChange: (key: (typeof emojiStickerCategories)[number]['key']) => void
+  onColorChange: (value: SettingsSwatchValue) => void
+  onEmojiSelect: (emoji: string) => void
+  onIconCategoryChange: (key: (typeof stickerIconCategories)[number]['key']) => void
+  onModeChange: (mode: EmojiStickerMode) => void
+  onSizeChange: (value: number) => void
+  selectedColor: string
+  selectedEmoji: string
+  selectedSize: number
+}) {
+  const active = emojiStickerCategories.find((category) => category.key === activeCategory) ?? emojiStickerCategories[0]
+  const activeIcon = stickerIconCategories.find((category) => category.key === activeIconCategory) ?? stickerIconCategories[0]
+  const categories = mode === 'icon' || mode === 'sticker' ? stickerIconCategories : emojiStickerCategories
+  const activeLabel = mode === 'icon' || mode === 'sticker' ? activeIcon.label : active.label
+  const activeItems = mode === 'icon' || mode === 'sticker' ? activeIcon.items : active.items
+
+  return (
+    <div className="ff-drawing-emoji-sticker-v1" data-mode={mode}>
+      <div className="ff-drawing-emoji-sticker-v1__category-tabs" role="tablist" aria-label="Emoji sticker categories">
+        {categories.map((category) => (
+          <button
+            aria-label={category.label}
+            aria-selected={mode === 'icon' || mode === 'sticker' ? activeIconCategory === category.key : activeCategory === category.key}
+            className="ff-drawing-emoji-sticker-v1__category-tab"
+            data-active={(mode === 'icon' || mode === 'sticker' ? activeIconCategory === category.key : activeCategory === category.key) ? 'true' : 'false'}
+            key={category.key}
+            onClick={() => {
+              if (mode === 'icon' || mode === 'sticker') {
+                onIconCategoryChange(category.key as (typeof stickerIconCategories)[number]['key'])
+                return
+              }
+              onCategoryChange(category.key as (typeof emojiStickerCategories)[number]['key'])
+            }}
+            role="tab"
+            title={category.label}
+            type="button"
+          >
+            {category.icon}
+          </button>
+        ))}
+      </div>
+      <div className="ff-drawing-emoji-sticker-v1__selected" aria-live="polite">
+        <span className="ff-drawing-emoji-sticker-v1__preview">{selectedEmoji}</span>
+        <span>{activeLabel}</span>
+      </div>
+      <div className="ff-drawing-emoji-sticker-v1__grid" role="listbox" aria-label={activeLabel}>
+        {activeItems.map((emoji) => (
+          <button
+            aria-selected={selectedEmoji === emoji}
+            className="ff-drawing-emoji-sticker-v1__item"
+            data-active={selectedEmoji === emoji ? 'true' : 'false'}
+            key={emoji}
+            onClick={() => onEmojiSelect(emoji)}
+            role="option"
+            type="button"
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+      <div className="ff-drawing-emoji-sticker-v1__footer">
+        <button data-active={mode === 'emoji' ? 'true' : undefined} onClick={() => onModeChange('emoji')} type="button">表情符号</button>
+        <button data-active={mode === 'sticker' ? 'true' : undefined} onClick={() => onModeChange('sticker')} type="button">贴纸</button>
+        <button data-active={mode === 'icon' ? 'true' : undefined} onClick={() => onModeChange('icon')} type="button">图标</button>
+      </div>
+      <div className="ff-drawing-emoji-sticker-v1__style-row">
+        <div className="ff-drawing-emoji-sticker-v1__style-label">颜色</div>
+        <SettingsColorSwatch
+          color={selectedColor}
+          value={{ hex: selectedColor, opacity: 1 }}
+          onChange={onColorChange}
+        />
+        <input
+          aria-label="Sticker size"
+          className="ff-drawing-emoji-sticker-v1__size-input"
+          max={96}
+          min={12}
+          onChange={(event) => onSizeChange(Number(event.target.value))}
+          type="number"
+          value={selectedSize}
+        />
+      </div>
+    </div>
   )
 }
 

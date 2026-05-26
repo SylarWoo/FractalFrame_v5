@@ -2,10 +2,10 @@ import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import type { DrawingTextStyle, DrawingTrendLineStyle } from './drawingPersistence'
 import type { DrawingRulerStyle } from './rulerDrawingStyle'
 
-export type DrawingCommandTool = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange'
+export type DrawingCommandTool = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange' | 'emojiSticker'
 
 export type DrawingToolCommand = {
-  action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateQuickMeasureEnabled' | 'updateSelectedFibRetracementStyle' | 'updateSelectedFibTrendLine' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedRulerStyle' | 'updateSelectedTextStyle' | 'updateSelectedTrendLinePointPrice' | 'updateSelectedTrendLineStyle'
+  action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateQuickMeasureEnabled' | 'updateSelectedFibRetracementStyle' | 'updateSelectedFibTrendLine' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedRulerStyle' | 'updateSelectedStickerStyle' | 'updateSelectedTextStyle' | 'updateSelectedTrendLinePointPrice' | 'updateSelectedTrendLineStyle'
   enabled?: boolean
   fibBackgroundOpacity?: number
   fibBackgroundVisible?: boolean
@@ -30,6 +30,9 @@ export type DrawingToolCommand = {
   pointIndex?: number
   rulerStyle?: DrawingRulerStyle
   showPriceLabel?: boolean
+  stickerColor?: string
+  stickerSize?: number
+  stickerSymbol?: string
   textStyle?: DrawingTextStyle
   tool: DrawingCommandTool
   trendLineStyle?: DrawingTrendLineStyle
@@ -58,6 +61,9 @@ export type DrawingToolState = {
   price?: number
   selected: boolean
   showPriceLabel: boolean
+  stickerColor?: string
+  stickerSize?: number
+  stickerSymbol?: string
   textStyle?: DrawingTextStyle
   tool: DrawingCommandTool
   trendPointPrices?: [number | undefined, number | undefined]
@@ -80,7 +86,7 @@ export function publishDrawingToolCommand(command: Omit<DrawingToolCommand, 'id'
 export function isDrawingToolCommandEvent(event: Event): event is CustomEvent<DrawingToolCommand> {
   return event instanceof CustomEvent
     && event.type === drawingToolCommandEvent
-    && (event.detail?.tool === 'horizontalLine' || event.detail?.tool === 'trendLine' || event.detail?.tool === 'ruler' || event.detail?.tool === 'fibRetracement' || event.detail?.tool === 'morganRange')
+    && (event.detail?.tool === 'horizontalLine' || event.detail?.tool === 'trendLine' || event.detail?.tool === 'ruler' || event.detail?.tool === 'fibRetracement' || event.detail?.tool === 'morganRange' || event.detail?.tool === 'emojiSticker')
 }
 
 export function publishDrawingToolState(state: DrawingToolState) {
@@ -90,5 +96,5 @@ export function publishDrawingToolState(state: DrawingToolState) {
 export function isDrawingToolStateEvent(event: Event): event is CustomEvent<DrawingToolState> {
   return event instanceof CustomEvent
     && event.type === drawingToolStateEvent
-    && (event.detail?.tool === 'horizontalLine' || event.detail?.tool === 'trendLine' || event.detail?.tool === 'ruler' || event.detail?.tool === 'fibRetracement' || event.detail?.tool === 'morganRange')
+    && (event.detail?.tool === 'horizontalLine' || event.detail?.tool === 'trendLine' || event.detail?.tool === 'ruler' || event.detail?.tool === 'fibRetracement' || event.detail?.tool === 'morganRange' || event.detail?.tool === 'emojiSticker')
 }
