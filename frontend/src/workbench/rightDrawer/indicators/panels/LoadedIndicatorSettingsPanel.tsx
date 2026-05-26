@@ -94,7 +94,7 @@ export function LoadedIndicatorSettingsPanel({
   const panelRegistry: Partial<Record<SupportedChartIndicator, Record<Exclude<IndicatorSettingsTab, 'visibility'>, ReactNode>>> = {
     DPO: {
       input: <DpoInputPanel onSettingsChange={onDpoSettingsChange} settings={dpoSettings} />,
-      style: <DpoStylePanel onSettingsChange={onDpoSettingsChange} settings={dpoSettings} />,
+      style: <DpoStylePanel controlsOffsetPx={80} onSettingsChange={onDpoSettingsChange} settings={dpoSettings} showBand2Levels />,
     },
     MA: {
       input: <MaInputPanel onSettingsChange={onMaSettingsChange} settings={maSettings} />,

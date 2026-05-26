@@ -284,6 +284,10 @@
   grid-template-columns: 64px max-content max-content;
 }
 
+.ff-indicators-dpo-style-panel-v1--offset-controls .ff-indicators-style-row-v1 {
+  grid-template-columns: calc(64px + var(--ff-indicators-dpo-controls-offset, 0px)) max-content max-content;
+}
+
 .ff-indicators-dpo-style-panel-v1__precision-row {
   grid-template-columns: 64px max-content;
   justify-content: start;

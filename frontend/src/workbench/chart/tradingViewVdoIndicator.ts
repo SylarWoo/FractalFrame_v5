@@ -272,7 +272,9 @@ export function ensureTradingViewVdoIndicator() {
       drawHorizontalBand(ctx, bounding, yAxis, settings)
       drawHorizontalLine(ctx, bounding, yAxis, settings.zeroLineVisible, 0, settings.zeroLineColor, settings.zeroLineStyle, settings.zeroLineWidth, settings.zeroLineOpacity)
       drawHorizontalLine(ctx, bounding, yAxis, settings.upLineVisible, settings.upLineValue, settings.upLineColor, settings.upLineStyle, settings.upLineWidth, settings.upLineOpacity)
+      drawHorizontalLine(ctx, bounding, yAxis, settings.upLine2Visible, settings.upLine2Value, settings.upLine2Color, settings.upLine2Style, settings.upLine2Width, settings.upLine2Opacity)
       drawHorizontalLine(ctx, bounding, yAxis, settings.downLineVisible, settings.downLineValue, settings.downLineColor, settings.downLineStyle, settings.downLineWidth, settings.downLineOpacity)
+      drawHorizontalLine(ctx, bounding, yAxis, settings.downLine2Visible, settings.downLine2Value, settings.downLine2Color, settings.downLine2Style, settings.downLine2Width, settings.downLine2Opacity)
       drawLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, settings)
       return true
     },

@@ -23,6 +23,12 @@ export type DpoIndicatorSettings = {
   dpoOpacity: number
   dpoVisible: boolean
   downLineColor: string
+  downLine2Color: string
+  downLine2Style: RsiLineStyle
+  downLine2Width: number
+  downLine2Opacity: number
+  downLine2Value: number
+  downLine2Visible: boolean
   downLineStyle: RsiLineStyle
   downLineWidth: number
   downLineOpacity: number
@@ -34,6 +40,12 @@ export type DpoIndicatorSettings = {
   precision: RsiPrecision
   timeframe: VwapTimeframe
   upLineColor: string
+  upLine2Color: string
+  upLine2Style: RsiLineStyle
+  upLine2Width: number
+  upLine2Opacity: number
+  upLine2Value: number
+  upLine2Visible: boolean
   upLineStyle: RsiLineStyle
   upLineWidth: number
   upLineOpacity: number
@@ -679,6 +691,12 @@ export const defaultDpoIndicatorSettings: DpoIndicatorSettings = {
   dpoOpacity: 1,
   dpoVisible: true,
   downLineColor: '#ef5350',
+  downLine2Color: '#787b86',
+  downLine2Style: 'dashed',
+  downLine2Width: 1,
+  downLine2Opacity: 1,
+  downLine2Value: -11,
+  downLine2Visible: true,
   downLineStyle: 'dashed',
   downLineWidth: 1,
   downLineOpacity: 1,
@@ -690,6 +708,12 @@ export const defaultDpoIndicatorSettings: DpoIndicatorSettings = {
   precision: 'system',
   timeframe: 'chart',
   upLineColor: '#26a69a',
+  upLine2Color: '#787b86',
+  upLine2Style: 'dashed',
+  upLine2Width: 1,
+  upLine2Opacity: 1,
+  upLine2Value: 11,
+  upLine2Visible: true,
   upLineStyle: 'dashed',
   upLineWidth: 1,
   upLineOpacity: 1,
@@ -708,11 +732,15 @@ export const defaultDpoIndicatorSettings: DpoIndicatorSettings = {
 export const defaultVdoIndicatorSettings: VdoIndicatorSettings = {
   ...defaultDpoIndicatorSettings,
   backgroundVisible: true,
+  downLine2Value: -0.05,
+  downLine2Visible: true,
   downLineValue: -0.236,
   downLineVisible: true,
   dpoColor: '#2962ff',
   emaSmoothing: 0,
   length: 120,
+  upLine2Value: 0.05,
+  upLine2Visible: true,
   upLineValue: 0.236,
   upLineVisible: true,
 }
@@ -1062,9 +1090,15 @@ export function normalizeDpoSettings(input?: Partial<DpoIndicatorSettings>): Dpo
   const length = Math.round(Number(merged.length))
   const dpoLineWidth = Math.round(Number(merged.dpoLineWidth))
   const dpoOpacity = Number(merged.dpoOpacity)
+  const downLine2Width = Math.round(Number(merged.downLine2Width))
+  const downLine2Opacity = Number(merged.downLine2Opacity)
+  const downLine2Value = Number(merged.downLine2Value)
   const downLineWidth = Math.round(Number(merged.downLineWidth))
   const downLineOpacity = Number(merged.downLineOpacity)
   const downLineValue = Number(merged.downLineValue)
+  const upLine2Width = Math.round(Number(merged.upLine2Width))
+  const upLine2Opacity = Number(merged.upLine2Opacity)
+  const upLine2Value = Number(merged.upLine2Value)
   const upLineWidth = Math.round(Number(merged.upLineWidth))
   const upLineOpacity = Number(merged.upLineOpacity)
   const upLineValue = Number(merged.upLineValue)
@@ -1080,6 +1114,11 @@ export function normalizeDpoSettings(input?: Partial<DpoIndicatorSettings>): Dpo
     dpoLineWidth: Number.isFinite(dpoLineWidth) ? Math.max(1, Math.min(dpoLineWidth, 4)) : defaultDpoIndicatorSettings.dpoLineWidth,
     dpoOpacity: Number.isFinite(dpoOpacity) ? Math.max(0, Math.min(dpoOpacity, 1)) : defaultDpoIndicatorSettings.dpoOpacity,
     dpoVisible: merged.dpoVisible !== false,
+    downLine2Style: merged.downLine2Style === 'solid' || merged.downLine2Style === 'dotted' ? merged.downLine2Style : 'dashed',
+    downLine2Width: Number.isFinite(downLine2Width) ? Math.max(1, Math.min(downLine2Width, 4)) : defaultDpoIndicatorSettings.downLine2Width,
+    downLine2Opacity: Number.isFinite(downLine2Opacity) ? Math.max(0, Math.min(downLine2Opacity, 1)) : defaultDpoIndicatorSettings.downLine2Opacity,
+    downLine2Value: Number.isFinite(downLine2Value) ? downLine2Value : defaultDpoIndicatorSettings.downLine2Value,
+    downLine2Visible: merged.downLine2Visible !== false,
     downLineStyle: merged.downLineStyle === 'solid' || merged.downLineStyle === 'dotted' ? merged.downLineStyle : 'dashed',
     downLineWidth: Number.isFinite(downLineWidth) ? Math.max(1, Math.min(downLineWidth, 4)) : defaultDpoIndicatorSettings.downLineWidth,
     downLineOpacity: Number.isFinite(downLineOpacity) ? Math.max(0, Math.min(downLineOpacity, 1)) : defaultDpoIndicatorSettings.downLineOpacity,
@@ -1090,6 +1129,11 @@ export function normalizeDpoSettings(input?: Partial<DpoIndicatorSettings>): Dpo
     length: Number.isFinite(length) ? Math.max(1, Math.min(length, 500)) : defaultDpoIndicatorSettings.length,
     precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
     timeframe: ['chart', '1m', '5m', '15m', '30m', '1h', '4h', '1d'].includes(merged.timeframe) ? merged.timeframe : 'chart',
+    upLine2Style: merged.upLine2Style === 'solid' || merged.upLine2Style === 'dotted' ? merged.upLine2Style : 'dashed',
+    upLine2Width: Number.isFinite(upLine2Width) ? Math.max(1, Math.min(upLine2Width, 4)) : defaultDpoIndicatorSettings.upLine2Width,
+    upLine2Opacity: Number.isFinite(upLine2Opacity) ? Math.max(0, Math.min(upLine2Opacity, 1)) : defaultDpoIndicatorSettings.upLine2Opacity,
+    upLine2Value: Number.isFinite(upLine2Value) ? upLine2Value : defaultDpoIndicatorSettings.upLine2Value,
+    upLine2Visible: merged.upLine2Visible !== false,
     upLineStyle: merged.upLineStyle === 'solid' || merged.upLineStyle === 'dotted' ? merged.upLineStyle : 'dashed',
     upLineWidth: Number.isFinite(upLineWidth) ? Math.max(1, Math.min(upLineWidth, 4)) : defaultDpoIndicatorSettings.upLineWidth,
     upLineOpacity: Number.isFinite(upLineOpacity) ? Math.max(0, Math.min(upLineOpacity, 1)) : defaultDpoIndicatorSettings.upLineOpacity,

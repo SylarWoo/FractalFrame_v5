@@ -1,6 +1,7 @@
 export { VolInputPanel, VolStylePanel } from './VolSettingsPanels'
 export { RsiInputPanel, RsiStylePanel } from './RsiSettingsPanels'
 export { MaInputPanel, MaStylePanel } from './MaSettingsPanels'
+import type { CSSProperties } from 'react'
 import { OpenableSelect } from '../../../controls/OpenableSelect'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../../../settings/SettingsSwatches'
 import type {
@@ -829,22 +830,32 @@ export function DpoInputPanel({
 }
 
 export function DpoStylePanel({
+  controlsOffsetPx = 0,
   lineLabel = 'DPO',
   onSettingsChange,
+  showBand2Levels = false,
   showThresholds = true,
   settings,
   zeroLineEditable = true,
 }: {
+  controlsOffsetPx?: number
   lineLabel?: string
   onSettingsChange: (settings: DpoIndicatorSettings) => void
+  showBand2Levels?: boolean
   showThresholds?: boolean
   settings: DpoIndicatorSettings
   zeroLineEditable?: boolean
 }) {
   const patch = (next: Partial<DpoIndicatorSettings>) => onSettingsChange(updateDpoSettings(settings, next))
+  const panelClassName = controlsOffsetPx > 0
+    ? 'ff-indicators-input-panel-v1__tab-panel ff-indicators-style-panel-v1 ff-indicators-dpo-style-panel-v1 ff-indicators-dpo-style-panel-v1--offset-controls'
+    : 'ff-indicators-input-panel-v1__tab-panel ff-indicators-style-panel-v1 ff-indicators-dpo-style-panel-v1'
+  const panelStyle = controlsOffsetPx > 0
+    ? ({ '--ff-indicators-dpo-controls-offset': `${controlsOffsetPx}px` } as CSSProperties)
+    : undefined
 
   return (
-    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-style-panel-v1 ff-indicators-dpo-style-panel-v1" role="tabpanel">
+    <div className={panelClassName} role="tabpanel" style={panelStyle}>
       <div className="ff-indicators-style-row-v1">
         <CheckControl checked={settings.dpoVisible} label={lineLabel} onChange={(dpoVisible) => patch({ dpoVisible })} />
         <SettingsLineSwatch
@@ -891,7 +902,7 @@ export function DpoStylePanel({
       {showThresholds ? (
         <>
           <div className="ff-indicators-style-row-v1">
-            <CheckControl checked={settings.upLineVisible} label="up" onChange={(upLineVisible) => patch({ upLineVisible })} />
+            <CheckControl checked={settings.upLineVisible} label="Upper Band" onChange={(upLineVisible) => patch({ upLineVisible })} />
             <SettingsLineSwatch
               color={settings.upLineColor}
               lineStyle={settings.upLineStyle}
@@ -918,8 +929,38 @@ export function DpoStylePanel({
               />
             </span>
           </div>
+          {showBand2Levels ? (
+            <div className="ff-indicators-style-row-v1">
+              <CheckControl checked={settings.upLine2Visible} label="Upper Band 2 level" onChange={(upLine2Visible) => patch({ upLine2Visible })} />
+              <SettingsLineSwatch
+                color={settings.upLine2Color}
+                lineStyle={settings.upLine2Style}
+                onChange={(value) => patch({
+                  upLine2Color: value.hex,
+                  upLine2Style: value.lineStyle,
+                  upLine2Width: value.thickness,
+                  upLine2Opacity: value.opacity,
+                })}
+                thickness={settings.upLine2Width}
+                value={{
+                  hex: settings.upLine2Color,
+                  lineStyle: settings.upLine2Style,
+                  opacity: settings.upLine2Opacity,
+                  thickness: settings.upLine2Width,
+                }}
+              />
+              <span className="ff-indicators-input-panel-v1__control ff-indicators-dpo-style-panel-v1__level-value">
+                <NumberBox
+                  min={-500}
+                  onChange={(upLine2Value) => patch({ upLine2Value })}
+                  step={0.001}
+                  value={settings.upLine2Value}
+                />
+              </span>
+            </div>
+          ) : null}
           <div className="ff-indicators-style-row-v1">
-            <CheckControl checked={settings.downLineVisible} label="down" onChange={(downLineVisible) => patch({ downLineVisible })} />
+            <CheckControl checked={settings.downLineVisible} label="Lower Band" onChange={(downLineVisible) => patch({ downLineVisible })} />
             <SettingsLineSwatch
               color={settings.downLineColor}
               lineStyle={settings.downLineStyle}
@@ -946,6 +987,36 @@ export function DpoStylePanel({
               />
             </span>
           </div>
+          {showBand2Levels ? (
+            <div className="ff-indicators-style-row-v1">
+              <CheckControl checked={settings.downLine2Visible} label="Lower Band 2 level" onChange={(downLine2Visible) => patch({ downLine2Visible })} />
+              <SettingsLineSwatch
+                color={settings.downLine2Color}
+                lineStyle={settings.downLine2Style}
+                onChange={(value) => patch({
+                  downLine2Color: value.hex,
+                  downLine2Style: value.lineStyle,
+                  downLine2Width: value.thickness,
+                  downLine2Opacity: value.opacity,
+                })}
+                thickness={settings.downLine2Width}
+                value={{
+                  hex: settings.downLine2Color,
+                  lineStyle: settings.downLine2Style,
+                  opacity: settings.downLine2Opacity,
+                  thickness: settings.downLine2Width,
+                }}
+              />
+              <span className="ff-indicators-input-panel-v1__control ff-indicators-dpo-style-panel-v1__level-value">
+                <NumberBox
+                  min={-500}
+                  onChange={(downLine2Value) => patch({ downLine2Value })}
+                  step={0.001}
+                  value={settings.downLine2Value}
+                />
+              </span>
+            </div>
+          ) : null}
           <div className="ff-indicators-style-row-v1">
             <CheckControl checked={settings.backgroundVisible} label="背景" onChange={(backgroundVisible) => patch({ backgroundVisible })} />
             <SettingsColorSwatch
@@ -1001,5 +1072,5 @@ export function VdoStylePanel({
     onSettingsChange({ ...settings, ...next, emaSmoothing: settings.emaSmoothing })
   }
 
-  return <DpoStylePanel lineLabel="VDO" onSettingsChange={handleStyleChange} settings={settings} zeroLineEditable={false} />
+  return <DpoStylePanel controlsOffsetPx={100} lineLabel="VDO" onSettingsChange={handleStyleChange} settings={settings} showBand2Levels zeroLineEditable={false} />
 }
