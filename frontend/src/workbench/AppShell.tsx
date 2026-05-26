@@ -413,6 +413,9 @@ export function AppShell() {
             displayName={chartDisplayName}
             indicatorCommand={indicatorsController.command}
             jump={chartJump}
+            mmfLoaded={loadedIndicatorKeys.includes('MMF')}
+            mmfSettings={indicatorsController.settings.mmf}
+            stochSettings={indicatorsController.settings.stoch}
             onLoadStateChange={setChartLoadState}
             onMorganRangeSegmentChange={setMorganRangeSegment}
             page={chartTarget.page}

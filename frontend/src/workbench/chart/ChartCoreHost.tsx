@@ -46,6 +46,7 @@ const dpoPaneId = 'dpo_pane'
 const vdoPaneId = 'vdo_pane'
 const tsiPaneId = 'tsi_pane'
 const viPaneId = 'vi_pane'
+const mmfIndicatorZLevel = 30
 const rsiPaneHeightStorageKey = 'fractalframe.chart.rsiPaneHeight'
 const stochPaneHeightStorageKey = 'fractalframe.chart.stochPaneHeight'
 const macdPaneHeightStorageKey = 'fractalframe.chart.macdPaneHeight'
@@ -69,12 +70,15 @@ type ChartCoreHostProps = {
   indicatorCommand?: ChartIndicatorCommand | null
   jump?: { id: number; timestamp?: number } | null
   limit?: number
+  mmfLoaded?: boolean
+  mmfSettings?: MmfIndicatorSettings
   onLoadStateChange?: (state: ChartLoadState) => void
   onMorganRangeSegmentChange?: (segment: MorganRangeSegment | null) => void
   page?: ChartPageTarget | null
   period: string
   reloadId?: number
   stepLoad?: { direction: 'left' | 'right'; id: number } | null
+  stochSettings?: StochIndicatorSettings
   symbol: string
   totalRows?: number | null
 }
@@ -140,7 +144,7 @@ function refreshPane(chart: unknown, paneId: string) {
   })
 }
 
-export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
+export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfLoaded = false, mmfSettings, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows }: ChartCoreHostProps) {
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
   const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, page, period, reloadId, symbol, totalRows })
   const realtimeDataReady = !loadState.loading &&
@@ -201,6 +205,17 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const observeViPaneHeight = useCallback(() => observeIndicatorPaneHeight(viPaneId, viPaneHeightStorageKey, viPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const isIndicatorVisibleInCurrentPeriod = useCallback((name: ChartIndicatorCommand['name']) => isStoredVisibilityRangePeriodVisible(`indicator:${name}`, period), [period])
 
+  const buildMmfCalcParams = useCallback((settings?: MmfIndicatorSettings) => [
+    settings,
+    {
+      period,
+      stochDSmoothing: stochSettings?.dSmoothing,
+      stochKSmoothing: stochSettings?.kSmoothing,
+      stochLength: stochSettings?.length,
+      symbol,
+    },
+  ], [period, stochSettings?.dSmoothing, stochSettings?.kSmoothing, stochSettings?.length, symbol])
+
   const publishMorganRangeSegment = useCallback((dataIndex: number | null = morganRangeCrosshairIndexRef.current) => {
     const chart = chartInstanceRef.current
     if (!chart) {
@@ -239,6 +254,41 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
     publishMorganRangeSegment()
   }, [isIndicatorVisibleInCurrentPeriod, onMorganRangeSegmentChange, period, publishMorganRangeSegment])
+
+  const applyMmfCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    ensureTradingViewMmfIndicator()
+
+    if (command.action === 'unload' || !isIndicatorVisibleInCurrentPeriod('MMF')) {
+      chart.removeIndicator('candle_pane', 'MMF')
+      return
+    }
+
+    const settings = command.name === 'MMF' ? command.settings : undefined
+    const calcParams = buildMmfCalcParams(settings)
+    if (chart.getIndicatorByPaneId('candle_pane', 'MMF')) {
+      chart.overrideIndicator({ name: 'MMF', calcParams, zLevel: mmfIndicatorZLevel }, 'candle_pane')
+    } else {
+      chart.createIndicator({ name: 'MMF', calcParams, zLevel: mmfIndicatorZLevel }, true, { id: 'candle_pane' })
+    }
+  }, [buildMmfCalcParams, isIndicatorVisibleInCurrentPeriod])
+
+  useEffect(() => {
+    const chart = chartInstanceRef.current
+    if (!chart) return
+    ensureTradingViewMmfIndicator()
+
+    if (!mmfLoaded || !isIndicatorVisibleInCurrentPeriod('MMF')) {
+      chart.removeIndicator('candle_pane', 'MMF')
+      return
+    }
+
+    const calcParams = buildMmfCalcParams(mmfSettings)
+    if (chart.getIndicatorByPaneId('candle_pane', 'MMF')) {
+      chart.overrideIndicator({ name: 'MMF', calcParams, zLevel: mmfIndicatorZLevel }, 'candle_pane')
+    } else {
+      chart.createIndicator({ name: 'MMF', calcParams, zLevel: mmfIndicatorZLevel }, true, { id: 'candle_pane' })
+    }
+  }, [buildMmfCalcParams, chartInstanceRef, isIndicatorVisibleInCurrentPeriod, mmfLoaded, mmfSettings])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -323,14 +373,14 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       })
       return
     }
+    if (indicatorCommand.name === 'MMF') {
+      applyMmfCommand(chart, indicatorCommand)
+      return
+    }
     const candleIndicatorConfigs: Record<CandleIndicatorCommandName, CandleIndicatorConfig> = {
       MA: {
         ensureRegistered: ensureTradingViewMaShiftIndicator,
         name: 'MA',
-      },
-      MMF: {
-        ensureRegistered: ensureTradingViewMmfIndicator,
-        name: 'MMF',
       },
       VWAP: {
         ensureRegistered: ensureTradingViewVwapIndicator,
@@ -366,6 +416,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       return
     }
   }, [
+    applyMmfCommand,
     applyMorganRangeCommand,
     chartInstanceRef,
     indicatorCommand,

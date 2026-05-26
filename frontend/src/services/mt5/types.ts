@@ -22,3 +22,7 @@ export type {
   Mt5DiagnosticsPayload,
   RuntimeObservabilityPayload,
 } from './diagnosticsTypes'
+export type {
+  MmfIndicatorMarker,
+  MmfIndicatorPayload,
+} from './mmfIndicatorApi'

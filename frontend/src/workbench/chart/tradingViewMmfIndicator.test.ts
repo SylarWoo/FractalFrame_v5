@@ -13,86 +13,104 @@ function createRow(index: number, close: number): KLineData {
   }
 }
 
+function installMocks(dpo: number[], k: number[], d: number[]) {
+  vi.doMock('./tradingViewDpoIndicator', () => ({
+    calculateTradingViewDpoRows: () => dpo.map((value) => ({ dpo: value })),
+  }))
+  vi.doMock('./tradingViewStochIndicator', () => ({
+    calculateTradingViewStochRows: () => k.map((value, index) => ({ k: value, d: d[index] })),
+  }))
+  vi.doMock('./morganRangeModel', () => ({
+    calculateMorganRangeSegments: () => [],
+    getMorganRangeLevel: () => null,
+  }))
+}
+
+function cleanupMocks() {
+  vi.doUnmock('./tradingViewDpoIndicator')
+  vi.doUnmock('./tradingViewStochIndicator')
+  vi.doUnmock('./morganRangeModel')
+}
+
 describe('tradingViewMmfIndicator', () => {
-  it('marks the highest high between a start signal and fast-line confirmation', async () => {
+  it('marks the highest high inside a stochastic high cycle when DPO filters the cycle', async () => {
     vi.resetModules()
-    vi.doMock('./tradingViewDpoIndicator', () => ({
-      calculateTradingViewDpoRows: () => [
-        { dpo: 10 },
-        { dpo: 12 },
-        { dpo: 8 },
-        { dpo: 12 },
-        { dpo: 14 },
-        { dpo: 13 },
-        { dpo: 7 },
-      ],
-    }))
-    vi.doMock('./tradingViewStochIndicator', () => ({
-      calculateTradingViewStochRows: () => [
-        { k: 88, d: 84 },
-        { k: 86, d: 82 },
-        { k: 82, d: 83 },
-        { k: 81, d: 82 },
-        { k: 78, d: 79 },
-        { k: 76, d: 77 },
-        { k: 74, d: 75 },
-      ],
-    }))
-    vi.doMock('./morganRangeModel', () => ({
-      calculateMorganRangeSegments: () => [],
-      getMorganRangeLevel: () => null,
-    }))
+    installMocks(
+      [0, 0, 8, 12, 13, 12, 9, 6],
+      [42, 48, 55, 72, 86, 76, 68, 66],
+      [44, 49, 52, 70, 82, 78, 69, 66],
+    )
 
     const { calculateTradingViewMmfRows } = await import('./tradingViewMmfIndicator')
-    const data = [100, 102, 108, 104, 112, 109, 106].map((close, index) => createRow(index, close))
-    const rows = calculateTradingViewMmfRows(
-      data,
-      { ...defaultMmfIndicatorSettings, dpoValue: 11, highMorganRatio: '0.118', showHigh: true },
-    )
-    const markerIndexes = rows
-      .map((row, index) => Number.isFinite(row.highMarker) ? index : -1)
-      .filter((index) => index >= 0)
+    const data = [100, 102, 108, 104, 112, 109, 106, 103].map((close, index) => createRow(index, close))
+    const rows = calculateTradingViewMmfRows(data, {
+      ...defaultMmfIndicatorSettings,
+      dpoValue: 11,
+      showHigh: true,
+    })
 
-    expect(markerIndexes).toEqual([4])
     expect(rows[4]?.highMarker).toBe(112.5)
-    vi.doUnmock('./tradingViewDpoIndicator')
-    vi.doUnmock('./tradingViewStochIndicator')
-    vi.doUnmock('./morganRangeModel')
+    expect(rows.filter((row) => Number.isFinite(row.highMarker))).toHaveLength(1)
+    cleanupMocks()
   })
 
-  it('does not start from values already above a threshold without an upward break', async () => {
+  it('does not mark a high cycle without Morgan or DPO filter match', async () => {
     vi.resetModules()
-    vi.doMock('./tradingViewDpoIndicator', () => ({
-      calculateTradingViewDpoRows: () => [
-        { dpo: 12 },
-        { dpo: 13 },
-        { dpo: 14 },
-        { dpo: 9 },
-      ],
-    }))
-    vi.doMock('./tradingViewStochIndicator', () => ({
-      calculateTradingViewStochRows: () => [
-        { k: 86, d: 82 },
-        { k: 81, d: 83 },
-        { k: 76, d: 77 },
-        { k: 74, d: 75 },
-      ],
-    }))
-    vi.doMock('./morganRangeModel', () => ({
-      calculateMorganRangeSegments: () => [],
-      getMorganRangeLevel: () => null,
-    }))
+    installMocks(
+      [0, 0, 8, 9, 10, 9, 8, 6],
+      [42, 48, 55, 72, 86, 76, 68, 66],
+      [44, 49, 52, 70, 82, 78, 69, 66],
+    )
+
+    const { calculateTradingViewMmfRows } = await import('./tradingViewMmfIndicator')
+    const data = [100, 102, 108, 104, 112, 109, 106, 103].map((close, index) => createRow(index, close))
+    const rows = calculateTradingViewMmfRows(data, {
+      ...defaultMmfIndicatorSettings,
+      dpoValue: 11,
+      showHigh: true,
+    })
+
+    expect(rows.some((row) => Number.isFinite(row.highMarker))).toBe(false)
+    cleanupMocks()
+  })
+
+  it('does not mark a high cycle when the stochastic top stays inside 70', async () => {
+    vi.resetModules()
+    installMocks(
+      [0, 0, 8, 12, 13, 12, 9, 6],
+      [42, 48, 55, 66, 69, 64, 60, 58],
+      [44, 49, 52, 65, 67, 66, 61, 58],
+    )
+
+    const { calculateTradingViewMmfRows } = await import('./tradingViewMmfIndicator')
+    const data = [100, 102, 108, 104, 112, 109, 106, 103].map((close, index) => createRow(index, close))
+    const rows = calculateTradingViewMmfRows(data, {
+      ...defaultMmfIndicatorSettings,
+      dpoValue: 11,
+      showHigh: true,
+    })
+
+    expect(rows.some((row) => Number.isFinite(row.highMarker))).toBe(false)
+    cleanupMocks()
+  })
+
+  it('does not start a high cycle from stochastic values already above 50', async () => {
+    vi.resetModules()
+    installMocks(
+      [12, 13, 14, 9],
+      [86, 81, 76, 68],
+      [82, 83, 77, 69],
+    )
 
     const { calculateTradingViewMmfRows } = await import('./tradingViewMmfIndicator')
     const data = [100, 105, 107, 103].map((close, index) => createRow(index, close))
-    const rows = calculateTradingViewMmfRows(
-      data,
-      { ...defaultMmfIndicatorSettings, dpoValue: 11, highMorganRatio: '0.118', showHigh: true },
-    )
+    const rows = calculateTradingViewMmfRows(data, {
+      ...defaultMmfIndicatorSettings,
+      dpoValue: 11,
+      showHigh: true,
+    })
 
     expect(rows.some((row) => Number.isFinite(row.highMarker))).toBe(false)
-    vi.doUnmock('./tradingViewDpoIndicator')
-    vi.doUnmock('./tradingViewStochIndicator')
-    vi.doUnmock('./morganRangeModel')
+    cleanupMocks()
   })
 })

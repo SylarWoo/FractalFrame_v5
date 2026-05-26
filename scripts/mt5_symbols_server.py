@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_DIR = Path(__file__).resolve().parent
+for path in (str(SCRIPT_DIR), str(ROOT)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
 from http_bridge.mt5_m1_check_service import (
     check_mt5_m1_live,
     mt5_rates_to_rows,
@@ -25,6 +31,8 @@ from http_bridge.response import send_json as send_json_response
 from http_bridge.response import write_sse_event
 from http_bridge.mt5_m1_check_routes import handle_mt5_m1_check_get
 from http_bridge.mt5_symbol_routes import handle_mt5_symbols_get
+from http_bridge.indicator_routes import handle_indicator_get, handle_indicator_post
+from http_bridge.indicator_service import calculate_mmf_indicator_from_rows, query_mmf_indicator
 from http_bridge.sse import send_aggregate_job_events as send_aggregate_job_events_sse
 from http_bridge.sse import send_mt5_tick_events as send_mt5_tick_events_sse
 from http_bridge.sse import send_pull_job_events as send_pull_job_events_sse
@@ -57,10 +65,8 @@ from http_bridge.store_v5_status_service import (
 from http_bridge.store_v5_routes import handle_store_v5_get, handle_store_v5_post
 
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 DEFAULT_CACHE_ROOT = ROOT / "runtime_data" / "instruments" / "mt5"
+SERVER_SOURCE_VERSION = "mt5_symbols_server_source_v2_local_imports"
 LOGGER = get_logger("mt5_symbols_server")
 QUIET_ACCESS_LOG_PATHS = {
     "/api/market-data/v1/mt5/tick",
@@ -178,6 +184,8 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         services = sys.modules[__name__]
+        if handle_indicator_post(self, parsed, services):
+            return
         if handle_store_v5_post(self, parsed, services):
             return
         self.send_json(404, error_payload("not_found", parsed.path))
@@ -185,6 +193,16 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         services = sys.modules[__name__]
+        if parsed.path == "/api/debug/source-version":
+            from http_bridge import indicator_service
+
+            self.send_json(200, {
+                "ok": True,
+                "serverSourceVersion": SERVER_SOURCE_VERSION,
+                "indicatorServiceFile": str(Path(indicator_service.__file__).resolve()),
+                "indicatorEngineVersion": getattr(indicator_service, "_MMF_ENGINE_VERSION", None),
+            })
+            return
         if parsed.path == "/api/market-data/v1/diagnostics/mt5":
             from urllib.parse import parse_qs
 
@@ -215,6 +233,8 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
         if handle_mt5_symbols_get(self, parsed, services):
             return
         if handle_mt5_m1_check_get(self, parsed, services):
+            return
+        if handle_indicator_get(self, parsed, services):
             return
         if handle_store_v5_get(self, parsed, services):
             return
