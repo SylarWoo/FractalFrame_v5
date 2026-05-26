@@ -700,7 +700,7 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   highMorganRatio: '0.118',
   highOffsetPercent: 0,
   highSize: 24,
-  highSymbol: '\u25b2',
+  highSymbol: '\u25c6',
   showHigh: true,
 }
 
