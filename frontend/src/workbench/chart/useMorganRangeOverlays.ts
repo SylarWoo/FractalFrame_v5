@@ -1,9 +1,7 @@
 import type { Chart } from 'klinecharts'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { createStaticMorganRangeOverlay } from './morganRangeOverlay'
-import { calculateH4MorganAtr7, collectH4MorganCandles, h4MorganSeconds, type H4MorganCandle } from './morganRangeModel'
-import { defaultMrIndicatorSettings } from '../rightDrawer/indicatorPersistence'
-import type { MrIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { calculateMorganRangeSegments, h4MorganSeconds, type MorganRangeSegment } from './morganRangeModel'
 
 const maxMorganRangeBuckets = 36
 
@@ -12,15 +10,14 @@ export function clearMorganRangeOverlays(chart: Chart, overlayIds: Set<string>) 
   overlayIds.clear()
 }
 
-export function applyMorganRangeOverlays(chart: Chart, period: string, overlayIds: Set<string>, settings: MrIndicatorSettings = defaultMrIndicatorSettings) {
+export function applyMorganRangeOverlays(chart: Chart, period: string, overlayIds: Set<string>) {
   clearMorganRangeOverlays(chart, overlayIds)
   const periodSeconds = resolvePeriodSeconds(period)
   if (!Number.isFinite(periodSeconds) || periodSeconds <= 0 || periodSeconds > 2 * 60 * 60) return
 
-  const candles = collectH4MorganCandles(chart.getDataList())
-  if (candles.length < 8) return
-  const atr = calculateH4MorganAtr7(candles)
   const futureBars = Math.round(h4MorganSeconds / periodSeconds)
+  const segments = calculateMorganRangeSegments(chart.getDataList(), futureBars)
+  if (segments.length === 0) return
   const barSpace = Number(chart.getBarSpace())
   const futureWidthPx = futureBars * barSpace
   const startBoundaryOffsetPx = -barSpace / 2
@@ -28,104 +25,53 @@ export function applyMorganRangeOverlays(chart: Chart, period: string, overlayId
   const visibleRange = chart.getVisibleRange()
   const visibleFrom = Math.floor(Number(visibleRange.realFrom))
   const visibleTo = Math.ceil(Number(visibleRange.realTo))
-  const lastBucketIndex = candles.length - 1
-  const visibleBucketIndexes = candles
-    .map((candle, index) => ({ candle, index }))
-    .filter(({ candle }) => {
-      const bucketEndIndex = candle.startIndex + futureBars
-      return bucketEndIndex >= visibleFrom - futureBars && candle.startIndex <= visibleTo + futureBars
+  const lastSegmentIndex = segments.length - 1
+  const visibleSegmentIndexes = segments
+    .map((segment, index) => ({ index, segment }))
+    .filter(({ segment }) => {
+      return segment.endIndex >= visibleFrom - futureBars && segment.startIndex <= visibleTo + futureBars
     })
     .map(({ index }) => index)
-  const firstVisibleBucketIndex = visibleBucketIndexes.length > 0 ? Math.min(...visibleBucketIndexes) : lastBucketIndex
-  const lastVisibleBucketIndex = visibleBucketIndexes.length > 0 ? Math.max(...visibleBucketIndexes) : lastBucketIndex
-  const firstBucket = Math.max(1, firstVisibleBucketIndex - 2, lastVisibleBucketIndex - maxMorganRangeBuckets + 1)
-  const lastBucket = Math.min(lastBucketIndex, lastVisibleBucketIndex + 2)
+  const firstVisibleSegmentIndex = visibleSegmentIndexes.length > 0 ? Math.min(...visibleSegmentIndexes) : lastSegmentIndex
+  const lastVisibleSegmentIndex = visibleSegmentIndexes.length > 0 ? Math.max(...visibleSegmentIndexes) : lastSegmentIndex
+  const firstSegment = Math.max(0, firstVisibleSegmentIndex - 2, lastVisibleSegmentIndex - maxMorganRangeBuckets + 1)
+  const lastSegment = Math.min(lastSegmentIndex, lastVisibleSegmentIndex + 2)
 
   const createRange = (
-    anchor: H4MorganCandle,
-    previous: H4MorganCandle,
-    atr7: number | undefined,
+    segment: MorganRangeSegment,
     widthBars = futureBars,
     startOffsetPx = startBoundaryOffsetPx,
   ) => {
-    if (!previous || !anchor || !Number.isFinite(atr7)) return
     const widthPx = widthBars * barSpace
     if (!Number.isFinite(widthPx) || widthPx <= 0) return
-    const center = (previous.high + previous.low + previous.close) / 3
-    const radius = 3 * Number(atr7)
-    if (!Number.isFinite(center) || !Number.isFinite(radius) || radius <= 0) return
 
     const startPoint = {
-      dataIndex: anchor.startIndex,
-      timestamp: anchor.startTimestamp,
-      value: center,
+      dataIndex: segment.startIndex,
+      timestamp: segment.startTimestamp,
+      value: segment.center,
     }
-    const upperPoint = { ...startPoint, value: center + radius }
-    const lowerPoint = { ...startPoint, value: center - radius }
-    const upperId = settings.upperLineVisible ? createStaticMorganRangeOverlay(chart, {
-      extendData: createMorganLineExtendData(settings.upperLineColor, settings.upperLineOpacity, settings.upperLineStyle, settings.upperLineWidth),
+    const upperPoint = { ...startPoint, value: segment.upper }
+    const lowerPoint = { ...startPoint, value: segment.lower }
+    const upperRangeId = createStaticMorganRangeOverlay(chart, {
       futureWidthPx: widthPx,
       paneId: 'candle_pane',
       points: [startPoint, upperPoint],
       startOffsetPx,
-    }) : null
-    const lowerId = settings.lowerLineVisible ? createStaticMorganRangeOverlay(chart, {
-      extendData: createMorganLineExtendData(settings.lowerLineColor, settings.lowerLineOpacity, settings.lowerLineStyle, settings.lowerLineWidth),
+    })
+    const lowerRangeId = createStaticMorganRangeOverlay(chart, {
       futureWidthPx: widthPx,
       paneId: 'candle_pane',
       points: [startPoint, lowerPoint],
       startOffsetPx,
-    }) : null
-    const backgroundId = settings.backgroundVisible ? createStaticMorganRangeOverlay(chart, {
-      extendData: createMorganBackgroundExtendData(settings),
-      futureWidthPx: widthPx,
-      paneId: 'candle_pane',
-      points: [upperPoint, lowerPoint],
-      startOffsetPx,
-    }) : null
-    if (upperId) overlayIds.add(upperId)
-    if (lowerId) overlayIds.add(lowerId)
-    if (backgroundId) overlayIds.add(backgroundId)
+    })
+    if (upperRangeId) overlayIds.add(upperRangeId)
+    if (lowerRangeId) overlayIds.add(lowerRangeId)
   }
 
-  for (let index = firstBucket; index <= lastBucket; index += 1) {
-    const next = candles[index + 1]
-    const widthBars = next
-      ? Math.max(1, Math.min(futureBars, next.startIndex - candles[index].startIndex))
-      : futureBars
-    createRange(candles[index], candles[index - 1], atr[index - 1], widthBars)
-  }
-
-}
-
-function createMorganLineExtendData(color: string, opacity: number, lineStyle: MrIndicatorSettings['upperLineStyle'], lineWidth: number) {
-  return {
-    fibBackgroundVisible: false,
-    fibHorizontalLineStyle: {
-      hex: color,
-      lineStyle,
-      opacity,
-      thickness: lineWidth,
-    },
-    fibLevels: [
-      { color, enabled: true, opacity, value: '1' },
-    ],
-  }
-}
-
-function createMorganBackgroundExtendData(settings: MrIndicatorSettings) {
-  return {
-    fibBackgroundOpacity: settings.backgroundOpacity,
-    fibBackgroundVisible: true,
-    fibHorizontalLineStyle: {
-      hex: settings.backgroundColor,
-      lineStyle: 'solid' as const,
-      opacity: 0,
-      thickness: 1,
-    },
-    fibLevels: [
-      { color: settings.backgroundColor, enabled: true, opacity: 0, value: '1' },
-      { color: settings.backgroundColor, enabled: true, opacity: 0, value: '0' },
-    ],
+  for (let index = firstSegment; index <= lastSegment; index += 1) {
+    const segment = segments[index]
+    if (!segment) continue
+    const widthBars = Math.max(1, Math.min(futureBars, segment.endIndex - segment.startIndex + 1))
+    createRange(segment, widthBars)
   }
 }

@@ -5,16 +5,18 @@ import { IndicatorsTable } from './IndicatorsTable'
 import { indicatorRows, isSupportedChartIndicator } from './indicatorDefinitions'
 import { LoadedIndicatorSettingsPanel } from './indicatorSettingsPanels'
 import type { IndicatorsController } from '../indicators/useIndicatorsController'
+import type { MorganRangeSegment } from '../chart/morganRangeModel'
 import './IndicatorsDrawer.css'
 
 type IndicatorsDrawerProps = {
   indicatorShortcutKeys: string[]
   indicatorsController: IndicatorsController
   loadedIndicatorKeys: string[]
+  morganRangeSegment?: MorganRangeSegment | null
   onIndicatorShortcutKeysChange: (keys: string[]) => void
 }
 
-export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, loadedIndicatorKeys, onIndicatorShortcutKeysChange }: IndicatorsDrawerProps) {
+export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, loadedIndicatorKeys, morganRangeSegment, onIndicatorShortcutKeysChange }: IndicatorsDrawerProps) {
   const [topHeight, setTopHeight] = useState(254)
   const loadedKeySet = new Set(loadedIndicatorKeys)
   const selectedKey = indicatorsController.selectedKey
@@ -101,6 +103,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
               dpoSettings={indicatorsController.settings.dpo}
               macdSettings={indicatorsController.settings.macd}
               maSettings={indicatorsController.settings.ma}
+              morganRangeSegment={morganRangeSegment}
               mrSettings={indicatorsController.settings.mr}
               onDpoSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('DPO', settings)}
               onMacdSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MACD', settings)}

@@ -3,6 +3,7 @@ import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
+import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
 import { chartRealtimeDataChangedEvent, useChartRealtimeTicks } from './useChartRealtimeTicks'
@@ -10,9 +11,10 @@ import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
 import { useChartStepLoad } from './useChartStepLoad'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay } from './mainVolumeIndicator'
 import { applyMorganRangeOverlays, clearMorganRangeOverlays } from './useMorganRangeOverlays'
+import { calculateMorganRangeSegments, findMorganRangeSegmentByDataIndex, h4MorganSeconds, type MorganRangeSegment } from './morganRangeModel'
+import { readCrosshairDataIndex } from './paneTitleOverlayContent'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
-import { ensureTradingViewMrIndicator } from './tradingViewMrIndicator'
 import { ensureTradingViewDpoIndicator } from './tradingViewDpoIndicator'
 import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
 import { ensureTradingViewStochIndicator } from './tradingViewStochIndicator'
@@ -67,6 +69,7 @@ type ChartCoreHostProps = {
   jump?: { id: number; timestamp?: number } | null
   limit?: number
   onLoadStateChange?: (state: ChartLoadState) => void
+  onMorganRangeSegmentChange?: (segment: MorganRangeSegment | null) => void
   page?: ChartPageTarget | null
   period: string
   reloadId?: number
@@ -135,7 +138,7 @@ function refreshPane(chart: unknown, paneId: string) {
   })
 }
 
-export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLoadStateChange, page, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
+export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, symbol, totalRows }: ChartCoreHostProps) {
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
   const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, page, period, reloadId, symbol, totalRows })
   const realtimeDataReady = !loadState.loading &&
@@ -156,6 +159,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const morganRangeLoadedRef = useRef(false)
   const morganRangeOverlayIdsRef = useRef<Set<string>>(new Set())
   const morganRangeSettingsRef = useRef<MrIndicatorSettings | null>(null)
+  const morganRangeCrosshairIndexRef = useRef<number | null>(null)
 
   useEffect(() => {
     onLoadStateChange?.({ ...loadState, period, symbol, totalRows })
@@ -195,32 +199,44 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const observeViPaneHeight = useCallback(() => observeIndicatorPaneHeight(viPaneId, viPaneHeightStorageKey, viPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const isIndicatorVisibleInCurrentPeriod = useCallback((name: ChartIndicatorCommand['name']) => isStoredVisibilityRangePeriodVisible(`indicator:${name}`, period), [period])
 
+  const publishMorganRangeSegment = useCallback((dataIndex: number | null = morganRangeCrosshairIndexRef.current) => {
+    const chart = chartInstanceRef.current
+    if (!chart) {
+      onMorganRangeSegmentChange?.(null)
+      return
+    }
+    const periodSeconds = resolvePeriodSeconds(period)
+    if (!Number.isFinite(periodSeconds) || periodSeconds <= 0) {
+      onMorganRangeSegmentChange?.(null)
+      return
+    }
+    const futureBars = Math.round(h4MorganSeconds / periodSeconds)
+    const segments = calculateMorganRangeSegments(chart.getDataList(), futureBars)
+    const fallbackIndex = chart.getDataList().length - 1
+    onMorganRangeSegmentChange?.(findMorganRangeSegmentByDataIndex(segments, dataIndex ?? fallbackIndex) ?? segments[segments.length - 1] ?? null)
+  }, [chartInstanceRef, onMorganRangeSegmentChange, period])
+
   const applyMorganRangeCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
-    ensureTradingViewMrIndicator()
+    chart.removeIndicator('candle_pane', 'MR')
 
     if (command.action === 'unload') {
       morganRangeLoadedRef.current = false
       morganRangeSettingsRef.current = null
-      chart.removeIndicator('candle_pane', 'MR')
       clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+      onMorganRangeSegmentChange?.(null)
       return
     }
 
     morganRangeLoadedRef.current = true
     morganRangeSettingsRef.current = command.name === 'MR' ? command.settings ?? null : null
     if (!isIndicatorVisibleInCurrentPeriod('MR')) {
-      chart.removeIndicator('candle_pane', 'MR')
       clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+      onMorganRangeSegmentChange?.(null)
       return
     }
-    if (chart.getIndicatorByPaneId('candle_pane', 'MR')) {
-      chart.overrideIndicator({ name: 'MR', calcParams: [command.settings] }, 'candle_pane')
-      applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, morganRangeSettingsRef.current ?? undefined)
-      return
-    }
-    chart.createIndicator({ name: 'MR', calcParams: [command.settings] }, true, { id: 'candle_pane' })
-    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, morganRangeSettingsRef.current ?? undefined)
-  }, [isIndicatorVisibleInCurrentPeriod, period])
+    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+    publishMorganRangeSegment()
+  }, [isIndicatorVisibleInCurrentPeriod, onMorganRangeSegmentChange, period, publishMorganRangeSegment])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -363,10 +379,12 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     if (!chart || !morganRangeLoadedRef.current || loadState.loading) return
     if (!isIndicatorVisibleInCurrentPeriod('MR')) {
       clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+      onMorganRangeSegmentChange?.(null)
       return
     }
-    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, morganRangeSettingsRef.current ?? undefined)
-  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, loadState.rows, period])
+    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+    publishMorganRangeSegment()
+  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, loadState.rows, onMorganRangeSegmentChange, period, publishMorganRangeSegment])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -379,9 +397,11 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       frame = window.requestAnimationFrame(() => {
         if (!isIndicatorVisibleInCurrentPeriod('MR')) {
           clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+          onMorganRangeSegmentChange?.(null)
           return
         }
-        applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, morganRangeSettingsRef.current ?? undefined)
+        applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+        publishMorganRangeSegment()
       })
     }
 
@@ -393,7 +413,22 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       actions.forEach((action) => chart.unsubscribeAction(action, scheduleRefresh))
       window.removeEventListener(chartRealtimeDataChangedEvent, scheduleRefresh)
     }
-  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, period])
+  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, onMorganRangeSegmentChange, period, publishMorganRangeSegment])
+
+  useEffect(() => {
+    const chart = chartInstanceRef.current
+    if (!chart) return
+
+    const handleCrosshairChange = (payload: unknown) => {
+      morganRangeCrosshairIndexRef.current = readCrosshairDataIndex(payload)
+      publishMorganRangeSegment(morganRangeCrosshairIndexRef.current)
+    }
+    chart.subscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
+    publishMorganRangeSegment()
+    return () => {
+      chart.unsubscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
+    }
+  }, [chartInstanceRef, publishMorganRangeSegment])
 
   useEffect(() => () => {
     mainVolumeOverlayRef.current?.destroy()

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { MorganRangeSegment } from '../../../chart/morganRangeModel'
 import { VisibilityRangePanel } from '../../../visibilityRange/VisibilityRangePanel'
 import type { SupportedChartIndicator } from '../../indicatorDefinitions'
 import type {
@@ -45,6 +46,7 @@ export function LoadedIndicatorSettingsPanel({
   macdSettings,
   maSettings,
   mrSettings,
+  morganRangeSegment,
   onDpoSettingsChange,
   onMacdSettingsChange,
   onMaSettingsChange,
@@ -70,6 +72,7 @@ export function LoadedIndicatorSettingsPanel({
   macdSettings: MacdIndicatorSettings
   maSettings: MaIndicatorSettings
   mrSettings: MrIndicatorSettings
+  morganRangeSegment?: MorganRangeSegment | null
   onDpoSettingsChange: (settings: DpoIndicatorSettings) => void
   onMacdSettingsChange: (settings: MacdIndicatorSettings) => void
   onMaSettingsChange: (settings: MaIndicatorSettings) => void
@@ -105,7 +108,7 @@ export function LoadedIndicatorSettingsPanel({
       style: <MacdStylePanel onSettingsChange={onMacdSettingsChange} settings={macdSettings} />,
     },
     MR: {
-      input: <MrInputPanelV3 onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
+      input: <MrInputPanelV3 segment={morganRangeSegment} onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
       style: <MrStylePanelV3 onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
     },
     RSI: {

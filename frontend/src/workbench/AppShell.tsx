@@ -4,6 +4,7 @@ import { bottomPanels } from './bottomDrawer/bottomPanels'
 import { BottomWorkspace } from './bottomDrawer/BottomWorkspace'
 import { ChartCoreHost } from './chart/ChartCoreHost'
 import type { ChartLoadState, ChartPageTarget } from './chart/ChartCoreHost'
+import type { MorganRangeSegment } from './chart/morganRangeModel'
 import {
   LEFT_RAIL_BRUSH_SVGREPO_ICON_48,
   LEFT_RAIL_CURSOR_ARROW_SVGREPO_ICON_48,
@@ -200,6 +201,7 @@ export function AppShell() {
   const [chartJump, setChartJump] = useState<{ id: number; timestamp?: number } | null>(null)
   const [chartStepLoad, setChartStepLoad] = useState<{ direction: 'left' | 'right'; id: number } | null>(null)
   const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
+  const [morganRangeSegment, setMorganRangeSegment] = useState<MorganRangeSegment | null>(null)
   const indicatorsController = useIndicatorsController({
     chartLoadState,
     chartPeriod: chartTarget.period,
@@ -411,6 +413,7 @@ export function AppShell() {
             indicatorCommand={indicatorsController.command}
             jump={chartJump}
             onLoadStateChange={setChartLoadState}
+            onMorganRangeSegmentChange={setMorganRangeSegment}
             page={chartTarget.page}
             period={chartTarget.period}
             reloadId={chartTarget.reloadId}
@@ -442,6 +445,7 @@ export function AppShell() {
           indicatorShortcutKeys={indicatorShortcutKeys}
           indicatorsController={indicatorsController}
           loadedIndicatorKeys={loadedIndicatorKeys}
+          morganRangeSegment={morganRangeSegment}
           onClose={() => setActiveRightDrawer(null)}
           onIndicatorShortcutKeysChange={setIndicatorShortcutKeys}
           onOpenChart={setChartTarget}

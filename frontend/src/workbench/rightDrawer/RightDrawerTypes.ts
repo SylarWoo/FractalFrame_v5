@@ -1,4 +1,5 @@
 import type { ChartPageTarget } from '../chart/ChartCoreHost'
+import type { MorganRangeSegment } from '../chart/morganRangeModel'
 import type { IndicatorsController } from '../indicators/useIndicatorsController'
 import type { SupportedChartIndicator } from './indicatorDefinitions'
 
@@ -18,6 +19,7 @@ export type RightDrawerProps = {
   indicatorShortcutKeys: string[]
   indicatorsController: IndicatorsController
   loadedIndicatorKeys: string[]
+  morganRangeSegment?: MorganRangeSegment | null
   onClose: () => void
   onIndicatorShortcutKeysChange: (keys: string[]) => void
   onResize: (width: number) => void

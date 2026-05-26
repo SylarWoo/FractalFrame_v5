@@ -37,6 +37,7 @@ export function RightDrawer({
   indicatorShortcutKeys,
   indicatorsController,
   loadedIndicatorKeys,
+  morganRangeSegment,
   onClose,
   onIndicatorShortcutKeysChange,
   onResize,
@@ -429,6 +430,7 @@ export function RightDrawer({
             indicatorShortcutKeys={indicatorShortcutKeys}
             indicatorsController={indicatorsController}
             loadedIndicatorKeys={loadedIndicatorKeys}
+            morganRangeSegment={morganRangeSegment}
             onIndicatorShortcutKeysChange={onIndicatorShortcutKeysChange}
           />
         ) : renderedActiveDrawer === 'mt5' ? (

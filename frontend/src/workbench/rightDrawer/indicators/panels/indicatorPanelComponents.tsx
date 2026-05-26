@@ -2,6 +2,7 @@ export { VolInputPanel, VolStylePanel } from './VolSettingsPanels'
 export { RsiInputPanel, RsiStylePanel } from './RsiSettingsPanels'
 export { MaInputPanel, MaStylePanel } from './MaSettingsPanels'
 import type { CSSProperties } from 'react'
+import type { MorganRangeSegment } from '../../../chart/morganRangeModel'
 import { OpenableSelect } from '../../../controls/OpenableSelect'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../../../settings/SettingsSwatches'
 import type {
@@ -29,7 +30,6 @@ import {
   stochText,
   updateDpoSettings,
   updateMacdSettings,
-  updateMrSettings,
   updateStochSettings,
   updateTsiSettings,
   updateVdoSettings,
@@ -733,53 +733,57 @@ export function MrStylePanel() {
 
 export function MrInputPanelV3(props: {
   onSettingsChange: (settings: MrIndicatorSettings) => void
+  segment?: MorganRangeSegment | null
+  settings: MrIndicatorSettings
+}) {
+  const { segment } = props
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mr-panel-v1" role="tabpanel">
+      {segment ? (
+        <div className="ff-indicators-mr-level-table-v1">
+          <div className="ff-indicators-mr-level-table-v1__meta">
+            <span>Center {formatMorganRangePrice(segment.center)}</span>
+            <span>Range {formatMorganRangePrice(segment.range)}</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Ratio</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {segment.levels.map((level) => (
+                <tr key={level.ratio}>
+                  <td>{formatMorganRangeRatio(level.ratio)}</td>
+                  <td>{formatMorganRangePrice(level.price)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="ff-indicators-mr-level-table-v1__empty">No Morgan range data</div>
+      )}
+    </div>
+  )
+}
+
+function formatMorganRangeRatio(value: number) {
+  if (value === 0) return '0'
+  return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+function formatMorganRangePrice(value: number) {
+  return Number.isFinite(value) ? value.toFixed(3) : '--'
+}
+
+export function MrStylePanelV3(props: {
+  onSettingsChange: (settings: MrIndicatorSettings) => void
   settings: MrIndicatorSettings
 }) {
   void props
   return <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mr-panel-v1" role="tabpanel" />
-}
-
-export function MrStylePanelV3({
-  onSettingsChange,
-  settings,
-}: {
-  onSettingsChange: (settings: MrIndicatorSettings) => void
-  settings: MrIndicatorSettings
-}) {
-  const patch = (next: Partial<MrIndicatorSettings>) => onSettingsChange(updateMrSettings(settings, next))
-
-  return (
-    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-style-panel-v1 ff-indicators-mr-style-panel-v1" role="tabpanel">
-      <div className="ff-indicators-style-row-v1">
-        <CheckControl checked={settings.upperLineVisible} label="Upper Range" onChange={(upperLineVisible) => patch({ upperLineVisible })} />
-        <SettingsLineSwatch
-          color={settings.upperLineColor}
-          lineStyle={settings.upperLineStyle}
-          onChange={(value) => patch({ upperLineColor: value.hex, upperLineOpacity: value.opacity, upperLineStyle: value.lineStyle, upperLineWidth: value.thickness })}
-          thickness={settings.upperLineWidth}
-          value={{ hex: settings.upperLineColor, lineStyle: settings.upperLineStyle, opacity: settings.upperLineOpacity, thickness: settings.upperLineWidth }}
-        />
-      </div>
-      <div className="ff-indicators-style-row-v1">
-        <CheckControl checked={settings.lowerLineVisible} label="Lower Range" onChange={(lowerLineVisible) => patch({ lowerLineVisible })} />
-        <SettingsLineSwatch
-          color={settings.lowerLineColor}
-          lineStyle={settings.lowerLineStyle}
-          onChange={(value) => patch({ lowerLineColor: value.hex, lowerLineOpacity: value.opacity, lowerLineStyle: value.lineStyle, lowerLineWidth: value.thickness })}
-          thickness={settings.lowerLineWidth}
-          value={{ hex: settings.lowerLineColor, lineStyle: settings.lowerLineStyle, opacity: settings.lowerLineOpacity, thickness: settings.lowerLineWidth }}
-        />
-      </div>
-      <div className="ff-indicators-style-row-v1">
-        <CheckControl checked={settings.backgroundVisible} label="Background" onChange={(backgroundVisible) => patch({ backgroundVisible })} />
-        <SettingsColorSwatch
-          color={settings.backgroundColor}
-          onChange={(value) => patch({ backgroundColor: value.hex, backgroundOpacity: value.opacity })}
-          value={{ hex: settings.backgroundColor, opacity: settings.backgroundOpacity }}
-        />
-      </div>
-    </div>
-  )
 }
 
 export function DpoInputPanel({

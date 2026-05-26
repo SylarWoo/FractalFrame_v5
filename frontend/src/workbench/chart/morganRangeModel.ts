@@ -12,6 +12,46 @@ export type H4MorganCandle = {
   startTimestamp: number
 }
 
+export type MorganRangeLevel = {
+  price: number
+  ratio: number
+}
+
+export type MorganRangeSegment = {
+  atr7: number
+  center: number
+  endIndex: number
+  index: number
+  levels: MorganRangeLevel[]
+  lower: number
+  range: number
+  startIndex: number
+  startTimestamp: number
+  upper: number
+}
+
+export const morganRangeLevelRatios = [
+  -1,
+  -0.786,
+  -0.618,
+  -0.5,
+  -0.382,
+  -0.236,
+  -0.177,
+  -0.118,
+  -0.059,
+  0,
+  0.059,
+  0.118,
+  0.177,
+  0.236,
+  0.382,
+  0.5,
+  0.618,
+  0.786,
+  1,
+] as const
+
 export function resolveKLineTimestampMs(data: KLineData) {
   const row = data as KLineData & {
     realTime?: number
@@ -79,4 +119,63 @@ export function calculateH4MorganAtr7(candles: H4MorganCandle[]) {
     }
     return sum / 7
   })
+}
+
+export function calculateMorganRangeLevels(center: number, range: number): MorganRangeLevel[] {
+  if (!Number.isFinite(center) || !Number.isFinite(range)) return []
+  return morganRangeLevelRatios.map((ratio) => ({
+    price: center + range * ratio,
+    ratio,
+  }))
+}
+
+export function calculateMorganRangeSegments(dataList: KLineData[], futureBars = 0): MorganRangeSegment[] {
+  const candles = collectH4MorganCandles(dataList)
+  if (candles.length < 8) return []
+  const atr = calculateH4MorganAtr7(candles)
+  const safeFutureBars = Number.isFinite(futureBars) ? Math.max(0, Math.round(futureBars)) : 0
+  const segments: MorganRangeSegment[] = []
+
+  for (let index = 1; index < candles.length; index += 1) {
+    const anchor = candles[index]
+    const previous = candles[index - 1]
+    const atr7 = Number(atr[index - 1])
+    if (!anchor || !previous || !Number.isFinite(atr7)) continue
+    const center = (previous.high + previous.low + previous.close) / 3
+    const range = 3 * atr7
+    if (!Number.isFinite(center) || !Number.isFinite(range) || range <= 0) continue
+    const next = candles[index + 1]
+    const endIndex = next
+      ? Math.max(anchor.startIndex, next.startIndex - 1)
+      : anchor.startIndex + safeFutureBars
+    segments.push({
+      atr7,
+      center,
+      endIndex,
+      index,
+      levels: calculateMorganRangeLevels(center, range),
+      lower: center - range,
+      range,
+      startIndex: anchor.startIndex,
+      startTimestamp: anchor.startTimestamp,
+      upper: center + range,
+    })
+  }
+
+  return segments
+}
+
+export function findMorganRangeSegmentByDataIndex(segments: MorganRangeSegment[], dataIndex: number) {
+  if (!Number.isFinite(dataIndex)) return null
+  const index = Math.round(dataIndex)
+  return segments.find((segment) => index >= segment.startIndex && index <= segment.endIndex) ?? null
+}
+
+export function getMorganRangeLevel(segment: MorganRangeSegment | null | undefined, ratio: number) {
+  if (!segment || !Number.isFinite(ratio)) return null
+  const normalizedRatio = Number(ratio.toFixed(3))
+  return segment.levels.find((level) => Number(level.ratio.toFixed(3)) === normalizedRatio) ?? {
+    price: segment.center + segment.range * ratio,
+    ratio,
+  }
 }

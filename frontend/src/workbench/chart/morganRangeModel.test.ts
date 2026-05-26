@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { KLineData } from 'klinecharts'
-import { collectH4MorganCandles, resolveH4MorganBucketKey } from './morganRangeModel'
+import { calculateMorganRangeSegments, getMorganRangeLevel, collectH4MorganCandles, resolveH4MorganBucketKey } from './morganRangeModel'
 
 const utc = (value: string) => Date.parse(value)
 
@@ -30,5 +30,40 @@ describe('morganRangeModel', () => {
     expect(candles).toHaveLength(2)
     expect(candles[1].startTimestamp).toBe(utc('2026-05-25T02:00:00.000Z'))
     expect(candles[1].close).toBe(104)
+  })
+
+  it('calculates callable Morgan range levels with the red zone split into eighths', () => {
+    const start = utc('2026-05-25T02:00:00.000Z')
+    const rows = Array.from({ length: 9 }, (_, index) => row(start + index * 4 * 60 * 60 * 1000, 100))
+    const segments = calculateMorganRangeSegments(rows, 1)
+    const segment = segments[0]
+
+    expect(segment.center).toBe(100)
+    expect(segment.range).toBe(6)
+    expect(segment.upper).toBe(106)
+    expect(segment.lower).toBe(94)
+    expect(segment.levels.map((level) => level.ratio)).toEqual([
+      -1,
+      -0.786,
+      -0.618,
+      -0.5,
+      -0.382,
+      -0.236,
+      -0.177,
+      -0.118,
+      -0.059,
+      0,
+      0.059,
+      0.118,
+      0.177,
+      0.236,
+      0.382,
+      0.5,
+      0.618,
+      0.786,
+      1,
+    ])
+    expect(getMorganRangeLevel(segment, 0.236)?.price).toBeCloseTo(101.416)
+    expect(getMorganRangeLevel(segment, -0.059)?.price).toBeCloseTo(99.646)
   })
 })
