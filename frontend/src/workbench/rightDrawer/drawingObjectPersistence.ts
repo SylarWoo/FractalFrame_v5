@@ -5,7 +5,7 @@ import { normalizeDrawingLineStyle, normalizeDrawingTextStyle, normalizeDrawingT
 import type { DrawingRulerStyle } from './rulerDrawingStyle'
 import { normalizeDrawingRulerStyle } from './rulerDrawingStyle'
 
-export type PersistableDrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement'
+export type PersistableDrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'emojiSticker'
 
 export type StoredHorizontalLineDrawing = {
   lineStyle: SettingsLineSwatchValue

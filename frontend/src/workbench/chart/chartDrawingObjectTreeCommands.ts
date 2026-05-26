@@ -16,7 +16,7 @@ type DrawingObjectTreeCommandAdapter = {
   isVisibleInCurrentPeriod: (objectId?: string) => boolean
   kind: DrawingObjectTreeTarget['kind']
   persist: () => void
-  selectedForVisible: (id: string, extendData: HorizontalLineExtendData | RulerExtendData | TrendLineExtendData | undefined) => boolean
+  selectedForVisible: (id: string, extendData: HorizontalLineExtendData | RulerExtendData | TrendLineExtendData | Record<string, unknown> | undefined) => boolean
   select: (command: Extract<ObjectTreeDrawingCommand, { action: 'select' }>, target: DrawingObjectTreeTarget, overlay: DrawingOverlay) => void
   updateHiddenState: (id: string, overlay: DrawingOverlay, manualVisible: boolean, periodVisible: boolean) => void
 }
@@ -24,13 +24,17 @@ type DrawingObjectTreeCommandAdapter = {
 export function createDrawingObjectTreeCommandHandler({
   chart,
   clearFibSelection = () => undefined,
+  clearStickerSelection = () => undefined,
   clearHorizontalLineSelection,
   clearTrendLineSelection,
+  emojiStickerOverlayIds = new Set<string>(),
   fibOverlayIds = new Set<string>(),
   getActiveObjectTreeOverlayId,
   getSelectedOverlayId,
   getSelectedRulerOverlayId,
   getSelectedTrendLineOverlayId,
+  getSelectedStickerOverlayId = () => null,
+  getSelectedStickerOverlayIds = () => new Set<string>(),
   horizontalLineOverlayIds,
   isHorizontalLineVisibleInCurrentPeriod,
   isRulerVisibleInCurrentPeriod,
@@ -40,6 +44,7 @@ export function createDrawingObjectTreeCommandHandler({
   persistCurrentFibRetracements = () => undefined,
   persistCurrentRulers,
   persistCurrentTrendLines,
+  persistCurrentEmojiStickers = () => undefined,
   publishHorizontalLineState,
   publishObjectTreeState,
   resolveTrendPointPrices,
@@ -55,6 +60,7 @@ export function createDrawingObjectTreeCommandHandler({
   setSelectedRulerOverlayId,
   setSelectedFibOverlayId = () => undefined,
   setSelectedTrendLineOverlayId,
+  setSelectedStickerOverlayId = () => undefined,
   setSelectedHorizontalLine,
   toggleSelectedHorizontalLine,
   trendLineOverlayIds,
@@ -62,13 +68,17 @@ export function createDrawingObjectTreeCommandHandler({
 }: {
   chart: Chart
   clearFibSelection?: () => void
+  clearStickerSelection?: () => void
   clearHorizontalLineSelection: () => void
   clearTrendLineSelection: () => void
+  emojiStickerOverlayIds?: Set<string>
   fibOverlayIds?: Set<string>
   getActiveObjectTreeOverlayId: () => string | null
   getSelectedOverlayId: () => string | null
   getSelectedRulerOverlayId: () => string | null
   getSelectedTrendLineOverlayId: () => string | null
+  getSelectedStickerOverlayId?: () => string | null
+  getSelectedStickerOverlayIds?: () => Set<string>
   horizontalLineOverlayIds: Set<string>
   isHorizontalLineVisibleInCurrentPeriod: (objectId?: string) => boolean
   isRulerVisibleInCurrentPeriod: (objectId?: string) => boolean
@@ -78,6 +88,7 @@ export function createDrawingObjectTreeCommandHandler({
   persistCurrentFibRetracements?: () => void
   persistCurrentRulers: () => void
   persistCurrentTrendLines: () => void
+  persistCurrentEmojiStickers?: () => void
   publishHorizontalLineState: (state?: Partial<{ armed: boolean; lineStyle: SettingsLineSwatchValue; locked: boolean; objectId: string; price: number; selected: boolean; showPriceLabel: boolean; textStyle: DrawingTextStyle }>) => void
   publishObjectTreeState: () => void
   resolveTrendPointPrices: (overlay: { points?: Array<{ value?: number }> } | null | undefined) => [number | undefined, number | undefined]
@@ -94,6 +105,7 @@ export function createDrawingObjectTreeCommandHandler({
   setSelectedRulerOverlayId: (id: string | null) => void
   setSelectedFibOverlayId?: (id: string | null) => void
   setSelectedTrendLineOverlayId: (id: string | null) => void
+  setSelectedStickerOverlayId?: (id: string | null, additive?: boolean) => void
   toggleSelectedHorizontalLine: (id: string) => void
   trendLineOverlayIds: Set<string>
   updateOverlayState: (id: string | undefined, patch: Record<string, unknown>) => void
@@ -125,6 +137,76 @@ export function createDrawingObjectTreeCommandHandler({
 
   const adapters: DrawingObjectTreeCommandAdapter[] = [
     {
+      deselect: (target, overlay) => {
+        const extendData = overlay.extendData as Record<string, unknown> | undefined
+        if (getSelectedStickerOverlayIds().has(target.id) || extendData?.selected === true) setSelectedStickerOverlayId(target.id, true)
+        else chart.overrideOverlay({ id: target.id, extendData: { ...extendData, selected: false } })
+        if (getActiveObjectTreeOverlayId() === target.id) setActiveObjectTreeOverlayId(getSelectedOverlayId() ?? getSelectedTrendLineOverlayId() ?? getSelectedRulerOverlayId())
+        publishDrawingToolState({
+          armed: false,
+          locked: false,
+          selected: false,
+          showPriceLabel: false,
+          tool: 'emojiSticker',
+        })
+      },
+      isVisibleInCurrentPeriod: () => true,
+      kind: 'emojiSticker',
+      persist: persistCurrentEmojiStickers,
+      selectedForVisible: (id, extendData) => getSelectedStickerOverlayIds().has(id) || getSelectedStickerOverlayId() === id || (extendData as { selected?: boolean } | undefined)?.selected === true,
+      select: (command, target, overlay) => {
+        if (command.additive !== true) {
+          clearHorizontalLineSelection()
+          clearTrendLineSelection()
+          clearRulerSelection()
+          clearFibSelection()
+        }
+        const targetExtendData = overlay.extendData as {
+          bold?: boolean
+          color?: string
+          fontFamily?: string
+          italic?: boolean
+          locked?: boolean
+          objectId?: string
+          selected?: boolean
+          size?: number
+          symbol?: string
+          textStyle?: DrawingTextStyle
+        } | undefined
+        const nextSelected = command.additive === true && (getSelectedStickerOverlayIds().has(target.id) || getSelectedStickerOverlayId() === target.id || targetExtendData?.selected === true) ? false : true
+        setSelectedStickerOverlayId(target.id, command.additive === true)
+        if (nextSelected) setActiveObjectTreeOverlayId(target.id)
+        else if (getActiveObjectTreeOverlayId() === target.id) setActiveObjectTreeOverlayId(getSelectedOverlayId() ?? getSelectedTrendLineOverlayId() ?? getSelectedRulerOverlayId())
+        publishDrawingToolState({
+          armed: false,
+          locked: targetExtendData?.locked === true,
+          objectId: targetExtendData?.objectId,
+          selected: nextSelected,
+          showPriceLabel: false,
+          stickerBold: targetExtendData?.bold,
+          stickerColor: targetExtendData?.color,
+          stickerFontFamily: targetExtendData?.fontFamily,
+          stickerItalic: targetExtendData?.italic,
+          stickerSize: targetExtendData?.size,
+          stickerSymbol: targetExtendData?.symbol,
+          textStyle: normalizeDrawingTextStyle(targetExtendData?.textStyle),
+          tool: 'emojiSticker',
+        })
+      },
+      updateHiddenState: (id, overlay, manualVisible) => {
+        if (getSelectedStickerOverlayIds().has(id) || getSelectedStickerOverlayId() === id) setSelectedStickerOverlayId(id, true)
+        chart.overrideOverlay({
+          id,
+          extendData: {
+            ...(overlay.extendData ?? {}),
+            manualVisible,
+            selected: false,
+          },
+        })
+        if (getSelectedStickerOverlayId() === id) setSelectedStickerOverlayId(null)
+      },
+    },
+    {
       deselect: (target) => {
         updateOverlayState(target.id, { handlePressed: false, hovered: false, pressed: false, selected: false })
         if (getSelectedOverlayId() === target.id) setSelectedOverlayId(null)
@@ -141,6 +223,8 @@ export function createDrawingObjectTreeCommandHandler({
         } else {
           clearTrendLineSelection()
           clearRulerSelection()
+          clearFibSelection()
+          clearStickerSelection()
           setSelectedHorizontalLine(target.id, false)
         }
         publishHorizontalLineState({ selected: true })
@@ -165,6 +249,8 @@ export function createDrawingObjectTreeCommandHandler({
         if (command.additive !== true) {
           clearHorizontalLineSelection()
           clearRulerSelection()
+          clearFibSelection()
+          clearStickerSelection()
         }
         if (command.additive !== true) {
           trendLineOverlayIds.forEach((overlayId) => {
@@ -240,6 +326,8 @@ export function createDrawingObjectTreeCommandHandler({
         if (command.additive !== true) {
           clearHorizontalLineSelection()
           clearTrendLineSelection()
+          clearFibSelection()
+          clearStickerSelection()
           rulerOverlayIds.forEach((overlayId) => {
             if (overlayId === target.id) return
             const rowOverlay = chart.getOverlayById(overlayId)
@@ -325,6 +413,7 @@ export function createDrawingObjectTreeCommandHandler({
           clearHorizontalLineSelection()
           clearTrendLineSelection()
           clearRulerSelection()
+          clearStickerSelection()
           fibOverlayIds.forEach((overlayId) => {
             if (overlayId === target.id) return
             const rowOverlay = chart.getOverlayById(overlayId)
@@ -397,6 +486,7 @@ export function createDrawingObjectTreeCommandHandler({
   const adapterFor = (kind: DrawingObjectTreeTarget['kind']) => adapters.find((adapter) => adapter.kind === kind)
   const resolveTarget = (treeId: string) => resolveDrawingObjectTreeTarget({
     chart,
+    emojiStickerOverlayIds,
     fibOverlayIds,
     horizontalLineOverlayIds,
     rulerOverlayIds,
@@ -417,6 +507,7 @@ export function createDrawingObjectTreeCommandHandler({
       clearTrendLineSelection()
       clearRulerSelection()
       clearFibSelection()
+      clearStickerSelection()
       return
     }
     const target = resolveTarget(command.id)
@@ -425,7 +516,13 @@ export function createDrawingObjectTreeCommandHandler({
     if (!overlay) return
 
     if (command.action === 'delete') {
-      resolveTargets(command).forEach((row) => chart.removeOverlay({ id: row.id }))
+      const rows = resolveTargets(command)
+      rows.forEach((row) => {
+        if (row.kind === 'emojiSticker' && getSelectedStickerOverlayIds().has(row.id)) setSelectedStickerOverlayId(row.id, true)
+        chart.removeOverlay({ id: row.id })
+      })
+      persistTargets(rows)
+      publishObjectTreeState()
       return
     }
 

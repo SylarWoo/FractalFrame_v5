@@ -14,6 +14,16 @@ const fontSizeOptions = [
   { label: '24', value: '24' },
 ]
 
+const fontFamilyOptions = [
+  { label: 'Arial', value: 'Arial' },
+  { label: 'Inter', value: 'Inter' },
+  { label: 'Tahoma', value: 'Tahoma' },
+  { label: 'Times', value: 'Times New Roman' },
+  { label: 'Courier', value: 'Courier New' },
+  { label: 'Microsoft YaHei', value: 'Microsoft YaHei' },
+  { label: 'SimSun', value: 'SimSun' },
+]
+
 const verticalAlignOptions = [
   { label: '\u9876\u90e8', value: 'top' },
   { label: '\u4e2d\u95f4', value: 'middle' },
@@ -60,6 +70,13 @@ export function DrawingTextPanel({
           onChange={(value) => update({ fontSize: Number(value) })}
           options={fontSizeOptions}
           value={String(displayTextStyle.fontSize)}
+        />
+        <OpenableSelect
+          ariaLabel="Font family"
+          className="ff-drawing-hline-text-tab-v1__font-family"
+          onChange={(value) => update({ fontFamily: value })}
+          options={fontFamilyOptions}
+          value={displayTextStyle.fontFamily}
         />
         <button
           aria-pressed={displayTextStyle.bold}

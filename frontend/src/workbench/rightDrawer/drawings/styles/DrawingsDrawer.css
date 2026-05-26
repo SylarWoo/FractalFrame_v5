@@ -81,24 +81,36 @@
   box-sizing: border-box;
 }
 
+.ff-drawing-hline-settings-v1 .ff-indicators-input-panel-v1__tab-panels,
+.ff-drawing-hline-settings-v1 .ff-indicators-input-panel-v1__tab-panel {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .ff-drawing-hline-settings-v1 .ff-indicators-input-panel-v1__tabs {
   flex-wrap: wrap;
 }
 
 .ff-drawing-emoji-sticker-v1 {
   display: grid;
-  width: min(100%, 320px);
+  width: 100%;
+  max-width: none;
   gap: 10px;
   padding-top: 10px;
+  box-sizing: border-box;
   color: #131722;
   font: 13px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
 }
 
 .ff-drawing-emoji-sticker-v1__category-tabs {
   display: grid;
-  grid-template-columns: repeat(9, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(34px, 1fr));
   gap: 2px;
   border-bottom: 1px solid #e5e7eb;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .ff-drawing-emoji-sticker-v1__category-tab {
@@ -122,7 +134,7 @@
   display: flex;
   min-height: 30px;
   align-items: center;
-  gap: 8px;
+  gap: 0;
   color: #6b7280;
 }
 
@@ -146,16 +158,20 @@
 
 .ff-drawing-emoji-sticker-v1__grid {
   display: grid;
-  grid-template-columns: repeat(8, minmax(26px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
   gap: 6px;
+  width: 100%;
+  min-width: 0;
   max-height: 280px;
   overflow: auto;
   padding-right: 4px;
+  box-sizing: border-box;
 }
 
 .ff-drawing-emoji-sticker-v1__item {
   display: inline-flex;
   aspect-ratio: 1;
+  min-height: 34px;
   min-width: 0;
   align-items: center;
   justify-content: center;
@@ -178,46 +194,16 @@
   background: #eaf2ff;
 }
 
-.ff-drawing-emoji-sticker-v1__footer {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
-  border-top: 1px solid #e5e7eb;
-  color: #131722;
-  text-align: center;
-}
-
-.ff-drawing-emoji-sticker-v1__footer button {
-  padding: 8px 4px 6px;
-  border-bottom: 3px solid transparent;
-  border-top: 0;
-  border-right: 0;
-  border-left: 0;
-  background: transparent;
-  color: inherit;
-  cursor: default;
-  font: inherit;
-}
-
-.ff-drawing-emoji-sticker-v1__footer button[data-active='true'] {
-  border-bottom-color: #2962ff;
-  color: #2962ff;
-}
-
 .ff-drawing-emoji-sticker-v1__style-row {
   display: grid;
-  grid-template-columns: auto 34px 80px;
+  grid-template-columns: 34px 80px;
   align-items: center;
   justify-content: start;
-  gap: 10px;
-  padding-top: 2px;
-}
-
-.ff-drawing-emoji-sticker-v1__style-label {
-  color: #131722;
-  font-size: 13px;
-  line-height: 1;
-  white-space: nowrap;
+  gap: 8px;
+  padding: 8px 0 0;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .ff-drawing-emoji-sticker-v1__size-input {
@@ -631,7 +617,13 @@
   width: 78px;
 }
 
+.ff-drawing-hline-text-tab-v1__font-family {
+  min-width: 132px;
+  width: 132px;
+}
+
 .ff-drawing-hline-text-tab-v1__font-size .ff-openable-select__button,
+.ff-drawing-hline-text-tab-v1__font-family .ff-openable-select__button,
 .ff-drawing-hline-text-tab-v1__align-select .ff-openable-select__button {
   height: 28px;
   border-radius: 4px;

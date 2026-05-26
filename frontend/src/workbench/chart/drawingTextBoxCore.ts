@@ -21,10 +21,14 @@ export function normalizeDrawingTextBoxStyle(textStyle: DrawingTextStyle | undef
   })
 }
 
-export function createDrawingTextBoxFont(text: Pick<DrawingTextStyle, 'bold' | 'fontSize' | 'italic'>) {
+function quoteFontFamily(fontFamily: string) {
+  return fontFamily.includes(' ') ? `"${fontFamily.replace(/"/g, '')}"` : fontFamily
+}
+
+export function createDrawingTextBoxFont(text: Pick<DrawingTextStyle, 'bold' | 'fontFamily' | 'fontSize' | 'italic'>) {
   const fontStyle = text.italic ? 'italic ' : ''
   const fontWeight = text.bold ? '700 ' : '400 '
-  return `${fontStyle}${fontWeight}${text.fontSize}px Arial, Tahoma, sans-serif`
+  return `${fontStyle}${fontWeight}${text.fontSize}px ${quoteFontFamily(text.fontFamily)}, Arial, Tahoma, sans-serif`
 }
 
 export function splitDrawingTextBoxRows(body: string, mode: DrawingTextBoxRowsMode = {}) {

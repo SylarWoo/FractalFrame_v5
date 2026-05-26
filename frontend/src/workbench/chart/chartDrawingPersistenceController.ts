@@ -17,6 +17,8 @@ import type {
   StoredRulerDrawing,
   StoredTrendLineDrawing,
 } from '../rightDrawer/drawingObjectPersistence'
+import { readStoredEmojiStickerDrawings, writeStoredEmojiStickerDrawings } from '../rightDrawer/stickerDrawingPersistence'
+import type { StoredEmojiStickerDrawing } from '../rightDrawer/stickerDrawingPersistence'
 import type {
   DrawingTextStyle,
   DrawingTrendLineStyle,
@@ -24,18 +26,23 @@ import type {
 import type { DrawingRulerStyle } from '../rightDrawer/rulerDrawingStyle'
 import {
   createHorizontalLineObjectId,
+  createEmojiStickerObjectId,
   createFibRetracementObjectId,
   createRulerObjectId,
   createTrendLineObjectId,
   syncFibRetracementObjectIdSeed,
+  syncEmojiStickerObjectIdSeed,
   syncHorizontalLineObjectIdSeed,
   syncRulerObjectIdSeed,
   syncTrendLineObjectIdSeed,
 } from './chartDrawingObjectIds'
 import { storedFibRetracementFromOverlay, storedHorizontalLineFromOverlay, storedRulerFromOverlay, storedTrendLineFromOverlay } from './chartDrawingSerialization'
+import { storedEmojiStickerFromOverlay } from './stickerDrawingSerialization'
 
 export type InitialStoredDrawingState = {
   fibRetracementPersistenceEnabled: boolean
+  emojiStickerPersistenceEnabled: boolean
+  pendingEmojiStickerDrawings: StoredEmojiStickerDrawing[]
   horizontalLinePersistenceEnabled: boolean
   pendingFibRetracementDrawings: StoredFibRetracementDrawing[]
   pendingHorizontalLineDrawings: StoredHorizontalLineDrawing[]
@@ -48,20 +55,25 @@ export type InitialStoredDrawingState = {
 export function readInitialStoredDrawingState(): InitialStoredDrawingState {
   const horizontalLinePersistenceEnabled = readDrawingObjectPersistence('horizontalLine')
   const fibRetracementPersistenceEnabled = readDrawingObjectPersistence('fibRetracement')
+  const emojiStickerPersistenceEnabled = readDrawingObjectPersistence('emojiSticker')
   const rulerPersistenceEnabled = readDrawingObjectPersistence('ruler')
   const trendLinePersistenceEnabled = readDrawingObjectPersistence('trendLine')
   const pendingFibRetracementDrawings = fibRetracementPersistenceEnabled ? readStoredFibRetracementDrawings() : []
+  const pendingEmojiStickerDrawings = emojiStickerPersistenceEnabled ? readStoredEmojiStickerDrawings() : []
   const pendingHorizontalLineDrawings = horizontalLinePersistenceEnabled ? readStoredHorizontalLineDrawings() : []
   const pendingRulerDrawings = rulerPersistenceEnabled ? readStoredRulerDrawings() : []
   const pendingTrendLineDrawings = trendLinePersistenceEnabled ? readStoredTrendLineDrawings() : []
   syncFibRetracementObjectIdSeed(pendingFibRetracementDrawings)
+  syncEmojiStickerObjectIdSeed(pendingEmojiStickerDrawings)
   syncHorizontalLineObjectIdSeed(pendingHorizontalLineDrawings)
   syncRulerObjectIdSeed(pendingRulerDrawings)
   syncTrendLineObjectIdSeed(pendingTrendLineDrawings)
   return {
     fibRetracementPersistenceEnabled,
+    emojiStickerPersistenceEnabled,
     horizontalLinePersistenceEnabled,
     pendingFibRetracementDrawings,
+    pendingEmojiStickerDrawings,
     pendingHorizontalLineDrawings,
     pendingRulerDrawings,
     pendingTrendLineDrawings,
@@ -77,10 +89,12 @@ export function createChartDrawingPersistenceController({
   createFibRetracementOverlay,
   createRulerOverlay,
   createTrendLineOverlay,
+  createEmojiStickerOverlay,
   fallbackPaneId,
   getDestroyed,
   getHorizontalLinePersistenceEnabled,
   getFibRetracementPersistenceEnabled,
+  getEmojiStickerPersistenceEnabled,
   getPendingRulerOverlayId,
   getPendingFibRetracementOverlayId,
   getPendingTrendLineOverlayId,
@@ -88,8 +102,10 @@ export function createChartDrawingPersistenceController({
   getTrendLinePersistenceEnabled,
   horizontalLineOverlayIds,
   fibRetracementOverlayIds,
+  emojiStickerOverlayIds,
   initialHorizontalLineDrawings,
   initialFibRetracementDrawings,
+  initialEmojiStickerDrawings,
   initialRulerDrawings,
   initialTrendLineDrawings,
   rulerOverlayIds,
@@ -159,10 +175,25 @@ export function createChartDrawingPersistenceController({
     showPriceLabel: boolean
     textStyle?: DrawingTextStyle
   }) => unknown
+  createEmojiStickerOverlay: (options: {
+    bold: boolean
+    color: string
+    fontFamily: string
+    italic: boolean
+    locked: boolean
+    manualVisible?: boolean
+    objectId?: string
+    paneId?: string
+    point: { dataIndex?: number; timestamp?: number; value?: number }
+    size: number
+    symbol: string
+    textStyle?: DrawingTextStyle
+  }) => unknown
   fallbackPaneId: string
   getDestroyed: () => boolean
   getHorizontalLinePersistenceEnabled: () => boolean
   getFibRetracementPersistenceEnabled: () => boolean
+  getEmojiStickerPersistenceEnabled: () => boolean
   getPendingFibRetracementOverlayId: () => string | null
   getPendingRulerOverlayId: () => string | null
   getPendingTrendLineOverlayId: () => string | null
@@ -170,7 +201,9 @@ export function createChartDrawingPersistenceController({
   getTrendLinePersistenceEnabled: () => boolean
   horizontalLineOverlayIds: Set<string>
   fibRetracementOverlayIds: Set<string>
+  emojiStickerOverlayIds: Set<string>
   initialFibRetracementDrawings: StoredFibRetracementDrawing[]
+  initialEmojiStickerDrawings: StoredEmojiStickerDrawing[]
   initialHorizontalLineDrawings: StoredHorizontalLineDrawing[]
   initialRulerDrawings: StoredRulerDrawing[]
   initialTrendLineDrawings: StoredTrendLineDrawing[]
@@ -178,6 +211,7 @@ export function createChartDrawingPersistenceController({
   trendLineOverlayIds: Set<string>
 }) {
   let pendingFibRetracementDrawings = initialFibRetracementDrawings
+  let pendingEmojiStickerDrawings = initialEmojiStickerDrawings
   let pendingHorizontalLineDrawings = initialHorizontalLineDrawings
   let pendingRulerDrawings = initialRulerDrawings
   let pendingTrendLineDrawings = initialTrendLineDrawings
@@ -247,6 +281,22 @@ export function createChartDrawingPersistenceController({
       if (drawing) drawings.push(drawing)
     })
     writeStoredFibRetracementDrawings(drawings)
+  }
+
+  const persistCurrentEmojiStickers = () => {
+    if (getDestroyed()) return
+    if (!getEmojiStickerPersistenceEnabled()) return
+    const drawings: StoredEmojiStickerDrawing[] = []
+    emojiStickerOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) {
+        emojiStickerOverlayIds.delete(id)
+        return
+      }
+      const drawing = storedEmojiStickerFromOverlay(overlay, createEmojiStickerObjectId, fallbackPaneId)
+      if (drawing) drawings.push(drawing)
+    })
+    writeStoredEmojiStickerDrawings(drawings)
   }
 
   const restorePendingStoredHorizontalLines = () => {
@@ -367,12 +417,42 @@ export function createChartDrawingPersistenceController({
     pendingFibRetracementDrawings = remaining
   }
 
+  const restorePendingStoredEmojiStickers = () => {
+    if (!getEmojiStickerPersistenceEnabled() || pendingEmojiStickerDrawings.length === 0) return
+    const remaining: StoredEmojiStickerDrawing[] = []
+    pendingEmojiStickerDrawings.forEach((drawing) => {
+      const paneId = drawing.paneId || fallbackPaneId
+      if (!canCreateOverlayOnPane(paneId)) {
+        remaining.push(drawing)
+        return
+      }
+      const overlayId = createEmojiStickerOverlay({
+        bold: drawing.bold,
+        color: drawing.color,
+        fontFamily: drawing.fontFamily,
+        italic: drawing.italic,
+        locked: drawing.locked,
+        manualVisible: drawing.manualVisible,
+        objectId: drawing.objectId || createEmojiStickerObjectId(),
+        paneId,
+        point: drawing.point,
+        size: drawing.size,
+        symbol: drawing.symbol,
+        textStyle: drawing.textStyle,
+      })
+      if (typeof overlayId === 'string') emojiStickerOverlayIds.add(overlayId)
+    })
+    pendingEmojiStickerDrawings = remaining
+  }
+
   return {
     persistCurrentFibRetracements,
+    persistCurrentEmojiStickers,
     persistCurrentHorizontalLines,
     persistCurrentRulers,
     persistCurrentTrendLines,
     restorePendingStoredFibRetracements,
+    restorePendingStoredEmojiStickers,
     restorePendingStoredHorizontalLines,
     restorePendingStoredRulers,
     restorePendingStoredTrendLines,

@@ -1,9 +1,11 @@
 import type { StoredFibRetracementDrawing, StoredHorizontalLineDrawing, StoredRulerDrawing, StoredTrendLineDrawing } from '../rightDrawer/drawingObjectPersistence'
+import type { StoredEmojiStickerDrawing } from '../rightDrawer/stickerDrawingPersistence'
 
 let horizontalLineObjectIdSeed = 0
 let trendLineObjectIdSeed = 0
 let rulerObjectIdSeed = 0
 let fibRetracementObjectIdSeed = 0
+let emojiStickerObjectIdSeed = 0
 
 export function createHorizontalLineObjectId() {
   horizontalLineObjectIdSeed += 1
@@ -32,6 +34,11 @@ export function createFibRetracementObjectId() {
   return `FB${String(fibRetracementObjectIdSeed).padStart(4, '0')}`
 }
 
+export function createEmojiStickerObjectId() {
+  emojiStickerObjectIdSeed += 1
+  return `ES${String(emojiStickerObjectIdSeed).padStart(4, '0')}`
+}
+
 export function syncTrendLineObjectIdSeed(drawings: StoredTrendLineDrawing[]) {
   drawings.forEach((drawing) => {
     const value = numericTrendLineObjectIdValue(drawing.objectId)
@@ -53,6 +60,13 @@ export function syncFibRetracementObjectIdSeed(drawings: StoredFibRetracementDra
   })
 }
 
+export function syncEmojiStickerObjectIdSeed(drawings: StoredEmojiStickerDrawing[]) {
+  drawings.forEach((drawing) => {
+    const value = numericEmojiStickerObjectIdValue(drawing.objectId)
+    if (Number.isFinite(value)) emojiStickerObjectIdSeed = Math.max(emojiStickerObjectIdSeed, value)
+  })
+}
+
 function numericObjectIdValue(objectId: string) {
   const match = /^HL(\d+)$/i.exec(objectId.trim())
   return match ? Number(match[1]) : Number.NaN
@@ -70,5 +84,10 @@ function numericRulerObjectIdValue(objectId: string) {
 
 function numericFibRetracementObjectIdValue(objectId: string) {
   const match = /^FB(\d+)$/i.exec(objectId.trim())
+  return match ? Number(match[1]) : Number.NaN
+}
+
+function numericEmojiStickerObjectIdValue(objectId: string) {
+  const match = /^ES(\d+)$/i.exec(objectId.trim())
   return match ? Number(match[1]) : Number.NaN
 }

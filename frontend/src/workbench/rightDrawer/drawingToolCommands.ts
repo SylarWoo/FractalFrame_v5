@@ -30,7 +30,10 @@ export type DrawingToolCommand = {
   pointIndex?: number
   rulerStyle?: DrawingRulerStyle
   showPriceLabel?: boolean
+  stickerBold?: boolean
   stickerColor?: string
+  stickerFontFamily?: string
+  stickerItalic?: boolean
   stickerSize?: number
   stickerSymbol?: string
   textStyle?: DrawingTextStyle
@@ -61,7 +64,10 @@ export type DrawingToolState = {
   price?: number
   selected: boolean
   showPriceLabel: boolean
+  stickerBold?: boolean
   stickerColor?: string
+  stickerFontFamily?: string
+  stickerItalic?: boolean
   stickerSize?: number
   stickerSymbol?: string
   textStyle?: DrawingTextStyle

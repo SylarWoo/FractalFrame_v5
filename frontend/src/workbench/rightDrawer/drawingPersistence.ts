@@ -8,6 +8,7 @@ export type DrawingTextStyle = {
   alignV: 'top' | 'middle' | 'bottom'
   body: string
   bold: boolean
+  fontFamily: string
   fontSize: number
   italic: boolean
   textColor: string
@@ -54,6 +55,7 @@ export function createDefaultDrawingTextStyle(): DrawingTextStyle {
     alignV: 'top',
     body: '',
     bold: false,
+    fontFamily: 'Arial',
     fontSize: 14,
     italic: false,
     textColor: '#131722',
@@ -83,6 +85,9 @@ function normalizeTextBody(value: unknown) {
 export function normalizeDrawingTextStyle(textStyle: Partial<DrawingTextStyle> | null | undefined): DrawingTextStyle {
   const fallback = createDefaultDrawingTextStyle()
   const fontSize = Number(textStyle?.fontSize)
+  const fontFamily = typeof textStyle?.fontFamily === 'string' && textStyle.fontFamily.trim()
+    ? textStyle.fontFamily.trim()
+    : fallback.fontFamily
   const alignH = textStyle?.alignH === 'left' || textStyle?.alignH === 'center' || textStyle?.alignH === 'right'
     ? textStyle.alignH
     : fallback.alignH
@@ -94,6 +99,7 @@ export function normalizeDrawingTextStyle(textStyle: Partial<DrawingTextStyle> |
     alignV,
     body: normalizeTextBody(textStyle?.body),
     bold: textStyle?.bold === true,
+    fontFamily,
     fontSize: Number.isFinite(fontSize) ? Math.max(8, Math.min(48, Math.round(fontSize))) : fallback.fontSize,
     italic: textStyle?.italic === true,
     textColor: typeof textStyle?.textColor === 'string' && textStyle.textColor.trim() ? textStyle.textColor.trim() : fallback.textColor,
