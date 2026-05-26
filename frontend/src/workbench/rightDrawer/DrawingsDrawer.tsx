@@ -377,7 +377,7 @@ export function DrawingsDrawer() {
       enabled: quickMeasureEnabled,
       tool: 'ruler',
     })
-  }, [])
+  }, [quickMeasureEnabled])
 
   function armSelectedTool() {
     setArmedKey(selectedKey)

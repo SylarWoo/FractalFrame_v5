@@ -127,10 +127,6 @@ export function TopBar({ indicatorShortcuts = [], onIndicatorShortcutToggle, onJ
     }
   }, [walletOpen])
 
-  useEffect(() => {
-    if (indicatorShortcuts.length === 0) setWalletOpen(false)
-  }, [indicatorShortcuts.length])
-
   function handleShortcutMenuResizePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const root = shortcutMenuRef.current
     if (!root) return

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   clampVisibilityRangeValue,
   readVisibilityRangeRows,
@@ -20,13 +20,25 @@ export function VisibilityRangePanel({ storageKey, storageKeys }: VisibilityRang
     return Array.from(new Set(keys.filter((key) => typeof key === 'string' && key.trim().length > 0)))
   }, [storageKey, storageKeys])
   const primaryStorageKey = effectiveStorageKeys[0]
-  const resolvedStorageKey = useMemo(() => visibilityRangeStorageKey(primaryStorageKey), [primaryStorageKey])
   const resolvedStorageKeys = useMemo(() => effectiveStorageKeys.map((key) => visibilityRangeStorageKey(key)).join('|'), [effectiveStorageKeys])
-  const [rows, setRows] = useState<VisibilityRangeRow[]>(() => readVisibilityRangeRows(primaryStorageKey))
 
-  useEffect(() => {
-    setRows(readVisibilityRangeRows(primaryStorageKey))
-  }, [primaryStorageKey, resolvedStorageKey, resolvedStorageKeys])
+  return (
+    <VisibilityRangePanelBody
+      effectiveStorageKeys={effectiveStorageKeys}
+      key={resolvedStorageKeys}
+      primaryStorageKey={primaryStorageKey}
+    />
+  )
+}
+
+function VisibilityRangePanelBody({
+  effectiveStorageKeys,
+  primaryStorageKey,
+}: {
+  effectiveStorageKeys: string[]
+  primaryStorageKey?: string
+}) {
+  const [rows, setRows] = useState<VisibilityRangeRow[]>(() => readVisibilityRangeRows(primaryStorageKey))
 
   const patchRow = (key: VisibilityRangeUnitKey, patch: Partial<VisibilityRangeRow>) => {
     const nextRows = rows.map((row) => {

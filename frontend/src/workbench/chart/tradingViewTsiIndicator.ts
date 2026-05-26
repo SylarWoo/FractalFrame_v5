@@ -58,8 +58,8 @@ function createLineFigureStyle(color: string, visible: boolean, lineStyle: TsiIn
     dashedValue: lineDashForStyle(lineStyle),
     size: clampLineWidth(lineWidth),
     smooth: false,
-    style: klineLineTypeForStyle(lineStyle),
-  } as any
+    style: klineLineTypeForStyle(lineStyle) as never,
+  }
 }
 
 function createTsiLineFigures() {

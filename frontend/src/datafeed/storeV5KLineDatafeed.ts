@@ -63,8 +63,7 @@ async function queryStoreV5KLineData(options: {
 }): Promise<KLineData[]> {
   const timeframe = normalizeTimeframe(options.period)
   const isDirectM1 = timeframe === 'M1'
-  let payload: StoreV5QueryPayload
-  payload = await queryStoreV5Ohlcv({
+  const payload: StoreV5QueryPayload = await queryStoreV5Ohlcv({
     anchor: isDirectM1 ? undefined : 'UTC2200',
     baseTimeframe: isDirectM1 ? undefined : 'M1',
     mode: isDirectM1 ? 'direct' : 'aggregated',

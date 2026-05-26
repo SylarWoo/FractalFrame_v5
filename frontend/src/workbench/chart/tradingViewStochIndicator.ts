@@ -65,8 +65,8 @@ function createLineFigureStyle(
     dashedValue: lineDashForStyle(lineStyle),
     size: clampLineWidth(lineWidth),
     smooth: false,
-    style: klineLineTypeForStyle(lineStyle),
-  } as any
+    style: klineLineTypeForStyle(lineStyle) as never,
+  }
 }
 
 function createStochLineFigures() {
@@ -297,9 +297,11 @@ export function ensureTradingViewStochIndicator() {
 
       drawHorizontal(settings.upperBand, settings.upperBandColor, settings.upperBandVisible, settings.upperBandLineStyle, settings.upperBandLineWidth, settings.upperBandOpacity)
       drawHorizontal(settings.upperBand2, settings.upperBand2Color, settings.upperBand2Visible, settings.upperBand2LineStyle, settings.upperBand2LineWidth, settings.upperBand2Opacity)
+      drawHorizontal(settings.upperBand3, settings.upperBand3Color, settings.upperBand3Visible, settings.upperBand3LineStyle, settings.upperBand3LineWidth, settings.upperBand3Opacity)
       drawHorizontal(settings.middleBand, settings.middleBandColor, settings.middleBandVisible, settings.middleBandLineStyle, settings.middleBandLineWidth, settings.middleBandOpacity)
       drawHorizontal(settings.lowerBand, settings.lowerBandColor, settings.lowerBandVisible, settings.lowerBandLineStyle, settings.lowerBandLineWidth, settings.lowerBandOpacity)
       drawHorizontal(settings.lowerBand2, settings.lowerBand2Color, settings.lowerBand2Visible, settings.lowerBand2LineStyle, settings.lowerBand2LineWidth, settings.lowerBand2Opacity)
+      drawHorizontal(settings.lowerBand3, settings.lowerBand3Color, settings.lowerBand3Visible, settings.lowerBand3LineStyle, settings.lowerBand3LineWidth, settings.lowerBand3Opacity)
       drawStochLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'k', settings.kColor, settings.kVisible, settings.kLineStyle, settings.kLineWidth, settings.kOpacity)
       drawStochLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'd', settings.dColor, settings.dVisible, settings.dLineStyle, settings.dLineWidth, settings.dOpacity)
       return true

@@ -1,7 +1,7 @@
 import { OpenableSelect } from '../../../controls/OpenableSelect'
 import { SettingsColorSwatch, SettingsLineWeightSwatch } from '../../../settings/SettingsSwatches'
-import type { MaIndicatorSettings, MaMarkerMode, MaSource, MaType, RsiPrecision } from '../../indicatorPersistence'
-import { CheckControl, NumberBox, maMarkerModeOptions, maSourceOptions, maTypeOptions, precisionOptions, updateMaSettings } from './indicatorPanelShared'
+import type { MaIndicatorSettings, MaMarkerMode, MaSource, MaType } from '../../indicatorPersistence'
+import { CheckControl, NumberBox, maMarkerModeOptions, maSourceOptions, maTypeOptions, updateMaSettings } from './indicatorPanelShared'
 export function MaInputPanel({
   onSettingsChange,
   settings,
@@ -142,22 +142,6 @@ export function MaStylePanel({
           </span>
         </span>
       </div>
-      <h3 className="ff-indicators-style-panel-v1__subhead">输出值</h3>
-      <label className="ff-indicators-input-panel-v1__row ff-indicators-ma-style-panel-v1__precision-row">
-        <span className="ff-indicators-input-panel-v1__label">精确度</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect
-            ariaLabel="MA precision"
-            onChange={(value) => patch({ precision: value as RsiPrecision })}
-            options={precisionOptions}
-            value={settings.precision}
-          />
-        </span>
-      </label>
-      <CheckControl checked={settings.priceScaleLabelsVisible} label="价格坐标上的标签" onChange={(priceScaleLabelsVisible) => patch({ priceScaleLabelsVisible })} />
-      <CheckControl checked={settings.statusLineValuesVisible} label="状态行中的值" onChange={(statusLineValuesVisible) => patch({ statusLineValuesVisible })} />
-      <h3 className="ff-indicators-style-panel-v1__subhead">输入值</h3>
-      <CheckControl checked={settings.inputStatusLineVisible} label="状态行中的输入" onChange={(inputStatusLineVisible) => patch({ inputStatusLineVisible })} />
     </div>
   )
 }

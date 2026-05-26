@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import type { SymbolTableColumnKey } from '../mt5DataCenter/SymbolTable'
 import type { WatchlistTableColumnKey } from '../mt5DataCenter/WatchlistTable'
@@ -240,9 +240,10 @@ function useSelectedMarketStatus(selectedRow: Mt5SymbolRow | null) {
   ))
 
   useEffect(() => {
+    let frame = 0
     if (!selectedRow?.symbol) {
-      setStatus(null)
-      return
+      frame = window.requestAnimationFrame(() => setStatus(null))
+      return () => window.cancelAnimationFrame(frame)
     }
 
     let timer = 0
@@ -255,6 +256,7 @@ function useSelectedMarketStatus(selectedRow: Mt5SymbolRow | null) {
 
     sync()
     return () => {
+      if (frame !== 0) window.cancelAnimationFrame(frame)
       if (timer !== 0) window.clearTimeout(timer)
     }
   }, [selectedRow])
@@ -421,6 +423,7 @@ function SelectedSymbolRealtimePages({
   selectedSymbol: string
   storeRows: StoreTableRow[]
 }) {
+  const reloadIdRef = useRef(0)
   const [snapshot, setSnapshot] = useState(readRealtimePageSnapshot)
   const [selectedPage, setSelectedPage] = useState(1)
   const [pages, setPages] = useState<RealtimePageRow[]>([])
@@ -448,12 +451,15 @@ function SelectedSymbolRealtimePages({
   }, [])
 
   useEffect(() => {
-    setSelectedPage(1)
-    if (!cacheKey) {
-      setPages([])
-      return
-    }
-    setPages(readPageIndexCache()[cacheKey]?.pages ?? [])
+    const frame = window.requestAnimationFrame(() => {
+      setSelectedPage(1)
+      if (!cacheKey) {
+        setPages([])
+        return
+      }
+      setPages(readPageIndexCache()[cacheKey]?.pages ?? [])
+    })
+    return () => window.cancelAnimationFrame(frame)
   }, [cacheKey])
 
   const buildPages = async () => {
@@ -571,12 +577,13 @@ function SelectedSymbolRealtimePages({
   const openPage = (page: RealtimePageRow) => {
     const period = visibleSnapshot?.period || selectedPeriod
     if (!period) return
+    reloadIdRef.current += 1
     setSelectedPage(page.index)
     onOpenChart?.({
       symbol: selectedSymbol,
       period,
       totalRows: page.rows,
-      reloadId: Date.now(),
+      reloadId: reloadIdRef.current,
       page: {
         index: page.index,
         limit: page.limit,

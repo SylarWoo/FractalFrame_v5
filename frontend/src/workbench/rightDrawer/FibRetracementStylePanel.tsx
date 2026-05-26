@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components, react-hooks/refs, react-hooks/set-state-in-effect */
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'

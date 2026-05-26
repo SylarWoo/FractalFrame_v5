@@ -185,7 +185,7 @@ export function useChartDataLoad({
       chart.setLoadDataCallback(({ callback }) => callback([], false))
       if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer)
     }
-  }, [chartInstanceRef, jump?.id, jump?.timestamp, limit, page?.index, page?.limit, page?.realtime, page?.timeTo, period, reloadId, symbol, totalRows])
+  }, [chartInstanceRef, jump?.id, jump?.timestamp, limit, page, page?.index, page?.limit, page?.realtime, page?.timeTo, period, reloadId, symbol, totalRows])
 
   return { loadState, setLoadState }
 }

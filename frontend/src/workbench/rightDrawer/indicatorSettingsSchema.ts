@@ -170,6 +170,12 @@ export type StochIndicatorSettings = {
   lowerBand2LineWidth: number
   lowerBand2Opacity: number
   lowerBand2Visible: boolean
+  lowerBand3: number
+  lowerBand3Color: string
+  lowerBand3LineStyle: RsiLineStyle
+  lowerBand3LineWidth: number
+  lowerBand3Opacity: number
+  lowerBand3Visible: boolean
   lowerBandColor: string
   lowerBandLineStyle: RsiLineStyle
   lowerBandLineWidth: number
@@ -191,6 +197,12 @@ export type StochIndicatorSettings = {
   upperBand2LineWidth: number
   upperBand2Opacity: number
   upperBand2Visible: boolean
+  upperBand3: number
+  upperBand3Color: string
+  upperBand3LineStyle: RsiLineStyle
+  upperBand3LineWidth: number
+  upperBand3Opacity: number
+  upperBand3Visible: boolean
   upperBandColor: string
   upperBandLineStyle: RsiLineStyle
   upperBandLineWidth: number
@@ -461,6 +473,12 @@ export const defaultStochIndicatorSettings: StochIndicatorSettings = {
   lowerBand2LineWidth: 1,
   lowerBand2Opacity: 1,
   lowerBand2Visible: true,
+  lowerBand3: 40,
+  lowerBand3Color: '#787b86',
+  lowerBand3LineStyle: 'dashed',
+  lowerBand3LineWidth: 1,
+  lowerBand3Opacity: 1,
+  lowerBand3Visible: true,
   lowerBandColor: '#787b86',
   lowerBandLineStyle: 'dashed',
   lowerBandLineWidth: 1,
@@ -482,6 +500,12 @@ export const defaultStochIndicatorSettings: StochIndicatorSettings = {
   upperBand2LineWidth: 1,
   upperBand2Opacity: 1,
   upperBand2Visible: true,
+  upperBand3: 60,
+  upperBand3Color: '#787b86',
+  upperBand3LineStyle: 'dashed',
+  upperBand3LineWidth: 1,
+  upperBand3Opacity: 1,
+  upperBand3Visible: true,
   upperBandColor: '#787b86',
   upperBandLineStyle: 'dashed',
   upperBandLineWidth: 1,
@@ -789,16 +813,20 @@ export function normalizeStochSettings(input?: Partial<StochIndicatorSettings>):
   const dLineWidth = Math.round(Number(merged.dLineWidth))
   const upperBandLineWidth = Math.round(Number(merged.upperBandLineWidth))
   const upperBand2LineWidth = Math.round(Number(merged.upperBand2LineWidth))
+  const upperBand3LineWidth = Math.round(Number(merged.upperBand3LineWidth))
   const middleBandLineWidth = Math.round(Number(merged.middleBandLineWidth))
   const lowerBandLineWidth = Math.round(Number(merged.lowerBandLineWidth))
   const lowerBand2LineWidth = Math.round(Number(merged.lowerBand2LineWidth))
+  const lowerBand3LineWidth = Math.round(Number(merged.lowerBand3LineWidth))
   const kOpacity = Number(merged.kOpacity)
   const dOpacity = Number(merged.dOpacity)
   const upperBandOpacity = Number(merged.upperBandOpacity)
   const upperBand2Opacity = Number(merged.upperBand2Opacity)
+  const upperBand3Opacity = Number(merged.upperBand3Opacity)
   const middleBandOpacity = Number(merged.middleBandOpacity)
   const lowerBandOpacity = Number(merged.lowerBandOpacity)
   const lowerBand2Opacity = Number(merged.lowerBand2Opacity)
+  const lowerBand3Opacity = Number(merged.lowerBand3Opacity)
   const backgroundFillOpacity = Number(merged.backgroundFillOpacity)
   const backgroundFillUpperOpacity = Number(merged.backgroundFillUpperOpacity)
   const backgroundFillLowerOpacity = Number(merged.backgroundFillLowerOpacity)
@@ -826,6 +854,10 @@ export function normalizeStochSettings(input?: Partial<StochIndicatorSettings>):
     lowerBand2LineWidth: Number.isFinite(lowerBand2LineWidth) ? Math.max(1, Math.min(lowerBand2LineWidth, 4)) : defaultStochIndicatorSettings.lowerBand2LineWidth,
     lowerBand2Opacity: Number.isFinite(lowerBand2Opacity) ? Math.max(0, Math.min(lowerBand2Opacity, 1)) : defaultStochIndicatorSettings.lowerBand2Opacity,
     lowerBand2Visible: merged.lowerBand2Visible !== false,
+    lowerBand3LineStyle: merged.lowerBand3LineStyle === 'dashed' || merged.lowerBand3LineStyle === 'dotted' ? merged.lowerBand3LineStyle : 'solid',
+    lowerBand3LineWidth: Number.isFinite(lowerBand3LineWidth) ? Math.max(1, Math.min(lowerBand3LineWidth, 4)) : defaultStochIndicatorSettings.lowerBand3LineWidth,
+    lowerBand3Opacity: Number.isFinite(lowerBand3Opacity) ? Math.max(0, Math.min(lowerBand3Opacity, 1)) : defaultStochIndicatorSettings.lowerBand3Opacity,
+    lowerBand3Visible: merged.lowerBand3Visible !== false,
     lowerBandLineStyle: merged.lowerBandLineStyle === 'dashed' || merged.lowerBandLineStyle === 'dotted' ? merged.lowerBandLineStyle : 'solid',
     lowerBandLineWidth: Number.isFinite(lowerBandLineWidth) ? Math.max(1, Math.min(lowerBandLineWidth, 4)) : defaultStochIndicatorSettings.lowerBandLineWidth,
     lowerBandOpacity: Number.isFinite(lowerBandOpacity) ? Math.max(0, Math.min(lowerBandOpacity, 1)) : defaultStochIndicatorSettings.lowerBandOpacity,
@@ -840,6 +872,10 @@ export function normalizeStochSettings(input?: Partial<StochIndicatorSettings>):
     upperBand2LineWidth: Number.isFinite(upperBand2LineWidth) ? Math.max(1, Math.min(upperBand2LineWidth, 4)) : defaultStochIndicatorSettings.upperBand2LineWidth,
     upperBand2Opacity: Number.isFinite(upperBand2Opacity) ? Math.max(0, Math.min(upperBand2Opacity, 1)) : defaultStochIndicatorSettings.upperBand2Opacity,
     upperBand2Visible: merged.upperBand2Visible !== false,
+    upperBand3LineStyle: merged.upperBand3LineStyle === 'dashed' || merged.upperBand3LineStyle === 'dotted' ? merged.upperBand3LineStyle : 'solid',
+    upperBand3LineWidth: Number.isFinite(upperBand3LineWidth) ? Math.max(1, Math.min(upperBand3LineWidth, 4)) : defaultStochIndicatorSettings.upperBand3LineWidth,
+    upperBand3Opacity: Number.isFinite(upperBand3Opacity) ? Math.max(0, Math.min(upperBand3Opacity, 1)) : defaultStochIndicatorSettings.upperBand3Opacity,
+    upperBand3Visible: merged.upperBand3Visible !== false,
     upperBandLineStyle: merged.upperBandLineStyle === 'dashed' || merged.upperBandLineStyle === 'dotted' ? merged.upperBandLineStyle : 'solid',
     upperBandLineWidth: Number.isFinite(upperBandLineWidth) ? Math.max(1, Math.min(upperBandLineWidth, 4)) : defaultStochIndicatorSettings.upperBandLineWidth,
     upperBandOpacity: Number.isFinite(upperBandOpacity) ? Math.max(0, Math.min(upperBandOpacity, 1)) : defaultStochIndicatorSettings.upperBandOpacity,

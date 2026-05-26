@@ -40,14 +40,17 @@ export function resolveFuturePlaceholderCount(period: string) {
   return Math.max(0, Math.min(maxFuturePlaceholderBars, Math.ceil((futurePlaceholderDays * 24 * 60 * 60) / periodSeconds)))
 }
 
-export function appendFuturePlaceholders(rows: KLineData[], _period: string, enabled = readRightPlaceholderVisible()) {
+export function appendFuturePlaceholders(rows: KLineData[], period: string, enabled = readRightPlaceholderVisible()) {
+  void period
   const realRows = stripFuturePlaceholders(rows)
   if (!enabled || realRows.length === 0) return realRows
 
   return realRows
 }
 
-export function applyRightPlaceholderOffset(_chart: Chart, _period: string) {
+export function applyRightPlaceholderOffset(chart: Chart, period: string) {
+  void chart
+  void period
   // Intentionally no-op: KLineCharts right-offset APIs switch the chart into
   // distance-limited scrolling, which breaks the existing free right-drag.
 }

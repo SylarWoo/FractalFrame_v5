@@ -65,7 +65,6 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
 
   useEffect(() => {
     if (!settingVisible || !dataReady) {
-      setState((current) => current.visible ? { ...current, visible: false } : current)
       return
     }
 
@@ -162,5 +161,5 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
     }
   }, [chartInstanceRef, dataReady, period, settingVisible, symbol])
 
-  return state
+  return settingVisible && dataReady ? state : { ...state, visible: false }
 }

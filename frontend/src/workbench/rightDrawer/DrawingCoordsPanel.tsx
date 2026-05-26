@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { formatGlobalPrice } from '../chart/globalPricePrecision'
 
 export type DrawingPriceCoordinate = {
@@ -41,14 +41,11 @@ export function DrawingPriceCoordsPanel({
 function DrawingPriceCoordinateRow({ coordinate }: { coordinate: DrawingPriceCoordinate }) {
   const [draft, setDraft] = useState('')
   const [editing, setEditing] = useState(false)
-
-  useEffect(() => {
-    if (editing) return
-    setDraft(Number.isFinite(coordinate.price) ? formatGlobalPrice(coordinate.price, '') : '')
-  }, [coordinate.price, editing])
+  const formattedPrice = Number.isFinite(coordinate.price) ? formatGlobalPrice(coordinate.price, '') : ''
+  const displayValue = editing ? draft : formattedPrice
 
   const commit = () => {
-    const nextPrice = Number(draft.trim().replace(/,/g, ''))
+    const nextPrice = Number(displayValue.trim().replace(/,/g, ''))
     if (!Number.isFinite(nextPrice)) {
       setDraft(Number.isFinite(coordinate.price) ? formatGlobalPrice(coordinate.price, '') : '')
       setEditing(false)
@@ -82,7 +79,7 @@ function DrawingPriceCoordinateRow({ coordinate }: { coordinate: DrawingPriceCoo
         }}
         step="any"
         type="number"
-        value={draft}
+        value={displayValue}
       />
     </div>
   )

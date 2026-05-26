@@ -167,11 +167,12 @@ export function RightDrawer({
   })
 
   useEffect(() => {
+    let frame = 0
     if (!activeDrawer) {
-      setRenderedActiveDrawer(null)
-      return
+      frame = window.requestAnimationFrame(() => setRenderedActiveDrawer(null))
+      return () => window.cancelAnimationFrame(frame)
     }
-    let frame = window.requestAnimationFrame(() => {
+    frame = window.requestAnimationFrame(() => {
       frame = window.requestAnimationFrame(() => {
         setRenderedActiveDrawer(activeDrawer)
       })
@@ -241,6 +242,8 @@ export function RightDrawer({
 
     void loadCachedMt5Symbols()
     return () => { cancelled = true }
+  // Initial MT5 cache bootstrap intentionally runs once; realtime symbol changes are handled by dedicated selection hooks.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

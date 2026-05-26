@@ -8,7 +8,6 @@ import type {
   MacdIndicatorSettings,
   MacdMaType,
   MrIndicatorSettings,
-  RsiPrecision,
   RsiSource,
   StochIndicatorSettings,
   TsiIndicatorSettings,
@@ -25,7 +24,6 @@ import {
   InfoBadge,
   NumberBox,
   macdMaTypeOptions,
-  precisionOptions,
   rsiSourceOptions,
   stochText,
   updateDpoSettings,
@@ -38,7 +36,6 @@ import {
   updateVwapSettings,
   vwapAnchorPeriodOptions,
   vwapBandCalculationModeOptions,
-  vwapPrecisionOptions,
   vwapSourceOptions,
   vwapStyleText,
   vwapText,
@@ -125,22 +122,6 @@ export function VwapStylePanel({
           value={{ hex: settings.band1FillColor, opacity: settings.band1FillOpacity }}
         />
       </div>
-      <h3 className="ff-indicators-style-panel-v1__subhead">{vwapStyleText.outputValues}</h3>
-      <label className="ff-indicators-input-panel-v1__row ff-indicators-vwap-style-panel-v1__precision-row">
-        <span className="ff-indicators-input-panel-v1__label">{vwapStyleText.precision}</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect
-            ariaLabel="VWAP precision"
-            onChange={(value) => patch({ precision: value as RsiPrecision })}
-            options={vwapPrecisionOptions}
-            value={settings.precision}
-          />
-        </span>
-      </label>
-      <CheckControl checked={settings.priceScaleLabelsVisible} label={vwapStyleText.priceScaleLabels} onChange={(priceScaleLabelsVisible) => patch({ priceScaleLabelsVisible })} />
-      <CheckControl checked={settings.statusLineValuesVisible} label={vwapStyleText.statusLineValues} onChange={(statusLineValuesVisible) => patch({ statusLineValuesVisible })} />
-      <h3 className="ff-indicators-style-panel-v1__subhead">{vwapStyleText.inputValues}</h3>
-      <CheckControl checked={settings.inputsInStatusLine} label={vwapStyleText.inputsInStatusLine} onChange={(inputsInStatusLine) => patch({ inputsInStatusLine })} />
     </div>
   )
 }
@@ -300,17 +281,6 @@ export function MacdStylePanel({
           <NumberBox max={0} min={0} onChange={() => undefined} value={0} />
         </span>
       </div>
-      <h3 className="ff-indicators-style-panel-v1__subhead">输出值</h3>
-      <label className="ff-indicators-input-panel-v1__row ff-indicators-macd-style-panel-v1__precision-row">
-        <span className="ff-indicators-input-panel-v1__label">精确度</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect ariaLabel="MACD precision" onChange={(value) => patch({ precision: value as RsiPrecision })} options={precisionOptions} value={settings.precision} />
-        </span>
-      </label>
-      <CheckControl checked={settings.priceScaleLabelsVisible} label="价格坐标上的标签" onChange={(priceScaleLabelsVisible) => patch({ priceScaleLabelsVisible })} />
-      <CheckControl checked={settings.statusLineValuesVisible} label="状态行中的值" onChange={(statusLineValuesVisible) => patch({ statusLineValuesVisible })} />
-      <h3 className="ff-indicators-style-panel-v1__subhead">输入值</h3>
-      <CheckControl checked={settings.inputStatusLineVisible} label="状态行中的输入" onChange={(inputStatusLineVisible) => patch({ inputStatusLineVisible })} />
     </div>
   )
 }
@@ -407,17 +377,6 @@ export function TsiStylePanel({
           <NumberBox max={0} min={0} onChange={() => undefined} value={0} />
         </span>
       </div>
-      <h3 className="ff-indicators-style-panel-v1__subhead">输出值</h3>
-      <label className="ff-indicators-input-panel-v1__row ff-indicators-tsi-style-panel-v1__precision-row">
-        <span className="ff-indicators-input-panel-v1__label">精确度</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect ariaLabel="TSI precision" onChange={(value) => patch({ precision: value as RsiPrecision })} options={precisionOptions} value={settings.precision} />
-        </span>
-      </label>
-      <CheckControl checked={settings.priceScaleLabelsVisible} label="价格坐标上的标签" onChange={(priceScaleLabelsVisible) => patch({ priceScaleLabelsVisible })} />
-      <CheckControl checked={settings.statusLineValuesVisible} label="状态行中的值" onChange={(statusLineValuesVisible) => patch({ statusLineValuesVisible })} />
-      <h3 className="ff-indicators-style-panel-v1__subhead">输入值</h3>
-      <CheckControl checked={settings.inputStatusLineVisible} label="状态行中的输入" onChange={(inputStatusLineVisible) => patch({ inputStatusLineVisible })} />
     </div>
   )
 }
@@ -489,17 +448,6 @@ export function ViStylePanel({
           value={{ hex: settings.minusColor, lineStyle: settings.minusLineStyle, opacity: settings.minusOpacity, thickness: settings.minusLineWidth }}
         />
       </div>
-      <h3 className="ff-indicators-style-panel-v1__subhead">输出值</h3>
-      <label className="ff-indicators-input-panel-v1__row ff-indicators-vi-style-panel-v1__precision-row">
-        <span className="ff-indicators-input-panel-v1__label">精确度</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect ariaLabel="VI precision" onChange={(value) => patch({ precision: value as RsiPrecision })} options={precisionOptions} value={settings.precision} />
-        </span>
-      </label>
-      <CheckControl checked={settings.priceScaleLabelsVisible} label="价格坐标上的标签" onChange={(priceScaleLabelsVisible) => patch({ priceScaleLabelsVisible })} />
-      <CheckControl checked={settings.statusLineValuesVisible} label="状态行中的值" onChange={(statusLineValuesVisible) => patch({ statusLineValuesVisible })} />
-      <h3 className="ff-indicators-style-panel-v1__subhead">输入值</h3>
-      <CheckControl checked={settings.inputStatusLineVisible} label="状态行中的输入" onChange={(inputStatusLineVisible) => patch({ inputStatusLineVisible })} />
     </div>
   )
 }
@@ -562,6 +510,19 @@ export function StochStylePanel({
         </span>
       </div>
       <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.upperBand3Visible} label={stochText.upperBand3Level} onChange={(upperBand3Visible) => patch({ upperBand3Visible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.upperBand3Color}
+            lineStyle={settings.upperBand3LineStyle}
+            onChange={(value) => patch({ upperBand3Color: value.hex, upperBand3LineStyle: value.lineStyle, upperBand3LineWidth: value.thickness, upperBand3Opacity: value.opacity })}
+            thickness={settings.upperBand3LineWidth}
+            value={{ hex: settings.upperBand3Color, lineStyle: settings.upperBand3LineStyle, opacity: settings.upperBand3Opacity, thickness: settings.upperBand3LineWidth }}
+          />
+          <NumberBox max={100} min={0} onChange={(upperBand3) => patch({ upperBand3 })} value={settings.upperBand3} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
         <CheckControl checked={settings.lowerBandVisible} label={stochText.lowerBand} onChange={(lowerBandVisible) => patch({ lowerBandVisible })} />
         <span className="ff-indicators-style-row-v1__controls">
           <SettingsLineSwatch
@@ -585,6 +546,19 @@ export function StochStylePanel({
             value={{ hex: settings.lowerBand2Color, lineStyle: settings.lowerBand2LineStyle, opacity: settings.lowerBand2Opacity, thickness: settings.lowerBand2LineWidth }}
           />
           <NumberBox max={100} min={0} onChange={(lowerBand2) => patch({ lowerBand2 })} value={settings.lowerBand2} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.lowerBand3Visible} label={stochText.lowerBand3Level} onChange={(lowerBand3Visible) => patch({ lowerBand3Visible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.lowerBand3Color}
+            lineStyle={settings.lowerBand3LineStyle}
+            onChange={(value) => patch({ lowerBand3Color: value.hex, lowerBand3LineStyle: value.lineStyle, lowerBand3LineWidth: value.thickness, lowerBand3Opacity: value.opacity })}
+            thickness={settings.lowerBand3LineWidth}
+            value={{ hex: settings.lowerBand3Color, lineStyle: settings.lowerBand3LineStyle, opacity: settings.lowerBand3Opacity, thickness: settings.lowerBand3LineWidth }}
+          />
+          <NumberBox max={100} min={0} onChange={(lowerBand3) => patch({ lowerBand3 })} value={settings.lowerBand3} />
         </span>
       </div>
       <div className="ff-indicators-style-row-v1">
@@ -627,17 +601,6 @@ export function StochStylePanel({
           value={{ hex: settings.backgroundFillLowerColor, opacity: settings.backgroundFillLowerOpacity }}
         />
       </div>
-      <h3 className="ff-indicators-style-panel-v1__subhead">{stochText.outputValues}</h3>
-      <label className="ff-indicators-input-panel-v1__row ff-indicators-stoch-style-panel-v1__precision-row">
-        <span className="ff-indicators-input-panel-v1__label">{stochText.precision}</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect ariaLabel="Stoch precision" onChange={(value) => patch({ precision: value as RsiPrecision })} options={precisionOptions} value={settings.precision} />
-        </span>
-      </label>
-      <CheckControl checked={settings.priceScaleLabelsVisible} label={stochText.priceScaleLabels} onChange={(priceScaleLabelsVisible) => patch({ priceScaleLabelsVisible })} />
-      <CheckControl checked={settings.statusLineValuesVisible} label={stochText.statusLineValues} onChange={(statusLineValuesVisible) => patch({ statusLineValuesVisible })} />
-      <h3 className="ff-indicators-style-panel-v1__subhead">{stochText.inputValues}</h3>
-      <CheckControl checked={settings.inputStatusLineVisible} label={stochText.inputsInStatusLine} onChange={(inputStatusLineVisible) => patch({ inputStatusLineVisible })} />
     </div>
   )
 }
@@ -767,69 +730,12 @@ export function MrStylePanel() {
   )
 }
 
-export function MrInputPanelV2({
-  onSettingsChange,
-  settings,
-}: {
+export function MrInputPanelV3(props: {
   onSettingsChange: (settings: MrIndicatorSettings) => void
   settings: MrIndicatorSettings
 }) {
-  return (
-    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mr-panel-v1" role="tabpanel">
-      <section className="ff-indicators-input-panel-v1__section">
-        <label className="ff-indicators-input-panel-v1__row">
-          <span className="ff-indicators-input-panel-v1__label">状态行中的输入</span>
-          <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--check">
-            <input checked={settings.inputsInStatusLine} onChange={(event) => onSettingsChange({ ...settings, inputsInStatusLine: event.target.checked })} type="checkbox" />
-          </span>
-        </label>
-      </section>
-    </div>
-  )
-}
-
-export function MrStylePanelV2({
-  onSettingsChange,
-  settings,
-}: {
-  onSettingsChange: (settings: MrIndicatorSettings) => void
-  settings: MrIndicatorSettings
-}) {
-  return (
-    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-style-panel-v1 ff-indicators-mr-style-panel-v1" role="tabpanel">
-      <label className="ff-indicators-input-panel-v1__row ff-indicators-mr-style-panel-v1__precision-row">
-        <span className="ff-indicators-input-panel-v1__label">精确度</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect ariaLabel="MR precision" onChange={(value) => onSettingsChange({ ...settings, precision: value as RsiPrecision })} options={precisionOptions} value={settings.precision} />
-        </span>
-      </label>
-      <CheckControl checked={settings.labelsOnPriceScale} label="价格坐标上的标签" onChange={(labelsOnPriceScale) => onSettingsChange({ ...settings, labelsOnPriceScale })} />
-      <CheckControl checked={settings.valuesInStatusLine} label="状态行中的值" onChange={(valuesInStatusLine) => onSettingsChange({ ...settings, valuesInStatusLine })} />
-    </div>
-  )
-}
-
-export function MrInputPanelV3({
-  onSettingsChange,
-  settings,
-}: {
-  onSettingsChange: (settings: MrIndicatorSettings) => void
-  settings: MrIndicatorSettings
-}) {
-  const patch = (next: Partial<MrIndicatorSettings>) => onSettingsChange(updateMrSettings(settings, next))
-
-  return (
-    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mr-panel-v1" role="tabpanel">
-      <section className="ff-indicators-input-panel-v1__section">
-        <label className="ff-indicators-input-panel-v1__row">
-          <span className="ff-indicators-input-panel-v1__label">Status line inputs</span>
-          <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--check">
-            <input checked={settings.inputsInStatusLine} onChange={(event) => patch({ inputsInStatusLine: event.target.checked })} type="checkbox" />
-          </span>
-        </label>
-      </section>
-    </div>
-  )
+  void props
+  return <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mr-panel-v1" role="tabpanel" />
 }
 
 export function MrStylePanelV3({
@@ -843,12 +749,6 @@ export function MrStylePanelV3({
 
   return (
     <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-style-panel-v1 ff-indicators-mr-style-panel-v1" role="tabpanel">
-      <label className="ff-indicators-input-panel-v1__row ff-indicators-mr-style-panel-v1__precision-row">
-        <span className="ff-indicators-input-panel-v1__label">Precision</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect ariaLabel="MR precision" onChange={(value) => patch({ precision: value as RsiPrecision })} options={precisionOptions} value={settings.precision} />
-        </span>
-      </label>
       <div className="ff-indicators-style-row-v1">
         <CheckControl checked={settings.upperLineVisible} label="Upper Range" onChange={(upperLineVisible) => patch({ upperLineVisible })} />
         <SettingsLineSwatch
@@ -877,8 +777,6 @@ export function MrStylePanelV3({
           value={{ hex: settings.backgroundColor, opacity: settings.backgroundOpacity }}
         />
       </div>
-      <CheckControl checked={settings.labelsOnPriceScale} label="Price scale labels" onChange={(labelsOnPriceScale) => patch({ labelsOnPriceScale })} />
-      <CheckControl checked={settings.valuesInStatusLine} label="Status line values" onChange={(valuesInStatusLine) => patch({ valuesInStatusLine })} />
     </div>
   )
 }
@@ -1059,22 +957,6 @@ export function DpoStylePanel({
           </div>
         </>
       ) : null}
-      <h3 className="ff-indicators-style-panel-v1__subhead">输出值</h3>
-      <label className="ff-indicators-input-panel-v1__row ff-indicators-dpo-style-panel-v1__precision-row">
-        <span className="ff-indicators-input-panel-v1__label">精确度</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect
-            ariaLabel="DPO precision"
-            onChange={(value) => patch({ precision: value as RsiPrecision })}
-            options={vwapPrecisionOptions}
-            value={settings.precision}
-          />
-        </span>
-      </label>
-      <CheckControl checked={settings.labelsOnPriceScale} label="价格坐标上的标签" onChange={(labelsOnPriceScale) => patch({ labelsOnPriceScale })} />
-      <CheckControl checked={settings.valuesInStatusLine} label="状态行中的值" onChange={(valuesInStatusLine) => patch({ valuesInStatusLine })} />
-      <h3 className="ff-indicators-style-panel-v1__subhead">输入值</h3>
-      <CheckControl checked={settings.inputsInStatusLine} label="状态行中的输入" onChange={(inputsInStatusLine) => patch({ inputsInStatusLine })} />
     </div>
   )
 }

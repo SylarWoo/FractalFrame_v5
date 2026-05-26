@@ -1,7 +1,7 @@
 import { OpenableSelect } from '../../../controls/OpenableSelect'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../../../settings/SettingsSwatches'
-import type { RsiIndicatorSettings, RsiPrecision, RsiSmoothingType, RsiSource } from '../../indicatorPersistence'
-import { CheckControl, InfoBadge, NumberBox, precisionOptions, rsiSmoothingOptions, rsiSourceOptions, updateSettings } from './indicatorPanelShared'
+import type { RsiIndicatorSettings, RsiSmoothingType, RsiSource } from '../../indicatorPersistence'
+import { CheckControl, InfoBadge, NumberBox, rsiSmoothingOptions, rsiSourceOptions, updateSettings } from './indicatorPanelShared'
 export function RsiInputPanel({
   onSettingsChange,
   settings,
@@ -209,20 +209,6 @@ export function RsiStylePanel({
           value={{ hex: settings.backgroundFillColor, opacity: settings.backgroundFillOpacity }}
         />
       </div>
-      <h3 className="ff-indicators-style-panel-v1__subhead">输出值</h3>
-      <label className="ff-indicators-input-panel-v1__row">
-        <span className="ff-indicators-input-panel-v1__label">精确度</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect
-            ariaLabel="RSI precision"
-            onChange={(value) => patch({ precision: value as RsiPrecision })}
-            options={precisionOptions}
-            value={settings.precision}
-          />
-        </span>
-      </label>
-      <CheckControl checked={settings.priceScaleLabelsVisible} label="价格坐标上的标签" onChange={(priceScaleLabelsVisible) => patch({ priceScaleLabelsVisible })} />
-      <CheckControl checked={settings.statusLineValuesVisible} label="状态行中的值" onChange={(statusLineValuesVisible) => patch({ statusLineValuesVisible })} />
     </div>
   )
 }

@@ -63,8 +63,8 @@ function createLineFigureStyle(
     dashedValue: lineDashForStyle(lineStyle),
     size: clampLineWidth(lineWidth),
     smooth: false,
-    style: klineLineTypeForStyle(lineStyle),
-  } as any
+    style: klineLineTypeForStyle(lineStyle) as never,
+  }
 }
 
 function createDpoLineFigures() {

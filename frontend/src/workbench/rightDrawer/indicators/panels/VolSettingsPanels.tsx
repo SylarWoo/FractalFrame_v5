@@ -1,7 +1,6 @@
-import { OpenableSelect } from '../../../controls/OpenableSelect'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../../../settings/SettingsSwatches'
-import type { RsiPrecision, VolIndicatorSettings } from '../../indicatorPersistence'
-import { CheckControl, InfoBadge, NumberBox, precisionOptions } from './indicatorPanelShared'
+import type { VolIndicatorSettings } from '../../indicatorPersistence'
+import { CheckControl, InfoBadge, NumberBox } from './indicatorPanelShared'
 
 export function VolInputPanel({
   onSettingsChange,
@@ -88,22 +87,6 @@ export function VolStylePanel({
           }}
         />
       </div>
-      <h3 className="ff-indicators-style-panel-v1__subhead">输出值</h3>
-      <label className="ff-indicators-input-panel-v1__row ff-indicators-vol-style-panel-v1__precision-row">
-        <span className="ff-indicators-input-panel-v1__label">精确度</span>
-        <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
-          <OpenableSelect
-            ariaLabel="Vol precision"
-            onChange={(value) => patch({ precision: value as RsiPrecision })}
-            options={precisionOptions}
-            value={settings.precision}
-          />
-        </span>
-      </label>
-      <CheckControl checked={settings.labelsOnPriceScale} label="价格坐标上的标签" onChange={(labelsOnPriceScale) => patch({ labelsOnPriceScale })} />
-      <CheckControl checked={settings.valuesInStatusLine} label="状态行中的值" onChange={(valuesInStatusLine) => patch({ valuesInStatusLine })} />
-      <h3 className="ff-indicators-style-panel-v1__subhead">输入值</h3>
-      <CheckControl checked={settings.inputsInStatusLine} label="状态行中的输入" onChange={(inputsInStatusLine) => patch({ inputsInStatusLine })} />
     </div>
   )
 }

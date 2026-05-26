@@ -24,8 +24,8 @@ export function useWatchlistRealtime({
   foregroundRealtimeSymbol,
   watchlistSymbols,
 }: UseWatchlistRealtimeOptions) {
-  const initialRealtimeSnapshot = useRef(readPersistedRealtimeSnapshot()).current
-  const initialRealtimeEnabled = useRef(readWatchlistRealtimeEnabled()).current
+  const [initialRealtimeSnapshot] = useState(readPersistedRealtimeSnapshot)
+  const [initialRealtimeEnabled] = useState(readWatchlistRealtimeEnabled)
   const [watchlistRealtimeEnabled, setWatchlistRealtimeEnabled] = useState(initialRealtimeEnabled)
   const [watchlistRealtimeReady, setWatchlistRealtimeReady] = useState(false)
   const [watchlistRealtimeStatus, setWatchlistRealtimeStatus] = useState('')

@@ -124,11 +124,7 @@ export function writeJsonObjectValue(key: string, propertyKey: string, value: un
     }
     window.localStorage.setItem(key, JSON.stringify(nextValue))
   } catch {
-    const devValue = readDevState(key)
-    nextValue = {
-      ...(devValue && typeof devValue === 'object' && !Array.isArray(devValue) ? (devValue as Record<string, unknown>) : {}),
-      [propertyKey]: value,
-    }
+    // Dev-state patch below keeps persistence working when localStorage is unavailable.
   }
   writeDevStateObjectPatch(key, propertyKey, value)
   return true
