@@ -299,7 +299,17 @@ export type MrIndicatorSettings = {
   valuesInStatusLine: boolean
 }
 
-export type MmfIndicatorSettings = Record<string, never>
+export type MmfMorganRatio = '0.118' | '0.177' | '0.236'
+
+export type MmfIndicatorSettings = {
+  dpoValue: number
+  highColor: string
+  highMorganRatio: MmfMorganRatio
+  highOffsetPercent: number
+  highSize: number
+  highSymbol: string
+  showHigh: boolean
+}
 
 export type MaIndicatorSettings = {
   colors: string[]
@@ -684,7 +694,15 @@ export const defaultMrIndicatorSettings: MrIndicatorSettings = {
   valuesInStatusLine: true,
 }
 
-export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {}
+export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
+  dpoValue: 11,
+  highColor: '#ef5350',
+  highMorganRatio: '0.118',
+  highOffsetPercent: 0,
+  highSize: 24,
+  highSymbol: '\u25b2',
+  showHigh: true,
+}
 
 export const defaultDpoIndicatorSettings: DpoIndicatorSettings = {
   backgroundColor: '#26a69a',
@@ -1078,6 +1096,23 @@ export function normalizeMrSettings(input?: Partial<MrIndicatorSettings>): MrInd
     upperLineVisible: merged.upperLineVisible !== false,
     upperLineWidth: Number.isFinite(upperLineWidth) ? Math.max(1, Math.min(upperLineWidth, 4)) : defaultMrIndicatorSettings.upperLineWidth,
     valuesInStatusLine: merged.valuesInStatusLine !== false,
+  }
+}
+
+export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): MmfIndicatorSettings {
+  const merged = { ...defaultMmfIndicatorSettings, ...(input ?? {}) }
+  const highOffsetPercent = Number(merged.highOffsetPercent)
+  const highSize = Math.round(Number(merged.highSize))
+  const highColor = typeof merged.highColor === 'string' && merged.highColor.trim() ? merged.highColor : defaultMmfIndicatorSettings.highColor
+  const highSymbol = typeof merged.highSymbol === 'string' && merged.highSymbol.trim() ? merged.highSymbol : defaultMmfIndicatorSettings.highSymbol
+  return {
+    highColor,
+    highMorganRatio: ['0.118', '0.177', '0.236'].includes(merged.highMorganRatio) ? merged.highMorganRatio : defaultMmfIndicatorSettings.highMorganRatio,
+    highOffsetPercent: Number.isFinite(highOffsetPercent) ? Math.max(-99, Math.min(Math.round(highOffsetPercent), 99)) : defaultMmfIndicatorSettings.highOffsetPercent,
+    highSize: Number.isFinite(highSize) ? Math.max(8, Math.min(highSize, 96)) : defaultMmfIndicatorSettings.highSize,
+    highSymbol,
+    dpoValue: Number.isFinite(Number(merged.dpoValue)) ? Math.max(0, Math.min(Math.round(Number(merged.dpoValue)), 40)) : defaultMmfIndicatorSettings.dpoValue,
+    showHigh: merged.showHigh === true,
   }
 }
 

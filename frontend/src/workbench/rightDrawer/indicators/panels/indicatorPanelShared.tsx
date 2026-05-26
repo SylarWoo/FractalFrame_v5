@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useEffect, useRef, useState } from 'react'
 
+import { NumericStepperInput } from '../../../controls/NumericStepperInput'
 import type {
   MacdIndicatorSettings,
   MacdMaType,
@@ -10,6 +10,7 @@ import type {
   MaSource,
   MaType,
   MrIndicatorSettings,
+  MmfIndicatorSettings,
   RsiIndicatorSettings,
   RsiPrecision,
   RsiSmoothingType,
@@ -258,6 +259,13 @@ export function updateMrSettings(
   return { ...current, ...patch }
 }
 
+export function updateMmfSettings(
+  current: MmfIndicatorSettings,
+  patch: Partial<MmfIndicatorSettings>,
+): MmfIndicatorSettings {
+  return { ...current, ...patch }
+}
+
 export function CheckControl({
   checked,
   label,
@@ -276,60 +284,35 @@ export function CheckControl({
 }
 
 export function NumberBox({
+  className,
+  formatValue,
   max = 500,
   min = 0,
   onChange,
+  parseValue,
   step = 1,
   value,
 }: {
+  className?: string
+  formatValue?: (value: number) => string
   max?: number
   min?: number
   onChange: (value: number) => void
+  parseValue?: (value: string) => number
   step?: number
   value: number
 }) {
-  const [text, setText] = useState(String(value))
-  const focusedRef = useRef(false)
-
-  useEffect(() => {
-    if (focusedRef.current) return
-    setText(String(value))
-  }, [value])
-
-  const commitText = (nextText: string) => {
-    const nextValue = Number(nextText)
-    if (nextText === '' || nextText === '-' || nextText === '+' || !Number.isFinite(nextValue)) return
-    onChange(Math.max(min, Math.min(max, nextValue)))
-  }
-
   return (
-    <input
-      className="ff-indicators-number-box-v1"
-      inputMode="decimal"
+    <NumericStepperInput
+      className={className}
+      formatValue={formatValue}
+      inputClassName="ff-indicators-number-box-v1"
       max={max}
       min={min}
-      onChange={(event) => {
-        const nextText = event.target.value
-        setText(nextText)
-        commitText(nextText)
-      }}
-      onBlur={() => {
-        focusedRef.current = false
-        const nextValue = Number(text)
-        if (text === '' || text === '-' || text === '+' || !Number.isFinite(nextValue)) {
-          setText(String(value))
-          return
-        }
-        const clampedValue = Math.max(min, Math.min(max, nextValue))
-        setText(String(clampedValue))
-        onChange(clampedValue)
-      }}
-      onFocus={() => {
-        focusedRef.current = true
-      }}
+      onChange={onChange}
+      parseValue={parseValue}
       step={step}
-      type="text"
-      value={text}
+      value={value}
     />
   )
 }

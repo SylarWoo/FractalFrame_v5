@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { readSettingsStringValue, writeSettingsSymbolStateValue } from '../settingsSymbolState'
 import './OpenableSelect.css'
 
@@ -7,17 +8,25 @@ export type OpenableSelectOption = {
   value: string
 }
 
+type OpenableSelectStyleResolver = CSSProperties | ((option: OpenableSelectOption) => CSSProperties)
+
 type OpenableSelectProps = {
   ariaLabel?: string
   className?: string
   defaultValue?: string
   onChange?: (value: string) => void
+  optionStyle?: OpenableSelectStyleResolver
   options: OpenableSelectOption[]
+  selectedStyle?: OpenableSelectStyleResolver
   storageKey?: string
   value?: string
 }
 
-export function OpenableSelect({ ariaLabel, className = '', defaultValue, onChange, options, storageKey, value: controlledValue }: OpenableSelectProps) {
+function resolveOpenableSelectStyle(style: OpenableSelectStyleResolver | undefined, option: OpenableSelectOption) {
+  return typeof style === 'function' ? style(option) : style
+}
+
+export function OpenableSelect({ ariaLabel, className = '', defaultValue, onChange, optionStyle, options, selectedStyle, storageKey, value: controlledValue }: OpenableSelectProps) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const fallback = options[0]?.value ?? ''
   const [internalValue, setInternalValue] = useState(() => (
@@ -53,7 +62,7 @@ export function OpenableSelect({ ariaLabel, className = '', defaultValue, onChan
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
-        <span>{selected.label}</span>
+        <span style={resolveOpenableSelectStyle(selectedStyle, selected)}>{selected.label}</span>
         <span aria-hidden="true" className="ff-openable-select__chevron">⌄</span>
       </button>
       {open && (
@@ -70,6 +79,7 @@ export function OpenableSelect({ ariaLabel, className = '', defaultValue, onChan
                 setOpen(false)
               }}
               role="option"
+              style={resolveOpenableSelectStyle(optionStyle, option)}
               type="button"
             >
               {option.label}

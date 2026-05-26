@@ -1,6 +1,7 @@
 export { VolInputPanel, VolStylePanel } from './VolSettingsPanels'
 export { RsiInputPanel, RsiStylePanel } from './RsiSettingsPanels'
 export { MaInputPanel, MaStylePanel } from './MaSettingsPanels'
+export { MmfInputPanel, MmfStylePanel } from './MmfSettingsPanels'
 import type { CSSProperties } from 'react'
 import type { MorganRangeSegment } from '../../../chart/morganRangeModel'
 import { OpenableSelect } from '../../../controls/OpenableSelect'

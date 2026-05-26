@@ -1,11 +1,11 @@
 import { readBooleanFlag, readJson, removeStorageItem, writeBooleanFlag, writeJson } from '../persistence/jsonStorage'
 import {
   defaultMaIndicatorSettings,
-  defaultMmfIndicatorSettings,
   defaultRsiIndicatorSettings,
   normalizeDpoSettings,
   normalizeIndicatorSettingsTab,
   normalizeMacdSettings,
+  normalizeMmfSettings,
   normalizeMrSettings,
   normalizeStochSettings,
   normalizeTsiSettings,
@@ -26,6 +26,7 @@ export type {
   MaSource,
   MaType,
   MmfIndicatorSettings,
+  MmfMorganRatio,
   MrIndicatorSettings,
   PersistedIndicatorsState,
   RsiIndicatorSettings,
@@ -97,7 +98,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
         : defaultMaIndicatorSettings.colors,
     },
     macd: normalizeMacdSettings(parsed?.macd),
-    mmf: defaultMmfIndicatorSettings,
+    mmf: normalizeMmfSettings(parsed?.mmf),
     mr: normalizeMrSettings(parsed?.mr),
     rsi: {
       ...defaultRsiIndicatorSettings,

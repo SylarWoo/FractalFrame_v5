@@ -26,6 +26,8 @@ import {
   DpoStylePanel,
   MrInputPanelV3,
   MrStylePanelV3,
+  MmfInputPanel,
+  MmfStylePanel,
   RsiInputPanel,
   RsiStylePanel,
   StochInputPanel,
@@ -117,8 +119,8 @@ export function LoadedIndicatorSettingsPanel({
       style: <MrStylePanelV3 onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
     },
     MMF: {
-      input: <EmptyMmfPanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
-      style: <EmptyMmfPanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
+      input: <MmfInputPanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
+      style: <MmfStylePanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
     },
     RSI: {
       input: <RsiInputPanel onSettingsChange={onSettingsChange} settings={settings} />,
@@ -163,9 +165,4 @@ export function LoadedIndicatorSettingsPanel({
       ) : null}
     </>
   )
-}
-
-function EmptyMmfPanel(_props: { onSettingsChange: (settings: MmfIndicatorSettings) => void; settings: MmfIndicatorSettings }) {
-  void _props
-  return <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel" />
 }

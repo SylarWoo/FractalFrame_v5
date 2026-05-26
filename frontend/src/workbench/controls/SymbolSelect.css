@@ -1,0 +1,102 @@
+.ff-symbol-select-v1 {
+  position: relative;
+  width: var(--ff-symbol-select-width, 80px);
+}
+
+.ff-symbol-select-v1__button {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: var(--ff-symbol-select-width, 80px);
+  height: 34px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  border: 1px solid #d1d4dc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #131722;
+  cursor: pointer;
+  padding: 0 8px 0 18px;
+}
+
+.ff-symbol-select-v1__button .ff-symbol-select-v1__glyph {
+  flex: 0 0 28px;
+  justify-content: flex-start;
+}
+
+.ff-symbol-select-v1__chevron {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: #131722;
+  font: 10px/1 Arial, Tahoma, 'Segoe UI', sans-serif;
+}
+
+.ff-symbol-select-v1__menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 120;
+  box-sizing: border-box;
+  display: grid;
+  width: var(--ff-symbol-select-width, 80px);
+  overflow: hidden;
+  border: 1px solid #e0e3eb;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
+  padding: 4px 0;
+}
+
+.ff-symbol-select-v1__option {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  height: 36px;
+  align-items: center;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  color: #131722;
+  cursor: pointer;
+  padding: 0 0 0 18px;
+}
+
+.ff-symbol-select-v1__glyph {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  font-family: Arial, Tahoma, 'Segoe UI Symbol', 'Segoe UI', sans-serif;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.ff-symbol-select-v1__glyph[data-size='triangle'] {
+  font-size: 20px;
+}
+
+.ff-symbol-select-v1__glyph[data-size='diamond'] {
+  font-size: 24px;
+}
+
+.ff-symbol-select-v1__glyph[data-size='circle'] {
+  font-size: 30px;
+}
+
+.ff-symbol-select-v1__glyph[data-size='small'] {
+  font-size: 28px;
+}
+
+.ff-symbol-select-v1__option:hover {
+  background: #f2f3f5;
+}
+
+.ff-symbol-select-v1__option .ff-symbol-select-v1__glyph {
+  justify-content: flex-start;
+}
+
+.ff-symbol-select-v1__option[data-active='true'] {
+  background: #2f2f2f;
+  color: #ffffff;
+}

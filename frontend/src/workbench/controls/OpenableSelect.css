@@ -62,3 +62,25 @@
   background: #2f2f2f;
   color: #ffffff;
 }
+
+.ff-openable-select--mmf-symbol .ff-openable-select__button {
+  justify-content: center;
+  padding: 0 8px;
+}
+
+.ff-openable-select--mmf-symbol .ff-openable-select__button > span:first-child {
+  flex: 1;
+  font: 20px/1 Arial, Tahoma, 'Segoe UI Symbol', 'Segoe UI', sans-serif;
+  text-align: center;
+}
+
+.ff-openable-select--mmf-symbol .ff-openable-select__chevron {
+  font-size: 12px;
+}
+
+.ff-openable-select--mmf-symbol .ff-openable-select__option {
+  height: 36px;
+  font: 22px/36px Arial, Tahoma, 'Segoe UI Symbol', 'Segoe UI', sans-serif;
+  padding: 0;
+  text-align: center;
+}

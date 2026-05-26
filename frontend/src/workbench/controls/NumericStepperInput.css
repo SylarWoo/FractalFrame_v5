@@ -1,0 +1,27 @@
+.ff-numeric-stepper-v1 {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+  max-width: 100%;
+  align-items: stretch;
+}
+
+.ff-numeric-stepper-v1__input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.ff-numeric-stepper-v1--suffix .ff-numeric-stepper-v1__input {
+  padding-right: 18px;
+}
+
+.ff-numeric-stepper-v1__suffix {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  color: #5d6473;
+  font: 12px/1 Arial, Tahoma, 'Segoe UI', sans-serif;
+  pointer-events: none;
+  transform: translateY(-50%);
+}

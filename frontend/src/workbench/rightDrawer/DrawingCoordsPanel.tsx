@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { formatGlobalPrice } from '../chart/globalPricePrecision'
+import { NumericStepperInput } from '../controls/NumericStepperInput'
 
 export type DrawingPriceCoordinate = {
   id: string
@@ -39,47 +39,17 @@ export function DrawingPriceCoordsPanel({
 }
 
 function DrawingPriceCoordinateRow({ coordinate }: { coordinate: DrawingPriceCoordinate }) {
-  const [draft, setDraft] = useState('')
-  const [editing, setEditing] = useState(false)
-  const formattedPrice = Number.isFinite(coordinate.price) ? formatGlobalPrice(coordinate.price, '') : ''
-  const displayValue = editing ? draft : formattedPrice
-
-  const commit = () => {
-    const nextPrice = Number(displayValue.trim().replace(/,/g, ''))
-    if (!Number.isFinite(nextPrice)) {
-      setDraft(Number.isFinite(coordinate.price) ? formatGlobalPrice(coordinate.price, '') : '')
-      setEditing(false)
-      return
-    }
-    coordinate.onChange(nextPrice)
-    setDraft(formatGlobalPrice(nextPrice, ''))
-    setEditing(false)
-  }
-
   return (
     <div className="ff-drawing-hline-coords-tab-v1__row">
       <label className="ff-drawing-hline-coords-tab-v1__label" htmlFor={coordinate.id}>
         {coordinate.label}
       </label>
-      <input
-        autoComplete="off"
-        className="ff-drawing-hline-coords-tab-v1__input"
+      <NumericStepperInput
+        formatValue={(value) => formatGlobalPrice(value, '')}
         id={coordinate.id}
-        inputMode="decimal"
-        onBlur={commit}
-        onChange={(event) => setDraft(event.target.value)}
-        onFocus={() => {
-          setEditing(true)
-          setDraft(Number.isFinite(coordinate.price) ? formatGlobalPrice(coordinate.price, '') : '')
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter') return
-          event.preventDefault()
-          commit()
-        }}
-        step="any"
-        type="number"
-        value={displayValue}
+        inputClassName="ff-drawing-hline-coords-tab-v1__input"
+        onChange={coordinate.onChange}
+        value={coordinate.price}
       />
     </div>
   )
