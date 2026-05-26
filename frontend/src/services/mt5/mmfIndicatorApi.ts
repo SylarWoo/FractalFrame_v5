@@ -37,10 +37,10 @@ export async function fetchMmfIndicatorMarkers(options: {
   timeTo?: number
   limit?: number
   dpoValue?: number
-  highMorganRatio?: string
+  highMorganRatio?: number | string
   highOffsetPercent?: number
   lowDpoValue?: number
-  lowMorganRatio?: string
+  lowMorganRatio?: number | string
   lowOffsetPercent?: number
   showHigh?: boolean
   showLow?: boolean
@@ -58,10 +58,10 @@ export async function fetchMmfIndicatorMarkers(options: {
   if (typeof options.timeTo === 'number') params.set('timeTo', String(options.timeTo))
   if (typeof options.limit === 'number') params.set('limit', String(options.limit))
   if (typeof options.dpoValue === 'number') params.set('dpoValue', String(options.dpoValue))
-  if (options.highMorganRatio) params.set('highMorganRatio', options.highMorganRatio)
+  if (options.highMorganRatio != null) params.set('highMorganRatio', String(options.highMorganRatio))
   if (typeof options.highOffsetPercent === 'number') params.set('highOffsetPercent', String(options.highOffsetPercent))
   if (typeof options.lowDpoValue === 'number') params.set('lowDpoValue', String(options.lowDpoValue))
-  if (options.lowMorganRatio) params.set('lowMorganRatio', options.lowMorganRatio)
+  if (options.lowMorganRatio != null) params.set('lowMorganRatio', String(options.lowMorganRatio))
   if (typeof options.lowOffsetPercent === 'number') params.set('lowOffsetPercent', String(options.lowOffsetPercent))
   if (typeof options.showHigh === 'boolean') params.set('showHigh', options.showHigh ? '1' : '0')
   if (typeof options.showLow === 'boolean') params.set('showLow', options.showLow ? '1' : '0')
@@ -89,10 +89,10 @@ export async function calculateMmfIndicatorMarkers(options: {
   timeframe: string
   settings: {
     dpoValue?: number
-    highMorganRatio?: string
+    highMorganRatio?: number | string
     highOffsetPercent?: number
     lowDpoValue?: number
-    lowMorganRatio?: string
+    lowMorganRatio?: number | string
     lowOffsetPercent?: number
     showHigh?: boolean
     showLow?: boolean

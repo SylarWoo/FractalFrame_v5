@@ -1,22 +1,9 @@
-import { OpenableSelect } from '../../../controls/OpenableSelect'
 import { SymbolSelect } from '../../../controls/SymbolSelect'
 import type { SymbolSelectSize } from '../../../controls/SymbolSelect'
 import { SettingsColorSwatch } from '../../../settings/SettingsSwatches'
 import { mmfHighSymbolOptions } from '../../stickerSymbols'
-import type { MmfIndicatorSettings, MmfMorganRatio } from '../../indicatorPersistence'
+import type { MmfIndicatorSettings } from '../../indicatorPersistence'
 import { CheckControl, NumberBox, updateMmfSettings } from './indicatorPanelShared'
-
-const mmfMorganRatioOptions: Array<{ label: string; value: MmfMorganRatio }> = [
-  { label: '0.118', value: '0.118' },
-  { label: '0.177', value: '0.177' },
-  { label: '0.236', value: '0.236' },
-]
-
-const mmfLowMorganRatioOptions: Array<{ label: string; value: MmfMorganRatio }> = [
-  { label: '-0.118', value: '-0.118' },
-  { label: '-0.177', value: '-0.177' },
-  { label: '-0.236', value: '-0.236' },
-]
 
 function resolveMmfSymbolSize(symbol: string): SymbolSelectSize {
   if (['\u25b2', '\u25b3', '\u25bc', '\u25bd'].includes(symbol)) return 'triangle'
@@ -43,13 +30,12 @@ export function MmfInputPanel({
           dpoMin={0}
           dpoValue={settings.dpoValue}
           label={'\u9ad8\u70b9'}
+          morganMax={0.236}
+          morganMin={0.118}
           morganRatio={settings.highMorganRatio}
-          morganRatioOptions={mmfMorganRatioOptions}
-          offsetPercent={settings.highOffsetPercent}
           onCheckedChange={(showHigh) => patch({ showHigh })}
           onDpoChange={(dpoValue) => patch({ dpoValue })}
           onMorganRatioChange={(highMorganRatio) => patch({ highMorganRatio })}
-          onOffsetChange={(highOffsetPercent) => patch({ highOffsetPercent })}
         />
         <MmfSignalInputBlock
           checked={settings.showLow}
@@ -57,13 +43,12 @@ export function MmfInputPanel({
           dpoMin={-40}
           dpoValue={settings.lowDpoValue}
           label={'\u4f4e\u70b9'}
+          morganMax={-0.118}
+          morganMin={-0.236}
           morganRatio={settings.lowMorganRatio}
-          morganRatioOptions={mmfLowMorganRatioOptions}
-          offsetPercent={settings.lowOffsetPercent}
           onCheckedChange={(showLow) => patch({ showLow })}
           onDpoChange={(lowDpoValue) => patch({ lowDpoValue })}
           onMorganRatioChange={(lowMorganRatio) => patch({ lowMorganRatio })}
-          onOffsetChange={(lowOffsetPercent) => patch({ lowOffsetPercent })}
         />
       </section>
     </div>
@@ -76,26 +61,24 @@ function MmfSignalInputBlock({
   dpoMax,
   dpoMin,
   label,
+  morganMax,
+  morganMin,
   morganRatio,
-  morganRatioOptions,
-  offsetPercent,
   onCheckedChange,
   onDpoChange,
   onMorganRatioChange,
-  onOffsetChange,
 }: {
   checked: boolean
   dpoMax: number
   dpoMin: number
   dpoValue: number
   label: string
-  morganRatio: MmfMorganRatio
-  morganRatioOptions: Array<{ label: string; value: MmfMorganRatio }>
-  offsetPercent: number
+  morganMax: number
+  morganMin: number
+  morganRatio: number
   onCheckedChange: (checked: boolean) => void
   onDpoChange: (value: number) => void
-  onMorganRatioChange: (value: MmfMorganRatio) => void
-  onOffsetChange: (value: number) => void
+  onMorganRatioChange: (value: number) => void
 }) {
   return (
     <div className="ff-indicators-mmf-panel-v1__signal-block">
@@ -104,20 +87,16 @@ function MmfSignalInputBlock({
       </div>
       <div className="ff-indicators-mmf-panel-v1__settings-grid">
         <span className="ff-indicators-mmf-panel-v1__label">{'\u6469\u6839\u533a\u95f4'}</span>
-        <span className="ff-indicators-mmf-panel-v1__ratio-select">
-          <OpenableSelect
-            ariaLabel={`MMF ${label} Morgan ratio`}
-            onChange={(value) => onMorganRatioChange(value as MmfMorganRatio)}
-            options={morganRatioOptions}
-            value={morganRatio}
+        <span className="ff-indicators-mmf-panel-v1__morgan-input">
+          <NumberBox
+            formatValue={(value) => value.toFixed(3)}
+            max={morganMax}
+            min={morganMin}
+            onChange={onMorganRatioChange}
+            parseValue={(value) => Number(value)}
+            step={0.001}
+            value={Number(morganRatio)}
           />
-        </span>
-        <span className="ff-indicators-mmf-panel-v1__label">{'\u5fae\u8c03'}</span>
-        <span className="ff-indicators-mmf-panel-v1__offset-wrap">
-          <span className="ff-indicators-mmf-panel-v1__offset-input">
-            <NumberBox max={99} min={-99} onChange={onOffsetChange} value={offsetPercent} />
-          </span>
-          <span className="ff-indicators-mmf-panel-v1__offset-unit">%</span>
         </span>
         <span className="ff-indicators-mmf-panel-v1__label">DPO</span>
         <span className="ff-indicators-mmf-panel-v1__dpo-input">

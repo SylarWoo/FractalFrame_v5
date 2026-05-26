@@ -10,9 +10,11 @@ H4_MORGAN_SECONDS = 4 * 60 * 60
 XAU_SESSION_ANCHOR_SECONDS = 22 * 60 * 60
 MORGAN_LEVEL_RATIOS = (-1, -0.786, -0.618, -0.5, -0.382, -0.236, -0.177, -0.118, -0.059, 0, 0.059, 0.118, 0.177, 0.236, 0.382, 0.5, 0.618, 0.786, 1)
 MMF_HIGH_STOCH_START_LEVEL = 50
-MMF_HIGH_STOCH_REVERSAL_LEVEL = 70
+MMF_HIGH_STOCH_ZONE_LEVEL = 70
+MMF_HIGH_STOCH_REVERSAL_LEVEL = 65
 MMF_LOW_STOCH_START_LEVEL = 50
-MMF_LOW_STOCH_REVERSAL_LEVEL = 30
+MMF_LOW_STOCH_ZONE_LEVEL = 30
+MMF_LOW_STOCH_REVERSAL_LEVEL = 35
 
 
 @dataclass(frozen=True)
@@ -351,7 +353,7 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
 
             if active is not None:
                 active.has_filter_match = active.has_filter_match or high_filter_match
-                active.reached_reversal_zone = active.reached_reversal_zone or _stoch_lines_are_above(k, d, MMF_HIGH_STOCH_REVERSAL_LEVEL)
+                active.reached_reversal_zone = active.reached_reversal_zone or _stoch_lines_are_above(k, d, MMF_HIGH_STOCH_ZONE_LEVEL)
 
             if active is not None and active.reached_reversal_zone and index > active.start_index and _stoch_lines_break_below(previous_k, previous_d, k, d, MMF_HIGH_STOCH_REVERSAL_LEVEL):
                 active.end_index = index
@@ -394,7 +396,7 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
 
             if low_active is not None:
                 low_active.has_filter_match = low_active.has_filter_match or low_filter_match
-                low_active.reached_reversal_zone = low_active.reached_reversal_zone or _stoch_lines_are_below(k, d, MMF_LOW_STOCH_REVERSAL_LEVEL)
+                low_active.reached_reversal_zone = low_active.reached_reversal_zone or _stoch_lines_are_below(k, d, MMF_LOW_STOCH_ZONE_LEVEL)
 
             if low_active is not None and low_active.reached_reversal_zone and index > low_active.start_index and _stoch_lines_break_above(previous_k, previous_d, k, d, MMF_LOW_STOCH_REVERSAL_LEVEL):
                 low_active.end_index = index

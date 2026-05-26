@@ -24,7 +24,8 @@ type MmfHighActiveState = {
 }
 
 const highStochStartLevel = 50
-const highStochEndLevel = 70
+const highStochZoneLevel = 70
+const highStochEndLevel = 65
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
@@ -92,7 +93,7 @@ export function calculateMmfHighStateMachineRows(
         hasFilterMatch: isHighFilterMatched(row, settings),
         highestHigh: row.high,
         highestHighIndex: index,
-        reachedReversalZone: areStochLinesAbove(row.k, row.d, highStochEndLevel),
+        reachedReversalZone: areStochLinesAbove(row.k, row.d, highStochZoneLevel),
         startIndex: index,
       }
     }
@@ -105,7 +106,7 @@ export function calculateMmfHighStateMachineRows(
     }
 
     active.hasFilterMatch = active.hasFilterMatch || isHighFilterMatched(row, settings)
-    active.reachedReversalZone = active.reachedReversalZone || areStochLinesAbove(row.k, row.d, highStochEndLevel)
+    active.reachedReversalZone = active.reachedReversalZone || areStochLinesAbove(row.k, row.d, highStochZoneLevel)
 
     if (active.reachedReversalZone && index > active.startIndex && doStochLinesBreakBelow(previousRow.k, previousRow.d, row.k, row.d, highStochEndLevel)) {
       if (active.hasFilterMatch) {

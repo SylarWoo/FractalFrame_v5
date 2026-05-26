@@ -36,13 +36,13 @@ describe('tradingViewMmfIndicator', () => {
   it('marks the highest high inside a stochastic high cycle when DPO filters the cycle', async () => {
     vi.resetModules()
     installMocks(
-      [0, 0, 8, 12, 13, 12, 9, 6],
-      [42, 48, 55, 72, 86, 76, 68, 66],
-      [44, 49, 52, 70, 82, 78, 69, 66],
+      [0, 0, 8, 12, 13, 12, 9, 6, 4],
+      [42, 48, 55, 72, 86, 76, 68, 66, 64],
+      [44, 49, 52, 70, 82, 78, 69, 66, 64],
     )
 
     const { calculateTradingViewMmfRows } = await import('./tradingViewMmfIndicator')
-    const data = [100, 102, 108, 104, 112, 109, 106, 103].map((close, index) => createRow(index, close))
+    const data = [100, 102, 108, 104, 112, 109, 106, 103, 101].map((close, index) => createRow(index, close))
     const rows = calculateTradingViewMmfRows(data, {
       ...defaultMmfIndicatorSettings,
       dpoValue: 11,
