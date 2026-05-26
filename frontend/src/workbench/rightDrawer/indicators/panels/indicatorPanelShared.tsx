@@ -166,13 +166,17 @@ export const stochText = {
   kLength: '%K Length',
   kSmoothing: '%K Smoothing',
   lowerBand: 'Lower Band',
+  lowerBand2Level: 'Lower Band 2 level',
   outputValues: '\u8f93\u51fa\u503c',
   precision: '\u7cbe\u786e\u5ea6',
   priceScaleLabels: '\u4ef7\u683c\u5750\u6807\u4e0a\u7684\u6807\u7b7e',
   settings: 'Stoch \u8bbe\u7f6e',
   statusLineValues: '\u72b6\u6001\u884c\u4e2d\u7684\u503c',
   upperBand: 'Upper Band',
+  upperBand2Level: 'Upper Band 2 level',
   backgroundFill: 'Background Fill',
+  backgroundFillLower: 'Background Fill Lower',
+  backgroundFillUpper: 'Background Fill Upper',
 }
 
 

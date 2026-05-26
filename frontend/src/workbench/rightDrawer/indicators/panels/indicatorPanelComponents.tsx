@@ -547,6 +547,19 @@ export function StochStylePanel({
         </span>
       </div>
       <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.upperBand2Visible} label={stochText.upperBand2Level} onChange={(upperBand2Visible) => patch({ upperBand2Visible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.upperBand2Color}
+            lineStyle={settings.upperBand2LineStyle}
+            onChange={(value) => patch({ upperBand2Color: value.hex, upperBand2LineStyle: value.lineStyle, upperBand2LineWidth: value.thickness, upperBand2Opacity: value.opacity })}
+            thickness={settings.upperBand2LineWidth}
+            value={{ hex: settings.upperBand2Color, lineStyle: settings.upperBand2LineStyle, opacity: settings.upperBand2Opacity, thickness: settings.upperBand2LineWidth }}
+          />
+          <NumberBox max={100} min={0} onChange={(upperBand2) => patch({ upperBand2 })} value={settings.upperBand2} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
         <CheckControl checked={settings.lowerBandVisible} label={stochText.lowerBand} onChange={(lowerBandVisible) => patch({ lowerBandVisible })} />
         <span className="ff-indicators-style-row-v1__controls">
           <SettingsLineSwatch
@@ -560,12 +573,56 @@ export function StochStylePanel({
         </span>
       </div>
       <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.lowerBand2Visible} label={stochText.lowerBand2Level} onChange={(lowerBand2Visible) => patch({ lowerBand2Visible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.lowerBand2Color}
+            lineStyle={settings.lowerBand2LineStyle}
+            onChange={(value) => patch({ lowerBand2Color: value.hex, lowerBand2LineStyle: value.lineStyle, lowerBand2LineWidth: value.thickness, lowerBand2Opacity: value.opacity })}
+            thickness={settings.lowerBand2LineWidth}
+            value={{ hex: settings.lowerBand2Color, lineStyle: settings.lowerBand2LineStyle, opacity: settings.lowerBand2Opacity, thickness: settings.lowerBand2LineWidth }}
+          />
+          <NumberBox max={100} min={0} onChange={(lowerBand2) => patch({ lowerBand2 })} value={settings.lowerBand2} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.middleBandVisible} label="Middle Band" onChange={(middleBandVisible) => patch({ middleBandVisible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.middleBandColor}
+            lineStyle={settings.middleBandLineStyle}
+            onChange={(value) => patch({ middleBandColor: value.hex, middleBandLineStyle: value.lineStyle, middleBandLineWidth: value.thickness, middleBandOpacity: value.opacity })}
+            thickness={settings.middleBandLineWidth}
+            value={{ hex: settings.middleBandColor, lineStyle: settings.middleBandLineStyle, opacity: settings.middleBandOpacity, thickness: settings.middleBandLineWidth }}
+          />
+          <NumberBox max={100} min={0} onChange={(middleBand) => patch({ middleBand })} value={settings.middleBand} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
         <CheckControl checked={settings.backgroundFillVisible} label={stochText.backgroundFill} onChange={(backgroundFillVisible) => patch({ backgroundFillVisible })} />
         <SettingsColorSwatch
           checkerboard
           color={settings.backgroundFillColor}
           onChange={(value) => patch({ backgroundFillColor: value.hex, backgroundFillOpacity: value.opacity })}
           value={{ hex: settings.backgroundFillColor, opacity: settings.backgroundFillOpacity }}
+        />
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.backgroundFillUpperVisible} label={stochText.backgroundFillUpper} onChange={(backgroundFillUpperVisible) => patch({ backgroundFillUpperVisible })} />
+        <SettingsColorSwatch
+          checkerboard
+          color={settings.backgroundFillUpperColor}
+          onChange={(value) => patch({ backgroundFillUpperColor: value.hex, backgroundFillUpperOpacity: value.opacity })}
+          value={{ hex: settings.backgroundFillUpperColor, opacity: settings.backgroundFillUpperOpacity }}
+        />
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.backgroundFillLowerVisible} label={stochText.backgroundFillLower} onChange={(backgroundFillLowerVisible) => patch({ backgroundFillLowerVisible })} />
+        <SettingsColorSwatch
+          checkerboard
+          color={settings.backgroundFillLowerColor}
+          onChange={(value) => patch({ backgroundFillLowerColor: value.hex, backgroundFillLowerOpacity: value.opacity })}
+          value={{ hex: settings.backgroundFillLowerColor, opacity: settings.backgroundFillLowerOpacity }}
         />
       </div>
       <h3 className="ff-indicators-style-panel-v1__subhead">{stochText.outputValues}</h3>

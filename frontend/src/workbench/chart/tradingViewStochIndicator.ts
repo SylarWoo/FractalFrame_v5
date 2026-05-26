@@ -262,6 +262,16 @@ export function ensureTradingViewStochIndicator() {
         ctx.restore()
       }
 
+      const fillBetween = (fromValue: number, toValue: number, color: string, opacity: number, visible: boolean) => {
+        if (!visible) return
+        const fromY = yAxis.convertToPixel(fromValue)
+        const toY = yAxis.convertToPixel(toValue)
+        ctx.save()
+        ctx.fillStyle = colorWithAlpha(color, opacity)
+        ctx.fillRect(left, Math.min(fromY, toY), bounding.width, Math.abs(toY - fromY))
+        ctx.restore()
+      }
+
       if (settings.backgroundFillVisible && settings.upperBandVisible && settings.lowerBandVisible) {
         const upperY = yAxis.convertToPixel(settings.upperBand)
         const lowerY = yAxis.convertToPixel(settings.lowerBand)
@@ -270,10 +280,26 @@ export function ensureTradingViewStochIndicator() {
         ctx.fillRect(left, Math.min(upperY, lowerY), bounding.width, Math.abs(lowerY - upperY))
         ctx.restore()
       }
+      fillBetween(
+        settings.upperBand,
+        settings.upperBand2,
+        settings.backgroundFillUpperColor,
+        settings.backgroundFillUpperOpacity,
+        settings.backgroundFillVisible && settings.backgroundFillUpperVisible && settings.upperBandVisible && settings.upperBand2Visible,
+      )
+      fillBetween(
+        settings.lowerBand,
+        settings.lowerBand2,
+        settings.backgroundFillLowerColor,
+        settings.backgroundFillLowerOpacity,
+        settings.backgroundFillVisible && settings.backgroundFillLowerVisible && settings.lowerBandVisible && settings.lowerBand2Visible,
+      )
 
       drawHorizontal(settings.upperBand, settings.upperBandColor, settings.upperBandVisible, settings.upperBandLineStyle, settings.upperBandLineWidth, settings.upperBandOpacity)
+      drawHorizontal(settings.upperBand2, settings.upperBand2Color, settings.upperBand2Visible, settings.upperBand2LineStyle, settings.upperBand2LineWidth, settings.upperBand2Opacity)
       drawHorizontal(settings.middleBand, settings.middleBandColor, settings.middleBandVisible, settings.middleBandLineStyle, settings.middleBandLineWidth, settings.middleBandOpacity)
       drawHorizontal(settings.lowerBand, settings.lowerBandColor, settings.lowerBandVisible, settings.lowerBandLineStyle, settings.lowerBandLineWidth, settings.lowerBandOpacity)
+      drawHorizontal(settings.lowerBand2, settings.lowerBand2Color, settings.lowerBand2Visible, settings.lowerBand2LineStyle, settings.lowerBand2LineWidth, settings.lowerBand2Opacity)
       drawStochLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'k', settings.kColor, settings.kVisible, settings.kLineStyle, settings.kLineWidth, settings.kOpacity)
       drawStochLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'd', settings.dColor, settings.dVisible, settings.dLineStyle, settings.dLineWidth, settings.dOpacity)
       return true
