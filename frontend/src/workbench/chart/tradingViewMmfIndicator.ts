@@ -47,11 +47,11 @@ function resolveAdjustedMorganRatio(settings: MmfIndicatorSettings) {
   return selected + (target - selected) * (Math.abs(offset) / 100)
 }
 
-function resolveBearishCrossThreshold(previousK: number, previousD: number, k: number, d: number) {
-  const crossLevel = Math.max(previousK, previousD, k, d)
-  if (crossLevel > 80) return 75
-  if (crossLevel >= 70) return 65
-  if (crossLevel >= 65) return 55
+function resolveBearishCrossThreshold(k: number, d: number) {
+  const crossLevel = Math.max(k, d)
+  if (crossLevel >= 80) return 75
+  if (crossLevel >= 70 && crossLevel < 80) return 65
+  if (crossLevel >= 60 && crossLevel < 70) return 55
   return null
 }
 
@@ -132,7 +132,7 @@ function calculateTradingViewMmfRowsInternal(dataList: KLineData[], inputSetting
     }
 
     if (isBearishStochCross(previousStoch?.k, previousStoch?.d, k, d)) {
-      const threshold = resolveBearishCrossThreshold(previousStoch?.k as number, previousStoch?.d as number, k as number, d as number)
+      const threshold = resolveBearishCrossThreshold(k as number, d as number)
       active.reversalThreshold = threshold
       active.reversalCrossIndex = threshold == null ? null : index
     }
