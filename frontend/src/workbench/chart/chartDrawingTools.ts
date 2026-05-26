@@ -48,6 +48,7 @@ import { createRulerToolCommandHandler } from './chartRulerToolCommands'
 import { createQuickMeasureController } from './quickMeasureOverlay'
 import { createMorganRangeController } from './morganRangeOverlay'
 import { createStickerOverlayController } from './stickerOverlay'
+import { createChartSymbolMarkerController } from './chartSymbolMarkerOverlay'
 import { createStickerDrawingCommandHandler } from './stickerDrawingCommands'
 import { createChartDrawingHitTester } from './chartDrawingHitTesting'
 import { createTrendLinePendingStartHandleController } from './trendLinePendingStartHandle'
@@ -177,6 +178,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   let quickMeasureController: ReturnType<typeof createQuickMeasureController> | null = null
   let morganRangeController: ReturnType<typeof createMorganRangeController> | null = null
   let stickerController: ReturnType<typeof createStickerOverlayController> | null = null
+  let symbolMarkerController: ReturnType<typeof createChartSymbolMarkerController> | null = null
   const applyDrawingVisibility = () => drawingVisibilityController?.applyDrawingVisibility()
   const applyHorizontalLineVisibility = () => drawingVisibilityController?.applyHorizontalLineVisibility()
   const isHorizontalLineVisibleInCurrentPeriod = (objectId?: string) => drawingVisibilityController?.isHorizontalLineVisibleInCurrentPeriod(objectId) ?? true
@@ -777,6 +779,11 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     chart,
     fallbackPaneId: candlePaneId,
   })
+  symbolMarkerController = createChartSymbolMarkerController({
+    chart,
+    fallbackPaneId: candlePaneId,
+  })
+  window.fractalFrameSymbolMarkers = symbolMarkerController
   quickMeasureController.setEnabled(readQuickMeasureEnabled())
   morganRangeController = createMorganRangeController({
     chart,
@@ -1012,6 +1019,8 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     hidePendingTrendStartHandle()
     morganRangeController?.cleanup()
     stickerController?.cleanup()
+    symbolMarkerController?.clearAll()
+    if (window.fractalFrameSymbolMarkers === symbolMarkerController) delete window.fractalFrameSymbolMarkers
     cleanupLifecycle()
     paneInteractionController?.cleanup()
     quickMeasureController?.cleanup()

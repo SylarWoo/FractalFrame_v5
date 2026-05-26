@@ -17,6 +17,7 @@ import { createHorizontalLinePointFigures, createHorizontalLineYAxisFigures } fr
 import { ensureMorganRangeOverlay } from './morganRangeOverlay'
 import { ensureQuickMeasureOverlay } from './quickMeasureOverlay'
 import { createRulerPointFigures, createRulerYAxisFigures } from './rulerOverlayFigures'
+import { ensureChartSymbolMarkerOverlay } from './chartSymbolMarkerOverlay'
 import { ensureStickerOverlay } from './stickerOverlay'
 import { createTrendLinePointFigures, createTrendLineYAxisFigures } from './trendLineOverlayFigures'
 
@@ -97,4 +98,5 @@ export function ensureChartDrawingOverlays() {
   ensureFibRetracementOverlay()
   ensureMorganRangeOverlay()
   ensureStickerOverlay()
+  ensureChartSymbolMarkerOverlay()
 }

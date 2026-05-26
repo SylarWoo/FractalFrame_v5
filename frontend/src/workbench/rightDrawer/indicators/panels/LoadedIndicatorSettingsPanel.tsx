@@ -7,6 +7,7 @@ import type {
   IndicatorSettingsTab,
   MacdIndicatorSettings,
   MaIndicatorSettings,
+  MmfIndicatorSettings,
   MrIndicatorSettings,
   RsiIndicatorSettings,
   StochIndicatorSettings,
@@ -45,11 +46,13 @@ export function LoadedIndicatorSettingsPanel({
   dpoSettings,
   macdSettings,
   maSettings,
+  mmfSettings,
   mrSettings,
   morganRangeSegment,
   onDpoSettingsChange,
   onMacdSettingsChange,
   onMaSettingsChange,
+  onMmfSettingsChange,
   onMrSettingsChange,
   onSettingsChange,
   onStochSettingsChange,
@@ -71,11 +74,13 @@ export function LoadedIndicatorSettingsPanel({
   dpoSettings: DpoIndicatorSettings
   macdSettings: MacdIndicatorSettings
   maSettings: MaIndicatorSettings
+  mmfSettings: MmfIndicatorSettings
   mrSettings: MrIndicatorSettings
   morganRangeSegment?: MorganRangeSegment | null
   onDpoSettingsChange: (settings: DpoIndicatorSettings) => void
   onMacdSettingsChange: (settings: MacdIndicatorSettings) => void
   onMaSettingsChange: (settings: MaIndicatorSettings) => void
+  onMmfSettingsChange: (settings: MmfIndicatorSettings) => void
   onMrSettingsChange: (settings: MrIndicatorSettings) => void
   onSettingsChange: (settings: RsiIndicatorSettings) => void
   onStochSettingsChange: (settings: StochIndicatorSettings) => void
@@ -110,6 +115,10 @@ export function LoadedIndicatorSettingsPanel({
     MR: {
       input: <MrInputPanelV3 segment={morganRangeSegment} onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
       style: <MrStylePanelV3 onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
+    },
+    MMF: {
+      input: <EmptyMmfPanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
+      style: <EmptyMmfPanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
     },
     RSI: {
       input: <RsiInputPanel onSettingsChange={onSettingsChange} settings={settings} />,
@@ -154,4 +163,9 @@ export function LoadedIndicatorSettingsPanel({
       ) : null}
     </>
   )
+}
+
+function EmptyMmfPanel(_props: { onSettingsChange: (settings: MmfIndicatorSettings) => void; settings: MmfIndicatorSettings }) {
+  void _props
+  return <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel" />
 }

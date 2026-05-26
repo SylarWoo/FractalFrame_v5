@@ -6,7 +6,7 @@ import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
 import type { VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 
 export type IndicatorPaneCommandName = 'DPO' | 'MACD' | 'RSI' | 'Stoch' | 'TSI' | 'VDO' | 'VI'
-export type CandleIndicatorCommandName = 'MA' | 'VWAP'
+export type CandleIndicatorCommandName = 'MA' | 'MMF' | 'VWAP'
 
 export type IndicatorPaneConfig = {
   ensureRegistered: () => void

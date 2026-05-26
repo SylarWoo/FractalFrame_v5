@@ -7,7 +7,7 @@ import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSetting
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 import { formatIndicatorValue } from './indicatorValueFormat'
 
-type StochIndicatorRow = {
+export type StochIndicatorRow = {
   d?: number
   k?: number
 }

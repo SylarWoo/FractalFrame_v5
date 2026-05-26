@@ -7,7 +7,7 @@ import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSetting
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 import { formatIndicatorValue } from './indicatorValueFormat'
 
-type MaShiftRow = {
+export type MaShiftRow = {
   ma?: number
   maFadedColor1?: number
   maFadedColor2?: number

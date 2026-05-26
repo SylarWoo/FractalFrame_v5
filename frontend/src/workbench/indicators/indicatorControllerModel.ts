@@ -4,6 +4,7 @@ import type {
   DpoIndicatorSettings,
   MacdIndicatorSettings,
   MaIndicatorSettings,
+  MmfIndicatorSettings,
   MrIndicatorSettings,
   PersistedIndicatorsState,
   RsiIndicatorSettings,
@@ -19,6 +20,7 @@ export type IndicatorSettings =
   | DpoIndicatorSettings
   | MacdIndicatorSettings
   | MaIndicatorSettings
+  | MmfIndicatorSettings
   | MrIndicatorSettings
   | RsiIndicatorSettings
   | StochIndicatorSettings
@@ -45,6 +47,7 @@ export const indicatorControllerDefinitions = [
   { key: 'VI', stateField: 'vi' },
   { key: 'MA', stateField: 'ma' },
   { key: 'MR', stateField: 'mr' },
+  { key: 'MMF', stateField: 'mmf' },
   { key: 'VWAP', stateField: 'vwap' },
   { key: 'Vol', stateField: 'vol' },
 ] as const satisfies readonly IndicatorControllerDefinition[]

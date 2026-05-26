@@ -299,6 +299,8 @@ export type MrIndicatorSettings = {
   valuesInStatusLine: boolean
 }
 
+export type MmfIndicatorSettings = Record<string, never>
+
 export type MaIndicatorSettings = {
   colors: string[]
   dnColor: string
@@ -378,6 +380,7 @@ export type PersistedIndicatorsState = {
     DPO?: boolean
     MA?: boolean
     MACD?: boolean
+    MMF?: boolean
     MR?: boolean
     RSI?: boolean
     Stoch?: boolean
@@ -390,6 +393,7 @@ export type PersistedIndicatorsState = {
   dpo: DpoIndicatorSettings
   ma: MaIndicatorSettings
   macd: MacdIndicatorSettings
+  mmf: MmfIndicatorSettings
   mr: MrIndicatorSettings
   rsi: RsiIndicatorSettings
   stoch: StochIndicatorSettings
@@ -679,6 +683,8 @@ export const defaultMrIndicatorSettings: MrIndicatorSettings = {
   upperLineWidth: 1,
   valuesInStatusLine: true,
 }
+
+export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {}
 
 export const defaultDpoIndicatorSettings: DpoIndicatorSettings = {
   backgroundColor: '#26a69a',

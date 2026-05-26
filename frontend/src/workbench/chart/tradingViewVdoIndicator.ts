@@ -7,7 +7,7 @@ import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSetting
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 import { formatIndicatorValue } from './indicatorValueFormat'
 
-type VdoIndicatorRow = {
+export type VdoIndicatorRow = {
   vdo?: number
 }
 

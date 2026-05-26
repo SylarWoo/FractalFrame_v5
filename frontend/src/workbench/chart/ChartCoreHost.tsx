@@ -14,6 +14,7 @@ import { applyMorganRangeOverlays, clearMorganRangeOverlays } from './useMorganR
 import { calculateMorganRangeSegments, findMorganRangeSegmentByDataIndex, h4MorganSeconds, type MorganRangeSegment } from './morganRangeModel'
 import { readCrosshairDataIndex } from './paneTitleOverlayContent'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
+import { ensureTradingViewMmfIndicator } from './tradingViewMmfIndicator'
 import { ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
 import { ensureTradingViewDpoIndicator } from './tradingViewDpoIndicator'
 import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
@@ -33,7 +34,7 @@ import type {
   IndicatorPaneCommandName,
   IndicatorPaneConfig,
 } from './chartIndicatorCommandHandlers'
-import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MmfIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import { readString, writeString } from '../persistence/jsonStorage'
 import './ChartCoreHost.css'
@@ -91,6 +92,7 @@ export type ChartIndicatorCommand = {
 } & (
   | { name: 'MA'; settings?: MaIndicatorSettings }
   | { name: 'MACD'; settings?: MacdIndicatorSettings }
+  | { name: 'MMF'; settings?: MmfIndicatorSettings }
   | { name: 'DPO'; settings?: DpoIndicatorSettings }
   | { name: 'MR'; settings?: MrIndicatorSettings }
   | { name: 'RSI'; settings?: RsiIndicatorSettings }
@@ -325,6 +327,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       MA: {
         ensureRegistered: ensureTradingViewMaShiftIndicator,
         name: 'MA',
+      },
+      MMF: {
+        ensureRegistered: ensureTradingViewMmfIndicator,
+        name: 'MMF',
       },
       VWAP: {
         ensureRegistered: ensureTradingViewVwapIndicator,
