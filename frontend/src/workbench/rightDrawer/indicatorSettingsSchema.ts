@@ -256,9 +256,22 @@ export type VolIndicatorSettings = {
 }
 
 export type MrIndicatorSettings = {
+  backgroundColor: string
+  backgroundOpacity: number
+  backgroundVisible: boolean
   inputsInStatusLine: boolean
   labelsOnPriceScale: boolean
+  lowerLineColor: string
+  lowerLineOpacity: number
+  lowerLineStyle: RsiLineStyle
+  lowerLineVisible: boolean
+  lowerLineWidth: number
   precision: RsiPrecision
+  upperLineColor: string
+  upperLineOpacity: number
+  upperLineStyle: RsiLineStyle
+  upperLineVisible: boolean
+  upperLineWidth: number
   valuesInStatusLine: boolean
 }
 
@@ -612,9 +625,22 @@ export const defaultVolIndicatorSettings: VolIndicatorSettings = {
 }
 
 export const defaultMrIndicatorSettings: MrIndicatorSettings = {
+  backgroundColor: '#787b86',
+  backgroundOpacity: 0.12,
+  backgroundVisible: true,
   inputsInStatusLine: true,
   labelsOnPriceScale: true,
+  lowerLineColor: '#787b86',
+  lowerLineOpacity: 1,
+  lowerLineStyle: 'solid',
+  lowerLineVisible: true,
+  lowerLineWidth: 1,
   precision: 'system',
+  upperLineColor: '#787b86',
+  upperLineOpacity: 1,
+  upperLineStyle: 'solid',
+  upperLineVisible: true,
+  upperLineWidth: 1,
   valuesInStatusLine: true,
 }
 
@@ -961,11 +987,26 @@ export function normalizeVolSettings(input?: Partial<VolIndicatorSettings>): Vol
 
 export function normalizeMrSettings(input?: Partial<MrIndicatorSettings>): MrIndicatorSettings {
   const merged = { ...defaultMrIndicatorSettings, ...(input ?? {}) }
+  const upperLineWidth = Math.round(Number(merged.upperLineWidth))
+  const lowerLineWidth = Math.round(Number(merged.lowerLineWidth))
+  const upperLineOpacity = Number(merged.upperLineOpacity)
+  const lowerLineOpacity = Number(merged.lowerLineOpacity)
+  const backgroundOpacity = Number(merged.backgroundOpacity)
   return {
     ...merged,
+    backgroundOpacity: Number.isFinite(backgroundOpacity) ? Math.max(0, Math.min(backgroundOpacity, 1)) : defaultMrIndicatorSettings.backgroundOpacity,
+    backgroundVisible: merged.backgroundVisible !== false,
     inputsInStatusLine: merged.inputsInStatusLine !== false,
     labelsOnPriceScale: merged.labelsOnPriceScale !== false,
+    lowerLineOpacity: Number.isFinite(lowerLineOpacity) ? Math.max(0, Math.min(lowerLineOpacity, 1)) : defaultMrIndicatorSettings.lowerLineOpacity,
+    lowerLineStyle: ['solid', 'dashed', 'dotted'].includes(merged.lowerLineStyle) ? merged.lowerLineStyle : defaultMrIndicatorSettings.lowerLineStyle,
+    lowerLineVisible: merged.lowerLineVisible !== false,
+    lowerLineWidth: Number.isFinite(lowerLineWidth) ? Math.max(1, Math.min(lowerLineWidth, 4)) : defaultMrIndicatorSettings.lowerLineWidth,
     precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
+    upperLineOpacity: Number.isFinite(upperLineOpacity) ? Math.max(0, Math.min(upperLineOpacity, 1)) : defaultMrIndicatorSettings.upperLineOpacity,
+    upperLineStyle: ['solid', 'dashed', 'dotted'].includes(merged.upperLineStyle) ? merged.upperLineStyle : defaultMrIndicatorSettings.upperLineStyle,
+    upperLineVisible: merged.upperLineVisible !== false,
+    upperLineWidth: Number.isFinite(upperLineWidth) ? Math.max(1, Math.min(upperLineWidth, 4)) : defaultMrIndicatorSettings.upperLineWidth,
     valuesInStatusLine: merged.valuesInStatusLine !== false,
   }
 }

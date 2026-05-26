@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useRef, useState } from 'react'
 
 import type {
@@ -8,6 +9,7 @@ import type {
   MaMarkerMode,
   MaSource,
   MaType,
+  MrIndicatorSettings,
   RsiIndicatorSettings,
   RsiPrecision,
   RsiSmoothingType,
@@ -244,6 +246,13 @@ export function updateVdoSettings(
   current: VdoIndicatorSettings,
   patch: Partial<VdoIndicatorSettings>,
 ): VdoIndicatorSettings {
+  return { ...current, ...patch }
+}
+
+export function updateMrSettings(
+  current: MrIndicatorSettings,
+  patch: Partial<MrIndicatorSettings>,
+): MrIndicatorSettings {
   return { ...current, ...patch }
 }
 

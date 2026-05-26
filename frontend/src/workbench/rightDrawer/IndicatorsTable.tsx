@@ -27,7 +27,7 @@ const minColumnWidths: IndicatorColumnWidths = {
 
 type IndicatorsTableProps = {
   indicatorShortcutKeys: string[]
-  rows: IndicatorTableRow[]
+  rows: readonly IndicatorTableRow[]
   selectedKey: string
   onIndicatorShortcutKeysChange: (keys: string[]) => void
   onSelect: (key: string) => void
@@ -61,7 +61,7 @@ export function IndicatorsTable({
     const target = event.currentTarget
 
     target.setPointerCapture(pointerId)
-    document.body.dataset.fractalframeIndicatorsColumnResizing = 'true'
+    document.body.setAttribute('data-fractalframe-indicators-column-resizing', 'true')
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       const nextWidth = startWidth + (moveEvent.clientX - startX)

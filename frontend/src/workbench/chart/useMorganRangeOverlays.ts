@@ -2,6 +2,8 @@ import type { Chart } from 'klinecharts'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { createStaticMorganRangeOverlay } from './morganRangeOverlay'
 import { calculateH4MorganAtr7, collectH4MorganCandles, h4MorganSeconds, type H4MorganCandle } from './morganRangeModel'
+import { defaultMrIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { MrIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 
 const maxMorganRangeBuckets = 36
 
@@ -10,7 +12,7 @@ export function clearMorganRangeOverlays(chart: Chart, overlayIds: Set<string>) 
   overlayIds.clear()
 }
 
-export function applyMorganRangeOverlays(chart: Chart, period: string, overlayIds: Set<string>) {
+export function applyMorganRangeOverlays(chart: Chart, period: string, overlayIds: Set<string>, settings: MrIndicatorSettings = defaultMrIndicatorSettings) {
   clearMorganRangeOverlays(chart, overlayIds)
   const periodSeconds = resolvePeriodSeconds(period)
   if (!Number.isFinite(periodSeconds) || periodSeconds <= 0 || periodSeconds > 2 * 60 * 60) return
@@ -58,20 +60,32 @@ export function applyMorganRangeOverlays(chart: Chart, period: string, overlayId
       timestamp: anchor.startTimestamp,
       value: center,
     }
-    const upperId = createStaticMorganRangeOverlay(chart, {
+    const upperPoint = { ...startPoint, value: center + radius }
+    const lowerPoint = { ...startPoint, value: center - radius }
+    const upperId = settings.upperLineVisible ? createStaticMorganRangeOverlay(chart, {
+      extendData: createMorganLineExtendData(settings.upperLineColor, settings.upperLineOpacity, settings.upperLineStyle, settings.upperLineWidth),
       futureWidthPx: widthPx,
       paneId: 'candle_pane',
-      points: [startPoint, { ...startPoint, value: center + radius }],
+      points: [startPoint, upperPoint],
       startOffsetPx,
-    })
-    const lowerId = createStaticMorganRangeOverlay(chart, {
+    }) : null
+    const lowerId = settings.lowerLineVisible ? createStaticMorganRangeOverlay(chart, {
+      extendData: createMorganLineExtendData(settings.lowerLineColor, settings.lowerLineOpacity, settings.lowerLineStyle, settings.lowerLineWidth),
       futureWidthPx: widthPx,
       paneId: 'candle_pane',
-      points: [startPoint, { ...startPoint, value: center - radius }],
+      points: [startPoint, lowerPoint],
       startOffsetPx,
-    })
+    }) : null
+    const backgroundId = settings.backgroundVisible ? createStaticMorganRangeOverlay(chart, {
+      extendData: createMorganBackgroundExtendData(settings),
+      futureWidthPx: widthPx,
+      paneId: 'candle_pane',
+      points: [upperPoint, lowerPoint],
+      startOffsetPx,
+    }) : null
     if (upperId) overlayIds.add(upperId)
     if (lowerId) overlayIds.add(lowerId)
+    if (backgroundId) overlayIds.add(backgroundId)
   }
 
   for (let index = firstBucket; index <= lastBucket; index += 1) {
@@ -82,4 +96,36 @@ export function applyMorganRangeOverlays(chart: Chart, period: string, overlayId
     createRange(candles[index], candles[index - 1], atr[index - 1], widthBars)
   }
 
+}
+
+function createMorganLineExtendData(color: string, opacity: number, lineStyle: MrIndicatorSettings['upperLineStyle'], lineWidth: number) {
+  return {
+    fibBackgroundVisible: false,
+    fibHorizontalLineStyle: {
+      hex: color,
+      lineStyle,
+      opacity,
+      thickness: lineWidth,
+    },
+    fibLevels: [
+      { color, enabled: true, opacity, value: '1' },
+    ],
+  }
+}
+
+function createMorganBackgroundExtendData(settings: MrIndicatorSettings) {
+  return {
+    fibBackgroundOpacity: settings.backgroundOpacity,
+    fibBackgroundVisible: true,
+    fibHorizontalLineStyle: {
+      hex: settings.backgroundColor,
+      lineStyle: 'solid' as const,
+      opacity: 0,
+      thickness: 1,
+    },
+    fibLevels: [
+      { color: settings.backgroundColor, enabled: true, opacity: 0, value: '1' },
+      { color: settings.backgroundColor, enabled: true, opacity: 0, value: '0' },
+    ],
+  }
 }

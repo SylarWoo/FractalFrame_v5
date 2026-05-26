@@ -35,13 +35,12 @@ export function RightDrawer({
   activeDrawer,
   drawerWidth,
   indicatorShortcutKeys,
+  indicatorsController,
   loadedIndicatorKeys,
   onClose,
   onIndicatorShortcutKeysChange,
-  onLoadIndicator,
   onResize,
   onToggleDrawer,
-  onUnloadIndicator,
   onOpenChart,
 }: RightDrawerProps) {
   const initialSnapshot = useMemo(() => getInitialSymbolSnapshot(), [])
@@ -425,10 +424,9 @@ export function RightDrawer({
         ) : renderedActiveDrawer === 'indicators' ? (
           <IndicatorsDrawer
             indicatorShortcutKeys={indicatorShortcutKeys}
+            indicatorsController={indicatorsController}
             loadedIndicatorKeys={loadedIndicatorKeys}
             onIndicatorShortcutKeysChange={onIndicatorShortcutKeysChange}
-            onLoadIndicator={onLoadIndicator}
-            onUnloadIndicator={onUnloadIndicator}
           />
         ) : renderedActiveDrawer === 'mt5' ? (
           <RightDrawerMt5Body

@@ -1,8 +1,6 @@
 import type { IndicatorTableRow } from './IndicatorsTable'
 
-export type SupportedChartIndicator = 'DPO' | 'MA' | 'MACD' | 'MR' | 'RSI' | 'Stoch' | 'TSI' | 'VDO' | 'VI' | 'VWAP' | 'Vol'
-
-export const indicatorRows: IndicatorTableRow[] = [
+export const indicatorRows = [
   { key: 'RSI', name: '相对强弱指数', type: '副图指标', description: 'Relative Strength Index' },
   { key: 'Stoch', name: '随机指标', type: '副图指标', description: 'Stochastic' },
   { key: 'MACD', name: '平滑异同移动平均线', type: '副图指标', description: 'Moving Average Convergence Divergence' },
@@ -14,10 +12,14 @@ export const indicatorRows: IndicatorTableRow[] = [
   { key: 'MR', name: '摩根区间', type: '主图指标', description: 'Morgan Range' },
   { key: 'VWAP', name: '成交量加权平均价', type: '主图指标', description: 'Volume Weighted Average Price' },
   { key: 'Vol', name: '成交量', type: '主图指标', description: 'MT5 tick volume' },
-]
+] as const satisfies readonly IndicatorTableRow[]
+
+export type SupportedChartIndicator = typeof indicatorRows[number]['key']
+
+const supportedChartIndicatorKeys = new Set<string>(indicatorRows.map((row) => row.key))
 
 export function isSupportedChartIndicator(key: string): key is SupportedChartIndicator {
-  return key === 'DPO' || key === 'MA' || key === 'MACD' || key === 'MR' || key === 'RSI' || key === 'Stoch' || key === 'TSI' || key === 'VDO' || key === 'VI' || key === 'VWAP' || key === 'Vol'
+  return supportedChartIndicatorKeys.has(key)
 }
 
 export function resolveInitialSelectedKey(value: string) {

@@ -26,6 +26,7 @@ type MorganRectStyles = {
 }
 
 export type StaticMorganRangeOverlayOptions = {
+  extendData?: Partial<RulerExtendData>
   futureWidthPx?: number
   paneId?: string
   points: [MorganRangePoint, MorganRangePoint]
@@ -107,6 +108,7 @@ function ensureMorganNoHitFigures() {
 
 export function createStaticMorganRangeOverlay(chart: Chart, {
   futureWidthPx,
+  extendData,
   paneId,
   points,
   startOffsetPx,
@@ -117,6 +119,7 @@ export function createStaticMorganRangeOverlay(chart: Chart, {
     name: morganRangeOverlayName,
     extendData: {
       ...readMorganRangeFibExtendData(),
+      ...(extendData ?? {}),
       futureWidthPx,
       startOffsetPx,
     },

@@ -1,14 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
+import type { Chart } from 'klinecharts'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
-import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
 import { chartRealtimeDataChangedEvent, useChartRealtimeTicks } from './useChartRealtimeTicks'
 import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
 import { useChartStepLoad } from './useChartStepLoad'
-import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
+import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay } from './mainVolumeIndicator'
 import { applyMorganRangeOverlays, clearMorganRangeOverlays } from './useMorganRangeOverlays'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
@@ -20,6 +20,17 @@ import { ensureTradingViewTsiIndicator } from './tradingViewTsiIndicator'
 import { ensureTradingViewVdoIndicator } from './tradingViewVdoIndicator'
 import { ensureTradingViewViIndicator } from './tradingViewViIndicator'
 import { ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
+import {
+  applyCandleIndicatorCommand,
+  applyPaneIndicatorCommand,
+  applyVolumeCommand,
+} from './chartIndicatorCommandHandlers'
+import type {
+  CandleIndicatorCommandName,
+  CandleIndicatorConfig,
+  IndicatorPaneCommandName,
+  IndicatorPaneConfig,
+} from './chartIndicatorCommandHandlers'
 import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import { readString, writeString } from '../persistence/jsonStorage'
@@ -144,6 +155,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
   const mainVolumeOverlayRef = useRef<ReturnType<typeof installMainVolumeOverlay> | null>(null)
   const morganRangeLoadedRef = useRef(false)
   const morganRangeOverlayIdsRef = useRef<Set<string>>(new Set())
+  const morganRangeSettingsRef = useRef<MrIndicatorSettings | null>(null)
 
   useEffect(() => {
     onLoadStateChange?.({ ...loadState, period, symbol, totalRows })
@@ -151,7 +163,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
 
   useChartStepLoad({ chartInstanceRef, period, setLoadState, stepLoad: stepLoad ?? null, symbol, totalRows })
 
-  const observeIndicatorPaneHeight = (paneId: string, storageKey: string, observerRef: MutableRefObject<ResizeObserver | null>) => {
+  const observeIndicatorPaneHeight = useCallback((paneId: string, storageKey: string, observerRef: MutableRefObject<ResizeObserver | null>) => {
     observerRef.current?.disconnect()
     observerRef.current = null
 
@@ -172,387 +184,179 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       const size = chart.getSize(paneId)
       if (size?.height) writeStoredPaneHeight(storageKey, size.height)
     })
-  }
+  }, [chartInstanceRef])
 
-  const observeRsiPaneHeight = () => observeIndicatorPaneHeight(rsiPaneId, rsiPaneHeightStorageKey, rsiPaneHeightObserverRef)
-  const observeStochPaneHeight = () => observeIndicatorPaneHeight(stochPaneId, stochPaneHeightStorageKey, stochPaneHeightObserverRef)
-  const observeMacdPaneHeight = () => observeIndicatorPaneHeight(macdPaneId, macdPaneHeightStorageKey, macdPaneHeightObserverRef)
-  const observeDpoPaneHeight = () => observeIndicatorPaneHeight(dpoPaneId, dpoPaneHeightStorageKey, dpoPaneHeightObserverRef)
-  const observeVdoPaneHeight = () => observeIndicatorPaneHeight(vdoPaneId, vdoPaneHeightStorageKey, vdoPaneHeightObserverRef)
-  const observeTsiPaneHeight = () => observeIndicatorPaneHeight(tsiPaneId, tsiPaneHeightStorageKey, tsiPaneHeightObserverRef)
-  const observeViPaneHeight = () => observeIndicatorPaneHeight(viPaneId, viPaneHeightStorageKey, viPaneHeightObserverRef)
-  const isIndicatorVisibleInCurrentPeriod = (name: ChartIndicatorCommand['name']) => isStoredVisibilityRangePeriodVisible(`indicator:${name}`, period)
+  const observeRsiPaneHeight = useCallback(() => observeIndicatorPaneHeight(rsiPaneId, rsiPaneHeightStorageKey, rsiPaneHeightObserverRef), [observeIndicatorPaneHeight])
+  const observeStochPaneHeight = useCallback(() => observeIndicatorPaneHeight(stochPaneId, stochPaneHeightStorageKey, stochPaneHeightObserverRef), [observeIndicatorPaneHeight])
+  const observeMacdPaneHeight = useCallback(() => observeIndicatorPaneHeight(macdPaneId, macdPaneHeightStorageKey, macdPaneHeightObserverRef), [observeIndicatorPaneHeight])
+  const observeDpoPaneHeight = useCallback(() => observeIndicatorPaneHeight(dpoPaneId, dpoPaneHeightStorageKey, dpoPaneHeightObserverRef), [observeIndicatorPaneHeight])
+  const observeVdoPaneHeight = useCallback(() => observeIndicatorPaneHeight(vdoPaneId, vdoPaneHeightStorageKey, vdoPaneHeightObserverRef), [observeIndicatorPaneHeight])
+  const observeTsiPaneHeight = useCallback(() => observeIndicatorPaneHeight(tsiPaneId, tsiPaneHeightStorageKey, tsiPaneHeightObserverRef), [observeIndicatorPaneHeight])
+  const observeViPaneHeight = useCallback(() => observeIndicatorPaneHeight(viPaneId, viPaneHeightStorageKey, viPaneHeightObserverRef), [observeIndicatorPaneHeight])
+  const isIndicatorVisibleInCurrentPeriod = useCallback((name: ChartIndicatorCommand['name']) => isStoredVisibilityRangePeriodVisible(`indicator:${name}`, period), [period])
+
+  const applyMorganRangeCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    ensureTradingViewMrIndicator()
+
+    if (command.action === 'unload') {
+      morganRangeLoadedRef.current = false
+      morganRangeSettingsRef.current = null
+      chart.removeIndicator('candle_pane', 'MR')
+      clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+      return
+    }
+
+    morganRangeLoadedRef.current = true
+    morganRangeSettingsRef.current = command.name === 'MR' ? command.settings ?? null : null
+    if (!isIndicatorVisibleInCurrentPeriod('MR')) {
+      chart.removeIndicator('candle_pane', 'MR')
+      clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+      return
+    }
+    if (chart.getIndicatorByPaneId('candle_pane', 'MR')) {
+      chart.overrideIndicator({ name: 'MR', calcParams: [command.settings] }, 'candle_pane')
+      applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, morganRangeSettingsRef.current ?? undefined)
+      return
+    }
+    chart.createIndicator({ name: 'MR', calcParams: [command.settings] }, true, { id: 'candle_pane' })
+    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, morganRangeSettingsRef.current ?? undefined)
+  }, [isIndicatorVisibleInCurrentPeriod, period])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
     if (!chart || !indicatorCommand) return
 
-    if (indicatorCommand.name === 'RSI') {
-      ensureTradingViewRsiIndicator()
-
-      if (indicatorCommand.action === 'load') {
-        if (!isIndicatorVisibleInCurrentPeriod('RSI')) {
-          const size = chart.getSize(rsiPaneId)
-          if (size?.height) writeStoredPaneHeight(rsiPaneHeightStorageKey, size.height)
-          rsiPaneHeightObserverRef.current?.disconnect()
-          rsiPaneHeightObserverRef.current = null
-          chart.removeIndicator(rsiPaneId, 'RSI')
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        if (chart.getIndicatorByPaneId(rsiPaneId, 'RSI')) {
-          chart.overrideIndicator({ name: 'RSI', calcParams: [indicatorCommand.settings] }, rsiPaneId, observeRsiPaneHeight)
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        chart.createIndicator(
-          { name: 'RSI', calcParams: [indicatorCommand.settings] },
-          false,
-          { id: rsiPaneId, height: readStoredPaneHeight(rsiPaneHeightStorageKey), minHeight: minRsiPaneHeight },
-          () => {
-            observeRsiPaneHeight()
-            refreshChartDrawings()
-            scheduleResetIndicatorYAxisAutoScale(chart)
-          },
-        )
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      } else {
-        const size = chart.getSize(rsiPaneId)
-        if (size?.height) writeStoredPaneHeight(rsiPaneHeightStorageKey, size.height)
-        rsiPaneHeightObserverRef.current?.disconnect()
-        rsiPaneHeightObserverRef.current = null
-        chart.removeIndicator(rsiPaneId, 'RSI')
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      }
+    const paneIndicatorConfigs: Record<IndicatorPaneCommandName, IndicatorPaneConfig> = {
+      DPO: {
+        ensureRegistered: ensureTradingViewDpoIndicator,
+        minHeight: minRsiPaneHeight,
+        name: 'DPO',
+        observeHeight: observeDpoPaneHeight,
+        observerRef: dpoPaneHeightObserverRef,
+        paneId: dpoPaneId,
+        storageKey: dpoPaneHeightStorageKey,
+      },
+      MACD: {
+        ensureRegistered: ensureTradingViewMacdIndicator,
+        minHeight: minRsiPaneHeight,
+        name: 'MACD',
+        observeHeight: observeMacdPaneHeight,
+        observerRef: macdPaneHeightObserverRef,
+        paneId: macdPaneId,
+        resetPaneIds: [macdPaneId],
+        storageKey: macdPaneHeightStorageKey,
+      },
+      RSI: {
+        ensureRegistered: ensureTradingViewRsiIndicator,
+        minHeight: minRsiPaneHeight,
+        name: 'RSI',
+        observeHeight: observeRsiPaneHeight,
+        observerRef: rsiPaneHeightObserverRef,
+        paneId: rsiPaneId,
+        storageKey: rsiPaneHeightStorageKey,
+      },
+      Stoch: {
+        ensureRegistered: ensureTradingViewStochIndicator,
+        minHeight: minRsiPaneHeight,
+        name: 'Stoch',
+        observeHeight: observeStochPaneHeight,
+        observerRef: stochPaneHeightObserverRef,
+        paneId: stochPaneId,
+        storageKey: stochPaneHeightStorageKey,
+      },
+      TSI: {
+        ensureRegistered: ensureTradingViewTsiIndicator,
+        minHeight: minRsiPaneHeight,
+        name: 'TSI',
+        observeHeight: observeTsiPaneHeight,
+        observerRef: tsiPaneHeightObserverRef,
+        paneId: tsiPaneId,
+        storageKey: tsiPaneHeightStorageKey,
+      },
+      VDO: {
+        ensureRegistered: ensureTradingViewVdoIndicator,
+        minHeight: minRsiPaneHeight,
+        name: 'VDO',
+        observeHeight: observeVdoPaneHeight,
+        observerRef: vdoPaneHeightObserverRef,
+        paneId: vdoPaneId,
+        storageKey: vdoPaneHeightStorageKey,
+      },
+      VI: {
+        ensureRegistered: ensureTradingViewViIndicator,
+        minHeight: minRsiPaneHeight,
+        name: 'VI',
+        observeHeight: observeViPaneHeight,
+        observerRef: viPaneHeightObserverRef,
+        paneId: viPaneId,
+        storageKey: viPaneHeightStorageKey,
+      },
     }
-
-    if (indicatorCommand.name === 'Stoch') {
-      ensureTradingViewStochIndicator()
-
-      if (indicatorCommand.action === 'load') {
-        if (!isIndicatorVisibleInCurrentPeriod('Stoch')) {
-          const size = chart.getSize(stochPaneId)
-          if (size?.height) writeStoredPaneHeight(stochPaneHeightStorageKey, size.height)
-          stochPaneHeightObserverRef.current?.disconnect()
-          stochPaneHeightObserverRef.current = null
-          chart.removeIndicator(stochPaneId, 'Stoch')
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        if (chart.getIndicatorByPaneId(stochPaneId, 'Stoch')) {
-          chart.overrideIndicator({ name: 'Stoch', calcParams: [indicatorCommand.settings] }, stochPaneId, observeStochPaneHeight)
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        chart.createIndicator(
-          { name: 'Stoch', calcParams: [indicatorCommand.settings] },
-          false,
-          { id: stochPaneId, height: readStoredPaneHeight(stochPaneHeightStorageKey), minHeight: minRsiPaneHeight },
-          () => {
-            observeStochPaneHeight()
-            refreshChartDrawings()
-            scheduleResetIndicatorYAxisAutoScale(chart)
-          },
-        )
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      } else {
-        const size = chart.getSize(stochPaneId)
-        if (size?.height) writeStoredPaneHeight(stochPaneHeightStorageKey, size.height)
-        stochPaneHeightObserverRef.current?.disconnect()
-        stochPaneHeightObserverRef.current = null
-        chart.removeIndicator(stochPaneId, 'Stoch')
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      }
+    const paneConfig = paneIndicatorConfigs[indicatorCommand.name as IndicatorPaneCommandName]
+    if (paneConfig) {
+      applyPaneIndicatorCommand({
+        chart,
+        command: indicatorCommand,
+        config: paneConfig,
+        isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+        readStoredPaneHeight,
+        refreshChartDrawings,
+        writeStoredPaneHeight,
+      })
+      return
     }
-
-    if (indicatorCommand.name === 'MACD') {
-      ensureTradingViewMacdIndicator()
-
-      if (indicatorCommand.action === 'load') {
-        if (!isIndicatorVisibleInCurrentPeriod('MACD')) {
-          const size = chart.getSize(macdPaneId)
-          if (size?.height) writeStoredPaneHeight(macdPaneHeightStorageKey, size.height)
-          macdPaneHeightObserverRef.current?.disconnect()
-          macdPaneHeightObserverRef.current = null
-          chart.removeIndicator(macdPaneId, 'MACD')
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        if (chart.getIndicatorByPaneId(macdPaneId, 'MACD')) {
-          chart.overrideIndicator({ name: 'MACD', calcParams: [indicatorCommand.settings] }, macdPaneId, observeMacdPaneHeight)
-          scheduleResetIndicatorYAxisAutoScale(chart, [macdPaneId])
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        chart.createIndicator(
-          { name: 'MACD', calcParams: [indicatorCommand.settings] },
-          false,
-          { id: macdPaneId, height: readStoredPaneHeight(macdPaneHeightStorageKey), minHeight: minRsiPaneHeight },
-          () => {
-            observeMacdPaneHeight()
-            refreshChartDrawings()
-            scheduleResetIndicatorYAxisAutoScale(chart, [macdPaneId])
-            scheduleResetIndicatorYAxisAutoScale(chart)
-          },
-        )
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      } else {
-        const size = chart.getSize(macdPaneId)
-        if (size?.height) writeStoredPaneHeight(macdPaneHeightStorageKey, size.height)
-        macdPaneHeightObserverRef.current?.disconnect()
-        macdPaneHeightObserverRef.current = null
-        chart.removeIndicator(macdPaneId, 'MACD')
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      }
+    const candleIndicatorConfigs: Record<CandleIndicatorCommandName, CandleIndicatorConfig> = {
+      MA: {
+        ensureRegistered: ensureTradingViewMaShiftIndicator,
+        name: 'MA',
+      },
+      VWAP: {
+        ensureRegistered: ensureTradingViewVwapIndicator,
+        name: 'VWAP',
+        resolveCalcParams: (command) => ({ ...command.settings, symbol }),
+      },
     }
-
-    if (indicatorCommand.name === 'DPO') {
-      ensureTradingViewDpoIndicator()
-
-      if (indicatorCommand.action === 'load') {
-        if (!isIndicatorVisibleInCurrentPeriod('DPO')) {
-          const size = chart.getSize(dpoPaneId)
-          if (size?.height) writeStoredPaneHeight(dpoPaneHeightStorageKey, size.height)
-          dpoPaneHeightObserverRef.current?.disconnect()
-          dpoPaneHeightObserverRef.current = null
-          chart.removeIndicator(dpoPaneId, 'DPO')
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        if (chart.getIndicatorByPaneId(dpoPaneId, 'DPO')) {
-          chart.overrideIndicator({ name: 'DPO', calcParams: [indicatorCommand.settings] }, dpoPaneId, observeDpoPaneHeight)
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        chart.createIndicator(
-          { name: 'DPO', calcParams: [indicatorCommand.settings] },
-          false,
-          { id: dpoPaneId, height: readStoredPaneHeight(dpoPaneHeightStorageKey), minHeight: minRsiPaneHeight },
-          () => {
-            observeDpoPaneHeight()
-            refreshChartDrawings()
-            scheduleResetIndicatorYAxisAutoScale(chart)
-          },
-        )
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      } else {
-        const size = chart.getSize(dpoPaneId)
-        if (size?.height) writeStoredPaneHeight(dpoPaneHeightStorageKey, size.height)
-        dpoPaneHeightObserverRef.current?.disconnect()
-        dpoPaneHeightObserverRef.current = null
-        chart.removeIndicator(dpoPaneId, 'DPO')
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      }
+    const candleConfig = candleIndicatorConfigs[indicatorCommand.name as CandleIndicatorCommandName]
+    if (candleConfig) {
+      applyCandleIndicatorCommand({
+        chart,
+        command: indicatorCommand,
+        config: candleConfig,
+        isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      })
+      return
     }
-
-    if (indicatorCommand.name === 'VDO') {
-      ensureTradingViewVdoIndicator()
-
-      if (indicatorCommand.action === 'load') {
-        if (!isIndicatorVisibleInCurrentPeriod('VDO')) {
-          const size = chart.getSize(vdoPaneId)
-          if (size?.height) writeStoredPaneHeight(vdoPaneHeightStorageKey, size.height)
-          vdoPaneHeightObserverRef.current?.disconnect()
-          vdoPaneHeightObserverRef.current = null
-          chart.removeIndicator(vdoPaneId, 'VDO')
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        if (chart.getIndicatorByPaneId(vdoPaneId, 'VDO')) {
-          chart.overrideIndicator({ name: 'VDO', calcParams: [indicatorCommand.settings] }, vdoPaneId, observeVdoPaneHeight)
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        chart.createIndicator(
-          { name: 'VDO', calcParams: [indicatorCommand.settings] },
-          false,
-          { id: vdoPaneId, height: readStoredPaneHeight(vdoPaneHeightStorageKey), minHeight: minRsiPaneHeight },
-          () => {
-            observeVdoPaneHeight()
-            refreshChartDrawings()
-            scheduleResetIndicatorYAxisAutoScale(chart)
-          },
-        )
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      } else {
-        const size = chart.getSize(vdoPaneId)
-        if (size?.height) writeStoredPaneHeight(vdoPaneHeightStorageKey, size.height)
-        vdoPaneHeightObserverRef.current?.disconnect()
-        vdoPaneHeightObserverRef.current = null
-        chart.removeIndicator(vdoPaneId, 'VDO')
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      }
+    const overlayIndicatorHandlers: Partial<Record<ChartIndicatorCommand['name'], () => void>> = {
+      MR: () => applyMorganRangeCommand(chart, indicatorCommand),
+      Vol: () => applyVolumeCommand({
+        chart,
+        command: indicatorCommand,
+        ensureRegistered: ensureMainVolumeLegendIndicator,
+        installOverlay: installMainVolumeOverlay,
+        isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+        overlayRef: mainVolumeOverlayRef,
+        refreshPane,
+      }),
     }
-
-    if (indicatorCommand.name === 'TSI') {
-      ensureTradingViewTsiIndicator()
-
-      if (indicatorCommand.action === 'load') {
-        if (!isIndicatorVisibleInCurrentPeriod('TSI')) {
-          const size = chart.getSize(tsiPaneId)
-          if (size?.height) writeStoredPaneHeight(tsiPaneHeightStorageKey, size.height)
-          tsiPaneHeightObserverRef.current?.disconnect()
-          tsiPaneHeightObserverRef.current = null
-          chart.removeIndicator(tsiPaneId, 'TSI')
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        if (chart.getIndicatorByPaneId(tsiPaneId, 'TSI')) {
-          chart.overrideIndicator({ name: 'TSI', calcParams: [indicatorCommand.settings] }, tsiPaneId, observeTsiPaneHeight)
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        chart.createIndicator(
-          { name: 'TSI', calcParams: [indicatorCommand.settings] },
-          false,
-          { id: tsiPaneId, height: readStoredPaneHeight(tsiPaneHeightStorageKey), minHeight: minRsiPaneHeight },
-          () => {
-            observeTsiPaneHeight()
-            refreshChartDrawings()
-            scheduleResetIndicatorYAxisAutoScale(chart)
-          },
-        )
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      } else {
-        const size = chart.getSize(tsiPaneId)
-        if (size?.height) writeStoredPaneHeight(tsiPaneHeightStorageKey, size.height)
-        tsiPaneHeightObserverRef.current?.disconnect()
-        tsiPaneHeightObserverRef.current = null
-        chart.removeIndicator(tsiPaneId, 'TSI')
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      }
+    const overlayHandler = overlayIndicatorHandlers[indicatorCommand.name]
+    if (overlayHandler) {
+      overlayHandler()
+      return
     }
-
-    if (indicatorCommand.name === 'VI') {
-      ensureTradingViewViIndicator()
-
-      if (indicatorCommand.action === 'load') {
-        if (!isIndicatorVisibleInCurrentPeriod('VI')) {
-          const size = chart.getSize(viPaneId)
-          if (size?.height) writeStoredPaneHeight(viPaneHeightStorageKey, size.height)
-          viPaneHeightObserverRef.current?.disconnect()
-          viPaneHeightObserverRef.current = null
-          chart.removeIndicator(viPaneId, 'VI')
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        if (chart.getIndicatorByPaneId(viPaneId, 'VI')) {
-          chart.overrideIndicator({ name: 'VI', calcParams: [indicatorCommand.settings] }, viPaneId, observeViPaneHeight)
-          scheduleResetIndicatorYAxisAutoScale(chart)
-          return
-        }
-        chart.createIndicator(
-          { name: 'VI', calcParams: [indicatorCommand.settings] },
-          false,
-          { id: viPaneId, height: readStoredPaneHeight(viPaneHeightStorageKey), minHeight: minRsiPaneHeight },
-          () => {
-            observeViPaneHeight()
-            refreshChartDrawings()
-            scheduleResetIndicatorYAxisAutoScale(chart)
-          },
-        )
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      } else {
-        const size = chart.getSize(viPaneId)
-        if (size?.height) writeStoredPaneHeight(viPaneHeightStorageKey, size.height)
-        viPaneHeightObserverRef.current?.disconnect()
-        viPaneHeightObserverRef.current = null
-        chart.removeIndicator(viPaneId, 'VI')
-        scheduleResetIndicatorYAxisAutoScale(chart)
-      }
-    }
-
-    if (indicatorCommand.name === 'MA') {
-      ensureTradingViewMaShiftIndicator()
-
-      if (indicatorCommand.action === 'load') {
-        if (!isIndicatorVisibleInCurrentPeriod('MA')) {
-          chart.removeIndicator('candle_pane', 'MA')
-          return
-        }
-        if (chart.getIndicatorByPaneId('candle_pane', 'MA')) {
-          chart.overrideIndicator({ name: 'MA', calcParams: [indicatorCommand.settings] }, 'candle_pane')
-          return
-        }
-        chart.createIndicator({ name: 'MA', calcParams: [indicatorCommand.settings] }, true, { id: 'candle_pane' })
-      } else {
-        chart.removeIndicator('candle_pane', 'MA')
-      }
-    }
-
-    if (indicatorCommand.name === 'VWAP') {
-      ensureTradingViewVwapIndicator()
-      const vwapSettings = { ...indicatorCommand.settings, symbol }
-
-      if (indicatorCommand.action === 'load') {
-        if (!isIndicatorVisibleInCurrentPeriod('VWAP')) {
-          chart.removeIndicator('candle_pane', 'VWAP')
-          return
-        }
-        if (chart.getIndicatorByPaneId('candle_pane', 'VWAP')) {
-          chart.overrideIndicator({ name: 'VWAP', calcParams: [vwapSettings] }, 'candle_pane')
-          return
-        }
-        chart.createIndicator({ name: 'VWAP', calcParams: [vwapSettings] }, true, { id: 'candle_pane' })
-      } else {
-        chart.removeIndicator('candle_pane', 'VWAP')
-      }
-    }
-
-    if (indicatorCommand.name === 'MR') {
-      ensureTradingViewMrIndicator()
-
-      if (indicatorCommand.action === 'load') {
-        morganRangeLoadedRef.current = true
-        if (!isIndicatorVisibleInCurrentPeriod('MR')) {
-          chart.removeIndicator('candle_pane', 'MR')
-          clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
-          return
-        }
-        if (chart.getIndicatorByPaneId('candle_pane', 'MR')) {
-          chart.overrideIndicator({ name: 'MR', calcParams: [indicatorCommand.settings] }, 'candle_pane')
-          applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
-          return
-        }
-        chart.createIndicator({ name: 'MR', calcParams: [indicatorCommand.settings] }, true, { id: 'candle_pane' })
-        applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
-      } else {
-        morganRangeLoadedRef.current = false
-        chart.removeIndicator('candle_pane', 'MR')
-        clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
-      }
-    }
-
-    if (indicatorCommand.name === 'Vol') {
-      ensureMainVolumeLegendIndicator()
-
-      if (indicatorCommand.action === 'load') {
-        if (!isIndicatorVisibleInCurrentPeriod('Vol')) {
-          chart.removeIndicator('candle_pane', mainVolumeIndicatorName)
-          mainVolumeOverlayRef.current?.destroy()
-          mainVolumeOverlayRef.current = null
-          refreshPane(chart, 'candle_pane')
-          return
-        }
-        if (chart.getIndicatorByPaneId('candle_pane', mainVolumeIndicatorName)) {
-          chart.overrideIndicator({ name: mainVolumeIndicatorName, calcParams: [indicatorCommand.settings], zLevel: -20 }, 'candle_pane')
-        } else {
-          chart.createIndicator({ name: mainVolumeIndicatorName, calcParams: [indicatorCommand.settings], zLevel: -20 }, true, { id: 'candle_pane' })
-        }
-        if (mainVolumeOverlayRef.current) {
-          mainVolumeOverlayRef.current.updateSettings(indicatorCommand.settings)
-        } else {
-          mainVolumeOverlayRef.current = installMainVolumeOverlay(chart, indicatorCommand.settings)
-        }
-        refreshPane(chart, 'candle_pane')
-      } else {
-        chart.removeIndicator('candle_pane', mainVolumeIndicatorName)
-        mainVolumeOverlayRef.current?.destroy()
-        mainVolumeOverlayRef.current = null
-        refreshPane(chart, 'candle_pane')
-      }
-    }
-  }, [chartInstanceRef, indicatorCommand, period, symbol])
+  }, [
+    applyMorganRangeCommand,
+    chartInstanceRef,
+    indicatorCommand,
+    isIndicatorVisibleInCurrentPeriod,
+    observeDpoPaneHeight,
+    observeMacdPaneHeight,
+    observeRsiPaneHeight,
+    observeStochPaneHeight,
+    observeTsiPaneHeight,
+    observeVdoPaneHeight,
+    observeViPaneHeight,
+    symbol,
+  ])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -561,8 +365,8 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
       return
     }
-    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
-  }, [chartInstanceRef, loadState.loading, loadState.rows, period])
+    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, morganRangeSettingsRef.current ?? undefined)
+  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, loadState.rows, period])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -577,7 +381,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
           clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
           return
         }
-        applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+        applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, morganRangeSettingsRef.current ?? undefined)
       })
     }
 
@@ -589,7 +393,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
       actions.forEach((action) => chart.unsubscribeAction(action, scheduleRefresh))
       window.removeEventListener(chartRealtimeDataChangedEvent, scheduleRefresh)
     }
-  }, [chartInstanceRef, loadState.loading, period])
+  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, period])
 
   useEffect(() => () => {
     mainVolumeOverlayRef.current?.destroy()
@@ -601,7 +405,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, onLo
     macdPaneHeightObserverRef.current?.disconnect()
     tsiPaneHeightObserverRef.current?.disconnect()
     viPaneHeightObserverRef.current?.disconnect()
-  }, [])
+  }, [chartInstanceRef])
 
   return (
     <section className="ff-chart-core-host" aria-label={`${symbol} ${period} chart`}>
