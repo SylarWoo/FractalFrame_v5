@@ -64,6 +64,21 @@ function isBearishStochCross(previousK: number | undefined, previousD: number | 
     && (k as number) < (d as number)
 }
 
+function breaksBelowReversalThreshold(
+  previousK: number | undefined,
+  previousD: number | undefined,
+  k: number | undefined,
+  d: number | undefined,
+  threshold: number,
+) {
+  const previousMaxStoch = Math.max(previousK as number, previousD as number)
+  const currentMaxStoch = Math.max(k as number, d as number)
+  return Number.isFinite(previousMaxStoch)
+    && Number.isFinite(currentMaxStoch)
+    && previousMaxStoch > threshold
+    && currentMaxStoch <= threshold
+}
+
 function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<MmfIndicatorRow>) {
   const crosshairIndex = Number(params.crosshair.dataIndex)
   if (Number.isFinite(crosshairIndex) && crosshairIndex >= 0) {
@@ -131,20 +146,23 @@ function calculateTradingViewMmfRowsInternal(dataList: KLineData[], inputSetting
       active.highestHighIndex = index
     }
 
-    if (isBearishStochCross(previousStoch?.k, previousStoch?.d, k, d)) {
+    if (
+      active.reversalThreshold == null
+      && isBearishStochCross(previousStoch?.k, previousStoch?.d, k, d)
+    ) {
       const threshold = resolveBearishCrossThreshold(k as number, d as number)
-      active.reversalThreshold = threshold
-      active.reversalCrossIndex = threshold == null ? null : index
+      if (threshold != null) {
+        active.reversalThreshold = threshold
+        active.reversalCrossIndex = index
+      }
     }
 
+    const threshold = active.reversalThreshold
     if (
-      active.reversalThreshold != null
+      threshold != null
       && active.reversalCrossIndex != null
       && index > active.reversalCrossIndex
-      && Number.isFinite(k)
-      && Number.isFinite(d)
-      && (k as number) <= active.reversalThreshold
-      && (d as number) <= active.reversalThreshold
+      && breaksBelowReversalThreshold(previousStoch?.k, previousStoch?.d, k, d, threshold)
     ) {
       const markerIndex = active.highestHighIndex
       rows[markerIndex] = {

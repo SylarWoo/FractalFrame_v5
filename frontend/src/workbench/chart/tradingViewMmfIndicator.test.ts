@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { KLineData } from 'klinecharts'
 import { defaultMmfIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { calculateTradingViewMmfRows } from './tradingViewMmfIndicator'
@@ -80,5 +80,45 @@ describe('tradingViewMmfIndicator', () => {
     )
 
     expect(rows.some((row) => Number.isFinite(row.highMarker))).toBe(false)
+  })
+
+  it('freezes the first valid stoch reversal threshold until confirmation', async () => {
+    vi.resetModules()
+    vi.doMock('./tradingViewDpoIndicator', () => ({
+      calculateTradingViewDpoRows: (dataList: KLineData[]) => dataList.map(() => ({ dpo: 12 })),
+    }))
+    vi.doMock('./tradingViewStochIndicator', () => ({
+      calculateTradingViewStochRows: () => [
+        { k: 82, d: 81 },
+        { k: 79, d: 80 },
+        { k: 76, d: 77 },
+        { k: 72, d: 74 },
+        { k: 71, d: 72 },
+        { k: 66, d: 68 },
+        { k: 74, d: 73 },
+        { k: 69, d: 71 },
+        { k: 76, d: 76 },
+        { k: 74, d: 74 },
+      ],
+    }))
+    vi.doMock('./morganRangeModel', () => ({
+      calculateMorganRangeSegments: () => [],
+      getMorganRangeLevel: () => null,
+    }))
+    const { calculateTradingViewMmfRows: calculateRows } = await import('./tradingViewMmfIndicator')
+    const data = [100, 105, 111, 109, 107, 106, 108, 107, 106, 104].map((close, index) => createRow(index, close))
+    const rows = calculateRows(
+      data,
+      { ...defaultMmfIndicatorSettings, dpoValue: 11, highMorganRatio: '0.118', showHigh: true },
+    )
+    const markerIndexes = rows
+      .map((row, index) => Number.isFinite(row.highMarker) ? index : -1)
+      .filter((index) => index >= 0)
+
+    expect(markerIndexes).toEqual([2])
+    expect(rows[2]?.highMarker).toBe(111.5)
+    vi.doUnmock('./tradingViewDpoIndicator')
+    vi.doUnmock('./tradingViewStochIndicator')
+    vi.doUnmock('./morganRangeModel')
   })
 })
