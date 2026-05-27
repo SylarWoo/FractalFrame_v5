@@ -41,7 +41,7 @@ type MmfMarkerSpec = {
 }
 
 let registered = false
-const remoteMmfEngineVersion = 'mmf-engine-v17-stoch-zone-confirm-offset'
+const remoteMmfEngineVersion = 'mmf-engine-v18-start-threshold'
 const remoteMmfRowsCacheMax = 24
 const remoteMmfRowsBySignature = new Map<string, Promise<MmfIndicatorRow[]> | MmfIndicatorRow[]>()
 

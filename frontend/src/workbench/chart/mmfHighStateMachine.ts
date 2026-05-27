@@ -23,7 +23,7 @@ type MmfHighActiveState = {
   startIndex: number
 }
 
-const highStochStartLevel = 50
+const highStochStartLevel = 65
 const highStochZoneLevel = 70
 const highStochEndLevel = 65
 
