@@ -136,6 +136,14 @@ function writeStoredPaneHeight(storageKey: string, height: number) {
   writeString(storageKey, String(normalizeRsiPaneHeight(height)))
 }
 
+function isChartPaneSeparatorTarget(target: EventTarget | null, chartRoot: HTMLElement | null) {
+  if (!(target instanceof HTMLElement) || !chartRoot?.contains(target)) return false
+  const style = window.getComputedStyle(target)
+  if (style.cursor !== 'ns-resize') return false
+  const rect = target.getBoundingClientRect()
+  return rect.height > 0 && rect.height <= 16 && rect.width > 80
+}
+
 function refreshPane(chart: unknown, paneId: string) {
   const updatePane = (chart as { updatePane?: (level: number, paneId?: string) => void }).updatePane
   if (!updatePane) return
@@ -161,6 +169,8 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
   const vdoPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const tsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const viPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const paneResizeActiveRef = useRef(false)
+  const paneResizeEndTimerRef = useRef(0)
   const mainVolumeOverlayRef = useRef<ReturnType<typeof installMainVolumeOverlay> | null>(null)
   const morganRangeLoadedRef = useRef(false)
   const morganRangeOverlayIdsRef = useRef<Set<string>>(new Set())
@@ -172,6 +182,24 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
   }, [loadState, onLoadStateChange, period, symbol, totalRows])
 
   useChartStepLoad({ chartInstanceRef, period, setLoadState, stepLoad: stepLoad ?? null, symbol, totalRows })
+
+  const persistVisiblePaneHeights = useCallback(() => {
+    const chart = chartInstanceRef.current
+    if (!chart) return
+    const paneHeights = [
+      [rsiPaneId, rsiPaneHeightStorageKey],
+      [stochPaneId, stochPaneHeightStorageKey],
+      [macdPaneId, macdPaneHeightStorageKey],
+      [dpoPaneId, dpoPaneHeightStorageKey],
+      [vdoPaneId, vdoPaneHeightStorageKey],
+      [tsiPaneId, tsiPaneHeightStorageKey],
+      [viPaneId, viPaneHeightStorageKey],
+    ] as const
+    paneHeights.forEach(([paneId, storageKey]) => {
+      const size = chart.getSize(paneId)
+      if (size?.height) writeStoredPaneHeight(storageKey, size.height)
+    })
+  }, [chartInstanceRef])
 
   const observeIndicatorPaneHeight = useCallback((paneId: string, storageKey: string, observerRef: MutableRefObject<ResizeObserver | null>) => {
     observerRef.current?.disconnect()
@@ -185,16 +213,57 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
       if (!paneDom) return
 
       const observer = new ResizeObserver(() => {
+        if (!paneResizeActiveRef.current) return
         const size = chart.getSize(paneId)
         if (size?.height) writeStoredPaneHeight(storageKey, size.height)
       })
       observer.observe(paneDom)
       observerRef.current = observer
-
-      const size = chart.getSize(paneId)
-      if (size?.height) writeStoredPaneHeight(storageKey, size.height)
     })
   }, [chartInstanceRef])
+
+  useEffect(() => {
+    const chartRoot = chartRef.current
+    if (!chartRoot) return
+
+    const startPaneResize = (event: Event) => {
+      if (!isChartPaneSeparatorTarget(event.target, chartRoot)) return
+      paneResizeActiveRef.current = true
+      if (paneResizeEndTimerRef.current !== 0) {
+        window.clearTimeout(paneResizeEndTimerRef.current)
+        paneResizeEndTimerRef.current = 0
+      }
+    }
+
+    const finishPaneResize = () => {
+      if (!paneResizeActiveRef.current) return
+      paneResizeActiveRef.current = false
+      persistVisiblePaneHeights()
+      paneResizeEndTimerRef.current = window.setTimeout(() => {
+        paneResizeEndTimerRef.current = 0
+        persistVisiblePaneHeights()
+      }, 80)
+    }
+
+    chartRoot.addEventListener('pointerdown', startPaneResize, true)
+    chartRoot.addEventListener('mousedown', startPaneResize, true)
+    window.addEventListener('pointerup', finishPaneResize, true)
+    window.addEventListener('mouseup', finishPaneResize, true)
+    window.addEventListener('blur', finishPaneResize)
+
+    return () => {
+      chartRoot.removeEventListener('pointerdown', startPaneResize, true)
+      chartRoot.removeEventListener('mousedown', startPaneResize, true)
+      window.removeEventListener('pointerup', finishPaneResize, true)
+      window.removeEventListener('mouseup', finishPaneResize, true)
+      window.removeEventListener('blur', finishPaneResize)
+      if (paneResizeEndTimerRef.current !== 0) {
+        window.clearTimeout(paneResizeEndTimerRef.current)
+        paneResizeEndTimerRef.current = 0
+      }
+      paneResizeActiveRef.current = false
+    }
+  }, [chartRef, persistVisiblePaneHeights])
 
   const observeRsiPaneHeight = useCallback(() => observeIndicatorPaneHeight(rsiPaneId, rsiPaneHeightStorageKey, rsiPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const observeStochPaneHeight = useCallback(() => observeIndicatorPaneHeight(stochPaneId, stochPaneHeightStorageKey, stochPaneHeightObserverRef), [observeIndicatorPaneHeight])

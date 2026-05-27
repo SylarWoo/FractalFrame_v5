@@ -1,3 +1,4 @@
+import { ActionType } from 'klinecharts'
 import type { Chart, KLineData } from 'klinecharts'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
@@ -56,9 +57,14 @@ export function applyRightPlaceholderOffset(chart: Chart, period: string) {
 }
 
 export function applyNewDataWithFuturePlaceholders(chart: Chart, rows: KLineData[], period: string, more?: boolean, callback?: () => void) {
-  chart.applyNewData(appendFuturePlaceholders(rows, period), more, () => {
-    callback?.()
-  })
+  if (callback) {
+    const handleDataReady = () => {
+      chart.unsubscribeAction(ActionType.OnDataReady, handleDataReady)
+      callback()
+    }
+    chart.subscribeAction(ActionType.OnDataReady, handleDataReady)
+  }
+  chart.applyNewData(appendFuturePlaceholders(rows, period), more)
 }
 
 export function refreshChartFuturePlaceholders(chart: Chart, period: string) {

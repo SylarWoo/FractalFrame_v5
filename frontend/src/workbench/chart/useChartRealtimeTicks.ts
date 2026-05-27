@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { MutableRefObject } from 'react'
+import { ActionType } from 'klinecharts'
 import type { Chart, KLineData } from 'klinecharts'
 import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
 import { queryMt5Rates } from '../../services/mt5/mt5SymbolsApi'
@@ -265,10 +266,13 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
             volume,
             turnover: estimateTurnover(high, low, last, volume),
           }
-      chart.updateData(nextRow, () => {
+      const handleDataReady = () => {
+        chart.unsubscribeAction(ActionType.OnDataReady, handleDataReady)
         applyPriceVolumePrecision(chart, symbol)
         dispatchChartRealtimeDataChanged()
-      })
+      }
+      chart.subscribeAction(ActionType.OnDataReady, handleDataReady)
+      chart.updateData(nextRow)
     }
 
     const bindWhenReady = () => {
