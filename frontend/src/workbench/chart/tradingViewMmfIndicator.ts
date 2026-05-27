@@ -14,8 +14,12 @@ import { calculateTradingViewVdoRows } from './tradingViewVdoIndicator'
 export type MmfIndicatorRow = {
   highMarker?: number
   highMarkerPrice?: number
+  highRangeEndIndex?: number
+  highRangeStartIndex?: number
   lowMarker?: number
   lowMarkerPrice?: number
+  lowRangeEndIndex?: number
+  lowRangeStartIndex?: number
   downBreakMarker?: number
   downBreakMarkerPrice?: number
   upBreakMarker?: number
@@ -47,7 +51,7 @@ type MmfMarkerSpec = {
 }
 
 let registered = false
-const remoteMmfEngineVersion = 'mmf-engine-v21-stoch-line-cross'
+const remoteMmfEngineVersion = 'mmf-engine-v25-break-vdo-range'
 const remoteMmfRowsCacheMax = 24
 const remoteMmfRowsBySignature = new Map<string, Promise<MmfIndicatorRow[]> | MmfIndicatorRow[]>()
 
@@ -240,6 +244,31 @@ function isValueInRange(value: unknown, lower: number, upper: number) {
   return Number.isFinite(number) && number >= lower && number <= upper
 }
 
+function normalizeRangeIndex(value: unknown, fallback: number, maxIndex: number) {
+  const number = Math.round(Number(value))
+  return Number.isFinite(number) ? Math.max(0, Math.min(number, maxIndex)) : fallback
+}
+
+function areVdoRowsInRange(
+  vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
+  startIndex: unknown,
+  endIndex: unknown,
+  fallbackIndex: number,
+  lower: number,
+  upper: number,
+) {
+  const maxIndex = Math.max(0, vdoRows.length - 1)
+  const start = normalizeRangeIndex(startIndex, fallbackIndex, maxIndex)
+  const end = normalizeRangeIndex(endIndex, fallbackIndex, maxIndex)
+  const from = Math.min(start, end)
+  const to = Math.max(start, end)
+
+  for (let index = from; index <= to; index += 1) {
+    if (!isValueInRange(vdoRows[index]?.vdo, lower, upper)) return false
+  }
+  return true
+}
+
 function applyBreakMarkersFromInternalVdo(realRows: KLineData[], outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
   if (!settings.showUpBreakPoint && !settings.showDownBreakPoint) return
   const vdoRows = calculateTradingViewVdoRows(realRows)
@@ -247,12 +276,19 @@ function applyBreakMarkersFromInternalVdo(realRows: KLineData[], outputRows: Mmf
   const downRange = resolveVdoRange(settings.downBreakVdoLower, settings.downBreakVdoUpper)
 
   outputRows.forEach((row, index) => {
-    const vdo = vdoRows[index]?.vdo
-    if (settings.showUpBreakPoint && Number.isFinite(row.highMarker) && isValueInRange(vdo, upRange.lower, upRange.upper)) {
+    if (
+      settings.showUpBreakPoint
+      && Number.isFinite(row.highMarker)
+      && areVdoRowsInRange(vdoRows, row.highRangeStartIndex, row.highRangeEndIndex, index, upRange.lower, upRange.upper)
+    ) {
       row.upBreakMarker = row.highMarker
       row.upBreakMarkerPrice = row.highMarkerPrice ?? row.highMarker
     }
-    if (settings.showDownBreakPoint && Number.isFinite(row.lowMarker) && isValueInRange(vdo, downRange.lower, downRange.upper)) {
+    if (
+      settings.showDownBreakPoint
+      && Number.isFinite(row.lowMarker)
+      && areVdoRowsInRange(vdoRows, row.lowRangeStartIndex, row.lowRangeEndIndex, index, downRange.lower, downRange.upper)
+    ) {
       row.downBreakMarker = row.lowMarker
       row.downBreakMarkerPrice = row.lowMarkerPrice ?? row.lowMarker
     }
@@ -260,7 +296,7 @@ function applyBreakMarkersFromInternalVdo(realRows: KLineData[], outputRows: Mmf
 }
 
 function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMarker[], settings: MmfIndicatorSettings): MmfIndicatorRow[] {
-  const markersByTypeAndTime = new Map<MmfIndicatorMarker['type'], Map<number, number>>()
+  const markersByTypeAndTime = new Map<MmfIndicatorMarker['type'], Map<number, MmfIndicatorMarker>>()
   mmfMarkerSpecs.forEach((spec) => {
     if (!spec.markerType) return
     markersByTypeAndTime.set(spec.markerType, new Map())
@@ -270,7 +306,7 @@ function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMa
     const time = Number(marker.time)
     const price = Number(marker.price)
     if (!Number.isFinite(time) || !Number.isFinite(price)) return
-    markersByTypeAndTime.get(marker.type)?.set(time, price)
+    markersByTypeAndTime.get(marker.type)?.set(time, marker)
   })
 
   const outputRows = realRows.map((row) => {
@@ -280,9 +316,17 @@ function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMa
     mmfMarkerSpecs.forEach((spec) => {
       if (!spec.markerType) return
       const marker = markersByTypeAndTime.get(spec.markerType)?.get(time)
-      if (!Number.isFinite(marker)) return
-      output[spec.markerKey] = marker
-      output[spec.priceKey] = marker
+      const price = Number(marker?.price)
+      if (!Number.isFinite(price)) return
+      output[spec.markerKey] = price
+      output[spec.priceKey] = price
+      if (marker?.type === 'MMF_HIGH') {
+        output.highRangeStartIndex = marker.startIndex
+        output.highRangeEndIndex = marker.endIndex
+      } else if (marker?.type === 'MMF_LOW') {
+        output.lowRangeStartIndex = marker.startIndex
+        output.lowRangeEndIndex = marker.endIndex
+      }
     })
     return output
   })

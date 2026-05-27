@@ -9,10 +9,8 @@ import pandas as pd
 H4_MORGAN_SECONDS = 4 * 60 * 60
 XAU_SESSION_ANCHOR_SECONDS = 22 * 60 * 60
 MORGAN_LEVEL_RATIOS = (-1, -0.786, -0.618, -0.5, -0.382, -0.236, -0.177, -0.118, -0.059, 0, 0.059, 0.118, 0.177, 0.236, 0.382, 0.5, 0.618, 0.786, 1)
-MMF_HIGH_STOCH_START_LEVEL = 65
 MMF_HIGH_STOCH_ZONE_LEVEL = 70
 MMF_HIGH_STOCH_REVERSAL_LEVEL = 65
-MMF_LOW_STOCH_START_LEVEL = 35
 MMF_LOW_STOCH_ZONE_LEVEL = 30
 MMF_LOW_STOCH_REVERSAL_LEVEL = 35
 
@@ -40,7 +38,6 @@ class MmfActiveState:
     highest_high_index: int
     has_filter_match: bool = False
     reached_reversal_zone: bool = False
-    stoch_started: bool = False
     end_index: int | None = None
 
 
@@ -255,6 +252,24 @@ def _value_crosses_above(previous_value: Any, value: Any, threshold: float) -> b
     return float(previous_value) < threshold and float(value) >= threshold
 
 
+def _value_crosses_below(previous_value: Any, value: Any, threshold: float) -> bool:
+    if not (_finite_number(previous_value) and _finite_number(value)):
+        return False
+    return float(previous_value) > threshold and float(value) <= threshold
+
+
+def _price_crosses_above_level(previous_price: Any, price: Any, previous_level: Any, level: Any) -> bool:
+    if not (_finite_number(previous_price) and _finite_number(price) and _finite_number(previous_level) and _finite_number(level)):
+        return False
+    return float(previous_price) < float(previous_level) and float(price) >= float(level)
+
+
+def _price_crosses_below_level(previous_price: Any, price: Any, previous_level: Any, level: Any) -> bool:
+    if not (_finite_number(previous_price) and _finite_number(price) and _finite_number(previous_level) and _finite_number(level)):
+        return False
+    return float(previous_price) > float(previous_level) and float(price) <= float(level)
+
+
 def _stoch_cross_value(previous_k: Any, previous_d: Any, k: Any, d: Any) -> float | None:
     if not (_finite_number(previous_k) and _finite_number(previous_d) and _finite_number(k) and _finite_number(d)):
         return None
@@ -287,34 +302,6 @@ def _stoch_golden_cross_value_below(previous_k: Any, previous_d: Any, k: Any, d:
         return False
     cross_value = _stoch_cross_value(previous_k, previous_d, k, d)
     return cross_value is not None and cross_value < threshold
-
-
-def _stoch_lines_fall_back_below(previous_k: Any, previous_d: Any, k: Any, d: Any, threshold: float) -> bool:
-    if not (_finite_number(previous_k) and _finite_number(previous_d) and _finite_number(k) and _finite_number(d)):
-        return False
-    return max(float(previous_k), float(previous_d)) > threshold and max(float(k), float(d)) <= threshold
-
-
-def _stoch_lines_rise_back_above(previous_k: Any, previous_d: Any, k: Any, d: Any, threshold: float) -> bool:
-    if not (_finite_number(previous_k) and _finite_number(previous_d) and _finite_number(k) and _finite_number(d)):
-        return False
-    return min(float(previous_k), float(previous_d)) < threshold and min(float(k), float(d)) >= threshold
-
-
-def _stoch_crosses_above_level(previous_k: Any, previous_d: Any, k: Any, d: Any, threshold: float) -> bool:
-    if not (_finite_number(previous_k) and _finite_number(previous_d) and _finite_number(k) and _finite_number(d)):
-        return False
-    k_crossed = float(previous_k) < threshold and float(k) >= threshold
-    d_crossed = float(previous_d) < threshold and float(d) >= threshold
-    return k_crossed or d_crossed
-
-
-def _stoch_crosses_below_level(previous_k: Any, previous_d: Any, k: Any, d: Any, threshold: float) -> bool:
-    if not (_finite_number(previous_k) and _finite_number(previous_d) and _finite_number(k) and _finite_number(d)):
-        return False
-    k_crossed = float(previous_k) > threshold and float(k) <= threshold
-    d_crossed = float(previous_d) > threshold and float(d) <= threshold
-    return k_crossed or d_crossed
 
 
 def calculate_mmf_precomputed_data(frame: pd.DataFrame, settings: MmfSettings) -> MmfPrecomputedData:
@@ -368,11 +355,15 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
         k = stoch_k[index]
         d = stoch_d[index]
         previous_dpo = dpos[index - 1]
+        previous_high = highs[index - 1]
+        previous_low = lows[index - 1]
         previous_k = stoch_k[index - 1]
         previous_d = stoch_d[index - 1]
 
         morgan_level = morgan_levels[index]
         low_morgan_level = low_morgan_levels[index]
+        previous_morgan_level = morgan_levels[index - 1]
+        previous_low_morgan_level = low_morgan_levels[index - 1]
 
         if settings.show_high:
             high_filter_match = (
@@ -380,9 +371,10 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
                 or (_finite_number(dpo) and float(dpo) >= float(settings.dpo_value))
             )
             high_dpo_start_signal = _value_crosses_above(previous_dpo, dpo, float(settings.dpo_value))
-            high_start_signal = _stoch_crosses_above_level(previous_k, previous_d, k, d, MMF_HIGH_STOCH_START_LEVEL)
+            high_morgan_start_signal = _price_crosses_above_level(previous_high, high, previous_morgan_level, morgan_level)
+            high_start_signal = high_dpo_start_signal or high_morgan_start_signal
 
-            if active is None and high_dpo_start_signal and _finite_number(high):
+            if active is None and high_start_signal and _finite_number(high):
                 active = MmfActiveState(
                     start_index=index,
                     highest_high=float(high),
@@ -396,12 +388,11 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
 
             if active is not None:
                 active.has_filter_match = active.has_filter_match or high_filter_match
-                active.stoch_started = active.stoch_started or high_start_signal
                 active.reached_reversal_zone = active.reached_reversal_zone or (
-                    active.stoch_started and _stoch_dead_cross_value_above(previous_k, previous_d, k, d, MMF_HIGH_STOCH_ZONE_LEVEL)
+                    _stoch_dead_cross_value_above(previous_k, previous_d, k, d, MMF_HIGH_STOCH_ZONE_LEVEL)
                 )
 
-            if active is not None and active.stoch_started and active.reached_reversal_zone and index > active.start_index and _stoch_lines_break_below(previous_k, previous_d, k, d, MMF_HIGH_STOCH_REVERSAL_LEVEL):
+            if active is not None and active.reached_reversal_zone and index > active.start_index and _stoch_lines_break_below(previous_k, previous_d, k, d, MMF_HIGH_STOCH_REVERSAL_LEVEL):
                 active.end_index = index
                 if active.has_filter_match:
                     marker_records.append({
@@ -417,9 +408,6 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
                         "confirmCrossIndex": index,
                     })
                 active = None
-            elif active is not None and active.stoch_started and index > active.start_index and _stoch_lines_fall_back_below(previous_k, previous_d, k, d, MMF_HIGH_STOCH_START_LEVEL):
-                active.stoch_started = False
-                active.reached_reversal_zone = False
 
         if settings.show_low:
             low_dpo_threshold = -abs(float(settings.low_dpo_value))
@@ -427,14 +415,16 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
                 (_finite_number(low) and _finite_number(low_morgan_level) and float(low) <= float(low_morgan_level))
                 or (_finite_number(dpo) and float(dpo) <= low_dpo_threshold)
             )
-            low_start_signal = _stoch_crosses_below_level(previous_k, previous_d, k, d, MMF_LOW_STOCH_START_LEVEL)
+            low_dpo_start_signal = _value_crosses_below(previous_dpo, dpo, low_dpo_threshold)
+            low_morgan_start_signal = _price_crosses_below_level(previous_low, low, previous_low_morgan_level, low_morgan_level)
+            low_start_signal = low_dpo_start_signal or low_morgan_start_signal
 
             if low_active is None and low_start_signal and _finite_number(low):
                 low_active = MmfLowActiveState(
                     start_index=index,
                     lowest_low=float(low),
                     lowest_low_index=index,
-                    has_filter_match=low_filter_match,
+                    has_filter_match=True,
                 )
 
             if low_active is not None and _finite_number(low) and float(low) < low_active.lowest_low:
@@ -460,8 +450,6 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
                         "confirmThreshold": MMF_LOW_STOCH_REVERSAL_LEVEL,
                         "confirmCrossIndex": index,
                     })
-                low_active = None
-            elif low_active is not None and index > low_active.start_index and _stoch_lines_rise_back_above(previous_k, previous_d, k, d, MMF_LOW_STOCH_START_LEVEL):
                 low_active = None
 
     markers = sorted(marker_records, key=lambda marker: (int(marker["index"]), str(marker["type"])))

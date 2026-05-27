@@ -9,6 +9,8 @@ export type MmfHighInputRow = {
 export type MmfHighMarkerRow = {
   highMarker?: number
   highMarkerPrice?: number
+  highRangeEndIndex?: number
+  highRangeStartIndex?: number
 }
 
 export type MmfHighStateMachineSettings = {
@@ -21,10 +23,8 @@ type MmfHighActiveState = {
   highestHighIndex: number
   reachedReversalZone: boolean
   startIndex: number
-  stochStarted: boolean
 }
 
-const highStochStartLevel = 65
 const highStochZoneLevel = 70
 const highStochEndLevel = 65
 
@@ -41,11 +41,6 @@ function doStochLinesBreakBelow(
 ) {
   if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return false
   return Math.max(previousK, previousD) > threshold && Math.max(k, d) <= threshold
-}
-
-function doesValueCrossAbove(previousValue: number | undefined, value: number | undefined, threshold: number) {
-  if (!finiteNumber(previousValue) || !finiteNumber(value)) return false
-  return previousValue < threshold && value >= threshold
 }
 
 function resolveStochCrossValue(
@@ -75,33 +70,26 @@ function isStochDeadCrossValueAbove(
   return crossValue != null && crossValue > threshold
 }
 
-function doStochLinesFallBackBelow(
-  previousK: number | undefined,
-  previousD: number | undefined,
-  k: number | undefined,
-  d: number | undefined,
-  threshold: number,
-) {
-  if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return false
-  return Math.max(previousK, previousD) > threshold && Math.max(k, d) <= threshold
-}
-
-function doStochLinesCrossAbove(
-  previousK: number | undefined,
-  previousD: number | undefined,
-  k: number | undefined,
-  d: number | undefined,
-  threshold: number,
-) {
-  if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return false
-  return (previousK < threshold && k >= threshold) || (previousD < threshold && d >= threshold)
-}
-
 function isHighFilterMatched(row: MmfHighInputRow, settings: MmfHighStateMachineSettings) {
   return (
     (finiteNumber(row.high) && finiteNumber(row.morganLevel) && row.high >= row.morganLevel)
     || (finiteNumber(row.dpo) && row.dpo >= settings.dpoThreshold)
   )
+}
+
+function doesValueCrossAbove(previousValue: number | undefined, value: number | undefined, threshold: number) {
+  if (!finiteNumber(previousValue) || !finiteNumber(value)) return false
+  return previousValue < threshold && value >= threshold
+}
+
+function doesPriceCrossAboveLevel(
+  previousPrice: number | undefined,
+  price: number | undefined,
+  previousLevel: number | undefined,
+  level: number | undefined,
+) {
+  if (!finiteNumber(previousPrice) || !finiteNumber(price) || !finiteNumber(previousLevel) || !finiteNumber(level)) return false
+  return previousPrice < previousLevel && price >= level
 }
 
 export function calculateMmfHighStateMachineRows(
@@ -115,16 +103,16 @@ export function calculateMmfHighStateMachineRows(
     const row = inputRows[index]
     const previousRow = inputRows[index - 1]
     const dpoStartSignal = doesValueCrossAbove(previousRow.dpo, row.dpo, settings.dpoThreshold)
-    const stochStartSignal = doStochLinesCrossAbove(previousRow.k, previousRow.d, row.k, row.d, highStochStartLevel)
+    const morganStartSignal = doesPriceCrossAboveLevel(previousRow.high, row.high, previousRow.morganLevel, row.morganLevel)
+    const startSignal = dpoStartSignal || morganStartSignal
 
-    if (!active && dpoStartSignal && finiteNumber(row.high)) {
+    if (!active && startSignal && finiteNumber(row.high)) {
       active = {
         hasFilterMatch: true,
         highestHigh: row.high,
         highestHighIndex: index,
         reachedReversalZone: false,
         startIndex: index,
-        stochStarted: false,
       }
     }
 
@@ -136,24 +124,22 @@ export function calculateMmfHighStateMachineRows(
     }
 
     active.hasFilterMatch = active.hasFilterMatch || isHighFilterMatched(row, settings)
-    active.stochStarted = active.stochStarted || stochStartSignal
     active.reachedReversalZone = active.reachedReversalZone || (
-      active.stochStarted && isStochDeadCrossValueAbove(previousRow.k, previousRow.d, row.k, row.d, highStochZoneLevel)
+      isStochDeadCrossValueAbove(previousRow.k, previousRow.d, row.k, row.d, highStochZoneLevel)
     )
 
-    if (active.stochStarted && active.reachedReversalZone && index > active.startIndex && doStochLinesBreakBelow(previousRow.k, previousRow.d, row.k, row.d, highStochEndLevel)) {
+    if (active.reachedReversalZone && index > active.startIndex && doStochLinesBreakBelow(previousRow.k, previousRow.d, row.k, row.d, highStochEndLevel)) {
       if (active.hasFilterMatch) {
         const markerIndex = active.highestHighIndex
         rows[markerIndex] = {
           ...rows[markerIndex],
           highMarker: active.highestHigh,
           highMarkerPrice: active.highestHigh,
+          highRangeEndIndex: index,
+          highRangeStartIndex: active.startIndex,
         }
       }
       active = null
-    } else if (active.stochStarted && index > active.startIndex && doStochLinesFallBackBelow(previousRow.k, previousRow.d, row.k, row.d, highStochStartLevel)) {
-      active.stochStarted = false
-      active.reachedReversalZone = false
     }
   }
 

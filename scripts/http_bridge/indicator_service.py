@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 _MMF_RESULT_CACHE_MAX = 32
-_MMF_ENGINE_VERSION = "mmf_python_state_machine_v21_stoch_line_cross"
+_MMF_ENGINE_VERSION = "mmf_python_state_machine_v24_dpo_or_morgan_range"
 _MMF_INTERNAL_DPO_LENGTH = 21
 _mmf_result_cache: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
 
