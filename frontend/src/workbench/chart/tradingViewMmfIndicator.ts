@@ -1,6 +1,6 @@
 import { IndicatorSeries, registerIndicator } from 'klinecharts'
 import type { IndicatorCreateTooltipDataSourceParams, KLineData } from 'klinecharts'
-import { defaultDpoIndicatorSettings, defaultMmfIndicatorSettings, defaultStochIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { defaultDpoIndicatorSettings, defaultMmfIndicatorSettings, defaultStochIndicatorSettings, defaultVdoIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MmfIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { calculateMmfIndicatorMarkers, type MmfIndicatorMarker } from '../../services/mt5/mmfIndicatorApi'
 import { isFuturePlaceholder, stripFuturePlaceholders } from './chartFuturePlaceholders'
@@ -20,6 +20,18 @@ export type MmfIndicatorRow = {
   lowMarkerPrice?: number
   lowRangeEndIndex?: number
   lowRangeStartIndex?: number
+  pullbackMarker?: number
+  pullbackMarkerPrice?: number
+  reboundMarker?: number
+  reboundMarkerPrice?: number
+  resistanceMarker?: number
+  resistanceMarkerPrice?: number
+  supportMarker?: number
+  supportMarkerPrice?: number
+  trendDownMarker?: number
+  trendDownMarkerPrice?: number
+  trendUpMarker?: number
+  trendUpMarkerPrice?: number
   downBreakMarker?: number
   downBreakMarkerPrice?: number
   upBreakMarker?: number
@@ -38,10 +50,10 @@ type NormalizedMmfCalcContext = Required<Pick<MmfCalcContext, 'period' | 'symbol
 
 type MmfMarkerSpec = {
   color: (settings: MmfIndicatorSettings) => string
-  markerKey: keyof Pick<MmfIndicatorRow, 'downBreakMarker' | 'highMarker' | 'lowMarker' | 'upBreakMarker'>
+  markerKey: keyof Pick<MmfIndicatorRow, 'downBreakMarker' | 'highMarker' | 'lowMarker' | 'pullbackMarker' | 'reboundMarker' | 'resistanceMarker' | 'supportMarker' | 'trendDownMarker' | 'trendUpMarker' | 'upBreakMarker'>
   markerType?: MmfIndicatorMarker['type']
   offsetMultiplier: number
-  priceKey: keyof Pick<MmfIndicatorRow, 'downBreakMarkerPrice' | 'highMarkerPrice' | 'lowMarkerPrice' | 'upBreakMarkerPrice'>
+  priceKey: keyof Pick<MmfIndicatorRow, 'downBreakMarkerPrice' | 'highMarkerPrice' | 'lowMarkerPrice' | 'pullbackMarkerPrice' | 'reboundMarkerPrice' | 'resistanceMarkerPrice' | 'supportMarkerPrice' | 'trendDownMarkerPrice' | 'trendUpMarkerPrice' | 'upBreakMarkerPrice'>
   show: (settings: MmfIndicatorSettings) => boolean
   size: (settings: MmfIndicatorSettings) => number
   symbol: (settings: MmfIndicatorSettings) => string
@@ -51,9 +63,20 @@ type MmfMarkerSpec = {
 }
 
 let registered = false
-const remoteMmfEngineVersion = 'mmf-engine-v25-break-vdo-range'
+const remoteMmfEngineVersion = 'mmf-engine-v46-dedupe-extreme-windows'
 const remoteMmfRowsCacheMax = 24
 const remoteMmfRowsBySignature = new Map<string, Promise<MmfIndicatorRow[]> | MmfIndicatorRow[]>()
+const mmfInternalStochSettings = {
+  ...defaultStochIndicatorSettings,
+  dSmoothing: 4,
+  kSmoothing: 6,
+  length: 28,
+}
+const mmfInternalVdoSettings = {
+  ...defaultVdoIndicatorSettings,
+  emaSmoothing: 12,
+  length: 120,
+}
 
 function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): MmfIndicatorSettings {
   return { ...defaultMmfIndicatorSettings, ...(input ?? {}) }
@@ -111,7 +134,7 @@ const mmfMarkerSpecs: MmfMarkerSpec[] = [
     size: (settings) => clampMarkerSize(settings.upBreakSize, defaultMmfIndicatorSettings.upBreakSize),
     symbol: (settings) => settings.upBreakSymbol || defaultMmfIndicatorSettings.upBreakSymbol,
     textBaseline: 'bottom',
-    title: 'Up Break ',
+    title: 'Up Direction ',
     yDirection: -1,
   },
   {
@@ -136,7 +159,79 @@ const mmfMarkerSpecs: MmfMarkerSpec[] = [
     size: (settings) => clampMarkerSize(settings.downBreakSize, defaultMmfIndicatorSettings.downBreakSize),
     symbol: (settings) => settings.downBreakSymbol || defaultMmfIndicatorSettings.downBreakSymbol,
     textBaseline: 'top',
-    title: 'Down Break ',
+    title: 'Down Direction ',
+    yDirection: 1,
+  },
+  {
+    color: (settings) => settings.resistanceColor || defaultMmfIndicatorSettings.resistanceColor,
+    markerKey: 'resistanceMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'resistanceMarkerPrice',
+    show: (settings) => settings.showResistanceLevel,
+    size: (settings) => clampMarkerSize(settings.resistanceSize, defaultMmfIndicatorSettings.resistanceSize),
+    symbol: (settings) => settings.resistanceSymbol || defaultMmfIndicatorSettings.resistanceSymbol,
+    textBaseline: 'bottom',
+    title: 'Resistance ',
+    yDirection: -1,
+  },
+  {
+    color: (settings) => settings.supportColor || defaultMmfIndicatorSettings.supportColor,
+    markerKey: 'supportMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'supportMarkerPrice',
+    show: (settings) => settings.showSupportLevel,
+    size: (settings) => clampMarkerSize(settings.supportSize, defaultMmfIndicatorSettings.supportSize),
+    symbol: (settings) => settings.supportSymbol || defaultMmfIndicatorSettings.supportSymbol,
+    textBaseline: 'top',
+    title: 'Support ',
+    yDirection: 1,
+  },
+  {
+    color: (settings) => settings.trendDownColor || defaultMmfIndicatorSettings.trendDownColor,
+    markerKey: 'trendDownMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'trendDownMarkerPrice',
+    show: (settings) => settings.showTrendDownPoint,
+    size: (settings) => clampMarkerSize(settings.trendDownSize, defaultMmfIndicatorSettings.trendDownSize),
+    symbol: (settings) => settings.trendDownSymbol || defaultMmfIndicatorSettings.trendDownSymbol,
+    textBaseline: 'top',
+    title: 'Trend Down ',
+    yDirection: 1,
+  },
+  {
+    color: (settings) => settings.trendUpColor || defaultMmfIndicatorSettings.trendUpColor,
+    markerKey: 'trendUpMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'trendUpMarkerPrice',
+    show: (settings) => settings.showTrendUpPoint,
+    size: (settings) => clampMarkerSize(settings.trendUpSize, defaultMmfIndicatorSettings.trendUpSize),
+    symbol: (settings) => settings.trendUpSymbol || defaultMmfIndicatorSettings.trendUpSymbol,
+    textBaseline: 'bottom',
+    title: 'Trend Up ',
+    yDirection: -1,
+  },
+  {
+    color: (settings) => settings.reboundColor || defaultMmfIndicatorSettings.reboundColor,
+    markerKey: 'reboundMarker',
+    offsetMultiplier: 0.25,
+    priceKey: 'reboundMarkerPrice',
+    show: (settings) => settings.showReboundPoint,
+    size: (settings) => clampMarkerSize(settings.reboundSize, defaultMmfIndicatorSettings.reboundSize),
+    symbol: (settings) => settings.reboundSymbol || defaultMmfIndicatorSettings.reboundSymbol,
+    textBaseline: 'bottom',
+    title: 'Rebound ',
+    yDirection: -1,
+  },
+  {
+    color: (settings) => settings.pullbackColor || defaultMmfIndicatorSettings.pullbackColor,
+    markerKey: 'pullbackMarker',
+    offsetMultiplier: 0.25,
+    priceKey: 'pullbackMarkerPrice',
+    show: (settings) => settings.showPullbackPoint,
+    size: (settings) => clampMarkerSize(settings.pullbackSize, defaultMmfIndicatorSettings.pullbackSize),
+    symbol: (settings) => settings.pullbackSymbol || defaultMmfIndicatorSettings.pullbackSymbol,
+    textBaseline: 'top',
+    title: 'Pullback ',
     yDirection: 1,
   },
 ]
@@ -244,24 +339,18 @@ function isValueInRange(value: unknown, lower: number, upper: number) {
   return Number.isFinite(number) && number >= lower && number <= upper
 }
 
-function normalizeRangeIndex(value: unknown, fallback: number, maxIndex: number) {
-  const number = Math.round(Number(value))
-  return Number.isFinite(number) ? Math.max(0, Math.min(number, maxIndex)) : fallback
-}
-
-function areVdoRowsInRange(
+function areVdoRowsInCenteredWindow(
   vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
-  startIndex: unknown,
-  endIndex: unknown,
-  fallbackIndex: number,
+  centerIndex: number,
+  radius: number,
   lower: number,
   upper: number,
 ) {
-  const maxIndex = Math.max(0, vdoRows.length - 1)
-  const start = normalizeRangeIndex(startIndex, fallbackIndex, maxIndex)
-  const end = normalizeRangeIndex(endIndex, fallbackIndex, maxIndex)
-  const from = Math.min(start, end)
-  const to = Math.max(start, end)
+  const maxIndex = vdoRows.length - 1
+  if (!Number.isFinite(centerIndex) || maxIndex < 0) return false
+  const center = Math.max(0, Math.min(Math.round(centerIndex), maxIndex))
+  const from = Math.max(0, center - radius)
+  const to = Math.min(maxIndex, center + radius)
 
   for (let index = from; index <= to; index += 1) {
     if (!isValueInRange(vdoRows[index]?.vdo, lower, upper)) return false
@@ -269,17 +358,366 @@ function areVdoRowsInRange(
   return true
 }
 
-function applyBreakMarkersFromInternalVdo(realRows: KLineData[], outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
-  if (!settings.showUpBreakPoint && !settings.showDownBreakPoint) return
-  const vdoRows = calculateTradingViewVdoRows(realRows)
+function isResistanceVdoWindowMatched(
+  vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
+  centerIndex: number,
+  radius: number,
+  lower: number,
+  upper: number,
+) {
+  const maxIndex = vdoRows.length - 1
+  if (!Number.isFinite(centerIndex) || maxIndex < 0) return false
+  const center = Math.max(0, Math.min(Math.round(centerIndex), maxIndex))
+  const from = Math.max(0, center - radius)
+  const to = Math.min(maxIndex, center + radius)
+  let hasBreak = false
+
+  for (let index = from; index <= to; index += 1) {
+    const value = Number(vdoRows[index]?.vdo)
+    if (!Number.isFinite(value)) return false
+    if (value > upper) return false
+    if (value >= lower) hasBreak = true
+  }
+  return hasBreak
+}
+
+function isSupportVdoWindowMatched(
+  vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
+  centerIndex: number,
+  radius: number,
+  lower: number,
+  upper: number,
+) {
+  const maxIndex = vdoRows.length - 1
+  if (!Number.isFinite(centerIndex) || maxIndex < 0) return false
+  const center = Math.max(0, Math.min(Math.round(centerIndex), maxIndex))
+  const from = Math.max(0, center - radius)
+  const to = Math.min(maxIndex, center + radius)
+  let hasBreak = false
+
+  for (let index = from; index <= to; index += 1) {
+    const value = Number(vdoRows[index]?.vdo)
+    if (!Number.isFinite(value)) return false
+    if (value < lower) return false
+    if (value <= upper) hasBreak = true
+  }
+  return hasBreak
+}
+
+function areVdoRowsAtOrBelowThreshold(
+  vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
+  centerIndex: number,
+  radius: number,
+  threshold: number,
+) {
+  const maxIndex = vdoRows.length - 1
+  if (!Number.isFinite(centerIndex) || maxIndex < 0 || !Number.isFinite(threshold)) return false
+  const center = Math.max(0, Math.min(Math.round(centerIndex), maxIndex))
+  const from = Math.max(0, center - radius)
+  const to = Math.min(maxIndex, center + radius)
+
+  for (let index = from; index <= to; index += 1) {
+    const value = Number(vdoRows[index]?.vdo)
+    if (!Number.isFinite(value) || value > threshold) return false
+  }
+  return true
+}
+
+function areVdoRowsAtOrAboveThreshold(
+  vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
+  centerIndex: number,
+  radius: number,
+  threshold: number,
+) {
+  const maxIndex = vdoRows.length - 1
+  if (!Number.isFinite(centerIndex) || maxIndex < 0 || !Number.isFinite(threshold)) return false
+  const center = Math.max(0, Math.min(Math.round(centerIndex), maxIndex))
+  const from = Math.max(0, center - radius)
+  const to = Math.min(maxIndex, center + radius)
+
+  for (let index = from; index <= to; index += 1) {
+    const value = Number(vdoRows[index]?.vdo)
+    if (!Number.isFinite(value) || value < threshold) return false
+  }
+  return true
+}
+
+function resolveStochCrossValue(previousK: unknown, previousD: unknown, k: unknown, d: unknown) {
+  const previousKNumber = Number(previousK)
+  const previousDNumber = Number(previousD)
+  const kNumber = Number(k)
+  const dNumber = Number(d)
+  if (!Number.isFinite(previousKNumber) || !Number.isFinite(previousDNumber) || !Number.isFinite(kNumber) || !Number.isFinite(dNumber)) return null
+  const denominator = (kNumber - previousKNumber) - (dNumber - previousDNumber)
+  if (denominator === 0) return null
+  const ratio = (previousDNumber - previousKNumber) / denominator
+  if (ratio < 0 || ratio > 1) return null
+  return previousKNumber + (kNumber - previousKNumber) * ratio
+}
+
+function resolveStochDeadCrossValue(previousK: unknown, previousD: unknown, k: unknown, d: unknown) {
+  const previousKNumber = Number(previousK)
+  const previousDNumber = Number(previousD)
+  const kNumber = Number(k)
+  const dNumber = Number(d)
+  if (!Number.isFinite(previousKNumber) || !Number.isFinite(previousDNumber) || !Number.isFinite(kNumber) || !Number.isFinite(dNumber)) return null
+  if (!(previousKNumber >= previousDNumber && kNumber < dNumber)) return null
+  const crossValue = resolveStochCrossValue(previousKNumber, previousDNumber, kNumber, dNumber)
+  return crossValue
+}
+
+function resolveStochGoldenCrossValue(previousK: unknown, previousD: unknown, k: unknown, d: unknown) {
+  const previousKNumber = Number(previousK)
+  const previousDNumber = Number(previousD)
+  const kNumber = Number(k)
+  const dNumber = Number(d)
+  if (!Number.isFinite(previousKNumber) || !Number.isFinite(previousDNumber) || !Number.isFinite(kNumber) || !Number.isFinite(dNumber)) return null
+  if (!(previousKNumber <= previousDNumber && kNumber > dNumber)) return null
+  const crossValue = resolveStochCrossValue(previousKNumber, previousDNumber, kNumber, dNumber)
+  return crossValue
+}
+
+function hasHighMarkerNearIndex(outputRows: MmfIndicatorRow[], markerIndex: number, price: number) {
+  const from = Math.max(0, markerIndex - 1)
+  const to = Math.min(outputRows.length - 1, markerIndex + 1)
+  for (let index = from; index <= to; index += 1) {
+    const highMarker = Number(outputRows[index]?.highMarker)
+    if (!Number.isFinite(highMarker)) continue
+    if (index === markerIndex) return true
+    if (Number.isFinite(price) && Math.abs(highMarker - price) < 0.000001) return true
+  }
+  return false
+}
+
+function hasHighMarkerInCenteredWindow(outputRows: MmfIndicatorRow[], centerIndex: number, radius: number) {
+  const from = Math.max(0, centerIndex - radius)
+  const to = Math.min(outputRows.length - 1, centerIndex + radius)
+  for (let index = from; index <= to; index += 1) {
+    if (Number.isFinite(outputRows[index]?.highMarker)) return true
+  }
+  return false
+}
+
+function findHighestHighInCenteredWindow(realRows: KLineData[], centerIndex: number, radius: number) {
+  const from = Math.max(0, centerIndex - radius)
+  const to = Math.min(realRows.length - 1, centerIndex + radius)
+  let highestHigh = Number.NEGATIVE_INFINITY
+  let highestHighIndex = -1
+  for (let index = from; index <= to; index += 1) {
+    const high = Number(realRows[index]?.high)
+    if (Number.isFinite(high) && high > highestHigh) {
+      highestHigh = high
+      highestHighIndex = index
+    }
+  }
+  return highestHighIndex >= 0 ? { index: highestHighIndex, price: highestHigh } : null
+}
+
+function hasVdoAboveThresholdInCenteredWindow(
+  vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
+  centerIndex: number,
+  radius: number,
+  threshold: number,
+) {
+  if (!Number.isFinite(threshold)) return true
+  const from = Math.max(0, centerIndex - radius)
+  const to = Math.min(vdoRows.length - 1, centerIndex + radius)
+  for (let index = from; index <= to; index += 1) {
+    const value = Number(vdoRows[index]?.vdo)
+    if (!Number.isFinite(value)) return true
+    if (value > threshold) return true
+  }
+  return false
+}
+
+function hasLowMarkerNearIndex(outputRows: MmfIndicatorRow[], markerIndex: number, price: number) {
+  const from = Math.max(0, markerIndex - 1)
+  const to = Math.min(outputRows.length - 1, markerIndex + 1)
+  for (let index = from; index <= to; index += 1) {
+    const lowMarker = Number(outputRows[index]?.lowMarker)
+    if (!Number.isFinite(lowMarker)) continue
+    if (index === markerIndex) return true
+    if (Number.isFinite(price) && Math.abs(lowMarker - price) < 0.000001) return true
+  }
+  return false
+}
+
+function hasLowMarkerInCenteredWindow(outputRows: MmfIndicatorRow[], centerIndex: number, radius: number) {
+  const from = Math.max(0, centerIndex - radius)
+  const to = Math.min(outputRows.length - 1, centerIndex + radius)
+  for (let index = from; index <= to; index += 1) {
+    if (Number.isFinite(outputRows[index]?.lowMarker)) return true
+  }
+  return false
+}
+
+function findLowestLowInCenteredWindow(realRows: KLineData[], centerIndex: number, radius: number) {
+  const from = Math.max(0, centerIndex - radius)
+  const to = Math.min(realRows.length - 1, centerIndex + radius)
+  let lowestLow = Number.POSITIVE_INFINITY
+  let lowestLowIndex = -1
+  for (let index = from; index <= to; index += 1) {
+    const low = Number(realRows[index]?.low)
+    if (Number.isFinite(low) && low < lowestLow) {
+      lowestLow = low
+      lowestLowIndex = index
+    }
+  }
+  return lowestLowIndex >= 0 ? { index: lowestLowIndex, price: lowestLow } : null
+}
+
+function hasVdoBelowThresholdInCenteredWindow(
+  vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
+  centerIndex: number,
+  radius: number,
+  threshold: number,
+) {
+  if (!Number.isFinite(threshold)) return true
+  const from = Math.max(0, centerIndex - radius)
+  const to = Math.min(vdoRows.length - 1, centerIndex + radius)
+  for (let index = from; index <= to; index += 1) {
+    const value = Number(vdoRows[index]?.vdo)
+    if (!Number.isFinite(value)) return true
+    if (value < threshold) return true
+  }
+  return false
+}
+
+function applyReboundMarkers(realRows: KLineData[], stochRows: ReturnType<typeof calculateTradingViewStochRows>, vdoRows: ReturnType<typeof calculateTradingViewVdoRows>, outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
+  if (!settings.showReboundPoint) return
+  const confirmDistance = 7
+  const crossLevel = 50
+  const markerWindowRadius = 7
+  const vdoThreshold = Number(settings.reboundVdoThreshold)
+
+  let armed = false
+  let active: {
+    crossValue: number
+    crossIndex: number
+  } | null = null
+
+  for (let index = 1; index < realRows.length; index += 1) {
+    if (Number.isFinite(outputRows[index]?.trendDownMarker)) {
+      armed = true
+      active = null
+      continue
+    }
+    if (!armed) continue
+
+    const row = stochRows[index]
+    const previousRow = stochRows[index - 1]
+    const k = Number(row?.k)
+
+    const deadCrossValue = resolveStochDeadCrossValue(previousRow?.k, previousRow?.d, row?.k, row?.d)
+    if (!active && deadCrossValue != null && deadCrossValue > crossLevel) {
+      active = {
+        crossValue: deadCrossValue,
+        crossIndex: index,
+      }
+    }
+    if (!active) continue
+
+    if (Number.isFinite(k) && active.crossValue - k >= confirmDistance) {
+      if (!hasHighMarkerInCenteredWindow(outputRows, active.crossIndex, markerWindowRadius)) {
+        const marker = findHighestHighInCenteredWindow(realRows, active.crossIndex, markerWindowRadius)
+        if (
+          marker
+          && !hasVdoAboveThresholdInCenteredWindow(vdoRows, active.crossIndex, markerWindowRadius, vdoThreshold)
+          && !hasHighMarkerInCenteredWindow(outputRows, marker.index, markerWindowRadius)
+          && !hasHighMarkerNearIndex(outputRows, marker.index, marker.price)
+        ) {
+          outputRows[marker.index] = {
+            ...outputRows[marker.index],
+            reboundMarker: marker.price,
+            reboundMarkerPrice: marker.price,
+          }
+        }
+      }
+      active = null
+      armed = false
+    }
+  }
+}
+
+function applyPullbackMarkers(realRows: KLineData[], stochRows: ReturnType<typeof calculateTradingViewStochRows>, vdoRows: ReturnType<typeof calculateTradingViewVdoRows>, outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
+  if (!settings.showPullbackPoint) return
+  const confirmDistance = 7
+  const crossLevel = 50
+  const markerWindowRadius = 7
+  const vdoThreshold = Number(settings.pullbackVdoThreshold)
+
+  let armed = false
+  let active: {
+    crossValue: number
+    crossIndex: number
+  } | null = null
+
+  for (let index = 1; index < realRows.length; index += 1) {
+    if (Number.isFinite(outputRows[index]?.trendUpMarker)) {
+      armed = true
+      active = null
+      continue
+    }
+    if (!armed) continue
+
+    const row = stochRows[index]
+    const previousRow = stochRows[index - 1]
+    const k = Number(row?.k)
+
+    const goldenCrossValue = resolveStochGoldenCrossValue(previousRow?.k, previousRow?.d, row?.k, row?.d)
+    if (!active && goldenCrossValue != null && goldenCrossValue < crossLevel) {
+      active = {
+        crossValue: goldenCrossValue,
+        crossIndex: index,
+      }
+    }
+    if (!active) continue
+
+    if (Number.isFinite(k) && k - active.crossValue >= confirmDistance) {
+      if (!hasLowMarkerInCenteredWindow(outputRows, active.crossIndex, markerWindowRadius)) {
+        const marker = findLowestLowInCenteredWindow(realRows, active.crossIndex, markerWindowRadius)
+        if (
+          marker
+          && !hasVdoBelowThresholdInCenteredWindow(vdoRows, active.crossIndex, markerWindowRadius, vdoThreshold)
+          && !hasLowMarkerInCenteredWindow(outputRows, marker.index, markerWindowRadius)
+          && !hasLowMarkerNearIndex(outputRows, marker.index, marker.price)
+        ) {
+          outputRows[marker.index] = {
+            ...outputRows[marker.index],
+            pullbackMarker: marker.price,
+            pullbackMarkerPrice: marker.price,
+          }
+        }
+      }
+      active = null
+      armed = false
+    }
+  }
+}
+
+function applyVdoDerivedMarkers(realRows: KLineData[], outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
+  if (
+    !settings.showUpBreakPoint
+    && !settings.showDownBreakPoint
+    && !settings.showResistanceLevel
+    && !settings.showSupportLevel
+    && !settings.showTrendDownPoint
+    && !settings.showTrendUpPoint
+    && !settings.showReboundPoint
+    && !settings.showPullbackPoint
+  ) return
+  const vdoRows = calculateTradingViewVdoRows(realRows, mmfInternalVdoSettings)
+  const stochRows = settings.showReboundPoint || settings.showPullbackPoint ? calculateTradingViewStochRows(realRows, mmfInternalStochSettings) : []
   const upRange = resolveVdoRange(settings.upBreakVdoLower, settings.upBreakVdoUpper)
   const downRange = resolveVdoRange(settings.downBreakVdoLower, settings.downBreakVdoUpper)
+  const resistanceRange = resolveVdoRange(settings.resistanceVdoLower, settings.resistanceVdoUpper)
+  const supportRange = resolveVdoRange(settings.supportVdoLower, settings.supportVdoUpper)
 
   outputRows.forEach((row, index) => {
     if (
       settings.showUpBreakPoint
       && Number.isFinite(row.highMarker)
-      && areVdoRowsInRange(vdoRows, row.highRangeStartIndex, row.highRangeEndIndex, index, upRange.lower, upRange.upper)
+      && areVdoRowsInCenteredWindow(vdoRows, index, 5, upRange.lower, upRange.upper)
     ) {
       row.upBreakMarker = row.highMarker
       row.upBreakMarkerPrice = row.highMarkerPrice ?? row.highMarker
@@ -287,12 +725,46 @@ function applyBreakMarkersFromInternalVdo(realRows: KLineData[], outputRows: Mmf
     if (
       settings.showDownBreakPoint
       && Number.isFinite(row.lowMarker)
-      && areVdoRowsInRange(vdoRows, row.lowRangeStartIndex, row.lowRangeEndIndex, index, downRange.lower, downRange.upper)
+      && areVdoRowsInCenteredWindow(vdoRows, index, 5, downRange.lower, downRange.upper)
     ) {
       row.downBreakMarker = row.lowMarker
       row.downBreakMarkerPrice = row.lowMarkerPrice ?? row.lowMarker
     }
+    if (
+      settings.showResistanceLevel
+      && Number.isFinite(row.highMarker)
+      && isResistanceVdoWindowMatched(vdoRows, index, 5, resistanceRange.lower, resistanceRange.upper)
+    ) {
+      row.resistanceMarker = row.highMarker
+      row.resistanceMarkerPrice = row.highMarkerPrice ?? row.highMarker
+    }
+    if (
+      settings.showSupportLevel
+      && Number.isFinite(row.lowMarker)
+      && isSupportVdoWindowMatched(vdoRows, index, 5, supportRange.lower, supportRange.upper)
+    ) {
+      row.supportMarker = row.lowMarker
+      row.supportMarkerPrice = row.lowMarkerPrice ?? row.lowMarker
+    }
+    if (
+      settings.showTrendDownPoint
+      && Number.isFinite(row.lowMarker)
+      && areVdoRowsAtOrBelowThreshold(vdoRows, index, 5, Number(settings.trendDownVdoUpper))
+    ) {
+      row.trendDownMarker = row.lowMarker
+      row.trendDownMarkerPrice = row.lowMarkerPrice ?? row.lowMarker
+    }
+    if (
+      settings.showTrendUpPoint
+      && Number.isFinite(row.highMarker)
+      && areVdoRowsAtOrAboveThreshold(vdoRows, index, 5, Number(settings.trendUpVdoUpper))
+    ) {
+      row.trendUpMarker = row.highMarker
+      row.trendUpMarkerPrice = row.highMarkerPrice ?? row.highMarker
+    }
   })
+  applyReboundMarkers(realRows, stochRows, vdoRows, outputRows, settings)
+  applyPullbackMarkers(realRows, stochRows, vdoRows, outputRows, settings)
 }
 
 function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMarker[], settings: MmfIndicatorSettings): MmfIndicatorRow[] {
@@ -330,7 +802,7 @@ function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMa
     })
     return output
   })
-  applyBreakMarkersFromInternalVdo(realRows, outputRows, settings)
+  applyVdoDerivedMarkers(realRows, outputRows, settings)
   return outputRows
 }
 
@@ -362,6 +834,12 @@ function createRemoteMmfSignature(realRows: KLineData[], settings: MmfIndicatorS
     settings.showLow ? 'L1' : 'L0',
     settings.showUpBreakPoint ? 'UB1' : 'UB0',
     settings.showDownBreakPoint ? 'DB1' : 'DB0',
+    settings.showResistanceLevel ? 'R1' : 'R0',
+    settings.showSupportLevel ? 'S1' : 'S0',
+    settings.showTrendDownPoint ? 'TD1' : 'TD0',
+    settings.showTrendUpPoint ? 'TU1' : 'TU0',
+    settings.showReboundPoint ? 'RB1' : 'RB0',
+    settings.showPullbackPoint ? 'PB1' : 'PB0',
     settings.dpoValue,
     settings.highMorganRatio,
     settings.highOffsetPercent,
@@ -372,12 +850,38 @@ function createRemoteMmfSignature(realRows: KLineData[], settings: MmfIndicatorS
     settings.upBreakVdoUpper,
     settings.downBreakVdoLower,
     settings.downBreakVdoUpper,
+    settings.resistanceVdoLower,
+    settings.resistanceVdoUpper,
+    settings.supportVdoLower,
+    settings.supportVdoUpper,
+    settings.trendDownVdoUpper,
+    settings.trendUpVdoUpper,
+    settings.reboundVdoThreshold,
+    settings.pullbackVdoThreshold,
     settings.upBreakSymbol,
     settings.upBreakSize,
     settings.upBreakColor,
     settings.downBreakSymbol,
     settings.downBreakSize,
     settings.downBreakColor,
+    settings.resistanceSymbol,
+    settings.resistanceSize,
+    settings.resistanceColor,
+    settings.supportSymbol,
+    settings.supportSize,
+    settings.supportColor,
+    settings.trendDownSymbol,
+    settings.trendDownSize,
+    settings.trendDownColor,
+    settings.trendUpSymbol,
+    settings.trendUpSize,
+    settings.trendUpColor,
+    settings.reboundSymbol,
+    settings.reboundSize,
+    settings.reboundColor,
+    settings.pullbackSymbol,
+    settings.pullbackSize,
+    settings.pullbackColor,
     context.stochLength,
     context.stochKSmoothing,
     context.stochDSmoothing,

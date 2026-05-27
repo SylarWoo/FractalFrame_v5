@@ -17,30 +17,12 @@ export type MmfHighStateMachineSettings = {
   dpoThreshold: number
 }
 
-type MmfHighActiveState = {
-  hasFilterMatch: boolean
-  highestHigh: number
-  highestHighIndex: number
-  reachedReversalZone: boolean
-  startIndex: number
-}
-
-const highStochZoneLevel = 70
-const highStochEndLevel = 65
+const highCrossMinLevel = 60
+const stochConfirmDistance = 7
+const crossWindowRadius = 7
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
-}
-
-function doStochLinesBreakBelow(
-  previousK: number | undefined,
-  previousD: number | undefined,
-  k: number | undefined,
-  d: number | undefined,
-  threshold: number,
-) {
-  if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return false
-  return Math.max(previousK, previousD) > threshold && Math.max(k, d) <= threshold
 }
 
 function resolveStochCrossValue(
@@ -57,17 +39,15 @@ function resolveStochCrossValue(
   return previousK + (k - previousK) * ratio
 }
 
-function isStochDeadCrossValueAbove(
+function resolveDeadCrossValue(
   previousK: number | undefined,
   previousD: number | undefined,
   k: number | undefined,
   d: number | undefined,
-  threshold: number,
 ) {
-  if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return false
-  if (!(previousK >= previousD && k < d)) return false
-  const crossValue = resolveStochCrossValue(previousK, previousD, k, d)
-  return crossValue != null && crossValue > threshold
+  if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return null
+  if (!(previousK >= previousD && k < d)) return null
+  return resolveStochCrossValue(previousK, previousD, k, d)
 }
 
 function isHighFilterMatched(row: MmfHighInputRow, settings: MmfHighStateMachineSettings) {
@@ -77,19 +57,32 @@ function isHighFilterMatched(row: MmfHighInputRow, settings: MmfHighStateMachine
   )
 }
 
-function doesValueCrossAbove(previousValue: number | undefined, value: number | undefined, threshold: number) {
-  if (!finiteNumber(previousValue) || !finiteNumber(value)) return false
-  return previousValue < threshold && value >= threshold
+function getCenteredWindow(index: number, rowsCount: number) {
+  return {
+    endIndex: Math.min(rowsCount - 1, index + crossWindowRadius),
+    startIndex: Math.max(0, index - crossWindowRadius),
+  }
 }
 
-function doesPriceCrossAboveLevel(
-  previousPrice: number | undefined,
-  price: number | undefined,
-  previousLevel: number | undefined,
-  level: number | undefined,
-) {
-  if (!finiteNumber(previousPrice) || !finiteNumber(price) || !finiteNumber(previousLevel) || !finiteNumber(level)) return false
-  return previousPrice < previousLevel && price >= level
+function hasHighFilterInWindow(inputRows: MmfHighInputRow[], settings: MmfHighStateMachineSettings, startIndex: number, endIndex: number) {
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    if (isHighFilterMatched(inputRows[index], settings)) return true
+  }
+  return false
+}
+
+function findHighestHighIndex(inputRows: MmfHighInputRow[], startIndex: number, endIndex: number) {
+  let highestIndex: number | null = null
+  let highestHigh: number | null = null
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const high = inputRows[index]?.high
+    if (!finiteNumber(high)) continue
+    if (highestHigh == null || high > highestHigh) {
+      highestHigh = high
+      highestIndex = index
+    }
+  }
+  return highestIndex
 }
 
 export function calculateMmfHighStateMachineRows(
@@ -97,49 +90,33 @@ export function calculateMmfHighStateMachineRows(
   settings: MmfHighStateMachineSettings,
 ): MmfHighMarkerRow[] {
   const rows: MmfHighMarkerRow[] = inputRows.map(() => ({}))
-  let active: MmfHighActiveState | null = null
+  let activeCross: { index: number, value: number } | null = null
 
   for (let index = 1; index < inputRows.length; index += 1) {
     const row = inputRows[index]
     const previousRow = inputRows[index - 1]
-    const dpoStartSignal = doesValueCrossAbove(previousRow.dpo, row.dpo, settings.dpoThreshold)
-    const morganStartSignal = doesPriceCrossAboveLevel(previousRow.high, row.high, previousRow.morganLevel, row.morganLevel)
-    const startSignal = dpoStartSignal || morganStartSignal
 
-    if (!active && startSignal && finiteNumber(row.high)) {
-      active = {
-        hasFilterMatch: true,
-        highestHigh: row.high,
-        highestHighIndex: index,
-        reachedReversalZone: false,
-        startIndex: index,
-      }
-    }
-
-    if (!active) continue
-
-    if (finiteNumber(row.high) && row.high > active.highestHigh) {
-      active.highestHigh = row.high
-      active.highestHighIndex = index
-    }
-
-    active.hasFilterMatch = active.hasFilterMatch || isHighFilterMatched(row, settings)
-    active.reachedReversalZone = active.reachedReversalZone || (
-      isStochDeadCrossValueAbove(previousRow.k, previousRow.d, row.k, row.d, highStochZoneLevel)
-    )
-
-    if (active.reachedReversalZone && index > active.startIndex && doStochLinesBreakBelow(previousRow.k, previousRow.d, row.k, row.d, highStochEndLevel)) {
-      if (active.hasFilterMatch) {
-        const markerIndex = active.highestHighIndex
-        rows[markerIndex] = {
-          ...rows[markerIndex],
-          highMarker: active.highestHigh,
-          highMarkerPrice: active.highestHigh,
-          highRangeEndIndex: index,
-          highRangeStartIndex: active.startIndex,
+    if (activeCross && index > activeCross.index && finiteNumber(row.k) && row.k <= activeCross.value - stochConfirmDistance) {
+      const { startIndex, endIndex } = getCenteredWindow(activeCross.index, inputRows.length)
+      const markerIndex = findHighestHighIndex(inputRows, startIndex, endIndex)
+      if (markerIndex != null && hasHighFilterInWindow(inputRows, settings, startIndex, endIndex)) {
+        const markerPrice = inputRows[markerIndex]?.high
+        if (finiteNumber(markerPrice)) {
+          rows[markerIndex] = {
+            ...rows[markerIndex],
+            highMarker: markerPrice,
+            highMarkerPrice: markerPrice,
+            highRangeEndIndex: endIndex,
+            highRangeStartIndex: startIndex,
+          }
         }
       }
-      active = null
+      activeCross = null
+    }
+
+    const deadCrossValue = resolveDeadCrossValue(previousRow.k, previousRow.d, row.k, row.d)
+    if (deadCrossValue != null && deadCrossValue >= highCrossMinLevel) {
+      activeCross = { index, value: deadCrossValue }
     }
   }
 

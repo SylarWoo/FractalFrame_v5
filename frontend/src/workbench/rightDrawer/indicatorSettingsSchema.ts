@@ -314,15 +314,49 @@ export type MmfIndicatorSettings = {
   lowOffsetPercent: number
   lowSize: number
   lowSymbol: string
+  pullbackColor: string
+  pullbackSize: number
+  pullbackSymbol: string
+  pullbackVdoThreshold: number
+  reboundColor: string
+  reboundSize: number
+  reboundSymbol: string
+  reboundVdoThreshold: number
+  resistanceColor: string
+  resistanceSize: number
+  resistanceSymbol: string
+  resistanceVdoLower: number
+  resistanceVdoUpper: number
   downBreakVdoLower: number
   downBreakVdoUpper: number
   downBreakColor: string
   downBreakSize: number
   downBreakSymbol: string
+  showResistanceLevel: boolean
   showHigh: boolean
   showLow: boolean
+  showPullbackPoint: boolean
+  showReboundPoint: boolean
   showDownBreakPoint: boolean
+  showSupportLevel: boolean
+  showTrendDownPoint: boolean
+  showTrendUpPoint: boolean
   showUpBreakPoint: boolean
+  supportColor: string
+  supportSize: number
+  supportSymbol: string
+  supportVdoLower: number
+  supportVdoUpper: number
+  trendDownColor: string
+  trendDownSize: number
+  trendDownSymbol: string
+  trendDownVdoLower: number
+  trendDownVdoUpper: number
+  trendUpColor: string
+  trendUpSize: number
+  trendUpSymbol: string
+  trendUpVdoLower: number
+  trendUpVdoUpper: number
   upBreakColor: string
   upBreakSize: number
   upBreakSymbol: string
@@ -726,15 +760,49 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   lowOffsetPercent: 0,
   lowSize: 24,
   lowSymbol: '\u25c6',
+  pullbackColor: '#ef5350',
+  pullbackSize: 24,
+  pullbackSymbol: '\u25c6',
+  pullbackVdoThreshold: -0.1,
+  reboundColor: '#26a69a',
+  reboundSize: 24,
+  reboundSymbol: '\u25c6',
+  reboundVdoThreshold: 0.1,
+  resistanceColor: '#ef5350',
+  resistanceSize: 24,
+  resistanceSymbol: '\u25c6',
+  resistanceVdoLower: 0.05,
+  resistanceVdoUpper: 0.1,
   downBreakVdoLower: -0.05,
   downBreakVdoUpper: 0.05,
   downBreakColor: '#ef5350',
   downBreakSize: 24,
   downBreakSymbol: '\u25c6',
+  showResistanceLevel: false,
   showHigh: true,
   showLow: false,
+  showPullbackPoint: false,
+  showReboundPoint: false,
   showDownBreakPoint: false,
+  showSupportLevel: false,
+  showTrendDownPoint: false,
+  showTrendUpPoint: false,
   showUpBreakPoint: false,
+  supportColor: '#26a69a',
+  supportSize: 24,
+  supportSymbol: '\u25c6',
+  supportVdoLower: -0.1,
+  supportVdoUpper: -0.05,
+  trendDownColor: '#ef5350',
+  trendDownSize: 24,
+  trendDownSymbol: '\u25c6',
+  trendDownVdoLower: -0.05,
+  trendDownVdoUpper: -0.1,
+  trendUpColor: '#26a69a',
+  trendUpSize: 24,
+  trendUpSymbol: '\u25c6',
+  trendUpVdoLower: -0.05,
+  trendUpVdoUpper: 0.1,
   upBreakColor: '#26a69a',
   upBreakSize: 24,
   upBreakSymbol: '\u25c6',
@@ -1147,18 +1215,46 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const highSymbol = typeof merged.highSymbol === 'string' && merged.highSymbol.trim() ? merged.highSymbol : defaultMmfIndicatorSettings.highSymbol
   const lowColor = typeof merged.lowColor === 'string' && merged.lowColor.trim() ? merged.lowColor : defaultMmfIndicatorSettings.lowColor
   const lowSymbol = typeof merged.lowSymbol === 'string' && merged.lowSymbol.trim() ? merged.lowSymbol : defaultMmfIndicatorSettings.lowSymbol
+  const pullbackColor = typeof merged.pullbackColor === 'string' && merged.pullbackColor.trim() ? merged.pullbackColor : defaultMmfIndicatorSettings.pullbackColor
+  const pullbackSymbol = typeof merged.pullbackSymbol === 'string' && merged.pullbackSymbol.trim() ? merged.pullbackSymbol : defaultMmfIndicatorSettings.pullbackSymbol
+  const reboundColor = typeof merged.reboundColor === 'string' && merged.reboundColor.trim() ? merged.reboundColor : defaultMmfIndicatorSettings.reboundColor
+  const reboundSymbol = typeof merged.reboundSymbol === 'string' && merged.reboundSymbol.trim() ? merged.reboundSymbol : defaultMmfIndicatorSettings.reboundSymbol
   const upBreakColor = typeof merged.upBreakColor === 'string' && merged.upBreakColor.trim() ? merged.upBreakColor : defaultMmfIndicatorSettings.upBreakColor
   const upBreakSymbol = typeof merged.upBreakSymbol === 'string' && merged.upBreakSymbol.trim() ? merged.upBreakSymbol : defaultMmfIndicatorSettings.upBreakSymbol
   const downBreakColor = typeof merged.downBreakColor === 'string' && merged.downBreakColor.trim() ? merged.downBreakColor : defaultMmfIndicatorSettings.downBreakColor
   const downBreakSymbol = typeof merged.downBreakSymbol === 'string' && merged.downBreakSymbol.trim() ? merged.downBreakSymbol : defaultMmfIndicatorSettings.downBreakSymbol
+  const resistanceColor = typeof merged.resistanceColor === 'string' && merged.resistanceColor.trim() ? merged.resistanceColor : defaultMmfIndicatorSettings.resistanceColor
+  const resistanceSymbol = typeof merged.resistanceSymbol === 'string' && merged.resistanceSymbol.trim() ? merged.resistanceSymbol : defaultMmfIndicatorSettings.resistanceSymbol
+  const supportColor = typeof merged.supportColor === 'string' && merged.supportColor.trim() ? merged.supportColor : defaultMmfIndicatorSettings.supportColor
+  const supportSymbol = typeof merged.supportSymbol === 'string' && merged.supportSymbol.trim() ? merged.supportSymbol : defaultMmfIndicatorSettings.supportSymbol
+  const trendDownColor = typeof merged.trendDownColor === 'string' && merged.trendDownColor.trim() ? merged.trendDownColor : defaultMmfIndicatorSettings.trendDownColor
+  const trendDownSymbol = typeof merged.trendDownSymbol === 'string' && merged.trendDownSymbol.trim() ? merged.trendDownSymbol : defaultMmfIndicatorSettings.trendDownSymbol
+  const trendUpColor = typeof merged.trendUpColor === 'string' && merged.trendUpColor.trim() ? merged.trendUpColor : defaultMmfIndicatorSettings.trendUpColor
+  const trendUpSymbol = typeof merged.trendUpSymbol === 'string' && merged.trendUpSymbol.trim() ? merged.trendUpSymbol : defaultMmfIndicatorSettings.trendUpSymbol
   const highMorganRatio = Number(merged.highMorganRatio)
   const lowMorganRatio = Number(merged.lowMorganRatio)
+  const pullbackSize = Math.round(Number(merged.pullbackSize))
+  const reboundSize = Math.round(Number(merged.reboundSize))
   const upBreakSize = Math.round(Number(merged.upBreakSize))
   const downBreakSize = Math.round(Number(merged.downBreakSize))
+  const resistanceSize = Math.round(Number(merged.resistanceSize))
+  const supportSize = Math.round(Number(merged.supportSize))
+  const trendDownSize = Math.round(Number(merged.trendDownSize))
+  const trendUpSize = Math.round(Number(merged.trendUpSize))
   const upBreakVdoLower = Number(merged.upBreakVdoLower)
   const upBreakVdoUpper = Number(merged.upBreakVdoUpper)
   const downBreakVdoLower = Number(merged.downBreakVdoLower)
   const downBreakVdoUpper = Number(merged.downBreakVdoUpper)
+  const pullbackVdoThreshold = Number(merged.pullbackVdoThreshold)
+  const reboundVdoThreshold = Number(merged.reboundVdoThreshold)
+  const resistanceVdoLower = Number(merged.resistanceVdoLower)
+  const resistanceVdoUpper = Number(merged.resistanceVdoUpper)
+  const supportVdoLower = Number(merged.supportVdoLower)
+  const supportVdoUpper = Number(merged.supportVdoUpper)
+  const trendDownVdoLower = Number(merged.trendDownVdoLower)
+  const trendDownVdoUpper = Number(merged.trendDownVdoUpper)
+  const trendUpVdoLower = Number(merged.trendUpVdoLower)
+  const trendUpVdoUpper = Number(merged.trendUpVdoUpper)
   return {
     highColor,
     highMorganRatio: Number.isFinite(highMorganRatio) ? Math.max(0.118, Math.min(highMorganRatio, 0.236)) : defaultMmfIndicatorSettings.highMorganRatio,
@@ -1172,15 +1268,49 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     lowOffsetPercent: Number.isFinite(lowOffsetPercent) ? Math.max(-99, Math.min(Math.round(lowOffsetPercent), 99)) : defaultMmfIndicatorSettings.lowOffsetPercent,
     lowSize: Number.isFinite(lowSize) ? Math.max(8, Math.min(lowSize, 96)) : defaultMmfIndicatorSettings.lowSize,
     lowSymbol,
+    pullbackColor,
+    pullbackSize: Number.isFinite(pullbackSize) ? Math.max(8, Math.min(pullbackSize, 96)) : defaultMmfIndicatorSettings.pullbackSize,
+    pullbackSymbol,
+    pullbackVdoThreshold: Number.isFinite(pullbackVdoThreshold) ? pullbackVdoThreshold : defaultMmfIndicatorSettings.pullbackVdoThreshold,
+    reboundColor,
+    reboundSize: Number.isFinite(reboundSize) ? Math.max(8, Math.min(reboundSize, 96)) : defaultMmfIndicatorSettings.reboundSize,
+    reboundSymbol,
+    reboundVdoThreshold: Number.isFinite(reboundVdoThreshold) ? reboundVdoThreshold : defaultMmfIndicatorSettings.reboundVdoThreshold,
+    resistanceColor,
+    resistanceSize: Number.isFinite(resistanceSize) ? Math.max(8, Math.min(resistanceSize, 96)) : defaultMmfIndicatorSettings.resistanceSize,
+    resistanceSymbol,
+    resistanceVdoLower: Number.isFinite(resistanceVdoLower) ? resistanceVdoLower : defaultMmfIndicatorSettings.resistanceVdoLower,
+    resistanceVdoUpper: Number.isFinite(resistanceVdoUpper) ? resistanceVdoUpper : defaultMmfIndicatorSettings.resistanceVdoUpper,
     downBreakVdoLower: Number.isFinite(downBreakVdoLower) ? downBreakVdoLower : defaultMmfIndicatorSettings.downBreakVdoLower,
     downBreakVdoUpper: Number.isFinite(downBreakVdoUpper) ? downBreakVdoUpper : defaultMmfIndicatorSettings.downBreakVdoUpper,
     downBreakColor,
     downBreakSize: Number.isFinite(downBreakSize) ? Math.max(8, Math.min(downBreakSize, 96)) : defaultMmfIndicatorSettings.downBreakSize,
     downBreakSymbol,
+    showResistanceLevel: merged.showResistanceLevel === true,
     showHigh: merged.showHigh === true,
     showLow: merged.showLow === true,
+    showPullbackPoint: merged.showPullbackPoint === true,
+    showReboundPoint: merged.showReboundPoint === true,
     showDownBreakPoint: merged.showDownBreakPoint === true,
+    showSupportLevel: merged.showSupportLevel === true,
+    showTrendDownPoint: merged.showTrendDownPoint === true,
+    showTrendUpPoint: merged.showTrendUpPoint === true,
     showUpBreakPoint: merged.showUpBreakPoint === true,
+    supportColor,
+    supportSize: Number.isFinite(supportSize) ? Math.max(8, Math.min(supportSize, 96)) : defaultMmfIndicatorSettings.supportSize,
+    supportSymbol,
+    supportVdoLower: Number.isFinite(supportVdoLower) ? supportVdoLower : defaultMmfIndicatorSettings.supportVdoLower,
+    supportVdoUpper: Number.isFinite(supportVdoUpper) ? supportVdoUpper : defaultMmfIndicatorSettings.supportVdoUpper,
+    trendDownColor,
+    trendDownSize: Number.isFinite(trendDownSize) ? Math.max(8, Math.min(trendDownSize, 96)) : defaultMmfIndicatorSettings.trendDownSize,
+    trendDownSymbol,
+    trendDownVdoLower: Number.isFinite(trendDownVdoLower) ? trendDownVdoLower : defaultMmfIndicatorSettings.trendDownVdoLower,
+    trendDownVdoUpper: Number.isFinite(trendDownVdoUpper) ? trendDownVdoUpper : defaultMmfIndicatorSettings.trendDownVdoUpper,
+    trendUpColor,
+    trendUpSize: Number.isFinite(trendUpSize) ? Math.max(8, Math.min(trendUpSize, 96)) : defaultMmfIndicatorSettings.trendUpSize,
+    trendUpSymbol,
+    trendUpVdoLower: Number.isFinite(trendUpVdoLower) ? trendUpVdoLower : defaultMmfIndicatorSettings.trendUpVdoLower,
+    trendUpVdoUpper: Number.isFinite(trendUpVdoUpper) ? trendUpVdoUpper : defaultMmfIndicatorSettings.trendUpVdoUpper,
     upBreakColor,
     upBreakSize: Number.isFinite(upBreakSize) ? Math.max(8, Math.min(upBreakSize, 96)) : defaultMmfIndicatorSettings.upBreakSize,
     upBreakSymbol,

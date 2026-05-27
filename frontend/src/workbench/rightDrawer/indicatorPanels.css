@@ -322,6 +322,15 @@
   pointer-events: auto;
 }
 
+.ff-indicators-mmf-panel-v1__vdo-threshold-grid {
+  display: inline-grid;
+  grid-template-columns: 34px 30px 80px;
+  align-items: center;
+  gap: 8px 6px;
+  margin-left: 24px;
+  pointer-events: auto;
+}
+
 .ff-indicators-mmf-panel-v1__label {
   color: #334155;
   font-size: 14px;

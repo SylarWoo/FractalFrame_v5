@@ -54,7 +54,7 @@ export function MmfInputPanel({
           <div className="ff-indicators-mmf-panel-v1__high-row">
             <CheckControl
               checked={settings.showUpBreakPoint}
-              label={'\u5411\u4e0a\u7a81\u7834\u70b9'}
+              label={'\u5411\u4e0a\u65b9\u5411\u70b9'}
               onChange={(showUpBreakPoint) => patch({ showUpBreakPoint })}
             />
           </div>
@@ -69,7 +69,7 @@ export function MmfInputPanel({
           <div className="ff-indicators-mmf-panel-v1__high-row">
             <CheckControl
               checked={settings.showDownBreakPoint}
-              label={'\u5411\u4e0b\u7a81\u7834\u70b9'}
+              label={'\u5411\u4e0b\u65b9\u5411\u70b9'}
               onChange={(showDownBreakPoint) => patch({ showDownBreakPoint })}
             />
           </div>
@@ -78,6 +78,88 @@ export function MmfInputPanel({
             onLowerChange={(downBreakVdoLower) => patch({ downBreakVdoLower })}
             onUpperChange={(downBreakVdoUpper) => patch({ downBreakVdoUpper })}
             upper={settings.downBreakVdoUpper}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showResistanceLevel}
+              label={'\u963b\u529b\u4f4d'}
+              onChange={(showResistanceLevel) => patch({ showResistanceLevel })}
+            />
+          </div>
+          <MmfVdoLimitRow
+            lower={settings.resistanceVdoLower}
+            onLowerChange={(resistanceVdoLower) => patch({ resistanceVdoLower })}
+            onUpperChange={(resistanceVdoUpper) => patch({ resistanceVdoUpper })}
+            upper={settings.resistanceVdoUpper}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showSupportLevel}
+              label={'\u652f\u6491\u4f4d'}
+              onChange={(showSupportLevel) => patch({ showSupportLevel })}
+            />
+          </div>
+          <MmfVdoLimitRow
+            lower={settings.supportVdoLower}
+            onLowerChange={(supportVdoLower) => patch({ supportVdoLower })}
+            onUpperChange={(supportVdoUpper) => patch({ supportVdoUpper })}
+            upper={settings.supportVdoUpper}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showTrendDownPoint}
+              label={'\u8d8b\u52bf\u4e0b\u964d\u70b9'}
+              onChange={(showTrendDownPoint) => patch({ showTrendDownPoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(trendDownVdoUpper) => patch({ trendDownVdoUpper })}
+            threshold={settings.trendDownVdoUpper}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showTrendUpPoint}
+              label={'\u8d8b\u52bf\u4e0a\u5347\u70b9'}
+              onChange={(showTrendUpPoint) => patch({ showTrendUpPoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(trendUpVdoUpper) => patch({ trendUpVdoUpper })}
+            threshold={settings.trendUpVdoUpper}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showReboundPoint}
+              label={'\u53cd\u5f39\u70b9'}
+              onChange={(showReboundPoint) => patch({ showReboundPoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(reboundVdoThreshold) => patch({ reboundVdoThreshold })}
+            threshold={settings.reboundVdoThreshold}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showPullbackPoint}
+              label={'\u56de\u64a4\u70b9'}
+              onChange={(showPullbackPoint) => patch({ showPullbackPoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(pullbackVdoThreshold) => patch({ pullbackVdoThreshold })}
+            threshold={settings.pullbackVdoThreshold}
           />
         </div>
       </section>
@@ -121,6 +203,32 @@ function MmfVdoLimitRow({
           parseValue={(value) => Number(value)}
           step={0.001}
           value={lower}
+        />
+      </span>
+    </div>
+  )
+}
+
+function MmfVdoThresholdRow({
+  onThresholdChange,
+  threshold,
+}: {
+  onThresholdChange: (value: number) => void
+  threshold: number
+}) {
+  return (
+    <div className="ff-indicators-mmf-panel-v1__vdo-threshold-grid">
+      <span className="ff-indicators-mmf-panel-v1__label">VDO</span>
+      <span className="ff-indicators-mmf-panel-v1__vdo-limit-label">{'\u9608\u503c'}</span>
+      <span className="ff-indicators-mmf-panel-v1__vdo-input">
+        <NumberBox
+          formatValue={(value) => value.toFixed(3)}
+          max={500}
+          min={-500}
+          onChange={onThresholdChange}
+          parseValue={(value) => Number(value)}
+          step={0.001}
+          value={threshold}
         />
       </span>
     </div>
@@ -211,7 +319,7 @@ export function MmfStylePanel({
         />
         <MmfMarkerStyleRow
           color={settings.upBreakColor}
-          label={'\u5411\u4e0a\u7a81\u7834\u70b9'}
+          label={'\u5411\u4e0a\u65b9\u5411\u70b9'}
           onColorChange={(upBreakColor) => patch({ upBreakColor })}
           onSizeChange={(upBreakSize) => patch({ upBreakSize })}
           onSymbolChange={(upBreakSymbol) => patch({ upBreakSymbol })}
@@ -220,12 +328,66 @@ export function MmfStylePanel({
         />
         <MmfMarkerStyleRow
           color={settings.downBreakColor}
-          label={'\u5411\u4e0b\u7a81\u7834\u70b9'}
+          label={'\u5411\u4e0b\u65b9\u5411\u70b9'}
           onColorChange={(downBreakColor) => patch({ downBreakColor })}
           onSizeChange={(downBreakSize) => patch({ downBreakSize })}
           onSymbolChange={(downBreakSymbol) => patch({ downBreakSymbol })}
           size={settings.downBreakSize}
           symbol={settings.downBreakSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.resistanceColor}
+          label={'\u963b\u529b\u4f4d'}
+          onColorChange={(resistanceColor) => patch({ resistanceColor })}
+          onSizeChange={(resistanceSize) => patch({ resistanceSize })}
+          onSymbolChange={(resistanceSymbol) => patch({ resistanceSymbol })}
+          size={settings.resistanceSize}
+          symbol={settings.resistanceSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.supportColor}
+          label={'\u652f\u6491\u4f4d'}
+          onColorChange={(supportColor) => patch({ supportColor })}
+          onSizeChange={(supportSize) => patch({ supportSize })}
+          onSymbolChange={(supportSymbol) => patch({ supportSymbol })}
+          size={settings.supportSize}
+          symbol={settings.supportSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.trendDownColor}
+          label={'\u8d8b\u52bf\u4e0b\u964d\u70b9'}
+          onColorChange={(trendDownColor) => patch({ trendDownColor })}
+          onSizeChange={(trendDownSize) => patch({ trendDownSize })}
+          onSymbolChange={(trendDownSymbol) => patch({ trendDownSymbol })}
+          size={settings.trendDownSize}
+          symbol={settings.trendDownSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.trendUpColor}
+          label={'\u8d8b\u52bf\u4e0a\u5347\u70b9'}
+          onColorChange={(trendUpColor) => patch({ trendUpColor })}
+          onSizeChange={(trendUpSize) => patch({ trendUpSize })}
+          onSymbolChange={(trendUpSymbol) => patch({ trendUpSymbol })}
+          size={settings.trendUpSize}
+          symbol={settings.trendUpSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.reboundColor}
+          label={'\u53cd\u5f39\u70b9'}
+          onColorChange={(reboundColor) => patch({ reboundColor })}
+          onSizeChange={(reboundSize) => patch({ reboundSize })}
+          onSymbolChange={(reboundSymbol) => patch({ reboundSymbol })}
+          size={settings.reboundSize}
+          symbol={settings.reboundSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.pullbackColor}
+          label={'\u56de\u64a4\u70b9'}
+          onColorChange={(pullbackColor) => patch({ pullbackColor })}
+          onSizeChange={(pullbackSize) => patch({ pullbackSize })}
+          onSymbolChange={(pullbackSymbol) => patch({ pullbackSymbol })}
+          size={settings.pullbackSize}
+          symbol={settings.pullbackSymbol}
         />
       </section>
     </div>

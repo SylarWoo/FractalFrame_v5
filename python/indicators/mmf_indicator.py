@@ -13,6 +13,10 @@ MMF_HIGH_STOCH_ZONE_LEVEL = 70
 MMF_HIGH_STOCH_REVERSAL_LEVEL = 65
 MMF_LOW_STOCH_ZONE_LEVEL = 30
 MMF_LOW_STOCH_REVERSAL_LEVEL = 35
+MMF_HIGH_CROSS_MIN_LEVEL = 60
+MMF_LOW_CROSS_MAX_LEVEL = 40
+MMF_STOCH_CONFIRM_DISTANCE = 7
+MMF_CROSS_WINDOW_RADIUS = 7
 
 
 @dataclass(frozen=True)
@@ -304,6 +308,132 @@ def _stoch_golden_cross_value_below(previous_k: Any, previous_d: Any, k: Any, d:
     return cross_value is not None and cross_value < threshold
 
 
+def _stoch_dead_cross_value(previous_k: Any, previous_d: Any, k: Any, d: Any) -> float | None:
+    if not (_finite_number(previous_k) and _finite_number(previous_d) and _finite_number(k) and _finite_number(d)):
+        return None
+    if not (float(previous_k) >= float(previous_d) and float(k) < float(d)):
+        return None
+    return _stoch_cross_value(previous_k, previous_d, k, d)
+
+
+def _stoch_golden_cross_value(previous_k: Any, previous_d: Any, k: Any, d: Any) -> float | None:
+    if not (_finite_number(previous_k) and _finite_number(previous_d) and _finite_number(k) and _finite_number(d)):
+        return None
+    if not (float(previous_k) <= float(previous_d) and float(k) > float(d)):
+        return None
+    return _stoch_cross_value(previous_k, previous_d, k, d)
+
+
+def _centered_window(index: int, rows_count: int, radius: int = MMF_CROSS_WINDOW_RADIUS) -> tuple[int, int]:
+    return max(0, index - radius), min(rows_count - 1, index + radius)
+
+
+def _window_has_high_filter(precomputed: MmfPrecomputedData, settings: MmfSettings, start_index: int, end_index: int) -> bool:
+    for index in range(start_index, end_index + 1):
+        dpo = precomputed.dpos[index]
+        high = precomputed.highs[index]
+        morgan_level = precomputed.morgan_levels[index]
+        if _finite_number(dpo) and float(dpo) >= float(settings.dpo_value):
+            return True
+        if _finite_number(high) and _finite_number(morgan_level) and float(high) >= float(morgan_level):
+            return True
+    return False
+
+
+def _window_has_low_filter(precomputed: MmfPrecomputedData, settings: MmfSettings, start_index: int, end_index: int) -> bool:
+    low_dpo_threshold = -abs(float(settings.low_dpo_value))
+    for index in range(start_index, end_index + 1):
+        dpo = precomputed.dpos[index]
+        low = precomputed.lows[index]
+        low_morgan_level = precomputed.low_morgan_levels[index]
+        if _finite_number(dpo) and float(dpo) <= low_dpo_threshold:
+            return True
+        if _finite_number(low) and _finite_number(low_morgan_level) and float(low) <= float(low_morgan_level):
+            return True
+    return False
+
+
+def _highest_high_index(precomputed: MmfPrecomputedData, start_index: int, end_index: int) -> int | None:
+    highest_index: int | None = None
+    highest_value: float | None = None
+    for index in range(start_index, end_index + 1):
+        high = precomputed.highs[index]
+        if not _finite_number(high):
+            continue
+        high_value = float(high)
+        if highest_value is None or high_value > highest_value:
+            highest_value = high_value
+            highest_index = index
+    return highest_index
+
+
+def _lowest_low_index(precomputed: MmfPrecomputedData, start_index: int, end_index: int) -> int | None:
+    lowest_index: int | None = None
+    lowest_value: float | None = None
+    for index in range(start_index, end_index + 1):
+        low = precomputed.lows[index]
+        if not _finite_number(low):
+            continue
+        low_value = float(low)
+        if lowest_value is None or low_value < lowest_value:
+            lowest_value = low_value
+            lowest_index = index
+    return lowest_index
+
+
+def _better_extreme_marker(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    marker_type = str(left.get("type"))
+    left_price = float(left["price"])
+    right_price = float(right["price"])
+    if marker_type == "MMF_HIGH":
+        if right_price > left_price:
+            return right
+        if right_price == left_price and int(right["index"]) > int(left["index"]):
+            return right
+        return left
+    if marker_type == "MMF_LOW":
+        if right_price < left_price:
+            return right
+        if right_price == left_price and int(right["index"]) > int(left["index"]):
+            return right
+        return left
+    return left
+
+
+def _dedupe_extreme_markers(marker_records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    for marker_type in ("MMF_HIGH", "MMF_LOW"):
+        typed_markers = sorted(
+            [marker for marker in marker_records if marker.get("type") == marker_type],
+            key=lambda marker: (int(marker["startIndex"]), int(marker["endIndex"]), int(marker["index"])),
+        )
+        active_group: list[dict[str, Any]] = []
+        active_end_index: int | None = None
+        for marker in typed_markers:
+            if not active_group:
+                active_group = [marker]
+                active_end_index = int(marker["endIndex"])
+                continue
+            if active_end_index is not None and int(marker["startIndex"]) <= active_end_index:
+                active_group.append(marker)
+                active_end_index = max(active_end_index, int(marker["endIndex"]))
+                continue
+            winner = active_group[0]
+            for candidate in active_group[1:]:
+                winner = _better_extreme_marker(winner, candidate)
+            deduped.append(winner)
+            active_group = [marker]
+            active_end_index = int(marker["endIndex"])
+        if active_group:
+            winner = active_group[0]
+            for candidate in active_group[1:]:
+                winner = _better_extreme_marker(winner, candidate)
+            deduped.append(winner)
+
+    deduped.extend(marker for marker in marker_records if marker.get("type") not in {"MMF_HIGH", "MMF_LOW"})
+    return deduped
+
+
 def calculate_mmf_precomputed_data(frame: pd.DataFrame, settings: MmfSettings) -> MmfPrecomputedData:
     dpo = calculate_dpo(frame["close"], settings.dpo_length)
     stoch_k, stoch_d = calculate_stoch(frame, settings.stoch_length, settings.stoch_k_smoothing, settings.stoch_d_smoothing)
@@ -345,113 +475,72 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
     segment_indexes = precomputed.segment_indexes
 
     marker_records: list[dict[str, Any]] = []
-    active: MmfActiveState | None = None
-    low_active: MmfLowActiveState | None = None
+    active_high_cross: dict[str, float | int] | None = None
+    active_low_cross: dict[str, float | int] | None = None
 
     for index in range(1, precomputed.rows_count):
-        high = highs[index]
-        low = lows[index]
-        dpo = dpos[index]
         k = stoch_k[index]
         d = stoch_d[index]
-        previous_dpo = dpos[index - 1]
-        previous_high = highs[index - 1]
-        previous_low = lows[index - 1]
         previous_k = stoch_k[index - 1]
         previous_d = stoch_d[index - 1]
 
-        morgan_level = morgan_levels[index]
-        low_morgan_level = low_morgan_levels[index]
-        previous_morgan_level = morgan_levels[index - 1]
-        previous_low_morgan_level = low_morgan_levels[index - 1]
-
         if settings.show_high:
-            high_filter_match = (
-                (_finite_number(high) and _finite_number(morgan_level) and float(high) >= float(morgan_level))
-                or (_finite_number(dpo) and float(dpo) >= float(settings.dpo_value))
-            )
-            high_dpo_start_signal = _value_crosses_above(previous_dpo, dpo, float(settings.dpo_value))
-            high_morgan_start_signal = _price_crosses_above_level(previous_high, high, previous_morgan_level, morgan_level)
-            high_start_signal = high_dpo_start_signal or high_morgan_start_signal
+            if active_high_cross is not None and index > int(active_high_cross["index"]) and _finite_number(k):
+                cross_value = float(active_high_cross["value"])
+                cross_index = int(active_high_cross["index"])
+                if float(k) <= cross_value - MMF_STOCH_CONFIRM_DISTANCE:
+                    start_index, end_index = _centered_window(cross_index, precomputed.rows_count)
+                    high_index = _highest_high_index(precomputed, start_index, end_index)
+                    if high_index is not None and _window_has_high_filter(precomputed, settings, start_index, end_index):
+                        marker_records.append({
+                            "type": "MMF_HIGH",
+                            "index": high_index,
+                            "time": int(times[high_index]),
+                            "price": float(highs[high_index]),
+                            "startIndex": start_index,
+                            "startTime": int(times[start_index]),
+                            "endIndex": end_index,
+                            "endTime": int(times[end_index]),
+                            "confirmThreshold": MMF_HIGH_CROSS_MIN_LEVEL,
+                            "confirmCrossIndex": index,
+                            "crossIndex": cross_index,
+                            "crossValue": cross_value,
+                        })
+                    active_high_cross = None
 
-            if active is None and high_start_signal and _finite_number(high):
-                active = MmfActiveState(
-                    start_index=index,
-                    highest_high=float(high),
-                    highest_high_index=index,
-                    has_filter_match=True,
-                )
-
-            if active is not None and _finite_number(high) and float(high) > active.highest_high:
-                active.highest_high = float(high)
-                active.highest_high_index = index
-
-            if active is not None:
-                active.has_filter_match = active.has_filter_match or high_filter_match
-                active.reached_reversal_zone = active.reached_reversal_zone or (
-                    _stoch_dead_cross_value_above(previous_k, previous_d, k, d, MMF_HIGH_STOCH_ZONE_LEVEL)
-                )
-
-            if active is not None and active.reached_reversal_zone and index > active.start_index and _stoch_lines_break_below(previous_k, previous_d, k, d, MMF_HIGH_STOCH_REVERSAL_LEVEL):
-                active.end_index = index
-                if active.has_filter_match:
-                    marker_records.append({
-                        "type": "MMF_HIGH",
-                        "index": active.highest_high_index,
-                        "time": int(times[active.highest_high_index]),
-                        "price": active.highest_high,
-                        "startIndex": active.start_index,
-                        "startTime": int(times[active.start_index]),
-                        "endIndex": active.end_index,
-                        "endTime": int(times[index]),
-                        "confirmThreshold": MMF_HIGH_STOCH_REVERSAL_LEVEL,
-                        "confirmCrossIndex": index,
-                    })
-                active = None
+            dead_cross_value = _stoch_dead_cross_value(previous_k, previous_d, k, d)
+            if dead_cross_value is not None and dead_cross_value >= MMF_HIGH_CROSS_MIN_LEVEL:
+                active_high_cross = {"index": index, "value": float(dead_cross_value)}
 
         if settings.show_low:
-            low_dpo_threshold = -abs(float(settings.low_dpo_value))
-            low_filter_match = (
-                (_finite_number(low) and _finite_number(low_morgan_level) and float(low) <= float(low_morgan_level))
-                or (_finite_number(dpo) and float(dpo) <= low_dpo_threshold)
-            )
-            low_dpo_start_signal = _value_crosses_below(previous_dpo, dpo, low_dpo_threshold)
-            low_morgan_start_signal = _price_crosses_below_level(previous_low, low, previous_low_morgan_level, low_morgan_level)
-            low_start_signal = low_dpo_start_signal or low_morgan_start_signal
+            if active_low_cross is not None and index > int(active_low_cross["index"]) and _finite_number(k):
+                cross_value = float(active_low_cross["value"])
+                cross_index = int(active_low_cross["index"])
+                if float(k) >= cross_value + MMF_STOCH_CONFIRM_DISTANCE:
+                    start_index, end_index = _centered_window(cross_index, precomputed.rows_count)
+                    low_index = _lowest_low_index(precomputed, start_index, end_index)
+                    if low_index is not None and _window_has_low_filter(precomputed, settings, start_index, end_index):
+                        marker_records.append({
+                            "type": "MMF_LOW",
+                            "index": low_index,
+                            "time": int(times[low_index]),
+                            "price": float(lows[low_index]),
+                            "startIndex": start_index,
+                            "startTime": int(times[start_index]),
+                            "endIndex": end_index,
+                            "endTime": int(times[end_index]),
+                            "confirmThreshold": MMF_LOW_CROSS_MAX_LEVEL,
+                            "confirmCrossIndex": index,
+                            "crossIndex": cross_index,
+                            "crossValue": cross_value,
+                        })
+                    active_low_cross = None
 
-            if low_active is None and low_start_signal and _finite_number(low):
-                low_active = MmfLowActiveState(
-                    start_index=index,
-                    lowest_low=float(low),
-                    lowest_low_index=index,
-                    has_filter_match=True,
-                )
+            golden_cross_value = _stoch_golden_cross_value(previous_k, previous_d, k, d)
+            if golden_cross_value is not None and golden_cross_value <= MMF_LOW_CROSS_MAX_LEVEL:
+                active_low_cross = {"index": index, "value": float(golden_cross_value)}
 
-            if low_active is not None and _finite_number(low) and float(low) < low_active.lowest_low:
-                low_active.lowest_low = float(low)
-                low_active.lowest_low_index = index
-
-            if low_active is not None:
-                low_active.has_filter_match = low_active.has_filter_match or low_filter_match
-                low_active.reached_reversal_zone = low_active.reached_reversal_zone or _stoch_golden_cross_value_below(previous_k, previous_d, k, d, MMF_LOW_STOCH_ZONE_LEVEL)
-
-            if low_active is not None and low_active.reached_reversal_zone and index > low_active.start_index and _stoch_lines_break_above(previous_k, previous_d, k, d, MMF_LOW_STOCH_REVERSAL_LEVEL):
-                low_active.end_index = index
-                if low_active.has_filter_match:
-                    marker_records.append({
-                        "type": "MMF_LOW",
-                        "index": low_active.lowest_low_index,
-                        "time": int(times[low_active.lowest_low_index]),
-                        "price": low_active.lowest_low,
-                        "startIndex": low_active.start_index,
-                        "startTime": int(times[low_active.start_index]),
-                        "endIndex": low_active.end_index,
-                        "endTime": int(times[index]),
-                        "confirmThreshold": MMF_LOW_STOCH_REVERSAL_LEVEL,
-                        "confirmCrossIndex": index,
-                    })
-                low_active = None
-
+    marker_records = _dedupe_extreme_markers(marker_records)
     markers = sorted(marker_records, key=lambda marker: (int(marker["index"]), str(marker["type"])))
     debug_rows = []
     if include_rows:
