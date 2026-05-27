@@ -263,17 +263,17 @@ def _stoch_lines_rise_back_above(previous_k: Any, previous_d: Any, k: Any, d: An
 def _stoch_crosses_above_level(previous_k: Any, previous_d: Any, k: Any, d: Any, threshold: float) -> bool:
     if not (_finite_number(previous_k) and _finite_number(previous_d) and _finite_number(k) and _finite_number(d)):
         return False
-    previous_min = min(float(previous_k), float(previous_d))
-    current_min = min(float(k), float(d))
-    return previous_min < threshold and current_min >= threshold
+    previous_max = max(float(previous_k), float(previous_d))
+    current_max = max(float(k), float(d))
+    return previous_max < threshold and current_max >= threshold
 
 
 def _stoch_crosses_below_level(previous_k: Any, previous_d: Any, k: Any, d: Any, threshold: float) -> bool:
     if not (_finite_number(previous_k) and _finite_number(previous_d) and _finite_number(k) and _finite_number(d)):
         return False
-    previous_max = max(float(previous_k), float(previous_d))
-    current_max = max(float(k), float(d))
-    return previous_max > threshold and current_max <= threshold
+    previous_min = min(float(previous_k), float(previous_d))
+    current_min = min(float(k), float(d))
+    return previous_min > threshold and current_min <= threshold
 
 
 def calculate_mmf_precomputed_data(frame: pd.DataFrame, settings: MmfSettings) -> MmfPrecomputedData:

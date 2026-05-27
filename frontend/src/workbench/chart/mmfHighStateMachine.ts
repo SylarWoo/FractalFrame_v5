@@ -66,7 +66,7 @@ function doStochLinesCrossAbove(
   threshold: number,
 ) {
   if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return false
-  return Math.min(previousK, previousD) < threshold && Math.min(k, d) >= threshold
+  return Math.max(previousK, previousD) < threshold && Math.max(k, d) >= threshold
 }
 
 function isHighFilterMatched(row: MmfHighInputRow, settings: MmfHighStateMachineSettings) {
