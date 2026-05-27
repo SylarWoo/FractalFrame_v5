@@ -21,6 +21,7 @@ type MmfHighActiveState = {
   highestHighIndex: number
   reachedReversalZone: boolean
   startIndex: number
+  stochStarted: boolean
 }
 
 const highStochStartLevel = 65
@@ -42,9 +43,36 @@ function doStochLinesBreakBelow(
   return Math.max(previousK, previousD) > threshold && Math.max(k, d) <= threshold
 }
 
-function areStochLinesAbove(k: number | undefined, d: number | undefined, threshold: number) {
-  if (!finiteNumber(k) || !finiteNumber(d)) return false
-  return Math.min(k, d) >= threshold
+function doesValueCrossAbove(previousValue: number | undefined, value: number | undefined, threshold: number) {
+  if (!finiteNumber(previousValue) || !finiteNumber(value)) return false
+  return previousValue < threshold && value >= threshold
+}
+
+function resolveStochCrossValue(
+  previousK: number | undefined,
+  previousD: number | undefined,
+  k: number | undefined,
+  d: number | undefined,
+) {
+  if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return null
+  const denominator = (k - previousK) - (d - previousD)
+  if (denominator === 0) return null
+  const ratio = (previousD - previousK) / denominator
+  if (ratio < 0 || ratio > 1) return null
+  return previousK + (k - previousK) * ratio
+}
+
+function isStochDeadCrossValueAbove(
+  previousK: number | undefined,
+  previousD: number | undefined,
+  k: number | undefined,
+  d: number | undefined,
+  threshold: number,
+) {
+  if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return false
+  if (!(previousK >= previousD && k < d)) return false
+  const crossValue = resolveStochCrossValue(previousK, previousD, k, d)
+  return crossValue != null && crossValue > threshold
 }
 
 function doStochLinesFallBackBelow(
@@ -66,7 +94,7 @@ function doStochLinesCrossAbove(
   threshold: number,
 ) {
   if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return false
-  return Math.max(previousK, previousD) < threshold && Math.max(k, d) >= threshold
+  return (previousK < threshold && k >= threshold) || (previousD < threshold && d >= threshold)
 }
 
 function isHighFilterMatched(row: MmfHighInputRow, settings: MmfHighStateMachineSettings) {
@@ -86,15 +114,17 @@ export function calculateMmfHighStateMachineRows(
   for (let index = 1; index < inputRows.length; index += 1) {
     const row = inputRows[index]
     const previousRow = inputRows[index - 1]
-    const startSignal = doStochLinesCrossAbove(previousRow.k, previousRow.d, row.k, row.d, highStochStartLevel)
+    const dpoStartSignal = doesValueCrossAbove(previousRow.dpo, row.dpo, settings.dpoThreshold)
+    const stochStartSignal = doStochLinesCrossAbove(previousRow.k, previousRow.d, row.k, row.d, highStochStartLevel)
 
-    if (!active && startSignal && finiteNumber(row.high)) {
+    if (!active && dpoStartSignal && finiteNumber(row.high)) {
       active = {
-        hasFilterMatch: isHighFilterMatched(row, settings),
+        hasFilterMatch: true,
         highestHigh: row.high,
         highestHighIndex: index,
-        reachedReversalZone: areStochLinesAbove(row.k, row.d, highStochZoneLevel),
+        reachedReversalZone: false,
         startIndex: index,
+        stochStarted: false,
       }
     }
 
@@ -106,9 +136,12 @@ export function calculateMmfHighStateMachineRows(
     }
 
     active.hasFilterMatch = active.hasFilterMatch || isHighFilterMatched(row, settings)
-    active.reachedReversalZone = active.reachedReversalZone || areStochLinesAbove(row.k, row.d, highStochZoneLevel)
+    active.stochStarted = active.stochStarted || stochStartSignal
+    active.reachedReversalZone = active.reachedReversalZone || (
+      active.stochStarted && isStochDeadCrossValueAbove(previousRow.k, previousRow.d, row.k, row.d, highStochZoneLevel)
+    )
 
-    if (active.reachedReversalZone && index > active.startIndex && doStochLinesBreakBelow(previousRow.k, previousRow.d, row.k, row.d, highStochEndLevel)) {
+    if (active.stochStarted && active.reachedReversalZone && index > active.startIndex && doStochLinesBreakBelow(previousRow.k, previousRow.d, row.k, row.d, highStochEndLevel)) {
       if (active.hasFilterMatch) {
         const markerIndex = active.highestHighIndex
         rows[markerIndex] = {
@@ -118,8 +151,9 @@ export function calculateMmfHighStateMachineRows(
         }
       }
       active = null
-    } else if (index > active.startIndex && doStochLinesFallBackBelow(previousRow.k, previousRow.d, row.k, row.d, highStochStartLevel)) {
-      active = null
+    } else if (active.stochStarted && index > active.startIndex && doStochLinesFallBackBelow(previousRow.k, previousRow.d, row.k, row.d, highStochStartLevel)) {
+      active.stochStarted = false
+      active.reachedReversalZone = false
     }
   }
 

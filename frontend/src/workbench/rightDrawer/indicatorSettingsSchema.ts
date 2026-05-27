@@ -314,8 +314,20 @@ export type MmfIndicatorSettings = {
   lowOffsetPercent: number
   lowSize: number
   lowSymbol: string
+  downBreakVdoLower: number
+  downBreakVdoUpper: number
+  downBreakColor: string
+  downBreakSize: number
+  downBreakSymbol: string
   showHigh: boolean
   showLow: boolean
+  showDownBreakPoint: boolean
+  showUpBreakPoint: boolean
+  upBreakColor: string
+  upBreakSize: number
+  upBreakSymbol: string
+  upBreakVdoLower: number
+  upBreakVdoUpper: number
 }
 
 export type MaIndicatorSettings = {
@@ -714,8 +726,20 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   lowOffsetPercent: 0,
   lowSize: 24,
   lowSymbol: '\u25c6',
+  downBreakVdoLower: -0.05,
+  downBreakVdoUpper: 0.05,
+  downBreakColor: '#ef5350',
+  downBreakSize: 24,
+  downBreakSymbol: '\u25c6',
   showHigh: true,
   showLow: false,
+  showDownBreakPoint: false,
+  showUpBreakPoint: false,
+  upBreakColor: '#26a69a',
+  upBreakSize: 24,
+  upBreakSymbol: '\u25c6',
+  upBreakVdoLower: -0.05,
+  upBreakVdoUpper: 0.05,
 }
 
 export const defaultDpoIndicatorSettings: DpoIndicatorSettings = {
@@ -1123,8 +1147,18 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const highSymbol = typeof merged.highSymbol === 'string' && merged.highSymbol.trim() ? merged.highSymbol : defaultMmfIndicatorSettings.highSymbol
   const lowColor = typeof merged.lowColor === 'string' && merged.lowColor.trim() ? merged.lowColor : defaultMmfIndicatorSettings.lowColor
   const lowSymbol = typeof merged.lowSymbol === 'string' && merged.lowSymbol.trim() ? merged.lowSymbol : defaultMmfIndicatorSettings.lowSymbol
+  const upBreakColor = typeof merged.upBreakColor === 'string' && merged.upBreakColor.trim() ? merged.upBreakColor : defaultMmfIndicatorSettings.upBreakColor
+  const upBreakSymbol = typeof merged.upBreakSymbol === 'string' && merged.upBreakSymbol.trim() ? merged.upBreakSymbol : defaultMmfIndicatorSettings.upBreakSymbol
+  const downBreakColor = typeof merged.downBreakColor === 'string' && merged.downBreakColor.trim() ? merged.downBreakColor : defaultMmfIndicatorSettings.downBreakColor
+  const downBreakSymbol = typeof merged.downBreakSymbol === 'string' && merged.downBreakSymbol.trim() ? merged.downBreakSymbol : defaultMmfIndicatorSettings.downBreakSymbol
   const highMorganRatio = Number(merged.highMorganRatio)
   const lowMorganRatio = Number(merged.lowMorganRatio)
+  const upBreakSize = Math.round(Number(merged.upBreakSize))
+  const downBreakSize = Math.round(Number(merged.downBreakSize))
+  const upBreakVdoLower = Number(merged.upBreakVdoLower)
+  const upBreakVdoUpper = Number(merged.upBreakVdoUpper)
+  const downBreakVdoLower = Number(merged.downBreakVdoLower)
+  const downBreakVdoUpper = Number(merged.downBreakVdoUpper)
   return {
     highColor,
     highMorganRatio: Number.isFinite(highMorganRatio) ? Math.max(0.118, Math.min(highMorganRatio, 0.236)) : defaultMmfIndicatorSettings.highMorganRatio,
@@ -1138,8 +1172,20 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     lowOffsetPercent: Number.isFinite(lowOffsetPercent) ? Math.max(-99, Math.min(Math.round(lowOffsetPercent), 99)) : defaultMmfIndicatorSettings.lowOffsetPercent,
     lowSize: Number.isFinite(lowSize) ? Math.max(8, Math.min(lowSize, 96)) : defaultMmfIndicatorSettings.lowSize,
     lowSymbol,
+    downBreakVdoLower: Number.isFinite(downBreakVdoLower) ? downBreakVdoLower : defaultMmfIndicatorSettings.downBreakVdoLower,
+    downBreakVdoUpper: Number.isFinite(downBreakVdoUpper) ? downBreakVdoUpper : defaultMmfIndicatorSettings.downBreakVdoUpper,
+    downBreakColor,
+    downBreakSize: Number.isFinite(downBreakSize) ? Math.max(8, Math.min(downBreakSize, 96)) : defaultMmfIndicatorSettings.downBreakSize,
+    downBreakSymbol,
     showHigh: merged.showHigh === true,
     showLow: merged.showLow === true,
+    showDownBreakPoint: merged.showDownBreakPoint === true,
+    showUpBreakPoint: merged.showUpBreakPoint === true,
+    upBreakColor,
+    upBreakSize: Number.isFinite(upBreakSize) ? Math.max(8, Math.min(upBreakSize, 96)) : defaultMmfIndicatorSettings.upBreakSize,
+    upBreakSymbol,
+    upBreakVdoLower: Number.isFinite(upBreakVdoLower) ? upBreakVdoLower : defaultMmfIndicatorSettings.upBreakVdoLower,
+    upBreakVdoUpper: Number.isFinite(upBreakVdoUpper) ? upBreakVdoUpper : defaultMmfIndicatorSettings.upBreakVdoUpper,
   }
 }
 

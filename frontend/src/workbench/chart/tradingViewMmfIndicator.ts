@@ -9,12 +9,17 @@ import { calculateMorganRangeSegments, getMorganRangeLevel } from './morganRange
 import type { MorganRangeSegment } from './morganRangeModel'
 import { calculateTradingViewDpoRows } from './tradingViewDpoIndicator'
 import { calculateTradingViewStochRows } from './tradingViewStochIndicator'
+import { calculateTradingViewVdoRows } from './tradingViewVdoIndicator'
 
 export type MmfIndicatorRow = {
   highMarker?: number
   highMarkerPrice?: number
   lowMarker?: number
   lowMarkerPrice?: number
+  downBreakMarker?: number
+  downBreakMarkerPrice?: number
+  upBreakMarker?: number
+  upBreakMarkerPrice?: number
 }
 
 type MmfCalcContext = {
@@ -29,9 +34,10 @@ type NormalizedMmfCalcContext = Required<Pick<MmfCalcContext, 'period' | 'symbol
 
 type MmfMarkerSpec = {
   color: (settings: MmfIndicatorSettings) => string
-  markerKey: 'highMarker' | 'lowMarker'
-  markerType: MmfIndicatorMarker['type']
-  priceKey: 'highMarkerPrice' | 'lowMarkerPrice'
+  markerKey: keyof Pick<MmfIndicatorRow, 'downBreakMarker' | 'highMarker' | 'lowMarker' | 'upBreakMarker'>
+  markerType?: MmfIndicatorMarker['type']
+  offsetMultiplier: number
+  priceKey: keyof Pick<MmfIndicatorRow, 'downBreakMarkerPrice' | 'highMarkerPrice' | 'lowMarkerPrice' | 'upBreakMarkerPrice'>
   show: (settings: MmfIndicatorSettings) => boolean
   size: (settings: MmfIndicatorSettings) => number
   symbol: (settings: MmfIndicatorSettings) => string
@@ -41,7 +47,7 @@ type MmfMarkerSpec = {
 }
 
 let registered = false
-const remoteMmfEngineVersion = 'mmf-engine-v18-start-threshold'
+const remoteMmfEngineVersion = 'mmf-engine-v21-stoch-line-cross'
 const remoteMmfRowsCacheMax = 24
 const remoteMmfRowsBySignature = new Map<string, Promise<MmfIndicatorRow[]> | MmfIndicatorRow[]>()
 
@@ -83,6 +89,7 @@ const mmfMarkerSpecs: MmfMarkerSpec[] = [
     color: (settings) => settings.highColor || defaultMmfIndicatorSettings.highColor,
     markerKey: 'highMarker',
     markerType: 'MMF_HIGH',
+    offsetMultiplier: 0.25,
     priceKey: 'highMarkerPrice',
     show: (settings) => settings.showHigh,
     size: (settings) => clampMarkerSize(settings.highSize, defaultMmfIndicatorSettings.highSize),
@@ -92,15 +99,40 @@ const mmfMarkerSpecs: MmfMarkerSpec[] = [
     yDirection: -1,
   },
   {
+    color: (settings) => settings.upBreakColor || defaultMmfIndicatorSettings.upBreakColor,
+    markerKey: 'upBreakMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'upBreakMarkerPrice',
+    show: (settings) => settings.showUpBreakPoint,
+    size: (settings) => clampMarkerSize(settings.upBreakSize, defaultMmfIndicatorSettings.upBreakSize),
+    symbol: (settings) => settings.upBreakSymbol || defaultMmfIndicatorSettings.upBreakSymbol,
+    textBaseline: 'bottom',
+    title: 'Up Break ',
+    yDirection: -1,
+  },
+  {
     color: (settings) => settings.lowColor || defaultMmfIndicatorSettings.lowColor,
     markerKey: 'lowMarker',
     markerType: 'MMF_LOW',
+    offsetMultiplier: 0.25,
     priceKey: 'lowMarkerPrice',
     show: (settings) => settings.showLow,
     size: (settings) => clampMarkerSize(settings.lowSize, defaultMmfIndicatorSettings.lowSize),
     symbol: (settings) => settings.lowSymbol || defaultMmfIndicatorSettings.lowSymbol,
     textBaseline: 'top',
     title: 'Low ',
+    yDirection: 1,
+  },
+  {
+    color: (settings) => settings.downBreakColor || defaultMmfIndicatorSettings.downBreakColor,
+    markerKey: 'downBreakMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'downBreakMarkerPrice',
+    show: (settings) => settings.showDownBreakPoint,
+    size: (settings) => clampMarkerSize(settings.downBreakSize, defaultMmfIndicatorSettings.downBreakSize),
+    symbol: (settings) => settings.downBreakSymbol || defaultMmfIndicatorSettings.downBreakSymbol,
+    textBaseline: 'top',
+    title: 'Down Break ',
     yDirection: 1,
   },
 ]
@@ -192,9 +224,45 @@ function createEmptyMmfRows(length: number): MmfIndicatorRow[] {
   return Array.from({ length }, () => ({}))
 }
 
-function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMarker[]): MmfIndicatorRow[] {
+function resolveVdoRange(lower: unknown, upper: unknown) {
+  const lowerValue = Number(lower)
+  const upperValue = Number(upper)
+  const safeLower = Number.isFinite(lowerValue) ? lowerValue : -0.05
+  const safeUpper = Number.isFinite(upperValue) ? upperValue : 0.05
+  return {
+    lower: Math.min(safeLower, safeUpper),
+    upper: Math.max(safeLower, safeUpper),
+  }
+}
+
+function isValueInRange(value: unknown, lower: number, upper: number) {
+  const number = Number(value)
+  return Number.isFinite(number) && number >= lower && number <= upper
+}
+
+function applyBreakMarkersFromInternalVdo(realRows: KLineData[], outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
+  if (!settings.showUpBreakPoint && !settings.showDownBreakPoint) return
+  const vdoRows = calculateTradingViewVdoRows(realRows)
+  const upRange = resolveVdoRange(settings.upBreakVdoLower, settings.upBreakVdoUpper)
+  const downRange = resolveVdoRange(settings.downBreakVdoLower, settings.downBreakVdoUpper)
+
+  outputRows.forEach((row, index) => {
+    const vdo = vdoRows[index]?.vdo
+    if (settings.showUpBreakPoint && Number.isFinite(row.highMarker) && isValueInRange(vdo, upRange.lower, upRange.upper)) {
+      row.upBreakMarker = row.highMarker
+      row.upBreakMarkerPrice = row.highMarkerPrice ?? row.highMarker
+    }
+    if (settings.showDownBreakPoint && Number.isFinite(row.lowMarker) && isValueInRange(vdo, downRange.lower, downRange.upper)) {
+      row.downBreakMarker = row.lowMarker
+      row.downBreakMarkerPrice = row.lowMarkerPrice ?? row.lowMarker
+    }
+  })
+}
+
+function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMarker[], settings: MmfIndicatorSettings): MmfIndicatorRow[] {
   const markersByTypeAndTime = new Map<MmfIndicatorMarker['type'], Map<number, number>>()
   mmfMarkerSpecs.forEach((spec) => {
+    if (!spec.markerType) return
     markersByTypeAndTime.set(spec.markerType, new Map())
   })
 
@@ -205,11 +273,12 @@ function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMa
     markersByTypeAndTime.get(marker.type)?.set(time, price)
   })
 
-  return realRows.map((row) => {
+  const outputRows = realRows.map((row) => {
     const timestamp = Number(row.timestamp)
     const time = Math.floor(timestamp / 1000)
     const output: MmfIndicatorRow = {}
     mmfMarkerSpecs.forEach((spec) => {
+      if (!spec.markerType) return
       const marker = markersByTypeAndTime.get(spec.markerType)?.get(time)
       if (!Number.isFinite(marker)) return
       output[spec.markerKey] = marker
@@ -217,6 +286,8 @@ function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMa
     })
     return output
   })
+  applyBreakMarkersFromInternalVdo(realRows, outputRows, settings)
+  return outputRows
 }
 
 function mergeRealRowsWithPlaceholders(dataList: KLineData[], realRows: MmfIndicatorRow[]) {
@@ -245,12 +316,24 @@ function createRemoteMmfSignature(realRows: KLineData[], settings: MmfIndicatorS
     Math.floor(Number(last?.timestamp ?? 0) / 1000),
     settings.showHigh ? 'H1' : 'H0',
     settings.showLow ? 'L1' : 'L0',
+    settings.showUpBreakPoint ? 'UB1' : 'UB0',
+    settings.showDownBreakPoint ? 'DB1' : 'DB0',
     settings.dpoValue,
     settings.highMorganRatio,
     settings.highOffsetPercent,
     settings.lowDpoValue,
     settings.lowMorganRatio,
     settings.lowOffsetPercent,
+    settings.upBreakVdoLower,
+    settings.upBreakVdoUpper,
+    settings.downBreakVdoLower,
+    settings.downBreakVdoUpper,
+    settings.upBreakSymbol,
+    settings.upBreakSize,
+    settings.upBreakColor,
+    settings.downBreakSymbol,
+    settings.downBreakSize,
+    settings.downBreakColor,
     context.stochLength,
     context.stochKSmoothing,
     context.stochDSmoothing,
@@ -325,7 +408,7 @@ async function calculateRemoteMmfRows(
     symbol: context.symbol,
     timeframe: context.period,
   })
-    .then((payload) => createMmfRowsFromMarkers(realRows, payload.markers ?? []))
+    .then((payload) => createMmfRowsFromMarkers(realRows, payload.markers ?? [], settings))
     .catch(() => createEmptyMmfRows(realRows.length))
 
   setCachedRemoteMmfRows(signature, request)
@@ -354,7 +437,7 @@ function drawMmfMarkers({
   mmfMarkerSpecs.forEach((spec) => {
     if (!spec.show(settings)) return
     const size = spec.size(settings)
-    const offset = spec.yDirection * Math.max(4, Math.round(size * 0.25))
+    const offset = spec.yDirection * Math.max(4, Math.round(size * spec.offsetMultiplier))
 
     ctx.save()
     ctx.fillStyle = spec.color(settings)

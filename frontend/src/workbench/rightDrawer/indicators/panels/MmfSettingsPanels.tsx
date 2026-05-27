@@ -50,7 +50,79 @@ export function MmfInputPanel({
           onDpoChange={(lowDpoValue) => patch({ lowDpoValue })}
           onMorganRatioChange={(lowMorganRatio) => patch({ lowMorganRatio })}
         />
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showUpBreakPoint}
+              label={'\u5411\u4e0a\u7a81\u7834\u70b9'}
+              onChange={(showUpBreakPoint) => patch({ showUpBreakPoint })}
+            />
+          </div>
+          <MmfVdoLimitRow
+            lower={settings.upBreakVdoLower}
+            onLowerChange={(upBreakVdoLower) => patch({ upBreakVdoLower })}
+            onUpperChange={(upBreakVdoUpper) => patch({ upBreakVdoUpper })}
+            upper={settings.upBreakVdoUpper}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showDownBreakPoint}
+              label={'\u5411\u4e0b\u7a81\u7834\u70b9'}
+              onChange={(showDownBreakPoint) => patch({ showDownBreakPoint })}
+            />
+          </div>
+          <MmfVdoLimitRow
+            lower={settings.downBreakVdoLower}
+            onLowerChange={(downBreakVdoLower) => patch({ downBreakVdoLower })}
+            onUpperChange={(downBreakVdoUpper) => patch({ downBreakVdoUpper })}
+            upper={settings.downBreakVdoUpper}
+          />
+        </div>
       </section>
+    </div>
+  )
+}
+
+function MmfVdoLimitRow({
+  lower,
+  onLowerChange,
+  onUpperChange,
+  upper,
+}: {
+  lower: number
+  onLowerChange: (value: number) => void
+  onUpperChange: (value: number) => void
+  upper: number
+}) {
+  return (
+    <div className="ff-indicators-mmf-panel-v1__vdo-grid">
+      <span className="ff-indicators-mmf-panel-v1__label">VDO</span>
+      <span className="ff-indicators-mmf-panel-v1__vdo-limit-label">{'\u4e0a\u9650'}</span>
+      <span className="ff-indicators-mmf-panel-v1__vdo-input">
+        <NumberBox
+          formatValue={(value) => value.toFixed(3)}
+          max={500}
+          min={-500}
+          onChange={onUpperChange}
+          parseValue={(value) => Number(value)}
+          step={0.001}
+          value={upper}
+        />
+      </span>
+      <span className="ff-indicators-mmf-panel-v1__vdo-limit-label">{'\u4e0b\u9650'}</span>
+      <span className="ff-indicators-mmf-panel-v1__vdo-input">
+        <NumberBox
+          formatValue={(value) => value.toFixed(3)}
+          max={500}
+          min={-500}
+          onChange={onLowerChange}
+          parseValue={(value) => Number(value)}
+          step={0.001}
+          value={lower}
+        />
+      </span>
     </div>
   )
 }
@@ -136,6 +208,24 @@ export function MmfStylePanel({
           onSymbolChange={(lowSymbol) => patch({ lowSymbol })}
           size={settings.lowSize}
           symbol={settings.lowSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.upBreakColor}
+          label={'\u5411\u4e0a\u7a81\u7834\u70b9'}
+          onColorChange={(upBreakColor) => patch({ upBreakColor })}
+          onSizeChange={(upBreakSize) => patch({ upBreakSize })}
+          onSymbolChange={(upBreakSymbol) => patch({ upBreakSymbol })}
+          size={settings.upBreakSize}
+          symbol={settings.upBreakSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.downBreakColor}
+          label={'\u5411\u4e0b\u7a81\u7834\u70b9'}
+          onColorChange={(downBreakColor) => patch({ downBreakColor })}
+          onSizeChange={(downBreakSize) => patch({ downBreakSize })}
+          onSymbolChange={(downBreakSymbol) => patch({ downBreakSymbol })}
+          size={settings.downBreakSize}
+          symbol={settings.downBreakSymbol}
         />
       </section>
     </div>
