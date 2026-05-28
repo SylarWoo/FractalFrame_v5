@@ -74,7 +74,8 @@ const indicatorShortcutLabels: Record<string, string> = {
   TSI: '真实强弱指数',
   VI: '漩涡指标',
   MA: '移动均线',
-  MMF: '摩根动量分形指标',
+  MMF: 'MMF v1 - 摩根动量分形指标',
+  MMF_V2: 'MMF v2 - 摩根动量分形指标',
   MR: '摩根区间',
   VWAP: '成交量加权平均价',
   Vol: '成交量',
@@ -349,7 +350,7 @@ export function AppShell() {
   }
 
   function handleToggleIndicatorShortcutLoad(name: string) {
-    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF' && name !== 'MR' && name !== 'RSI' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'VWAP' && name !== 'Vol') return
+    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF' && name !== 'MMF_V2' && name !== 'MR' && name !== 'RSI' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'VWAP' && name !== 'Vol') return
     if (loadedIndicatorKeys.includes(name)) {
       indicatorsController.unloadIndicator(name)
       return

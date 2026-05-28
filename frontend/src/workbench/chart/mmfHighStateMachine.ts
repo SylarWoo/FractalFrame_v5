@@ -50,6 +50,17 @@ function resolveDeadCrossValue(
   return resolveStochCrossValue(previousK, previousD, k, d)
 }
 
+function resolveGoldenCrossValue(
+  previousK: number | undefined,
+  previousD: number | undefined,
+  k: number | undefined,
+  d: number | undefined,
+) {
+  if (!finiteNumber(previousK) || !finiteNumber(previousD) || !finiteNumber(k) || !finiteNumber(d)) return null
+  if (!(previousK <= previousD && k > d)) return null
+  return resolveStochCrossValue(previousK, previousD, k, d)
+}
+
 function isHighFilterMatched(row: MmfHighInputRow, settings: MmfHighStateMachineSettings) {
   return (
     (finiteNumber(row.high) && finiteNumber(row.morganLevel) && row.high >= row.morganLevel)
@@ -85,6 +96,16 @@ function findHighestHighIndex(inputRows: MmfHighInputRow[], startIndex: number, 
   return highestIndex
 }
 
+function hasGoldenCrossAfterIndex(inputRows: MmfHighInputRow[], crossIndex: number) {
+  const endIndex = Math.min(inputRows.length - 1, crossIndex + crossWindowRadius)
+  for (let index = crossIndex + 1; index <= endIndex; index += 1) {
+    const previousRow = inputRows[index - 1]
+    const row = inputRows[index]
+    if (resolveGoldenCrossValue(previousRow?.k, previousRow?.d, row?.k, row?.d) != null) return true
+  }
+  return false
+}
+
 export function calculateMmfHighStateMachineRows(
   inputRows: MmfHighInputRow[],
   settings: MmfHighStateMachineSettings,
@@ -99,7 +120,11 @@ export function calculateMmfHighStateMachineRows(
     if (activeCross && index > activeCross.index && finiteNumber(row.k) && row.k <= activeCross.value - stochConfirmDistance) {
       const { startIndex, endIndex } = getCenteredWindow(activeCross.index, inputRows.length)
       const markerIndex = findHighestHighIndex(inputRows, startIndex, endIndex)
-      if (markerIndex != null && hasHighFilterInWindow(inputRows, settings, startIndex, endIndex)) {
+      if (
+        markerIndex != null
+        && !hasGoldenCrossAfterIndex(inputRows, activeCross.index)
+        && hasHighFilterInWindow(inputRows, settings, startIndex, endIndex)
+      ) {
         const markerPrice = inputRows[markerIndex]?.high
         if (finiteNumber(markerPrice)) {
           rows[markerIndex] = {

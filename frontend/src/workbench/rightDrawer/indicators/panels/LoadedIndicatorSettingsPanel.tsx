@@ -122,6 +122,10 @@ export function LoadedIndicatorSettingsPanel({
       input: <MmfInputPanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
       style: <MmfStylePanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
     },
+    MMF_V2: {
+      input: <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mmf-panel-v1" role="tabpanel" />,
+      style: <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-mmf-style-panel-v1" role="tabpanel" />,
+    },
     RSI: {
       input: <RsiInputPanel onSettingsChange={onSettingsChange} settings={settings} />,
       style: <RsiStylePanel onSettingsChange={onSettingsChange} settings={settings} />,

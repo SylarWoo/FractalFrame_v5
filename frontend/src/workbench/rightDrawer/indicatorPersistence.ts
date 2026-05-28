@@ -80,6 +80,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
       MA: parsed?.loaded?.MA === true,
       MACD: parsed?.loaded?.MACD === true,
       MMF: parsed?.loaded?.MMF === true,
+      MMF_V2: parsed?.loaded?.MMF_V2 === true,
       MR: parsed?.loaded?.MR === true,
       RSI: parsed?.loaded?.RSI === true,
       Stoch: parsed?.loaded?.Stoch === true,

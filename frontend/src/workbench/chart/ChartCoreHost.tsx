@@ -97,6 +97,7 @@ export type ChartIndicatorCommand = {
   | { name: 'MA'; settings?: MaIndicatorSettings }
   | { name: 'MACD'; settings?: MacdIndicatorSettings }
   | { name: 'MMF'; settings?: MmfIndicatorSettings }
+  | { name: 'MMF_V2'; settings?: MmfIndicatorSettings }
   | { name: 'DPO'; settings?: DpoIndicatorSettings }
   | { name: 'MR'; settings?: MrIndicatorSettings }
   | { name: 'RSI'; settings?: RsiIndicatorSettings }

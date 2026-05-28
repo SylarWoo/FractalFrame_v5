@@ -113,4 +113,24 @@ describe('tradingViewMmfIndicator', () => {
     expect(rows.some((row) => Number.isFinite(row.highMarker))).toBe(false)
     cleanupMocks()
   })
+
+  it('does not mark a high cycle when a golden cross appears within the next 7 bars', async () => {
+    vi.resetModules()
+    installMocks(
+      [0, 0, 8, 12, 13, 12, 9, 6, 4],
+      [42, 48, 80, 70, 64, 72, 68, 66, 64],
+      [44, 49, 75, 72, 70, 68, 69, 66, 64],
+    )
+
+    const { calculateTradingViewMmfRows } = await import('./tradingViewMmfIndicator')
+    const data = [100, 102, 108, 104, 112, 109, 106, 103, 101].map((close, index) => createRow(index, close))
+    const rows = calculateTradingViewMmfRows(data, {
+      ...defaultMmfIndicatorSettings,
+      dpoValue: 11,
+      showHigh: true,
+    })
+
+    expect(rows.some((row) => Number.isFinite(row.highMarker))).toBe(false)
+    cleanupMocks()
+  })
 })

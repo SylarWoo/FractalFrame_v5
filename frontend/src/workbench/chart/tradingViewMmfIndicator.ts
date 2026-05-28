@@ -23,6 +23,10 @@ export type MmfIndicatorRow = {
   lowMarkerPrice?: number
   lowRangeEndIndex?: number
   lowRangeStartIndex?: number
+  lowPositionHighMarker?: number
+  lowPositionHighMarkerPrice?: number
+  highPositionLowMarker?: number
+  highPositionLowMarkerPrice?: number
   oscHighDivergenceMarker?: number
   oscHighDivergenceMarkerPrice?: number
   oscLowDivergenceMarker?: number
@@ -71,10 +75,10 @@ type NormalizedMmfCalcContext = Required<Pick<MmfCalcContext, 'period' | 'symbol
 
 type MmfMarkerSpec = {
   color: (settings: MmfIndicatorSettings) => string
-  markerKey: keyof Pick<MmfIndicatorRow, 'bottomDivergenceMarker' | 'downBreakConfirmMarker' | 'downBreakMarker' | 'highMarker' | 'lowMarker' | 'oscHighDivergenceMarker' | 'oscLowDivergenceMarker' | 'pullbackMarker' | 'reboundMarker' | 'resistanceMarker' | 'supportMarker' | 'topDivergenceMarker' | 'trendDownDivergenceMarker' | 'trendDownMarker' | 'trendDownReturnMarker' | 'trendUpDivergenceMarker' | 'trendUpMarker' | 'trendUpReturnMarker' | 'upBreakConfirmMarker' | 'upBreakMarker'>
+  markerKey: keyof Pick<MmfIndicatorRow, 'bottomDivergenceMarker' | 'downBreakConfirmMarker' | 'downBreakMarker' | 'highMarker' | 'highPositionLowMarker' | 'lowMarker' | 'lowPositionHighMarker' | 'oscHighDivergenceMarker' | 'oscLowDivergenceMarker' | 'pullbackMarker' | 'reboundMarker' | 'resistanceMarker' | 'supportMarker' | 'topDivergenceMarker' | 'trendDownDivergenceMarker' | 'trendDownMarker' | 'trendDownReturnMarker' | 'trendUpDivergenceMarker' | 'trendUpMarker' | 'trendUpReturnMarker' | 'upBreakConfirmMarker' | 'upBreakMarker'>
   markerType?: MmfIndicatorMarker['type']
   offsetMultiplier: number
-  priceKey: keyof Pick<MmfIndicatorRow, 'bottomDivergenceMarkerPrice' | 'downBreakConfirmMarkerPrice' | 'downBreakMarkerPrice' | 'highMarkerPrice' | 'lowMarkerPrice' | 'oscHighDivergenceMarkerPrice' | 'oscLowDivergenceMarkerPrice' | 'pullbackMarkerPrice' | 'reboundMarkerPrice' | 'resistanceMarkerPrice' | 'supportMarkerPrice' | 'topDivergenceMarkerPrice' | 'trendDownDivergenceMarkerPrice' | 'trendDownMarkerPrice' | 'trendDownReturnMarkerPrice' | 'trendUpDivergenceMarkerPrice' | 'trendUpMarkerPrice' | 'trendUpReturnMarkerPrice' | 'upBreakConfirmMarkerPrice' | 'upBreakMarkerPrice'>
+  priceKey: keyof Pick<MmfIndicatorRow, 'bottomDivergenceMarkerPrice' | 'downBreakConfirmMarkerPrice' | 'downBreakMarkerPrice' | 'highMarkerPrice' | 'highPositionLowMarkerPrice' | 'lowMarkerPrice' | 'lowPositionHighMarkerPrice' | 'oscHighDivergenceMarkerPrice' | 'oscLowDivergenceMarkerPrice' | 'pullbackMarkerPrice' | 'reboundMarkerPrice' | 'resistanceMarkerPrice' | 'supportMarkerPrice' | 'topDivergenceMarkerPrice' | 'trendDownDivergenceMarkerPrice' | 'trendDownMarkerPrice' | 'trendDownReturnMarkerPrice' | 'trendUpDivergenceMarkerPrice' | 'trendUpMarkerPrice' | 'trendUpReturnMarkerPrice' | 'upBreakConfirmMarkerPrice' | 'upBreakMarkerPrice'>
   show: (settings: MmfIndicatorSettings) => boolean
   size: (settings: MmfIndicatorSettings) => number
   symbol: (settings: MmfIndicatorSettings) => string
@@ -84,7 +88,7 @@ type MmfMarkerSpec = {
 }
 
 let registered = false
-const remoteMmfEngineVersion = 'mmf-engine-v52-break-confirm-lookback-two'
+const remoteMmfEngineVersion = 'mmf-engine-v58-zone-extreme-cross-band'
 const remoteMmfRowsCacheMax = 24
 const remoteMmfRowsBySignature = new Map<string, Promise<MmfIndicatorRow[]> | MmfIndicatorRow[]>()
 const mmfInternalStochSettings = {
@@ -169,6 +173,30 @@ const mmfMarkerSpecs: MmfMarkerSpec[] = [
     symbol: (settings) => settings.lowSymbol || defaultMmfIndicatorSettings.lowSymbol,
     textBaseline: 'top',
     title: 'Low ',
+    yDirection: 1,
+  },
+  {
+    color: (settings) => settings.lowPositionHighColor || defaultMmfIndicatorSettings.lowPositionHighColor,
+    markerKey: 'lowPositionHighMarker',
+    offsetMultiplier: 0.25,
+    priceKey: 'lowPositionHighMarkerPrice',
+    show: (settings) => settings.showLowPositionHighPoint,
+    size: (settings) => clampMarkerSize(settings.lowPositionHighSize, defaultMmfIndicatorSettings.lowPositionHighSize),
+    symbol: (settings) => settings.lowPositionHighSymbol || defaultMmfIndicatorSettings.lowPositionHighSymbol,
+    textBaseline: 'bottom',
+    title: 'Low Position High ',
+    yDirection: -1,
+  },
+  {
+    color: (settings) => settings.highPositionLowColor || defaultMmfIndicatorSettings.highPositionLowColor,
+    markerKey: 'highPositionLowMarker',
+    offsetMultiplier: 0.25,
+    priceKey: 'highPositionLowMarkerPrice',
+    show: (settings) => settings.showHighPositionLowPoint,
+    size: (settings) => clampMarkerSize(settings.highPositionLowSize, defaultMmfIndicatorSettings.highPositionLowSize),
+    symbol: (settings) => settings.highPositionLowSymbol || defaultMmfIndicatorSettings.highPositionLowSymbol,
+    textBaseline: 'top',
+    title: 'High Position Low ',
     yDirection: 1,
   },
   {
@@ -618,6 +646,22 @@ function resolveStochGoldenCrossValue(previousK: unknown, previousD: unknown, k:
   return crossValue
 }
 
+function resolveSeparatedStochDeadCrossValue(previousK: unknown, previousD: unknown, k: unknown, d: unknown, minSeparation: number) {
+  const previousKNumber = Number(previousK)
+  const previousDNumber = Number(previousD)
+  if (!Number.isFinite(previousKNumber) || !Number.isFinite(previousDNumber)) return null
+  if (previousKNumber - previousDNumber < minSeparation) return null
+  return resolveStochDeadCrossValue(previousKNumber, previousDNumber, k, d)
+}
+
+function resolveSeparatedStochGoldenCrossValue(previousK: unknown, previousD: unknown, k: unknown, d: unknown, minSeparation: number) {
+  const previousKNumber = Number(previousK)
+  const previousDNumber = Number(previousD)
+  if (!Number.isFinite(previousKNumber) || !Number.isFinite(previousDNumber)) return null
+  if (previousDNumber - previousKNumber < minSeparation) return null
+  return resolveStochGoldenCrossValue(previousKNumber, previousDNumber, k, d)
+}
+
 function hasHighMarkerNearIndex(outputRows: MmfIndicatorRow[], markerIndex: number, price: number) {
   const from = Math.max(0, markerIndex - 1)
   const to = Math.min(outputRows.length - 1, markerIndex + 1)
@@ -705,6 +749,108 @@ function findLowestLowInCenteredWindow(realRows: KLineData[], centerIndex: numbe
     }
   }
   return lowestLowIndex >= 0 ? { index: lowestLowIndex, price: lowestLow } : null
+}
+
+function applyStochZoneExtremeMarkers(
+  realRows: KLineData[],
+  stochRows: ReturnType<typeof calculateTradingViewStochRows>,
+  vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
+  outputRows: MmfIndicatorRow[],
+  settings: MmfIndicatorSettings,
+) {
+  if (!settings.showLowPositionHighPoint && !settings.showHighPositionLowPoint) return
+  const lowPositionHighCrossMin = 30
+  const lowPositionHighCrossMax = 50
+  const highPositionLowCrossMin = 50
+  const highPositionLowCrossMax = 70
+  const confirmDistance = 7
+  const crossMinSeparation = 1
+  const markerWindowRadius = 7
+  const vdoFilterRadius = 5
+  const resistanceRange = resolveVdoRange(settings.resistanceVdoLower, settings.resistanceVdoUpper)
+  const supportRange = resolveVdoRange(settings.supportVdoLower, settings.supportVdoUpper)
+  let activeLowPositionHighCross: { index: number; value: number } | null = null
+  let activeHighPositionLowCross: { index: number; value: number } | null = null
+
+  for (let index = 1; index < realRows.length; index += 1) {
+    const row = stochRows[index]
+    const previousRow = stochRows[index - 1]
+    const k = Number(row?.k)
+    const deadCrossValue = resolveSeparatedStochDeadCrossValue(previousRow?.k, previousRow?.d, row?.k, row?.d, crossMinSeparation)
+    const goldenCrossValue = resolveSeparatedStochGoldenCrossValue(previousRow?.k, previousRow?.d, row?.k, row?.d, crossMinSeparation)
+
+    if (settings.showLowPositionHighPoint) {
+      if (
+        activeLowPositionHighCross
+        && index > activeLowPositionHighCross.index
+        && index <= activeLowPositionHighCross.index + markerWindowRadius
+        && goldenCrossValue != null
+      ) {
+        activeLowPositionHighCross = null
+      }
+
+      if (
+        activeLowPositionHighCross
+        && index > activeLowPositionHighCross.index
+        && Number.isFinite(k)
+        && k <= activeLowPositionHighCross.value - confirmDistance
+      ) {
+        const marker = findHighestHighInCenteredWindow(realRows, activeLowPositionHighCross.index, markerWindowRadius)
+        if (
+          marker
+          && isResistanceVdoWindowMatched(vdoRows, marker.index, vdoFilterRadius, resistanceRange.lower, resistanceRange.upper)
+          && !Number.isFinite(outputRows[marker.index]?.lowPositionHighMarker)
+        ) {
+          outputRows[marker.index] = {
+            ...outputRows[marker.index],
+            lowPositionHighMarker: marker.price,
+            lowPositionHighMarkerPrice: marker.price,
+          }
+        }
+        activeLowPositionHighCross = null
+      }
+
+      if (deadCrossValue != null && deadCrossValue > lowPositionHighCrossMin && deadCrossValue < lowPositionHighCrossMax) {
+        activeLowPositionHighCross = { index, value: deadCrossValue }
+      }
+    }
+
+    if (settings.showHighPositionLowPoint) {
+      if (
+        activeHighPositionLowCross
+        && index > activeHighPositionLowCross.index
+        && index <= activeHighPositionLowCross.index + markerWindowRadius
+        && deadCrossValue != null
+      ) {
+        activeHighPositionLowCross = null
+      }
+
+      if (
+        activeHighPositionLowCross
+        && index > activeHighPositionLowCross.index
+        && Number.isFinite(k)
+        && k >= activeHighPositionLowCross.value + confirmDistance
+      ) {
+        const marker = findLowestLowInCenteredWindow(realRows, activeHighPositionLowCross.index, markerWindowRadius)
+        if (
+          marker
+          && isSupportVdoWindowMatched(vdoRows, marker.index, vdoFilterRadius, supportRange.lower, supportRange.upper)
+          && !Number.isFinite(outputRows[marker.index]?.highPositionLowMarker)
+        ) {
+          outputRows[marker.index] = {
+            ...outputRows[marker.index],
+            highPositionLowMarker: marker.price,
+            highPositionLowMarkerPrice: marker.price,
+          }
+        }
+        activeHighPositionLowCross = null
+      }
+
+      if (goldenCrossValue != null && goldenCrossValue > highPositionLowCrossMin && goldenCrossValue < highPositionLowCrossMax) {
+        activeHighPositionLowCross = { index, value: goldenCrossValue }
+      }
+    }
+  }
 }
 
 function hasVdoBelowThresholdInCenteredWindow(
@@ -836,6 +982,8 @@ function rowHasAnyMmfPoint(row: MmfIndicatorRow | undefined) {
   return (
     Number.isFinite(row.highMarker)
     || Number.isFinite(row.lowMarker)
+    || Number.isFinite(row.lowPositionHighMarker)
+    || Number.isFinite(row.highPositionLowMarker)
     || Number.isFinite(row.bottomDivergenceMarker)
     || Number.isFinite(row.upBreakConfirmMarker)
     || Number.isFinite(row.downBreakConfirmMarker)
@@ -1272,7 +1420,12 @@ function applyVdoDerivedMarkers(realRows: KLineData[], outputRows: MmfIndicatorR
   applyBreakConfirmMarkers(vdoRows, outputRows, settings)
 }
 
-function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMarker[], settings: MmfIndicatorSettings): MmfIndicatorRow[] {
+function createMmfRowsFromMarkers(
+  realRows: KLineData[],
+  markers: MmfIndicatorMarker[],
+  settings: MmfIndicatorSettings,
+  context: NormalizedMmfCalcContext,
+): MmfIndicatorRow[] {
   const markersByTypeAndTime = new Map<MmfIndicatorMarker['type'], Map<number, MmfIndicatorMarker>>()
   mmfMarkerSpecs.forEach((spec) => {
     if (!spec.markerType) return
@@ -1307,6 +1460,16 @@ function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMa
     })
     return output
   })
+  if (settings.showLowPositionHighPoint || settings.showHighPositionLowPoint) {
+    const stochRows = calculateTradingViewStochRows(realRows, {
+      ...defaultStochIndicatorSettings,
+      dSmoothing: context.stochDSmoothing,
+      kSmoothing: context.stochKSmoothing,
+      length: context.stochLength,
+    })
+    const vdoRows = calculateTradingViewVdoRows(realRows, mmfInternalVdoSettings)
+    applyStochZoneExtremeMarkers(realRows, stochRows, vdoRows, outputRows, settings)
+  }
   applyVdoDerivedMarkers(realRows, outputRows, settings)
   return outputRows
 }
@@ -1337,6 +1500,8 @@ function createRemoteMmfSignature(realRows: KLineData[], settings: MmfIndicatorS
     Math.floor(Number(last?.timestamp ?? 0) / 1000),
     settings.showHigh ? 'H1' : 'H0',
     settings.showLow ? 'L1' : 'L0',
+    settings.showLowPositionHighPoint ? 'LPH1' : 'LPH0',
+    settings.showHighPositionLowPoint ? 'HPL1' : 'HPL0',
     settings.showUpBreakPoint ? 'UB1' : 'UB0',
     settings.showDownBreakPoint ? 'DB1' : 'DB0',
     settings.showResistanceLevel ? 'R1' : 'R0',
@@ -1439,6 +1604,12 @@ function createRemoteMmfSignature(realRows: KLineData[], settings: MmfIndicatorS
     settings.downBreakConfirmSymbol,
     settings.downBreakConfirmSize,
     settings.downBreakConfirmColor,
+    settings.lowPositionHighSymbol,
+    settings.lowPositionHighSize,
+    settings.lowPositionHighColor,
+    settings.highPositionLowSymbol,
+    settings.highPositionLowSize,
+    settings.highPositionLowColor,
     context.stochLength,
     context.stochKSmoothing,
     context.stochDSmoothing,
@@ -1469,7 +1640,7 @@ async function calculateRemoteMmfRows(
   inputContext?: unknown,
 ): Promise<MmfIndicatorRow[]> {
   const settings = normalizeMmfSettings(inputSettings)
-  if (!settings.showHigh && !settings.showLow) return createEmptyMmfRows(dataList.length)
+  if (!settings.showHigh && !settings.showLow && !settings.showLowPositionHighPoint && !settings.showHighPositionLowPoint) return createEmptyMmfRows(dataList.length)
   const context = normalizeMmfContext(inputContext)
   const realRows = stripFuturePlaceholders(dataList)
   if (!context.symbol || realRows.length === 0) return mergeRealRowsWithPlaceholders(dataList, createEmptyMmfRows(realRows.length))
@@ -1513,7 +1684,7 @@ async function calculateRemoteMmfRows(
     symbol: context.symbol,
     timeframe: context.period,
   })
-    .then((payload) => createMmfRowsFromMarkers(realRows, payload.markers ?? [], settings))
+    .then((payload) => createMmfRowsFromMarkers(realRows, payload.markers ?? [], settings, context))
     .catch(() => createEmptyMmfRows(realRows.length))
 
   setCachedRemoteMmfRows(signature, request)
@@ -1608,14 +1779,14 @@ export function ensureTradingViewMmfIndicator() {
 
   registerIndicator<MmfIndicatorRow>({
     name: 'MMF',
-    shortName: 'MMF',
+    shortName: 'MMF v1',
     calcParams: [defaultMmfIndicatorSettings],
     series: IndicatorSeries.Price,
     createTooltipDataSource: (params) => {
       const row = params.indicator.result[resolveTooltipIndex(params)]
       const settings = normalizeMmfSettings(params.indicator.calcParams[0] as Partial<MmfIndicatorSettings>)
       return {
-        name: 'MMF',
+        name: 'MMF v1',
         calcParamsText: '',
         icons: [],
         values: createMmfTooltipValues(row, settings, params.defaultStyles.tooltip.text.color),

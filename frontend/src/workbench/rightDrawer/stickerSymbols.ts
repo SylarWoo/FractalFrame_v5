@@ -18,4 +18,6 @@ export const mmfHighSymbolOptions = [
   '\u25a1',
   '\u2605',
   '\u2606',
+  '\u21d1',
+  '\u21d3',
 ] as const

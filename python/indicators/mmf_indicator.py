@@ -381,6 +381,32 @@ def _lowest_low_index(precomputed: MmfPrecomputedData, start_index: int, end_ind
     return lowest_index
 
 
+def _has_golden_cross_after(precomputed: MmfPrecomputedData, cross_index: int) -> bool:
+    end_index = min(precomputed.rows_count - 1, cross_index + MMF_CROSS_WINDOW_RADIUS)
+    for index in range(cross_index + 1, end_index + 1):
+        if _stoch_golden_cross_value(
+            precomputed.stoch_k[index - 1],
+            precomputed.stoch_d[index - 1],
+            precomputed.stoch_k[index],
+            precomputed.stoch_d[index],
+        ) is not None:
+            return True
+    return False
+
+
+def _has_dead_cross_after(precomputed: MmfPrecomputedData, cross_index: int) -> bool:
+    end_index = min(precomputed.rows_count - 1, cross_index + MMF_CROSS_WINDOW_RADIUS)
+    for index in range(cross_index + 1, end_index + 1):
+        if _stoch_dead_cross_value(
+            precomputed.stoch_k[index - 1],
+            precomputed.stoch_d[index - 1],
+            precomputed.stoch_k[index],
+            precomputed.stoch_d[index],
+        ) is not None:
+            return True
+    return False
+
+
 def _better_extreme_marker(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     marker_type = str(left.get("type"))
     left_price = float(left["price"])
@@ -491,7 +517,11 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
                 if float(k) <= cross_value - MMF_STOCH_CONFIRM_DISTANCE:
                     start_index, end_index = _centered_window(cross_index, precomputed.rows_count)
                     high_index = _highest_high_index(precomputed, start_index, end_index)
-                    if high_index is not None and _window_has_high_filter(precomputed, settings, start_index, end_index):
+                    if (
+                        high_index is not None
+                        and not _has_golden_cross_after(precomputed, cross_index)
+                        and _window_has_high_filter(precomputed, settings, start_index, end_index)
+                    ):
                         marker_records.append({
                             "type": "MMF_HIGH",
                             "index": high_index,
@@ -519,7 +549,11 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
                 if float(k) >= cross_value + MMF_STOCH_CONFIRM_DISTANCE:
                     start_index, end_index = _centered_window(cross_index, precomputed.rows_count)
                     low_index = _lowest_low_index(precomputed, start_index, end_index)
-                    if low_index is not None and _window_has_low_filter(precomputed, settings, start_index, end_index):
+                    if (
+                        low_index is not None
+                        and not _has_dead_cross_after(precomputed, cross_index)
+                        and _window_has_low_filter(precomputed, settings, start_index, end_index)
+                    ):
                         marker_records.append({
                             "type": "MMF_LOW",
                             "index": low_index,

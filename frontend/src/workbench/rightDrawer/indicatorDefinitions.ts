@@ -10,7 +10,8 @@ export const indicatorRows = [
   { key: 'VI', name: '漩涡指标', type: '副图指标', description: 'Vortex Indicator' },
   { key: 'MA', name: '移动均线', type: '主图指标', description: 'Moving Average' },
   { key: 'MR', name: '摩根区间', type: '主图指标', description: 'Morgan Range' },
-  { key: 'MMF', name: '摩根动量分形指标', type: '主图指标', description: 'Morgan Momentum Fractal' },
+  { key: 'MMF', name: 'MMF v1 - 摩根动量分形指标', type: '主图指标', description: 'Morgan Momentum Fractal v1' },
+  { key: 'MMF_V2', name: 'MMF v2 - 摩根动量分形指标', type: '主图指标', description: 'Morgan Momentum Fractal v2' },
   { key: 'VWAP', name: '成交量加权平均价', type: '主图指标', description: 'Volume Weighted Average Price' },
   { key: 'Vol', name: '成交量', type: '主图指标', description: 'MT5 tick volume' },
 ] as const satisfies readonly IndicatorTableRow[]

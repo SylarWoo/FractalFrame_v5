@@ -314,6 +314,12 @@ export type MmfIndicatorSettings = {
   lowOffsetPercent: number
   lowSize: number
   lowSymbol: string
+  lowPositionHighColor: string
+  lowPositionHighSize: number
+  lowPositionHighSymbol: string
+  highPositionLowColor: string
+  highPositionLowSize: number
+  highPositionLowSymbol: string
   trendDownReturnColor: string
   trendDownReturnMorganRatio: MmfMorganRatio
   trendDownReturnSize: number
@@ -378,7 +384,9 @@ export type MmfIndicatorSettings = {
   showBottomDivergencePoint: boolean
   showDownBreakConfirmPoint: boolean
   showHigh: boolean
+  showHighPositionLowPoint: boolean
   showLow: boolean
+  showLowPositionHighPoint: boolean
   showOscHighDivergencePoint: boolean
   showOscLowDivergencePoint: boolean
   showPullbackPoint: boolean
@@ -496,6 +504,7 @@ export type PersistedIndicatorsState = {
     MA?: boolean
     MACD?: boolean
     MMF?: boolean
+    MMF_V2?: boolean
     MR?: boolean
     RSI?: boolean
     Stoch?: boolean
@@ -812,6 +821,12 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   lowOffsetPercent: 0,
   lowSize: 24,
   lowSymbol: '\u25c6',
+  lowPositionHighColor: '#ef5350',
+  lowPositionHighSize: 24,
+  lowPositionHighSymbol: '\u21d3',
+  highPositionLowColor: '#26a69a',
+  highPositionLowSize: 24,
+  highPositionLowSymbol: '\u21d1',
   trendDownReturnColor: '#ef5350',
   trendDownReturnMorganRatio: 0.25,
   trendDownReturnSize: 24,
@@ -876,7 +891,9 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   showBottomDivergencePoint: false,
   showDownBreakConfirmPoint: false,
   showHigh: true,
+  showHighPositionLowPoint: false,
   showLow: false,
+  showLowPositionHighPoint: false,
   showOscHighDivergencePoint: false,
   showOscLowDivergencePoint: false,
   showPullbackPoint: false,
@@ -1319,6 +1336,10 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const highSymbol = typeof merged.highSymbol === 'string' && merged.highSymbol.trim() ? merged.highSymbol : defaultMmfIndicatorSettings.highSymbol
   const lowColor = typeof merged.lowColor === 'string' && merged.lowColor.trim() ? merged.lowColor : defaultMmfIndicatorSettings.lowColor
   const lowSymbol = typeof merged.lowSymbol === 'string' && merged.lowSymbol.trim() ? merged.lowSymbol : defaultMmfIndicatorSettings.lowSymbol
+  const lowPositionHighColor = typeof merged.lowPositionHighColor === 'string' && merged.lowPositionHighColor.trim() ? merged.lowPositionHighColor : defaultMmfIndicatorSettings.lowPositionHighColor
+  const lowPositionHighSymbol = typeof merged.lowPositionHighSymbol === 'string' && merged.lowPositionHighSymbol.trim() ? merged.lowPositionHighSymbol : defaultMmfIndicatorSettings.lowPositionHighSymbol
+  const highPositionLowColor = typeof merged.highPositionLowColor === 'string' && merged.highPositionLowColor.trim() ? merged.highPositionLowColor : defaultMmfIndicatorSettings.highPositionLowColor
+  const highPositionLowSymbol = typeof merged.highPositionLowSymbol === 'string' && merged.highPositionLowSymbol.trim() ? merged.highPositionLowSymbol : defaultMmfIndicatorSettings.highPositionLowSymbol
   const trendDownReturnColor = typeof merged.trendDownReturnColor === 'string' && merged.trendDownReturnColor.trim() ? merged.trendDownReturnColor : defaultMmfIndicatorSettings.trendDownReturnColor
   const trendDownReturnSymbol = typeof merged.trendDownReturnSymbol === 'string' && merged.trendDownReturnSymbol.trim() ? merged.trendDownReturnSymbol : defaultMmfIndicatorSettings.trendDownReturnSymbol
   const trendDownDivergenceColor = typeof merged.trendDownDivergenceColor === 'string' && merged.trendDownDivergenceColor.trim() ? merged.trendDownDivergenceColor : defaultMmfIndicatorSettings.trendDownDivergenceColor
@@ -1357,6 +1378,8 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const trendUpSymbol = typeof merged.trendUpSymbol === 'string' && merged.trendUpSymbol.trim() ? merged.trendUpSymbol : defaultMmfIndicatorSettings.trendUpSymbol
   const highMorganRatio = Number(merged.highMorganRatio)
   const lowMorganRatio = Number(merged.lowMorganRatio)
+  const lowPositionHighSize = Math.round(Number(merged.lowPositionHighSize))
+  const highPositionLowSize = Math.round(Number(merged.highPositionLowSize))
   const trendDownReturnMorganRatio = Number(merged.trendDownReturnMorganRatio)
   const trendUpReturnMorganRatio = Number(merged.trendUpReturnMorganRatio)
   const pullbackSize = Math.round(Number(merged.pullbackSize))
@@ -1414,6 +1437,12 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     lowOffsetPercent: Number.isFinite(lowOffsetPercent) ? Math.max(-99, Math.min(Math.round(lowOffsetPercent), 99)) : defaultMmfIndicatorSettings.lowOffsetPercent,
     lowSize: Number.isFinite(lowSize) ? Math.max(8, Math.min(lowSize, 96)) : defaultMmfIndicatorSettings.lowSize,
     lowSymbol,
+    lowPositionHighColor,
+    lowPositionHighSize: Number.isFinite(lowPositionHighSize) ? Math.max(8, Math.min(lowPositionHighSize, 96)) : defaultMmfIndicatorSettings.lowPositionHighSize,
+    lowPositionHighSymbol,
+    highPositionLowColor,
+    highPositionLowSize: Number.isFinite(highPositionLowSize) ? Math.max(8, Math.min(highPositionLowSize, 96)) : defaultMmfIndicatorSettings.highPositionLowSize,
+    highPositionLowSymbol,
     trendDownReturnColor,
     trendDownReturnMorganRatio: Number.isFinite(trendDownReturnMorganRatio) ? Math.max(0, Math.min(trendDownReturnMorganRatio, 1)) : defaultMmfIndicatorSettings.trendDownReturnMorganRatio,
     trendDownReturnSize: Number.isFinite(trendDownReturnSize) ? Math.max(8, Math.min(trendDownReturnSize, 96)) : defaultMmfIndicatorSettings.trendDownReturnSize,
@@ -1478,7 +1507,9 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     showBottomDivergencePoint: merged.showBottomDivergencePoint === true,
     showDownBreakConfirmPoint: merged.showDownBreakConfirmPoint === true,
     showHigh: merged.showHigh === true,
+    showHighPositionLowPoint: merged.showHighPositionLowPoint === true,
     showLow: merged.showLow === true,
+    showLowPositionHighPoint: merged.showLowPositionHighPoint === true,
     showOscHighDivergencePoint: merged.showOscHighDivergencePoint === true,
     showOscLowDivergencePoint: merged.showOscLowDivergencePoint === true,
     showPullbackPoint: merged.showPullbackPoint === true,
