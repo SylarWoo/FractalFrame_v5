@@ -1,6 +1,6 @@
 import { IndicatorSeries, registerIndicator } from 'klinecharts'
 import type { IndicatorCreateTooltipDataSourceParams, KLineData } from 'klinecharts'
-import { defaultDpoIndicatorSettings, defaultMmfIndicatorSettings, defaultStochIndicatorSettings, defaultVdoIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { defaultDpoIndicatorSettings, defaultMaIndicatorSettings, defaultMmfIndicatorSettings, defaultStochIndicatorSettings, defaultVdoIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MmfIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { calculateMmfIndicatorMarkers, type MmfIndicatorMarker } from '../../services/mt5/mmfIndicatorApi'
 import { isFuturePlaceholder, stripFuturePlaceholders } from './chartFuturePlaceholders'
@@ -8,6 +8,7 @@ import { calculateMmfHighStateMachineRows } from './mmfHighStateMachine'
 import { calculateMorganRangeSegments, getMorganRangeLevel } from './morganRangeModel'
 import type { MorganRangeSegment } from './morganRangeModel'
 import { calculateTradingViewDpoRows } from './tradingViewDpoIndicator'
+import { calculateTradingViewMaShiftRows } from './tradingViewMaShiftIndicator'
 import { calculateTradingViewStochRows } from './tradingViewStochIndicator'
 import { calculateTradingViewVdoRows } from './tradingViewVdoIndicator'
 
@@ -16,10 +17,18 @@ export type MmfIndicatorRow = {
   highMarkerPrice?: number
   highRangeEndIndex?: number
   highRangeStartIndex?: number
+  bottomDivergenceMarker?: number
+  bottomDivergenceMarkerPrice?: number
   lowMarker?: number
   lowMarkerPrice?: number
   lowRangeEndIndex?: number
   lowRangeStartIndex?: number
+  oscHighDivergenceMarker?: number
+  oscHighDivergenceMarkerPrice?: number
+  oscLowDivergenceMarker?: number
+  oscLowDivergenceMarkerPrice?: number
+  downBreakConfirmMarker?: number
+  downBreakConfirmMarkerPrice?: number
   pullbackMarker?: number
   pullbackMarkerPrice?: number
   reboundMarker?: number
@@ -28,12 +37,24 @@ export type MmfIndicatorRow = {
   resistanceMarkerPrice?: number
   supportMarker?: number
   supportMarkerPrice?: number
+  topDivergenceMarker?: number
+  topDivergenceMarkerPrice?: number
   trendDownMarker?: number
   trendDownMarkerPrice?: number
+  trendDownDivergenceMarker?: number
+  trendDownDivergenceMarkerPrice?: number
+  trendDownReturnMarker?: number
+  trendDownReturnMarkerPrice?: number
   trendUpMarker?: number
   trendUpMarkerPrice?: number
+  trendUpDivergenceMarker?: number
+  trendUpDivergenceMarkerPrice?: number
+  trendUpReturnMarker?: number
+  trendUpReturnMarkerPrice?: number
   downBreakMarker?: number
   downBreakMarkerPrice?: number
+  upBreakConfirmMarker?: number
+  upBreakConfirmMarkerPrice?: number
   upBreakMarker?: number
   upBreakMarkerPrice?: number
 }
@@ -50,10 +71,10 @@ type NormalizedMmfCalcContext = Required<Pick<MmfCalcContext, 'period' | 'symbol
 
 type MmfMarkerSpec = {
   color: (settings: MmfIndicatorSettings) => string
-  markerKey: keyof Pick<MmfIndicatorRow, 'downBreakMarker' | 'highMarker' | 'lowMarker' | 'pullbackMarker' | 'reboundMarker' | 'resistanceMarker' | 'supportMarker' | 'trendDownMarker' | 'trendUpMarker' | 'upBreakMarker'>
+  markerKey: keyof Pick<MmfIndicatorRow, 'bottomDivergenceMarker' | 'downBreakConfirmMarker' | 'downBreakMarker' | 'highMarker' | 'lowMarker' | 'oscHighDivergenceMarker' | 'oscLowDivergenceMarker' | 'pullbackMarker' | 'reboundMarker' | 'resistanceMarker' | 'supportMarker' | 'topDivergenceMarker' | 'trendDownDivergenceMarker' | 'trendDownMarker' | 'trendDownReturnMarker' | 'trendUpDivergenceMarker' | 'trendUpMarker' | 'trendUpReturnMarker' | 'upBreakConfirmMarker' | 'upBreakMarker'>
   markerType?: MmfIndicatorMarker['type']
   offsetMultiplier: number
-  priceKey: keyof Pick<MmfIndicatorRow, 'downBreakMarkerPrice' | 'highMarkerPrice' | 'lowMarkerPrice' | 'pullbackMarkerPrice' | 'reboundMarkerPrice' | 'resistanceMarkerPrice' | 'supportMarkerPrice' | 'trendDownMarkerPrice' | 'trendUpMarkerPrice' | 'upBreakMarkerPrice'>
+  priceKey: keyof Pick<MmfIndicatorRow, 'bottomDivergenceMarkerPrice' | 'downBreakConfirmMarkerPrice' | 'downBreakMarkerPrice' | 'highMarkerPrice' | 'lowMarkerPrice' | 'oscHighDivergenceMarkerPrice' | 'oscLowDivergenceMarkerPrice' | 'pullbackMarkerPrice' | 'reboundMarkerPrice' | 'resistanceMarkerPrice' | 'supportMarkerPrice' | 'topDivergenceMarkerPrice' | 'trendDownDivergenceMarkerPrice' | 'trendDownMarkerPrice' | 'trendDownReturnMarkerPrice' | 'trendUpDivergenceMarkerPrice' | 'trendUpMarkerPrice' | 'trendUpReturnMarkerPrice' | 'upBreakConfirmMarkerPrice' | 'upBreakMarkerPrice'>
   show: (settings: MmfIndicatorSettings) => boolean
   size: (settings: MmfIndicatorSettings) => number
   symbol: (settings: MmfIndicatorSettings) => string
@@ -63,7 +84,7 @@ type MmfMarkerSpec = {
 }
 
 let registered = false
-const remoteMmfEngineVersion = 'mmf-engine-v46-dedupe-extreme-windows'
+const remoteMmfEngineVersion = 'mmf-engine-v52-break-confirm-lookback-two'
 const remoteMmfRowsCacheMax = 24
 const remoteMmfRowsBySignature = new Map<string, Promise<MmfIndicatorRow[]> | MmfIndicatorRow[]>()
 const mmfInternalStochSettings = {
@@ -232,6 +253,126 @@ const mmfMarkerSpecs: MmfMarkerSpec[] = [
     symbol: (settings) => settings.pullbackSymbol || defaultMmfIndicatorSettings.pullbackSymbol,
     textBaseline: 'top',
     title: 'Pullback ',
+    yDirection: 1,
+  },
+  {
+    color: (settings) => settings.oscLowDivergenceColor || defaultMmfIndicatorSettings.oscLowDivergenceColor,
+    markerKey: 'oscLowDivergenceMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'oscLowDivergenceMarkerPrice',
+    show: (settings) => settings.showOscLowDivergencePoint,
+    size: (settings) => clampMarkerSize(settings.oscLowDivergenceSize, defaultMmfIndicatorSettings.oscLowDivergenceSize),
+    symbol: (settings) => settings.oscLowDivergenceSymbol || defaultMmfIndicatorSettings.oscLowDivergenceSymbol,
+    textBaseline: 'top',
+    title: 'Osc Low Divergence ',
+    yDirection: 1,
+  },
+  {
+    color: (settings) => settings.oscHighDivergenceColor || defaultMmfIndicatorSettings.oscHighDivergenceColor,
+    markerKey: 'oscHighDivergenceMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'oscHighDivergenceMarkerPrice',
+    show: (settings) => settings.showOscHighDivergencePoint,
+    size: (settings) => clampMarkerSize(settings.oscHighDivergenceSize, defaultMmfIndicatorSettings.oscHighDivergenceSize),
+    symbol: (settings) => settings.oscHighDivergenceSymbol || defaultMmfIndicatorSettings.oscHighDivergenceSymbol,
+    textBaseline: 'bottom',
+    title: 'Osc High Divergence ',
+    yDirection: -1,
+  },
+  {
+    color: (settings) => settings.trendDownReturnColor || defaultMmfIndicatorSettings.trendDownReturnColor,
+    markerKey: 'trendDownReturnMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'trendDownReturnMarkerPrice',
+    show: (settings) => settings.showTrendDownReturnPoint,
+    size: (settings) => clampMarkerSize(settings.trendDownReturnSize, defaultMmfIndicatorSettings.trendDownReturnSize),
+    symbol: (settings) => settings.trendDownReturnSymbol || defaultMmfIndicatorSettings.trendDownReturnSymbol,
+    textBaseline: 'bottom',
+    title: 'Trend Down Return ',
+    yDirection: -1,
+  },
+  {
+    color: (settings) => settings.trendUpReturnColor || defaultMmfIndicatorSettings.trendUpReturnColor,
+    markerKey: 'trendUpReturnMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'trendUpReturnMarkerPrice',
+    show: (settings) => settings.showTrendUpReturnPoint,
+    size: (settings) => clampMarkerSize(settings.trendUpReturnSize, defaultMmfIndicatorSettings.trendUpReturnSize),
+    symbol: (settings) => settings.trendUpReturnSymbol || defaultMmfIndicatorSettings.trendUpReturnSymbol,
+    textBaseline: 'top',
+    title: 'Trend Up Return ',
+    yDirection: 1,
+  },
+  {
+    color: (settings) => settings.trendDownDivergenceColor || defaultMmfIndicatorSettings.trendDownDivergenceColor,
+    markerKey: 'trendDownDivergenceMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'trendDownDivergenceMarkerPrice',
+    show: (settings) => settings.showTrendDownDivergencePoint,
+    size: (settings) => clampMarkerSize(settings.trendDownDivergenceSize, defaultMmfIndicatorSettings.trendDownDivergenceSize),
+    symbol: (settings) => settings.trendDownDivergenceSymbol || defaultMmfIndicatorSettings.trendDownDivergenceSymbol,
+    textBaseline: 'top',
+    title: 'Trend Down Divergence ',
+    yDirection: 1,
+  },
+  {
+    color: (settings) => settings.trendUpDivergenceColor || defaultMmfIndicatorSettings.trendUpDivergenceColor,
+    markerKey: 'trendUpDivergenceMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'trendUpDivergenceMarkerPrice',
+    show: (settings) => settings.showTrendUpDivergencePoint,
+    size: (settings) => clampMarkerSize(settings.trendUpDivergenceSize, defaultMmfIndicatorSettings.trendUpDivergenceSize),
+    symbol: (settings) => settings.trendUpDivergenceSymbol || defaultMmfIndicatorSettings.trendUpDivergenceSymbol,
+    textBaseline: 'bottom',
+    title: 'Trend Up Divergence ',
+    yDirection: -1,
+  },
+  {
+    color: (settings) => settings.bottomDivergenceColor || defaultMmfIndicatorSettings.bottomDivergenceColor,
+    markerKey: 'bottomDivergenceMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'bottomDivergenceMarkerPrice',
+    show: (settings) => settings.showBottomDivergencePoint,
+    size: (settings) => clampMarkerSize(settings.bottomDivergenceSize, defaultMmfIndicatorSettings.bottomDivergenceSize),
+    symbol: (settings) => settings.bottomDivergenceSymbol || defaultMmfIndicatorSettings.bottomDivergenceSymbol,
+    textBaseline: 'top',
+    title: 'Bottom Divergence ',
+    yDirection: 1,
+  },
+  {
+    color: (settings) => settings.topDivergenceColor || defaultMmfIndicatorSettings.topDivergenceColor,
+    markerKey: 'topDivergenceMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'topDivergenceMarkerPrice',
+    show: (settings) => settings.showTopDivergencePoint,
+    size: (settings) => clampMarkerSize(settings.topDivergenceSize, defaultMmfIndicatorSettings.topDivergenceSize),
+    symbol: (settings) => settings.topDivergenceSymbol || defaultMmfIndicatorSettings.topDivergenceSymbol,
+    textBaseline: 'bottom',
+    title: 'Top Divergence ',
+    yDirection: -1,
+  },
+  {
+    color: (settings) => settings.upBreakConfirmColor || defaultMmfIndicatorSettings.upBreakConfirmColor,
+    markerKey: 'upBreakConfirmMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'upBreakConfirmMarkerPrice',
+    show: (settings) => settings.showUpBreakConfirmPoint,
+    size: (settings) => clampMarkerSize(settings.upBreakConfirmSize, defaultMmfIndicatorSettings.upBreakConfirmSize),
+    symbol: (settings) => settings.upBreakConfirmSymbol || defaultMmfIndicatorSettings.upBreakConfirmSymbol,
+    textBaseline: 'bottom',
+    title: 'Up Break Confirm ',
+    yDirection: -1,
+  },
+  {
+    color: (settings) => settings.downBreakConfirmColor || defaultMmfIndicatorSettings.downBreakConfirmColor,
+    markerKey: 'downBreakConfirmMarker',
+    offsetMultiplier: 1.15,
+    priceKey: 'downBreakConfirmMarkerPrice',
+    show: (settings) => settings.showDownBreakConfirmPoint,
+    size: (settings) => clampMarkerSize(settings.downBreakConfirmSize, defaultMmfIndicatorSettings.downBreakConfirmSize),
+    symbol: (settings) => settings.downBreakConfirmSymbol || defaultMmfIndicatorSettings.downBreakConfirmSymbol,
+    textBaseline: 'top',
+    title: 'Down Break Confirm ',
     yDirection: 1,
   },
 ]
@@ -583,6 +724,354 @@ function hasVdoBelowThresholdInCenteredWindow(
   return false
 }
 
+function findPreviousExtremePoint(outputRows: MmfIndicatorRow[], index: number) {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    if (Number.isFinite(outputRows[cursor]?.highMarker)) return { index: cursor, type: 'high' as const }
+    if (Number.isFinite(outputRows[cursor]?.lowMarker)) return { index: cursor, type: 'low' as const }
+  }
+  return null
+}
+
+function findPreviousMmfPoint(outputRows: MmfIndicatorRow[], index: number) {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const row = outputRows[cursor]
+    if (rowHasAnyMmfPoint(row)) return { index: cursor, row }
+  }
+  return null
+}
+
+function hasDirectionMarkerInPreviousMmfPoints(
+  outputRows: MmfIndicatorRow[],
+  index: number,
+  markerKey: 'downBreakMarker' | 'upBreakMarker',
+  maxPoints: number,
+) {
+  let pointsSeen = 0
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const row = outputRows[cursor]
+    if (!rowHasAnyMmfPoint(row)) continue
+    pointsSeen += 1
+    if (Number.isFinite(row?.[markerKey])) return true
+    if (pointsSeen >= maxPoints) return false
+  }
+  return false
+}
+
+function hasAnyVdoAboveThresholdInCenteredWindow(
+  vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
+  centerIndex: number,
+  radius: number,
+  threshold: number,
+) {
+  if (!Number.isFinite(threshold)) return false
+  const from = Math.max(0, centerIndex - radius)
+  const to = Math.min(vdoRows.length - 1, centerIndex + radius)
+  for (let index = from; index <= to; index += 1) {
+    const value = Number(vdoRows[index]?.vdo)
+    if (Number.isFinite(value) && value > threshold) return true
+  }
+  return false
+}
+
+function hasAnyVdoBelowThresholdInCenteredWindow(
+  vdoRows: ReturnType<typeof calculateTradingViewVdoRows>,
+  centerIndex: number,
+  radius: number,
+  threshold: number,
+) {
+  if (!Number.isFinite(threshold)) return false
+  const from = Math.max(0, centerIndex - radius)
+  const to = Math.min(vdoRows.length - 1, centerIndex + radius)
+  for (let index = from; index <= to; index += 1) {
+    const value = Number(vdoRows[index]?.vdo)
+    if (Number.isFinite(value) && value < threshold) return true
+  }
+  return false
+}
+
+function applyOscillationDivergenceMarkers(vdoRows: ReturnType<typeof calculateTradingViewVdoRows>, outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
+  if (!settings.showOscLowDivergencePoint && !settings.showOscHighDivergencePoint) return
+  const markerWindowRadius = 7
+  const lowThreshold = Number(settings.oscLowDivergenceVdoThreshold)
+  const highThreshold = Number(settings.oscHighDivergenceVdoThreshold)
+
+  outputRows.forEach((row, index) => {
+    if (settings.showOscLowDivergencePoint && Number.isFinite(row.lowMarker)) {
+      const previousExtreme = findPreviousExtremePoint(outputRows, index)
+      if (
+        previousExtreme?.type === 'high'
+        && !Number.isFinite(outputRows[previousExtreme.index]?.trendUpMarker)
+        && hasAnyVdoAboveThresholdInCenteredWindow(vdoRows, index, markerWindowRadius, lowThreshold)
+      ) {
+        row.oscLowDivergenceMarker = row.lowMarker
+        row.oscLowDivergenceMarkerPrice = row.lowMarkerPrice ?? row.lowMarker
+      }
+    }
+
+    if (settings.showOscHighDivergencePoint && Number.isFinite(row.highMarker)) {
+      const previousExtreme = findPreviousExtremePoint(outputRows, index)
+      if (
+        previousExtreme?.type === 'low'
+        && !Number.isFinite(outputRows[previousExtreme.index]?.trendDownMarker)
+        && hasAnyVdoBelowThresholdInCenteredWindow(vdoRows, index, markerWindowRadius, highThreshold)
+      ) {
+        row.oscHighDivergenceMarker = row.highMarker
+        row.oscHighDivergenceMarkerPrice = row.highMarkerPrice ?? row.highMarker
+      }
+    }
+  })
+}
+
+function calculateMmfReturnMa120Rows(realRows: KLineData[]) {
+  return calculateTradingViewMaShiftRows(realRows, {
+    ...defaultMaIndicatorSettings,
+    length: 120,
+    source: 'hl2',
+    type: 'sma',
+  }).map((row) => row.ma)
+}
+
+function rowHasAnyMmfPoint(row: MmfIndicatorRow | undefined) {
+  if (!row) return false
+  return (
+    Number.isFinite(row.highMarker)
+    || Number.isFinite(row.lowMarker)
+    || Number.isFinite(row.bottomDivergenceMarker)
+    || Number.isFinite(row.upBreakConfirmMarker)
+    || Number.isFinite(row.downBreakConfirmMarker)
+    || Number.isFinite(row.reboundMarker)
+    || Number.isFinite(row.pullbackMarker)
+    || Number.isFinite(row.resistanceMarker)
+    || Number.isFinite(row.supportMarker)
+    || Number.isFinite(row.topDivergenceMarker)
+    || Number.isFinite(row.upBreakMarker)
+    || Number.isFinite(row.downBreakMarker)
+    || Number.isFinite(row.trendDownMarker)
+    || Number.isFinite(row.trendUpMarker)
+    || Number.isFinite(row.trendDownReturnMarker)
+    || Number.isFinite(row.trendUpReturnMarker)
+    || Number.isFinite(row.trendDownDivergenceMarker)
+    || Number.isFinite(row.trendUpDivergenceMarker)
+    || Number.isFinite(row.oscLowDivergenceMarker)
+    || Number.isFinite(row.oscHighDivergenceMarker)
+  )
+}
+
+function isPreviousMmfPointMarker(
+  outputRows: MmfIndicatorRow[],
+  index: number,
+  markerKey: 'trendDownMarker' | 'trendDownReturnMarker' | 'trendUpMarker' | 'trendUpReturnMarker',
+) {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const row = outputRows[cursor]
+    if (Number.isFinite(row?.[markerKey])) return true
+    if (rowHasAnyMmfPoint(row)) return false
+  }
+  return false
+}
+
+function isPreviousMmfPointOneOfMarkers(
+  outputRows: MmfIndicatorRow[],
+  index: number,
+  markerKeys: Array<keyof MmfIndicatorRow>,
+) {
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const row = outputRows[cursor]
+    if (markerKeys.some((markerKey) => Number.isFinite(row?.[markerKey]))) return true
+    if (rowHasAnyMmfPoint(row)) return false
+  }
+  return false
+}
+
+function getTrendReturnAllowedDistance(morganSegmentByIndex: Array<MorganRangeSegment | null>, index: number, ratioInput: unknown) {
+  const segment = morganSegmentByIndex[index]
+  const ratio = Number(ratioInput)
+  if (!segment || !Number.isFinite(segment.range) || !Number.isFinite(ratio)) return null
+  const middleHeight = segment.range * 0.118 * 2
+  const allowedDistance = middleHeight * Math.max(0, ratio)
+  return Number.isFinite(allowedDistance) ? allowedDistance : null
+}
+
+function isTrendReturnDistanceMatched(
+  markerPrice: unknown,
+  ma120Rows: Array<number | undefined>,
+  morganSegmentByIndex: Array<MorganRangeSegment | null>,
+  index: number,
+  ratioInput: unknown,
+  direction: 'down' | 'up',
+) {
+  const price = Number(markerPrice)
+  const ma120 = Number(ma120Rows[index])
+  const allowedDistance = getTrendReturnAllowedDistance(morganSegmentByIndex, index, ratioInput)
+  if (!Number.isFinite(price) || !Number.isFinite(ma120) || allowedDistance == null) return false
+  if (direction === 'down' && price >= ma120) return true
+  if (direction === 'up' && price <= ma120) return true
+  return Math.abs(price - ma120) <= allowedDistance
+}
+
+function applyTrendReturnMarkers(realRows: KLineData[], vdoRows: ReturnType<typeof calculateTradingViewVdoRows>, outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
+  if (!settings.showTrendDownReturnPoint && !settings.showTrendUpReturnPoint) return
+  const ma120Rows = calculateMmfReturnMa120Rows(realRows)
+  const morganSegmentByIndex = createMorganSegmentByIndex(realRows.length, calculateMorganRangeSegments(realRows))
+  const markerWindowRadius = 7
+
+  outputRows.forEach((row, index) => {
+    if (settings.showTrendDownReturnPoint) {
+      const markerPrice = Number.isFinite(row.reboundMarker) ? row.reboundMarker : row.highMarker
+      if (
+        Number.isFinite(markerPrice)
+        && !isPreviousMmfPointOneOfMarkers(outputRows, index, ['trendDownDivergenceMarker'])
+        && isPreviousMmfPointMarker(outputRows, index, 'trendDownMarker')
+        && isTrendReturnDistanceMatched(markerPrice, ma120Rows, morganSegmentByIndex, index, settings.trendDownReturnMorganRatio, 'down')
+        && areVdoRowsAtOrBelowThreshold(vdoRows, index, markerWindowRadius, Number(settings.trendDownReturnVdoThreshold))
+      ) {
+        row.trendDownReturnMarker = markerPrice
+        row.trendDownReturnMarkerPrice = markerPrice
+      }
+    }
+
+    if (settings.showTrendUpReturnPoint) {
+      const markerPrice = Number.isFinite(row.pullbackMarker) ? row.pullbackMarker : row.lowMarker
+      if (
+        Number.isFinite(markerPrice)
+        && !isPreviousMmfPointOneOfMarkers(outputRows, index, ['trendUpDivergenceMarker'])
+        && isPreviousMmfPointMarker(outputRows, index, 'trendUpMarker')
+        && isTrendReturnDistanceMatched(markerPrice, ma120Rows, morganSegmentByIndex, index, settings.trendUpReturnMorganRatio, 'up')
+        && areVdoRowsAtOrAboveThreshold(vdoRows, index, markerWindowRadius, Number(settings.trendUpReturnVdoThreshold))
+      ) {
+        row.trendUpReturnMarker = markerPrice
+        row.trendUpReturnMarkerPrice = markerPrice
+      }
+    }
+  })
+}
+
+function applyTrendDivergenceMarkers(vdoRows: ReturnType<typeof calculateTradingViewVdoRows>, outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
+  if (!settings.showTrendDownDivergencePoint && !settings.showTrendUpDivergencePoint) return
+  const markerWindowRadius = 7
+
+  outputRows.forEach((row, index) => {
+    if (
+      settings.showTrendDownDivergencePoint
+      && Number.isFinite(row.lowMarker)
+      && isPreviousMmfPointMarker(outputRows, index, 'trendDownReturnMarker')
+      && areVdoRowsAtOrBelowThreshold(vdoRows, index, markerWindowRadius, Number(settings.trendDownDivergenceVdoThreshold))
+    ) {
+      row.trendDownDivergenceMarker = row.lowMarker
+      row.trendDownDivergenceMarkerPrice = row.lowMarkerPrice ?? row.lowMarker
+    }
+
+    if (
+      settings.showTrendUpDivergencePoint
+      && Number.isFinite(row.highMarker)
+      && isPreviousMmfPointMarker(outputRows, index, 'trendUpReturnMarker')
+      && areVdoRowsAtOrAboveThreshold(vdoRows, index, markerWindowRadius, Number(settings.trendUpDivergenceVdoThreshold))
+    ) {
+      row.trendUpDivergenceMarker = row.highMarker
+      row.trendUpDivergenceMarkerPrice = row.highMarkerPrice ?? row.highMarker
+    }
+  })
+}
+
+function applyTopBottomDivergenceMarkers(realRows: KLineData[], vdoRows: ReturnType<typeof calculateTradingViewVdoRows>, outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
+  if (!settings.showBottomDivergencePoint && !settings.showTopDivergencePoint) return
+  const dpoRows = calculateTradingViewDpoRows(realRows, defaultDpoIndicatorSettings)
+  const markerWindowRadius = 7
+  const bottomThreshold = Number(settings.bottomDivergenceVdoThreshold)
+  const topThreshold = Number(settings.topDivergenceVdoThreshold)
+
+  outputRows.forEach((row, index) => {
+    if (settings.showBottomDivergencePoint && Number.isFinite(row.lowMarker)) {
+      const previousPoint = findPreviousMmfPoint(outputRows, index)
+      const previousPrice = Number(previousPoint?.row.trendDownMarker)
+      const currentPrice = Number(row.lowMarker)
+      const previousDpo = Number(previousPoint ? dpoRows[previousPoint.index]?.dpo : undefined)
+      const currentDpo = Number(dpoRows[index]?.dpo)
+      if (
+        previousPoint
+        && Number.isFinite(previousPrice)
+        && currentPrice < previousPrice
+        && Number.isFinite(previousDpo)
+        && Number.isFinite(currentDpo)
+        && currentDpo >= previousDpo
+        && areVdoRowsAtOrBelowThreshold(vdoRows, index, markerWindowRadius, bottomThreshold)
+      ) {
+        row.bottomDivergenceMarker = row.lowMarker
+        row.bottomDivergenceMarkerPrice = row.lowMarkerPrice ?? row.lowMarker
+      }
+    }
+
+    if (settings.showTopDivergencePoint && Number.isFinite(row.highMarker)) {
+      const previousPoint = findPreviousMmfPoint(outputRows, index)
+      const previousPrice = Number(previousPoint?.row.trendUpMarker)
+      const currentPrice = Number(row.highMarker)
+      const previousDpo = Number(previousPoint ? dpoRows[previousPoint.index]?.dpo : undefined)
+      const currentDpo = Number(dpoRows[index]?.dpo)
+      if (
+        previousPoint
+        && Number.isFinite(previousPrice)
+        && currentPrice > previousPrice
+        && Number.isFinite(previousDpo)
+        && Number.isFinite(currentDpo)
+        && currentDpo <= previousDpo
+        && areVdoRowsAtOrAboveThreshold(vdoRows, index, markerWindowRadius, topThreshold)
+      ) {
+        row.topDivergenceMarker = row.highMarker
+        row.topDivergenceMarkerPrice = row.highMarkerPrice ?? row.highMarker
+      }
+    }
+  })
+}
+
+function applyBreakConfirmMarkers(vdoRows: ReturnType<typeof calculateTradingViewVdoRows>, outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
+  if (!settings.showUpBreakConfirmPoint && !settings.showDownBreakConfirmPoint) return
+  const markerWindowRadius = 7
+  const upThreshold = Number(settings.upBreakConfirmVdoThreshold)
+  const downThreshold = Number(settings.downBreakConfirmVdoThreshold)
+
+  outputRows.forEach((row, index) => {
+    if (settings.showUpBreakConfirmPoint && Number.isFinite(row.highMarker)) {
+      if (
+        hasDirectionMarkerInPreviousMmfPoints(outputRows, index, 'upBreakMarker', 2)
+        && hasAnyVdoAboveThresholdInCenteredWindow(vdoRows, index, markerWindowRadius, upThreshold)
+      ) {
+        row.upBreakConfirmMarker = row.highMarker
+        row.upBreakConfirmMarkerPrice = row.highMarkerPrice ?? row.highMarker
+      }
+    }
+
+    if (settings.showDownBreakConfirmPoint && Number.isFinite(row.lowMarker)) {
+      if (
+        hasDirectionMarkerInPreviousMmfPoints(outputRows, index, 'downBreakMarker', 2)
+        && hasAnyVdoBelowThresholdInCenteredWindow(vdoRows, index, markerWindowRadius, downThreshold)
+      ) {
+        row.downBreakConfirmMarker = row.lowMarker
+        row.downBreakConfirmMarkerPrice = row.lowMarkerPrice ?? row.lowMarker
+      }
+    }
+  })
+}
+
+function removeTrendReturnMarkersAfterTrendDivergence(outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
+  if (!settings.showTrendDownReturnPoint && !settings.showTrendUpReturnPoint) return
+  outputRows.forEach((row, index) => {
+    if (
+      Number.isFinite(row.trendDownReturnMarker)
+      && isPreviousMmfPointOneOfMarkers(outputRows, index, ['trendDownDivergenceMarker'])
+    ) {
+      delete row.trendDownReturnMarker
+      delete row.trendDownReturnMarkerPrice
+    }
+    if (
+      Number.isFinite(row.trendUpReturnMarker)
+      && isPreviousMmfPointOneOfMarkers(outputRows, index, ['trendUpDivergenceMarker'])
+    ) {
+      delete row.trendUpReturnMarker
+      delete row.trendUpReturnMarkerPrice
+    }
+  })
+}
+
 function applyReboundMarkers(realRows: KLineData[], stochRows: ReturnType<typeof calculateTradingViewStochRows>, vdoRows: ReturnType<typeof calculateTradingViewVdoRows>, outputRows: MmfIndicatorRow[], settings: MmfIndicatorSettings) {
   if (!settings.showReboundPoint) return
   const confirmDistance = 7
@@ -705,6 +1194,16 @@ function applyVdoDerivedMarkers(realRows: KLineData[], outputRows: MmfIndicatorR
     && !settings.showTrendUpPoint
     && !settings.showReboundPoint
     && !settings.showPullbackPoint
+    && !settings.showOscLowDivergencePoint
+    && !settings.showOscHighDivergencePoint
+    && !settings.showTrendDownReturnPoint
+    && !settings.showTrendUpReturnPoint
+    && !settings.showTrendDownDivergencePoint
+    && !settings.showTrendUpDivergencePoint
+    && !settings.showBottomDivergencePoint
+    && !settings.showTopDivergencePoint
+    && !settings.showUpBreakConfirmPoint
+    && !settings.showDownBreakConfirmPoint
   ) return
   const vdoRows = calculateTradingViewVdoRows(realRows, mmfInternalVdoSettings)
   const stochRows = settings.showReboundPoint || settings.showPullbackPoint ? calculateTradingViewStochRows(realRows, mmfInternalStochSettings) : []
@@ -765,6 +1264,12 @@ function applyVdoDerivedMarkers(realRows: KLineData[], outputRows: MmfIndicatorR
   })
   applyReboundMarkers(realRows, stochRows, vdoRows, outputRows, settings)
   applyPullbackMarkers(realRows, stochRows, vdoRows, outputRows, settings)
+  applyOscillationDivergenceMarkers(vdoRows, outputRows, settings)
+  applyTrendReturnMarkers(realRows, vdoRows, outputRows, settings)
+  applyTrendDivergenceMarkers(vdoRows, outputRows, settings)
+  removeTrendReturnMarkersAfterTrendDivergence(outputRows, settings)
+  applyTopBottomDivergenceMarkers(realRows, vdoRows, outputRows, settings)
+  applyBreakConfirmMarkers(vdoRows, outputRows, settings)
 }
 
 function createMmfRowsFromMarkers(realRows: KLineData[], markers: MmfIndicatorMarker[], settings: MmfIndicatorSettings): MmfIndicatorRow[] {
@@ -840,6 +1345,16 @@ function createRemoteMmfSignature(realRows: KLineData[], settings: MmfIndicatorS
     settings.showTrendUpPoint ? 'TU1' : 'TU0',
     settings.showReboundPoint ? 'RB1' : 'RB0',
     settings.showPullbackPoint ? 'PB1' : 'PB0',
+    settings.showOscLowDivergencePoint ? 'OLD1' : 'OLD0',
+    settings.showOscHighDivergencePoint ? 'OHD1' : 'OHD0',
+    settings.showTrendDownReturnPoint ? 'TDR1' : 'TDR0',
+    settings.showTrendUpReturnPoint ? 'TUR1' : 'TUR0',
+    settings.showTrendDownDivergencePoint ? 'TDD1' : 'TDD0',
+    settings.showTrendUpDivergencePoint ? 'TUD1' : 'TUD0',
+    settings.showBottomDivergencePoint ? 'BD1' : 'BD0',
+    settings.showTopDivergencePoint ? 'TPD1' : 'TPD0',
+    settings.showUpBreakConfirmPoint ? 'UBC1' : 'UBC0',
+    settings.showDownBreakConfirmPoint ? 'DBC1' : 'DBC0',
     settings.dpoValue,
     settings.highMorganRatio,
     settings.highOffsetPercent,
@@ -858,6 +1373,18 @@ function createRemoteMmfSignature(realRows: KLineData[], settings: MmfIndicatorS
     settings.trendUpVdoUpper,
     settings.reboundVdoThreshold,
     settings.pullbackVdoThreshold,
+    settings.oscLowDivergenceVdoThreshold,
+    settings.oscHighDivergenceVdoThreshold,
+    settings.trendDownReturnMorganRatio,
+    settings.trendUpReturnMorganRatio,
+    settings.trendDownReturnVdoThreshold,
+    settings.trendUpReturnVdoThreshold,
+    settings.trendDownDivergenceVdoThreshold,
+    settings.trendUpDivergenceVdoThreshold,
+    settings.bottomDivergenceVdoThreshold,
+    settings.topDivergenceVdoThreshold,
+    settings.upBreakConfirmVdoThreshold,
+    settings.downBreakConfirmVdoThreshold,
     settings.upBreakSymbol,
     settings.upBreakSize,
     settings.upBreakColor,
@@ -882,6 +1409,36 @@ function createRemoteMmfSignature(realRows: KLineData[], settings: MmfIndicatorS
     settings.pullbackSymbol,
     settings.pullbackSize,
     settings.pullbackColor,
+    settings.oscLowDivergenceSymbol,
+    settings.oscLowDivergenceSize,
+    settings.oscLowDivergenceColor,
+    settings.oscHighDivergenceSymbol,
+    settings.oscHighDivergenceSize,
+    settings.oscHighDivergenceColor,
+    settings.trendDownReturnSymbol,
+    settings.trendDownReturnSize,
+    settings.trendDownReturnColor,
+    settings.trendUpReturnSymbol,
+    settings.trendUpReturnSize,
+    settings.trendUpReturnColor,
+    settings.trendDownDivergenceSymbol,
+    settings.trendDownDivergenceSize,
+    settings.trendDownDivergenceColor,
+    settings.trendUpDivergenceSymbol,
+    settings.trendUpDivergenceSize,
+    settings.trendUpDivergenceColor,
+    settings.bottomDivergenceSymbol,
+    settings.bottomDivergenceSize,
+    settings.bottomDivergenceColor,
+    settings.topDivergenceSymbol,
+    settings.topDivergenceSize,
+    settings.topDivergenceColor,
+    settings.upBreakConfirmSymbol,
+    settings.upBreakConfirmSize,
+    settings.upBreakConfirmColor,
+    settings.downBreakConfirmSymbol,
+    settings.downBreakConfirmSize,
+    settings.downBreakConfirmColor,
     context.stochLength,
     context.stochKSmoothing,
     context.stochDSmoothing,
@@ -981,28 +1538,53 @@ function drawMmfMarkers({
   const settings = normalizeMmfSettings(indicator.calcParams[0] as Partial<MmfIndicatorSettings>)
   const start = Math.max(0, Math.floor(visibleRange.from) - 2)
   const end = Math.min(indicator.result.length - 1, Math.ceil(visibleRange.to) + 2)
+  const visibleSpecs = mmfMarkerSpecs.filter((spec) => spec.show(settings))
 
-  mmfMarkerSpecs.forEach((spec) => {
-    if (!spec.show(settings)) return
-    const size = spec.size(settings)
-    const offset = spec.yDirection * Math.max(4, Math.round(size * spec.offsetMultiplier))
-
-    ctx.save()
-    ctx.fillStyle = spec.color(settings)
-    ctx.font = `${size}px Arial, Tahoma, 'Segoe UI Symbol', 'Segoe UI', sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = spec.textBaseline
-
-    for (let index = start; index <= end; index += 1) {
-      const marker = indicator.result[index]?.[spec.markerKey]
-      if (!Number.isFinite(marker)) continue
+  for (let index = start; index <= end; index += 1) {
+    const row = indicator.result[index]
+    if (!row) continue
+    const directionCounts: Record<-1 | 1, number> = { [-1]: 0, 1: 0 }
+    const directionBaseOffsets: Record<-1 | 1, number> = { [-1]: 0, 1: 0 }
+    visibleSpecs.forEach((spec) => {
+      const marker = row[spec.markerKey]
+      if (!Number.isFinite(marker)) return
+      const size = spec.size(settings)
+      const symbol = spec.symbol(settings)
+      const stackIndex = directionCounts[spec.yDirection]
+      directionCounts[spec.yDirection] += 1
+      if (directionBaseOffsets[spec.yDirection] === 0) {
+        directionBaseOffsets[spec.yDirection] = resolveMmfBaseMarkerOffset(size, spec.offsetMultiplier, symbol)
+      }
+      const offset = resolveMmfMarkerOffset(size, spec.yDirection, stackIndex, directionBaseOffsets[spec.yDirection])
       const x = xAxis.convertToPixel(index)
       const y = yAxis.convertToPixel(marker as number) + offset
-      ctx.fillText(spec.symbol(settings), x, y)
-    }
 
-    ctx.restore()
-  })
+      ctx.save()
+      ctx.fillStyle = spec.color(settings)
+      ctx.font = `${size}px Arial, Tahoma, 'Segoe UI Symbol', 'Segoe UI', sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = spec.textBaseline
+      ctx.fillText(symbol, x, y)
+      ctx.restore()
+    })
+  }
+}
+
+function resolveMmfSymbolOffsetScale(symbol: string) {
+  if (['\u25cf', '\u25cb', '\u25a0', '\u25a1'].includes(symbol)) return 0.78
+  return 1
+}
+
+function resolveMmfBaseMarkerOffset(size: number, offsetMultiplier: number, symbol: string) {
+  const scale = resolveMmfSymbolOffsetScale(symbol)
+  return Math.max(4, Math.round(size * offsetMultiplier * scale))
+}
+
+function resolveMmfMarkerOffset(size: number, direction: -1 | 1, stackIndex: number, baseOffset: number) {
+  const stackOffset = stackIndex <= 1
+    ? Math.round(size * 0.9 * stackIndex)
+    : Math.round(size * (0.9 + 0.68 * (stackIndex - 1)))
+  return direction * (baseOffset + stackOffset)
 }
 
 function createMmfTooltipValues(

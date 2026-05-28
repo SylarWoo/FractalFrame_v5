@@ -9,6 +9,7 @@ function resolveMmfSymbolSize(symbol: string): SymbolSelectSize {
   if (['\u25b2', '\u25b3', '\u25bc', '\u25bd'].includes(symbol)) return 'triangle'
   if (['\u25c6', '\u25c7'].includes(symbol)) return 'diamond'
   if (['\u25cf', '\u25cb'].includes(symbol)) return 'circle'
+  if (['\u2605', '\u2606'].includes(symbol)) return 'star'
   return 'small'
 }
 
@@ -162,6 +163,144 @@ export function MmfInputPanel({
             threshold={settings.pullbackVdoThreshold}
           />
         </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showOscLowDivergencePoint}
+              label={'\u9707\u8361\u4f4e\u70b9 - \u52a8\u91cf\u80cc\u79bb'}
+              onChange={(showOscLowDivergencePoint) => patch({ showOscLowDivergencePoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(oscLowDivergenceVdoThreshold) => patch({ oscLowDivergenceVdoThreshold })}
+            threshold={settings.oscLowDivergenceVdoThreshold}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showOscHighDivergencePoint}
+              label={'\u9707\u8361\u9ad8\u70b9 - \u52a8\u91cf\u80cc\u79bb'}
+              onChange={(showOscHighDivergencePoint) => patch({ showOscHighDivergencePoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(oscHighDivergenceVdoThreshold) => patch({ oscHighDivergenceVdoThreshold })}
+            threshold={settings.oscHighDivergenceVdoThreshold}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showTrendDownReturnPoint}
+              label={'\u4e0b\u964d\u8d8b\u52bf-\u56de\u5f52\u70b9'}
+              onChange={(showTrendDownReturnPoint) => patch({ showTrendDownReturnPoint })}
+            />
+          </div>
+          <MmfMorganOnlyRow
+            max={1}
+            min={0}
+            onChange={(trendDownReturnMorganRatio) => patch({ trendDownReturnMorganRatio })}
+            onVdoThresholdChange={(trendDownReturnVdoThreshold) => patch({ trendDownReturnVdoThreshold })}
+            value={settings.trendDownReturnMorganRatio}
+            vdoThreshold={settings.trendDownReturnVdoThreshold}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showTrendUpReturnPoint}
+              label={'\u4e0a\u5347\u8d8b\u52bf-\u56de\u5f52\u70b9'}
+              onChange={(showTrendUpReturnPoint) => patch({ showTrendUpReturnPoint })}
+            />
+          </div>
+          <MmfMorganOnlyRow
+            max={1}
+            min={0}
+            onChange={(trendUpReturnMorganRatio) => patch({ trendUpReturnMorganRatio })}
+            onVdoThresholdChange={(trendUpReturnVdoThreshold) => patch({ trendUpReturnVdoThreshold })}
+            value={settings.trendUpReturnMorganRatio}
+            vdoThreshold={settings.trendUpReturnVdoThreshold}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showTrendDownDivergencePoint}
+              label={'\u4e0b\u964d\u8d8b\u52bf - \u52a8\u91cf\u80cc\u79bb'}
+              onChange={(showTrendDownDivergencePoint) => patch({ showTrendDownDivergencePoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(trendDownDivergenceVdoThreshold) => patch({ trendDownDivergenceVdoThreshold })}
+            threshold={settings.trendDownDivergenceVdoThreshold}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showTrendUpDivergencePoint}
+              label={'\u4e0a\u5347\u8d8b\u52bf - \u52a8\u91cf\u80cc\u79bb'}
+              onChange={(showTrendUpDivergencePoint) => patch({ showTrendUpDivergencePoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(trendUpDivergenceVdoThreshold) => patch({ trendUpDivergenceVdoThreshold })}
+            threshold={settings.trendUpDivergenceVdoThreshold}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showBottomDivergencePoint}
+              label={'\u5e95\u80cc\u79bb'}
+              onChange={(showBottomDivergencePoint) => patch({ showBottomDivergencePoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(bottomDivergenceVdoThreshold) => patch({ bottomDivergenceVdoThreshold })}
+            threshold={settings.bottomDivergenceVdoThreshold}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showTopDivergencePoint}
+              label={'\u9876\u80cc\u79bb'}
+              onChange={(showTopDivergencePoint) => patch({ showTopDivergencePoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(topDivergenceVdoThreshold) => patch({ topDivergenceVdoThreshold })}
+            threshold={settings.topDivergenceVdoThreshold}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showUpBreakConfirmPoint}
+              label={'\u5411\u4e0a\u7a81\u7834\u786e\u8ba4\u70b9'}
+              onChange={(showUpBreakConfirmPoint) => patch({ showUpBreakConfirmPoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(upBreakConfirmVdoThreshold) => patch({ upBreakConfirmVdoThreshold })}
+            threshold={settings.upBreakConfirmVdoThreshold}
+          />
+        </div>
+        <div className="ff-indicators-mmf-panel-v1__signal-block">
+          <div className="ff-indicators-mmf-panel-v1__high-row">
+            <CheckControl
+              checked={settings.showDownBreakConfirmPoint}
+              label={'\u5411\u4e0b\u7a81\u7834\u786e\u8ba4\u70b9'}
+              onChange={(showDownBreakConfirmPoint) => patch({ showDownBreakConfirmPoint })}
+            />
+          </div>
+          <MmfVdoThresholdRow
+            onThresholdChange={(downBreakConfirmVdoThreshold) => patch({ downBreakConfirmVdoThreshold })}
+            threshold={settings.downBreakConfirmVdoThreshold}
+          />
+        </div>
       </section>
     </div>
   )
@@ -229,6 +368,51 @@ function MmfVdoThresholdRow({
           parseValue={(value) => Number(value)}
           step={0.001}
           value={threshold}
+        />
+      </span>
+    </div>
+  )
+}
+
+function MmfMorganOnlyRow({
+  max,
+  min,
+  onChange,
+  onVdoThresholdChange,
+  value,
+  vdoThreshold,
+}: {
+  max: number
+  min: number
+  onChange: (value: number) => void
+  onVdoThresholdChange: (value: number) => void
+  value: number
+  vdoThreshold: number
+}) {
+  return (
+    <div className="ff-indicators-mmf-panel-v1__morgan-only-grid">
+      <span className="ff-indicators-mmf-panel-v1__label">{'\u533a\u95f4\u6bd4\u4f8b'}</span>
+      <span className="ff-indicators-mmf-panel-v1__morgan-input">
+        <NumberBox
+          formatValue={(numberValue) => numberValue.toFixed(3)}
+          max={max}
+          min={min}
+          onChange={onChange}
+          parseValue={(inputValue) => Number(inputValue)}
+          step={0.001}
+          value={Number(value)}
+        />
+      </span>
+      <span className="ff-indicators-mmf-panel-v1__label">VDO</span>
+      <span className="ff-indicators-mmf-panel-v1__vdo-input">
+        <NumberBox
+          formatValue={(numberValue) => numberValue.toFixed(3)}
+          max={500}
+          min={-500}
+          onChange={onVdoThresholdChange}
+          parseValue={(inputValue) => Number(inputValue)}
+          step={0.001}
+          value={Number(vdoThreshold)}
         />
       </span>
     </div>
@@ -389,6 +573,96 @@ export function MmfStylePanel({
           size={settings.pullbackSize}
           symbol={settings.pullbackSymbol}
         />
+        <MmfMarkerStyleRow
+          color={settings.oscLowDivergenceColor}
+          label={'\u9707\u8361\u4f4e\u70b9 - \u52a8\u91cf\u80cc\u79bb'}
+          onColorChange={(oscLowDivergenceColor) => patch({ oscLowDivergenceColor })}
+          onSizeChange={(oscLowDivergenceSize) => patch({ oscLowDivergenceSize })}
+          onSymbolChange={(oscLowDivergenceSymbol) => patch({ oscLowDivergenceSymbol })}
+          size={settings.oscLowDivergenceSize}
+          symbol={settings.oscLowDivergenceSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.oscHighDivergenceColor}
+          label={'\u9707\u8361\u9ad8\u70b9 - \u52a8\u91cf\u80cc\u79bb'}
+          onColorChange={(oscHighDivergenceColor) => patch({ oscHighDivergenceColor })}
+          onSizeChange={(oscHighDivergenceSize) => patch({ oscHighDivergenceSize })}
+          onSymbolChange={(oscHighDivergenceSymbol) => patch({ oscHighDivergenceSymbol })}
+          size={settings.oscHighDivergenceSize}
+          symbol={settings.oscHighDivergenceSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.trendDownReturnColor}
+          label={'\u4e0b\u964d\u8d8b\u52bf-\u56de\u5f52\u70b9'}
+          onColorChange={(trendDownReturnColor) => patch({ trendDownReturnColor })}
+          onSizeChange={(trendDownReturnSize) => patch({ trendDownReturnSize })}
+          onSymbolChange={(trendDownReturnSymbol) => patch({ trendDownReturnSymbol })}
+          size={settings.trendDownReturnSize}
+          symbol={settings.trendDownReturnSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.trendUpReturnColor}
+          label={'\u4e0a\u5347\u8d8b\u52bf-\u56de\u5f52\u70b9'}
+          onColorChange={(trendUpReturnColor) => patch({ trendUpReturnColor })}
+          onSizeChange={(trendUpReturnSize) => patch({ trendUpReturnSize })}
+          onSymbolChange={(trendUpReturnSymbol) => patch({ trendUpReturnSymbol })}
+          size={settings.trendUpReturnSize}
+          symbol={settings.trendUpReturnSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.trendDownDivergenceColor}
+          label={'\u4e0b\u964d\u8d8b\u52bf - \u52a8\u91cf\u80cc\u79bb'}
+          onColorChange={(trendDownDivergenceColor) => patch({ trendDownDivergenceColor })}
+          onSizeChange={(trendDownDivergenceSize) => patch({ trendDownDivergenceSize })}
+          onSymbolChange={(trendDownDivergenceSymbol) => patch({ trendDownDivergenceSymbol })}
+          size={settings.trendDownDivergenceSize}
+          symbol={settings.trendDownDivergenceSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.trendUpDivergenceColor}
+          label={'\u4e0a\u5347\u8d8b\u52bf - \u52a8\u91cf\u80cc\u79bb'}
+          onColorChange={(trendUpDivergenceColor) => patch({ trendUpDivergenceColor })}
+          onSizeChange={(trendUpDivergenceSize) => patch({ trendUpDivergenceSize })}
+          onSymbolChange={(trendUpDivergenceSymbol) => patch({ trendUpDivergenceSymbol })}
+          size={settings.trendUpDivergenceSize}
+          symbol={settings.trendUpDivergenceSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.bottomDivergenceColor}
+          label={'\u5e95\u80cc\u79bb'}
+          onColorChange={(bottomDivergenceColor) => patch({ bottomDivergenceColor })}
+          onSizeChange={(bottomDivergenceSize) => patch({ bottomDivergenceSize })}
+          onSymbolChange={(bottomDivergenceSymbol) => patch({ bottomDivergenceSymbol })}
+          size={settings.bottomDivergenceSize}
+          symbol={settings.bottomDivergenceSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.topDivergenceColor}
+          label={'\u9876\u80cc\u79bb'}
+          onColorChange={(topDivergenceColor) => patch({ topDivergenceColor })}
+          onSizeChange={(topDivergenceSize) => patch({ topDivergenceSize })}
+          onSymbolChange={(topDivergenceSymbol) => patch({ topDivergenceSymbol })}
+          size={settings.topDivergenceSize}
+          symbol={settings.topDivergenceSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.upBreakConfirmColor}
+          label={'\u5411\u4e0a\u7a81\u7834\u786e\u8ba4\u70b9'}
+          onColorChange={(upBreakConfirmColor) => patch({ upBreakConfirmColor })}
+          onSizeChange={(upBreakConfirmSize) => patch({ upBreakConfirmSize })}
+          onSymbolChange={(upBreakConfirmSymbol) => patch({ upBreakConfirmSymbol })}
+          size={settings.upBreakConfirmSize}
+          symbol={settings.upBreakConfirmSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.downBreakConfirmColor}
+          label={'\u5411\u4e0b\u7a81\u7834\u786e\u8ba4\u70b9'}
+          onColorChange={(downBreakConfirmColor) => patch({ downBreakConfirmColor })}
+          onSizeChange={(downBreakConfirmSize) => patch({ downBreakConfirmSize })}
+          onSymbolChange={(downBreakConfirmSymbol) => patch({ downBreakConfirmSymbol })}
+          size={settings.downBreakConfirmSize}
+          symbol={settings.downBreakConfirmSymbol}
+        />
       </section>
     </div>
   )
@@ -421,7 +695,7 @@ function MmfMarkerStyleRow({
           options={mmfHighSymbolOptions}
           resolveSize={resolveMmfSymbolSize}
           value={symbol}
-          width={80}
+          width={60}
         />
       </span>
       <span className="ff-indicators-mmf-style-panel-v1__size-input">

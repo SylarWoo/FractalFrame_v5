@@ -314,6 +314,48 @@ export type MmfIndicatorSettings = {
   lowOffsetPercent: number
   lowSize: number
   lowSymbol: string
+  trendDownReturnColor: string
+  trendDownReturnMorganRatio: MmfMorganRatio
+  trendDownReturnSize: number
+  trendDownReturnSymbol: string
+  trendDownReturnVdoThreshold: number
+  trendDownDivergenceColor: string
+  trendDownDivergenceSize: number
+  trendDownDivergenceSymbol: string
+  trendDownDivergenceVdoThreshold: number
+  trendUpReturnColor: string
+  trendUpReturnMorganRatio: MmfMorganRatio
+  trendUpReturnSize: number
+  trendUpReturnSymbol: string
+  trendUpReturnVdoThreshold: number
+  trendUpDivergenceColor: string
+  trendUpDivergenceSize: number
+  trendUpDivergenceSymbol: string
+  trendUpDivergenceVdoThreshold: number
+  bottomDivergenceColor: string
+  bottomDivergenceSize: number
+  bottomDivergenceSymbol: string
+  bottomDivergenceVdoThreshold: number
+  topDivergenceColor: string
+  topDivergenceSize: number
+  topDivergenceSymbol: string
+  topDivergenceVdoThreshold: number
+  upBreakConfirmColor: string
+  upBreakConfirmSize: number
+  upBreakConfirmSymbol: string
+  upBreakConfirmVdoThreshold: number
+  downBreakConfirmColor: string
+  downBreakConfirmSize: number
+  downBreakConfirmSymbol: string
+  downBreakConfirmVdoThreshold: number
+  oscHighDivergenceColor: string
+  oscHighDivergenceSize: number
+  oscHighDivergenceSymbol: string
+  oscHighDivergenceVdoThreshold: number
+  oscLowDivergenceColor: string
+  oscLowDivergenceSize: number
+  oscLowDivergenceSymbol: string
+  oscLowDivergenceVdoThreshold: number
   pullbackColor: string
   pullbackSize: number
   pullbackSymbol: string
@@ -333,10 +375,20 @@ export type MmfIndicatorSettings = {
   downBreakSize: number
   downBreakSymbol: string
   showResistanceLevel: boolean
+  showBottomDivergencePoint: boolean
+  showDownBreakConfirmPoint: boolean
   showHigh: boolean
   showLow: boolean
+  showOscHighDivergencePoint: boolean
+  showOscLowDivergencePoint: boolean
   showPullbackPoint: boolean
   showReboundPoint: boolean
+  showTrendDownDivergencePoint: boolean
+  showTrendDownReturnPoint: boolean
+  showTrendUpDivergencePoint: boolean
+  showTrendUpReturnPoint: boolean
+  showTopDivergencePoint: boolean
+  showUpBreakConfirmPoint: boolean
   showDownBreakPoint: boolean
   showSupportLevel: boolean
   showTrendDownPoint: boolean
@@ -760,6 +812,48 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   lowOffsetPercent: 0,
   lowSize: 24,
   lowSymbol: '\u25c6',
+  trendDownReturnColor: '#ef5350',
+  trendDownReturnMorganRatio: 0.25,
+  trendDownReturnSize: 24,
+  trendDownReturnSymbol: '\u25c6',
+  trendDownReturnVdoThreshold: -0.1,
+  trendDownDivergenceColor: '#ef5350',
+  trendDownDivergenceSize: 24,
+  trendDownDivergenceSymbol: '\u25c6',
+  trendDownDivergenceVdoThreshold: -0.05,
+  trendUpReturnColor: '#26a69a',
+  trendUpReturnMorganRatio: 0.25,
+  trendUpReturnSize: 24,
+  trendUpReturnSymbol: '\u25c6',
+  trendUpReturnVdoThreshold: 0.1,
+  trendUpDivergenceColor: '#26a69a',
+  trendUpDivergenceSize: 24,
+  trendUpDivergenceSymbol: '\u25c6',
+  trendUpDivergenceVdoThreshold: 0.05,
+  bottomDivergenceColor: '#26a69a',
+  bottomDivergenceSize: 24,
+  bottomDivergenceSymbol: '\u25c6',
+  bottomDivergenceVdoThreshold: -0.1,
+  topDivergenceColor: '#ef5350',
+  topDivergenceSize: 24,
+  topDivergenceSymbol: '\u25c6',
+  topDivergenceVdoThreshold: 0.1,
+  upBreakConfirmColor: '#26a69a',
+  upBreakConfirmSize: 24,
+  upBreakConfirmSymbol: '\u25c6',
+  upBreakConfirmVdoThreshold: 0.1,
+  downBreakConfirmColor: '#ef5350',
+  downBreakConfirmSize: 24,
+  downBreakConfirmSymbol: '\u25c6',
+  downBreakConfirmVdoThreshold: -0.1,
+  oscHighDivergenceColor: '#ef5350',
+  oscHighDivergenceSize: 24,
+  oscHighDivergenceSymbol: '\u25c6',
+  oscHighDivergenceVdoThreshold: -0.05,
+  oscLowDivergenceColor: '#26a69a',
+  oscLowDivergenceSize: 24,
+  oscLowDivergenceSymbol: '\u25c6',
+  oscLowDivergenceVdoThreshold: 0.05,
   pullbackColor: '#ef5350',
   pullbackSize: 24,
   pullbackSymbol: '\u25c6',
@@ -779,10 +873,20 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   downBreakSize: 24,
   downBreakSymbol: '\u25c6',
   showResistanceLevel: false,
+  showBottomDivergencePoint: false,
+  showDownBreakConfirmPoint: false,
   showHigh: true,
   showLow: false,
+  showOscHighDivergencePoint: false,
+  showOscLowDivergencePoint: false,
   showPullbackPoint: false,
   showReboundPoint: false,
+  showTrendDownDivergencePoint: false,
+  showTrendDownReturnPoint: false,
+  showTrendUpDivergencePoint: false,
+  showTrendUpReturnPoint: false,
+  showTopDivergencePoint: false,
+  showUpBreakConfirmPoint: false,
   showDownBreakPoint: false,
   showSupportLevel: false,
   showTrendDownPoint: false,
@@ -1215,6 +1319,26 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const highSymbol = typeof merged.highSymbol === 'string' && merged.highSymbol.trim() ? merged.highSymbol : defaultMmfIndicatorSettings.highSymbol
   const lowColor = typeof merged.lowColor === 'string' && merged.lowColor.trim() ? merged.lowColor : defaultMmfIndicatorSettings.lowColor
   const lowSymbol = typeof merged.lowSymbol === 'string' && merged.lowSymbol.trim() ? merged.lowSymbol : defaultMmfIndicatorSettings.lowSymbol
+  const trendDownReturnColor = typeof merged.trendDownReturnColor === 'string' && merged.trendDownReturnColor.trim() ? merged.trendDownReturnColor : defaultMmfIndicatorSettings.trendDownReturnColor
+  const trendDownReturnSymbol = typeof merged.trendDownReturnSymbol === 'string' && merged.trendDownReturnSymbol.trim() ? merged.trendDownReturnSymbol : defaultMmfIndicatorSettings.trendDownReturnSymbol
+  const trendDownDivergenceColor = typeof merged.trendDownDivergenceColor === 'string' && merged.trendDownDivergenceColor.trim() ? merged.trendDownDivergenceColor : defaultMmfIndicatorSettings.trendDownDivergenceColor
+  const trendDownDivergenceSymbol = typeof merged.trendDownDivergenceSymbol === 'string' && merged.trendDownDivergenceSymbol.trim() ? merged.trendDownDivergenceSymbol : defaultMmfIndicatorSettings.trendDownDivergenceSymbol
+  const trendUpReturnColor = typeof merged.trendUpReturnColor === 'string' && merged.trendUpReturnColor.trim() ? merged.trendUpReturnColor : defaultMmfIndicatorSettings.trendUpReturnColor
+  const trendUpReturnSymbol = typeof merged.trendUpReturnSymbol === 'string' && merged.trendUpReturnSymbol.trim() ? merged.trendUpReturnSymbol : defaultMmfIndicatorSettings.trendUpReturnSymbol
+  const trendUpDivergenceColor = typeof merged.trendUpDivergenceColor === 'string' && merged.trendUpDivergenceColor.trim() ? merged.trendUpDivergenceColor : defaultMmfIndicatorSettings.trendUpDivergenceColor
+  const trendUpDivergenceSymbol = typeof merged.trendUpDivergenceSymbol === 'string' && merged.trendUpDivergenceSymbol.trim() ? merged.trendUpDivergenceSymbol : defaultMmfIndicatorSettings.trendUpDivergenceSymbol
+  const bottomDivergenceColor = typeof merged.bottomDivergenceColor === 'string' && merged.bottomDivergenceColor.trim() ? merged.bottomDivergenceColor : defaultMmfIndicatorSettings.bottomDivergenceColor
+  const bottomDivergenceSymbol = typeof merged.bottomDivergenceSymbol === 'string' && merged.bottomDivergenceSymbol.trim() ? merged.bottomDivergenceSymbol : defaultMmfIndicatorSettings.bottomDivergenceSymbol
+  const topDivergenceColor = typeof merged.topDivergenceColor === 'string' && merged.topDivergenceColor.trim() ? merged.topDivergenceColor : defaultMmfIndicatorSettings.topDivergenceColor
+  const topDivergenceSymbol = typeof merged.topDivergenceSymbol === 'string' && merged.topDivergenceSymbol.trim() ? merged.topDivergenceSymbol : defaultMmfIndicatorSettings.topDivergenceSymbol
+  const upBreakConfirmColor = typeof merged.upBreakConfirmColor === 'string' && merged.upBreakConfirmColor.trim() ? merged.upBreakConfirmColor : defaultMmfIndicatorSettings.upBreakConfirmColor
+  const upBreakConfirmSymbol = typeof merged.upBreakConfirmSymbol === 'string' && merged.upBreakConfirmSymbol.trim() ? merged.upBreakConfirmSymbol : defaultMmfIndicatorSettings.upBreakConfirmSymbol
+  const downBreakConfirmColor = typeof merged.downBreakConfirmColor === 'string' && merged.downBreakConfirmColor.trim() ? merged.downBreakConfirmColor : defaultMmfIndicatorSettings.downBreakConfirmColor
+  const downBreakConfirmSymbol = typeof merged.downBreakConfirmSymbol === 'string' && merged.downBreakConfirmSymbol.trim() ? merged.downBreakConfirmSymbol : defaultMmfIndicatorSettings.downBreakConfirmSymbol
+  const oscHighDivergenceColor = typeof merged.oscHighDivergenceColor === 'string' && merged.oscHighDivergenceColor.trim() ? merged.oscHighDivergenceColor : defaultMmfIndicatorSettings.oscHighDivergenceColor
+  const oscHighDivergenceSymbol = typeof merged.oscHighDivergenceSymbol === 'string' && merged.oscHighDivergenceSymbol.trim() ? merged.oscHighDivergenceSymbol : defaultMmfIndicatorSettings.oscHighDivergenceSymbol
+  const oscLowDivergenceColor = typeof merged.oscLowDivergenceColor === 'string' && merged.oscLowDivergenceColor.trim() ? merged.oscLowDivergenceColor : defaultMmfIndicatorSettings.oscLowDivergenceColor
+  const oscLowDivergenceSymbol = typeof merged.oscLowDivergenceSymbol === 'string' && merged.oscLowDivergenceSymbol.trim() ? merged.oscLowDivergenceSymbol : defaultMmfIndicatorSettings.oscLowDivergenceSymbol
   const pullbackColor = typeof merged.pullbackColor === 'string' && merged.pullbackColor.trim() ? merged.pullbackColor : defaultMmfIndicatorSettings.pullbackColor
   const pullbackSymbol = typeof merged.pullbackSymbol === 'string' && merged.pullbackSymbol.trim() ? merged.pullbackSymbol : defaultMmfIndicatorSettings.pullbackSymbol
   const reboundColor = typeof merged.reboundColor === 'string' && merged.reboundColor.trim() ? merged.reboundColor : defaultMmfIndicatorSettings.reboundColor
@@ -1233,8 +1357,20 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const trendUpSymbol = typeof merged.trendUpSymbol === 'string' && merged.trendUpSymbol.trim() ? merged.trendUpSymbol : defaultMmfIndicatorSettings.trendUpSymbol
   const highMorganRatio = Number(merged.highMorganRatio)
   const lowMorganRatio = Number(merged.lowMorganRatio)
+  const trendDownReturnMorganRatio = Number(merged.trendDownReturnMorganRatio)
+  const trendUpReturnMorganRatio = Number(merged.trendUpReturnMorganRatio)
   const pullbackSize = Math.round(Number(merged.pullbackSize))
   const reboundSize = Math.round(Number(merged.reboundSize))
+  const trendDownReturnSize = Math.round(Number(merged.trendDownReturnSize))
+  const trendDownDivergenceSize = Math.round(Number(merged.trendDownDivergenceSize))
+  const trendUpReturnSize = Math.round(Number(merged.trendUpReturnSize))
+  const trendUpDivergenceSize = Math.round(Number(merged.trendUpDivergenceSize))
+  const bottomDivergenceSize = Math.round(Number(merged.bottomDivergenceSize))
+  const topDivergenceSize = Math.round(Number(merged.topDivergenceSize))
+  const upBreakConfirmSize = Math.round(Number(merged.upBreakConfirmSize))
+  const downBreakConfirmSize = Math.round(Number(merged.downBreakConfirmSize))
+  const oscHighDivergenceSize = Math.round(Number(merged.oscHighDivergenceSize))
+  const oscLowDivergenceSize = Math.round(Number(merged.oscLowDivergenceSize))
   const upBreakSize = Math.round(Number(merged.upBreakSize))
   const downBreakSize = Math.round(Number(merged.downBreakSize))
   const resistanceSize = Math.round(Number(merged.resistanceSize))
@@ -1247,6 +1383,16 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const downBreakVdoUpper = Number(merged.downBreakVdoUpper)
   const pullbackVdoThreshold = Number(merged.pullbackVdoThreshold)
   const reboundVdoThreshold = Number(merged.reboundVdoThreshold)
+  const oscHighDivergenceVdoThreshold = Number(merged.oscHighDivergenceVdoThreshold)
+  const oscLowDivergenceVdoThreshold = Number(merged.oscLowDivergenceVdoThreshold)
+  const trendDownDivergenceVdoThreshold = Number(merged.trendDownDivergenceVdoThreshold)
+  const trendUpDivergenceVdoThreshold = Number(merged.trendUpDivergenceVdoThreshold)
+  const bottomDivergenceVdoThreshold = Number(merged.bottomDivergenceVdoThreshold)
+  const topDivergenceVdoThreshold = Number(merged.topDivergenceVdoThreshold)
+  const upBreakConfirmVdoThreshold = Number(merged.upBreakConfirmVdoThreshold)
+  const downBreakConfirmVdoThreshold = Number(merged.downBreakConfirmVdoThreshold)
+  const trendDownReturnVdoThreshold = Number(merged.trendDownReturnVdoThreshold)
+  const trendUpReturnVdoThreshold = Number(merged.trendUpReturnVdoThreshold)
   const resistanceVdoLower = Number(merged.resistanceVdoLower)
   const resistanceVdoUpper = Number(merged.resistanceVdoUpper)
   const supportVdoLower = Number(merged.supportVdoLower)
@@ -1268,6 +1414,48 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     lowOffsetPercent: Number.isFinite(lowOffsetPercent) ? Math.max(-99, Math.min(Math.round(lowOffsetPercent), 99)) : defaultMmfIndicatorSettings.lowOffsetPercent,
     lowSize: Number.isFinite(lowSize) ? Math.max(8, Math.min(lowSize, 96)) : defaultMmfIndicatorSettings.lowSize,
     lowSymbol,
+    trendDownReturnColor,
+    trendDownReturnMorganRatio: Number.isFinite(trendDownReturnMorganRatio) ? Math.max(0, Math.min(trendDownReturnMorganRatio, 1)) : defaultMmfIndicatorSettings.trendDownReturnMorganRatio,
+    trendDownReturnSize: Number.isFinite(trendDownReturnSize) ? Math.max(8, Math.min(trendDownReturnSize, 96)) : defaultMmfIndicatorSettings.trendDownReturnSize,
+    trendDownReturnSymbol,
+    trendDownReturnVdoThreshold: Number.isFinite(trendDownReturnVdoThreshold) ? trendDownReturnVdoThreshold : defaultMmfIndicatorSettings.trendDownReturnVdoThreshold,
+    trendDownDivergenceColor,
+    trendDownDivergenceSize: Number.isFinite(trendDownDivergenceSize) ? Math.max(8, Math.min(trendDownDivergenceSize, 96)) : defaultMmfIndicatorSettings.trendDownDivergenceSize,
+    trendDownDivergenceSymbol,
+    trendDownDivergenceVdoThreshold: Number.isFinite(trendDownDivergenceVdoThreshold) ? trendDownDivergenceVdoThreshold : defaultMmfIndicatorSettings.trendDownDivergenceVdoThreshold,
+    trendUpReturnColor,
+    trendUpReturnMorganRatio: Number.isFinite(trendUpReturnMorganRatio) ? Math.max(0, Math.min(trendUpReturnMorganRatio, 1)) : defaultMmfIndicatorSettings.trendUpReturnMorganRatio,
+    trendUpReturnSize: Number.isFinite(trendUpReturnSize) ? Math.max(8, Math.min(trendUpReturnSize, 96)) : defaultMmfIndicatorSettings.trendUpReturnSize,
+    trendUpReturnSymbol,
+    trendUpReturnVdoThreshold: Number.isFinite(trendUpReturnVdoThreshold) ? trendUpReturnVdoThreshold : defaultMmfIndicatorSettings.trendUpReturnVdoThreshold,
+    trendUpDivergenceColor,
+    trendUpDivergenceSize: Number.isFinite(trendUpDivergenceSize) ? Math.max(8, Math.min(trendUpDivergenceSize, 96)) : defaultMmfIndicatorSettings.trendUpDivergenceSize,
+    trendUpDivergenceSymbol,
+    trendUpDivergenceVdoThreshold: Number.isFinite(trendUpDivergenceVdoThreshold) ? trendUpDivergenceVdoThreshold : defaultMmfIndicatorSettings.trendUpDivergenceVdoThreshold,
+    bottomDivergenceColor,
+    bottomDivergenceSize: Number.isFinite(bottomDivergenceSize) ? Math.max(8, Math.min(bottomDivergenceSize, 96)) : defaultMmfIndicatorSettings.bottomDivergenceSize,
+    bottomDivergenceSymbol,
+    bottomDivergenceVdoThreshold: Number.isFinite(bottomDivergenceVdoThreshold) ? bottomDivergenceVdoThreshold : defaultMmfIndicatorSettings.bottomDivergenceVdoThreshold,
+    topDivergenceColor,
+    topDivergenceSize: Number.isFinite(topDivergenceSize) ? Math.max(8, Math.min(topDivergenceSize, 96)) : defaultMmfIndicatorSettings.topDivergenceSize,
+    topDivergenceSymbol,
+    topDivergenceVdoThreshold: Number.isFinite(topDivergenceVdoThreshold) ? topDivergenceVdoThreshold : defaultMmfIndicatorSettings.topDivergenceVdoThreshold,
+    upBreakConfirmColor,
+    upBreakConfirmSize: Number.isFinite(upBreakConfirmSize) ? Math.max(8, Math.min(upBreakConfirmSize, 96)) : defaultMmfIndicatorSettings.upBreakConfirmSize,
+    upBreakConfirmSymbol,
+    upBreakConfirmVdoThreshold: Number.isFinite(upBreakConfirmVdoThreshold) ? upBreakConfirmVdoThreshold : defaultMmfIndicatorSettings.upBreakConfirmVdoThreshold,
+    downBreakConfirmColor,
+    downBreakConfirmSize: Number.isFinite(downBreakConfirmSize) ? Math.max(8, Math.min(downBreakConfirmSize, 96)) : defaultMmfIndicatorSettings.downBreakConfirmSize,
+    downBreakConfirmSymbol,
+    downBreakConfirmVdoThreshold: Number.isFinite(downBreakConfirmVdoThreshold) ? downBreakConfirmVdoThreshold : defaultMmfIndicatorSettings.downBreakConfirmVdoThreshold,
+    oscHighDivergenceColor,
+    oscHighDivergenceSize: Number.isFinite(oscHighDivergenceSize) ? Math.max(8, Math.min(oscHighDivergenceSize, 96)) : defaultMmfIndicatorSettings.oscHighDivergenceSize,
+    oscHighDivergenceSymbol,
+    oscHighDivergenceVdoThreshold: Number.isFinite(oscHighDivergenceVdoThreshold) ? oscHighDivergenceVdoThreshold : defaultMmfIndicatorSettings.oscHighDivergenceVdoThreshold,
+    oscLowDivergenceColor,
+    oscLowDivergenceSize: Number.isFinite(oscLowDivergenceSize) ? Math.max(8, Math.min(oscLowDivergenceSize, 96)) : defaultMmfIndicatorSettings.oscLowDivergenceSize,
+    oscLowDivergenceSymbol,
+    oscLowDivergenceVdoThreshold: Number.isFinite(oscLowDivergenceVdoThreshold) ? oscLowDivergenceVdoThreshold : defaultMmfIndicatorSettings.oscLowDivergenceVdoThreshold,
     pullbackColor,
     pullbackSize: Number.isFinite(pullbackSize) ? Math.max(8, Math.min(pullbackSize, 96)) : defaultMmfIndicatorSettings.pullbackSize,
     pullbackSymbol,
@@ -1287,10 +1475,20 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     downBreakSize: Number.isFinite(downBreakSize) ? Math.max(8, Math.min(downBreakSize, 96)) : defaultMmfIndicatorSettings.downBreakSize,
     downBreakSymbol,
     showResistanceLevel: merged.showResistanceLevel === true,
+    showBottomDivergencePoint: merged.showBottomDivergencePoint === true,
+    showDownBreakConfirmPoint: merged.showDownBreakConfirmPoint === true,
     showHigh: merged.showHigh === true,
     showLow: merged.showLow === true,
+    showOscHighDivergencePoint: merged.showOscHighDivergencePoint === true,
+    showOscLowDivergencePoint: merged.showOscLowDivergencePoint === true,
     showPullbackPoint: merged.showPullbackPoint === true,
     showReboundPoint: merged.showReboundPoint === true,
+    showTrendDownDivergencePoint: merged.showTrendDownDivergencePoint === true,
+    showTrendDownReturnPoint: merged.showTrendDownReturnPoint === true,
+    showTrendUpDivergencePoint: merged.showTrendUpDivergencePoint === true,
+    showTrendUpReturnPoint: merged.showTrendUpReturnPoint === true,
+    showTopDivergencePoint: merged.showTopDivergencePoint === true,
+    showUpBreakConfirmPoint: merged.showUpBreakConfirmPoint === true,
     showDownBreakPoint: merged.showDownBreakPoint === true,
     showSupportLevel: merged.showSupportLevel === true,
     showTrendDownPoint: merged.showTrendDownPoint === true,

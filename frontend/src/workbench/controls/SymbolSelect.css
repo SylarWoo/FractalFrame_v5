@@ -88,6 +88,11 @@
   font-size: 28px;
 }
 
+.ff-symbol-select-v1__glyph[data-size='star'] {
+  font-size: 25px;
+  transform: translateX(-3px);
+}
+
 .ff-symbol-select-v1__option:hover {
   background: #f2f3f5;
 }

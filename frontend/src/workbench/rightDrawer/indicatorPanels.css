@@ -300,8 +300,13 @@
   pointer-events: auto;
 }
 
+.ff-indicators-mmf-panel-v1__high-row .ff-indicators-style-row-v1__check {
+  max-width: none;
+}
+
 .ff-indicators-mmf-panel-v1__high-row .ff-indicators-style-row-v1__check button {
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .ff-indicators-mmf-panel-v1__settings-grid {
@@ -325,6 +330,15 @@
 .ff-indicators-mmf-panel-v1__vdo-threshold-grid {
   display: inline-grid;
   grid-template-columns: 34px 30px 80px;
+  align-items: center;
+  gap: 8px 6px;
+  margin-left: 24px;
+  pointer-events: auto;
+}
+
+.ff-indicators-mmf-panel-v1__morgan-only-grid {
+  display: inline-grid;
+  grid-template-columns: 58px 80px 34px 80px;
   align-items: center;
   gap: 8px 6px;
   margin-left: 24px;
@@ -408,9 +422,9 @@
 
 .ff-indicators-mmf-style-panel-v1__row {
   display: inline-grid;
-  grid-template-columns: 92px 80px 60px max-content;
+  grid-template-columns: 136px 60px 52px max-content;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 6px;
 }
 
@@ -422,15 +436,19 @@
 
 .ff-indicators-mmf-style-panel-v1__symbol-select,
 .ff-indicators-mmf-style-panel-v1__symbol-select .ff-openable-select {
-  width: 80px;
-  max-width: 80px;
+  width: 60px;
+  max-width: 60px;
+}
+
+.ff-indicators-mmf-style-panel-v1__symbol-select .ff-symbol-select-v1__chevron {
+  display: none;
 }
 
 .ff-indicators-mmf-style-panel-v1__size-input,
 .ff-indicators-mmf-style-panel-v1__size-input .ff-numeric-stepper-v1,
 .ff-indicators-mmf-style-panel-v1__size-input .ff-indicators-number-box-v1 {
-  width: 60px;
-  max-width: 60px;
+  width: 52px;
+  max-width: 52px;
 }
 
 .ff-indicators-mmf-style-panel-v1__size-input .ff-indicators-number-box-v1 {
