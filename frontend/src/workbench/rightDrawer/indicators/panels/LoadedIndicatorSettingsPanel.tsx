@@ -101,7 +101,7 @@ export function LoadedIndicatorSettingsPanel({
   volSettings: VolIndicatorSettings
   vwapSettings: VwapIndicatorSettings
 }) {
-  const panelRegistry: Partial<Record<SupportedChartIndicator, Record<Exclude<IndicatorSettingsTab, 'visibility'>, ReactNode>>> = {
+  const panelRegistry: Partial<Record<SupportedChartIndicator, Record<Extract<IndicatorSettingsTab, 'input' | 'style'>, ReactNode>>> = {
     DPO: {
       input: <DpoInputPanel onSettingsChange={onDpoSettingsChange} settings={dpoSettings} />,
       style: <DpoStylePanel controlsOffsetPx={80} onSettingsChange={onDpoSettingsChange} settings={dpoSettings} showBand2Levels />,
@@ -151,13 +151,16 @@ export function LoadedIndicatorSettingsPanel({
       style: <VolStylePanel onSettingsChange={onVolSettingsChange} settings={volSettings} />,
     },
   }
-  const selectedPanel = settingsTab === 'visibility'
-    ? null
-    : panelRegistry[selectedKey as SupportedChartIndicator]?.[settingsTab]
+  const selectedPanel = settingsTab === 'input' || settingsTab === 'style'
+    ? panelRegistry[selectedKey as SupportedChartIndicator]?.[settingsTab]
+    : null
 
   return (
     <>
       {selectedPanel ?? null}
+      {settingsTab === 'strategy' ? (
+        <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel" />
+      ) : null}
       {settingsTab === 'visibility' ? (
         <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">
           <VisibilityRangePanel storageKey={`indicator:${selectedKey || 'default'}`} />

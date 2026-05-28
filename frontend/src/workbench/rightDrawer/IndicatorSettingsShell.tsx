@@ -9,6 +9,7 @@ type IndicatorSettingsShellTab = {
 const defaultTabs: IndicatorSettingsShellTab[] = [
   { id: 'input', label: '\u8f93\u5165' },
   { id: 'style', label: '\u6837\u5f0f' },
+  { id: 'strategy', label: '\u7b56\u7565' },
   { id: 'visibility', label: '\u53ef\u89c1\u8303\u56f4' },
 ]
 

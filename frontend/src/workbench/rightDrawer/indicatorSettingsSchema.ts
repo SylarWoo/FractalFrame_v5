@@ -5,7 +5,7 @@ export type RsiLineStyle = 'solid' | 'dashed' | 'dotted'
 export type MaType = 'sma' | 'ema' | 'smma' | 'wma' | 'vwma'
 export type MaSource = 'close' | 'open' | 'high' | 'low' | 'hl2' | 'hlc3' | 'ohlc4'
 export type MaMarkerMode = 'bar_down' | 'bar_up' | 'triangle_down' | 'triangle_up'
-export type IndicatorSettingsTab = 'input' | 'style' | 'visibility'
+export type IndicatorSettingsTab = 'input' | 'style' | 'strategy' | 'visibility'
 export type VwapAnchorPeriod = 'session' | 'week' | 'month' | 'quarter' | 'year' | 'decade' | 'century'
 export type VwapBandCalculationMode = 'standard_deviation' | 'percentage'
 export type VwapSource = 'hlc3' | 'close' | 'open' | 'high' | 'low' | 'hl2' | 'ohlc4'
@@ -523,7 +523,7 @@ export type PersistedIndicatorsState = {
   }
 }
 
-const indicatorSettingsTabs = new Set<IndicatorSettingsTab>(['input', 'style', 'visibility'])
+const indicatorSettingsTabs = new Set<IndicatorSettingsTab>(['input', 'style', 'strategy', 'visibility'])
 
 export function normalizeIndicatorSettingsTab(value: unknown): IndicatorSettingsTab {
   return indicatorSettingsTabs.has(value as IndicatorSettingsTab) ? value as IndicatorSettingsTab : 'input'
