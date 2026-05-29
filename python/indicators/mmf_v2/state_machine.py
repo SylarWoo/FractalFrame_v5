@@ -320,7 +320,7 @@ def _create_trend_divergence_markers(features: pd.DataFrame, signals: list[Stoch
         if signal.type == "low":
             if (
                 show_down_divergence
-                and previous_signal_index in return_signal_indexes["down"]
+                and _previous_signal_is_return(signals, previous_signal_index, return_signal_indexes["down"], "high")
                 and _is_trend_down_divergence(features, signal, settings)
             ):
                 markers.append(_create_marker(signal, settings, ("MMF_V2_TREND_DOWN_DIVERGENCE", "trend_down_divergence_after_return_low_below_morgan")))
@@ -328,12 +328,18 @@ def _create_trend_divergence_markers(features: pd.DataFrame, signals: list[Stoch
             continue
         if (
             show_up_divergence
-            and previous_signal_index in return_signal_indexes["up"]
+            and _previous_signal_is_return(signals, previous_signal_index, return_signal_indexes["up"], "low")
             and _is_trend_up_divergence(features, signal, settings)
         ):
             markers.append(_create_marker(signal, settings, ("MMF_V2_TREND_UP_DIVERGENCE", "trend_up_divergence_after_return_high_above_morgan")))
         previous_signal_index = signal_index
     return markers
+
+
+def _previous_signal_is_return(signals: list[StochStateSignal], previous_signal_index: int | None, return_signal_indexes: set[int], expected_type: str) -> bool:
+    if previous_signal_index is None or previous_signal_index not in return_signal_indexes:
+        return False
+    return signals[previous_signal_index].type == expected_type
 
 
 def _trend_return_signal_indexes(features: pd.DataFrame, signals: list[StochStateSignal], settings: MmfV2Settings) -> dict[str, set[int]]:

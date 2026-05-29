@@ -472,6 +472,7 @@ class MmfV2RegressionTest(unittest.TestCase):
         features["ma"] = [100.0] * len(features)
         features.loc[4, "ma"] = 104.0
         features["morgan_center"] = 100.0
+        features.loc[6, "morgan_center"] = 96.0
         features["morgan_true_range"] = 4.0
         settings = MmfV2Settings(
             show_trend_down_divergence_point=True,
