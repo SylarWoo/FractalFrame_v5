@@ -28,7 +28,7 @@ if (-not (Test-Path -LiteralPath $pythonExe)) {
 Push-Location $repoRoot
 try {
   Invoke-Check "Python unit tests" {
-    & $pythonExe -m unittest tests.test_store_v5 tests.test_http_bridge_helpers tests.test_mmf_v2_regression
+    & $pythonExe -m pytest
   }
 
   Invoke-Check "Python compile check" {

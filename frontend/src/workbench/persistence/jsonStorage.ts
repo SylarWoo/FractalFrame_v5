@@ -85,6 +85,13 @@ function resolvePersistentStateEndpoint() {
 }
 
 export function readJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (raw) return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+
   const devValue = readDevState(key)
   if (devValue !== undefined && typeof devValue !== 'string') {
     try {
@@ -95,12 +102,7 @@ export function readJson<T>(key: string, fallback: T): T {
     return devValue as T
   }
 
-  try {
-    const raw = window.localStorage.getItem(key)
-    return raw ? JSON.parse(raw) as T : fallback
-  } catch {
-    return fallback
-  }
+  return fallback
 }
 
 export function writeJson(key: string, value: unknown) {
@@ -131,6 +133,13 @@ export function writeJsonObjectValue(key: string, propertyKey: string, value: un
 }
 
 export function readString(key: string, fallback = '') {
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (raw != null) return raw
+  } catch {
+    return fallback
+  }
+
   const devValue = readDevState(key)
   if (typeof devValue === 'string') {
     try {
@@ -141,11 +150,7 @@ export function readString(key: string, fallback = '') {
     return devValue
   }
 
-  try {
-    return window.localStorage.getItem(key) ?? fallback
-  } catch {
-    return fallback
-  }
+  return fallback
 }
 
 export function writeString(key: string, value: string) {

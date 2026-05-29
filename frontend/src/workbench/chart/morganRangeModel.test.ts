@@ -40,6 +40,7 @@ describe('morganRangeModel', () => {
 
     expect(segment.center).toBe(100)
     expect(segment.range).toBe(6)
+    expect(segment.trueRange).toBeCloseTo(2.832)
     expect(segment.upper).toBe(106)
     expect(segment.lower).toBe(94)
     expect(segment.levels.map((level) => level.ratio)).toEqual([

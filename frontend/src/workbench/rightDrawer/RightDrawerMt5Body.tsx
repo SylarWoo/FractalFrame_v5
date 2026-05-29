@@ -285,7 +285,7 @@ function SelectedSymbolPeriodSelector({
   selectedStoreTableKey: string
 }) {
   return (
-    <div className="ff-watchlist-periods ff-import-selected-periods" aria-label="Selected symbol available periods">
+    <div className="ff-watchlist-periods ff-import-selected-periods ff-chart-jump-controls" aria-label="Selected symbol available periods">
       {directPeriods.length > 0 && (
         <section className="ff-watchlist-periods__group">
           <h4>Direct source</h4>

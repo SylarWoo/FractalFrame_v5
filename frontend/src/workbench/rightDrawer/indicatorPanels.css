@@ -356,6 +356,12 @@
   white-space: nowrap;
 }
 
+.ff-indicators-mmf-v2-panel__advance-label-part--compact {
+  display: inline-block;
+  font-size: 11px;
+  transform: translateY(-1px);
+}
+
 .ff-indicators-mmf-v2-panel__advance-input,
 .ff-indicators-mmf-v2-panel__advance-input .ff-numeric-stepper-v1,
 .ff-indicators-mmf-v2-panel__advance-input .ff-indicators-number-box-v1 {

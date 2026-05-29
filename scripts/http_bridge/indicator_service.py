@@ -8,7 +8,7 @@ from typing import Any
 _MMF_RESULT_CACHE_MAX = 32
 _MMF_V2_RESULT_CACHE_MAX = 64
 _MMF_ENGINE_VERSION = "mmf_python_state_machine_v26_dedupe_extreme_windows"
-_MMF_V2_SERVICE_CACHE_VERSION = "mmf_v2_service_cache_v2_support_resistance"
+_MMF_V2_SERVICE_CACHE_VERSION = "mmf_v2_service_cache_v8_trend_divergence"
 _MMF_INTERNAL_DPO_LENGTH = 21
 _mmf_result_cache: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
 _mmf_v2_result_cache: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
@@ -133,6 +133,22 @@ def _mmf_v2_settings_cache_signature(settings: Any) -> tuple[Any, ...]:
         bool(getattr(settings, "show_low", True)),
         bool(getattr(settings, "show_support_level", False)),
         bool(getattr(settings, "show_resistance_level", False)),
+        bool(getattr(settings, "show_expected_support_level", False)),
+        bool(getattr(settings, "show_expected_resistance_level", False)),
+        bool(getattr(settings, "show_trend_down_rebound_point", False)),
+        bool(getattr(settings, "show_trend_up_pullback_point", False)),
+        bool(getattr(settings, "show_trend_down_return_point", False)),
+        bool(getattr(settings, "show_trend_up_return_point", False)),
+        float(getattr(settings, "trend_down_return_morgan_ratio", 0.25)),
+        float(getattr(settings, "trend_up_return_morgan_ratio", 0.25)),
+        bool(getattr(settings, "show_trend_down_divergence_point", False)),
+        bool(getattr(settings, "show_trend_up_divergence_point", False)),
+        float(getattr(settings, "trend_down_divergence_morgan_ratio", 0.375)),
+        float(getattr(settings, "trend_up_divergence_morgan_ratio", 0.375)),
+        bool(getattr(settings, "show_support_down_break_point", False)),
+        bool(getattr(settings, "show_support_up_break_point", False)),
+        bool(getattr(settings, "show_resistance_down_break_point", False)),
+        bool(getattr(settings, "show_resistance_up_break_point", False)),
         int(getattr(settings, "high_anchor_lookback_bars", 14)),
         int(getattr(settings, "low_anchor_lookback_bars", 14)),
         float(getattr(settings, "high_stoch_k_advance", 10)),
@@ -149,9 +165,9 @@ def _mmf_v2_settings_cache_signature(settings: Any) -> tuple[Any, ...]:
         float(getattr(settings.vdo, "up_line2_value", 0.05)),
         float(getattr(settings.vdo, "down_line_value", -0.1)),
         float(getattr(settings.vdo, "down_line2_value", -0.05)),
-        int(getattr(settings.ma, "length", 20)),
+        int(getattr(settings.ma, "length", 120)),
         str(getattr(settings.ma, "ma_type", "sma")).lower(),
-        str(getattr(settings.ma, "source", "close")).lower(),
+        str(getattr(settings.ma, "source", "hlc3")).lower(),
         str(getattr(settings.morgan, "anchor", "h4")).lower(),
         tuple(float(value) for value in getattr(settings.morgan, "ratios", ())),
     )
@@ -300,7 +316,6 @@ def _normalize_mmf_v2_settings(payload: dict[str, Any]) -> "MmfV2Settings":
     settings_payload = payload.get("settings") if isinstance(payload.get("settings"), dict) else {}
     stoch_payload = settings_payload.get("stoch") if isinstance(settings_payload.get("stoch"), dict) else {}
     vdo_payload = settings_payload.get("vdo") if isinstance(settings_payload.get("vdo"), dict) else {}
-    ma_payload = settings_payload.get("ma") if isinstance(settings_payload.get("ma"), dict) else {}
     morgan_payload = settings_payload.get("morgan") if isinstance(settings_payload.get("morgan"), dict) else {}
     ratios_payload = morgan_payload.get("ratios")
     ratios = tuple(_safe_float(value, 0) for value in ratios_payload) if isinstance(ratios_payload, list) else (-0.236, -0.118, 0.118, 0.236)
@@ -311,10 +326,26 @@ def _normalize_mmf_v2_settings(payload: dict[str, Any]) -> "MmfV2Settings":
         show_low=_safe_bool(settings_payload.get("showLow"), True),
         show_support_level=_safe_bool(settings_payload.get("showSupportLevel"), False),
         show_resistance_level=_safe_bool(settings_payload.get("showResistanceLevel"), False),
+        show_expected_support_level=_safe_bool(settings_payload.get("showExpectedSupportLevel"), False),
+        show_expected_resistance_level=_safe_bool(settings_payload.get("showExpectedResistanceLevel"), False),
+        show_trend_down_rebound_point=_safe_bool(settings_payload.get("showTrendDownReboundPoint"), False),
+        show_trend_up_pullback_point=_safe_bool(settings_payload.get("showTrendUpPullbackPoint"), False),
+        show_trend_down_return_point=_safe_bool(settings_payload.get("showTrendDownReturnPoint"), False),
+        show_trend_up_return_point=_safe_bool(settings_payload.get("showTrendUpReturnPoint"), False),
+        show_trend_down_divergence_point=_safe_bool(settings_payload.get("showTrendDownDivergencePointV2"), False),
+        show_trend_up_divergence_point=_safe_bool(settings_payload.get("showTrendUpDivergencePointV2"), False),
+        show_support_down_break_point=_safe_bool(settings_payload.get("showSupportDownBreakPoint"), False),
+        show_support_up_break_point=_safe_bool(settings_payload.get("showSupportUpBreakPoint"), False),
+        show_resistance_down_break_point=_safe_bool(settings_payload.get("showResistanceDownBreakPoint"), False),
+        show_resistance_up_break_point=_safe_bool(settings_payload.get("showResistanceUpBreakPoint"), False),
         high_anchor_lookback_bars=_safe_int(settings_payload.get("highAnchorLookbackBars"), 14, minimum=1, maximum=200),
         low_anchor_lookback_bars=_safe_int(settings_payload.get("lowAnchorLookbackBars"), 14, minimum=1, maximum=200),
         high_stoch_k_advance=max(0, min(_safe_float(settings_payload.get("highStochKAdvance"), 10), 100)),
         low_stoch_k_advance=max(0, min(_safe_float(settings_payload.get("lowStochKAdvance"), 10), 100)),
+        trend_down_return_morgan_ratio=max(0, min(_safe_float(settings_payload.get("trendDownReturnMorganRatio"), 0.25), 1)),
+        trend_up_return_morgan_ratio=max(0, min(_safe_float(settings_payload.get("trendUpReturnMorganRatio"), 0.25), 1)),
+        trend_down_divergence_morgan_ratio=max(0, min(_safe_float(settings_payload.get("trendDownDivergenceMorganRatio"), 0.375), 1)),
+        trend_up_divergence_morgan_ratio=max(0, min(_safe_float(settings_payload.get("trendUpDivergenceMorganRatio"), 0.375), 1)),
         high_confirm_lookahead_bars=_safe_int(settings_payload.get("highConfirmLookaheadBars"), 7, minimum=1, maximum=200),
         low_confirm_lookahead_bars=_safe_int(settings_payload.get("lowConfirmLookaheadBars"), 7, minimum=1, maximum=200),
         stoch=MmfV2StochSettings(
@@ -331,11 +362,7 @@ def _normalize_mmf_v2_settings(payload: dict[str, Any]) -> "MmfV2Settings":
             down_line_value=_safe_float(vdo_payload.get("downLineValue") or vdo_payload.get("down_line_value"), -0.1),
             down_line2_value=_safe_float(vdo_payload.get("downLine2Value") or vdo_payload.get("down_line2_value"), -0.05),
         ),
-        ma=MmfV2MaSettings(
-            length=_safe_int(ma_payload.get("length"), 20),
-            ma_type=str(ma_payload.get("type") or ma_payload.get("maType") or "sma"),
-            source=str(ma_payload.get("source") or "close"),
-        ),
+        ma=MmfV2MaSettings(),
         morgan=MmfV2MorganSettings(
             anchor=str(morgan_payload.get("anchor") or "h4"),
             ratios=ratios,

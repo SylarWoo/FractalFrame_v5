@@ -6,6 +6,12 @@ from typing import Any
 
 import pandas as pd
 
+from python.indicators.morgan_range import (
+    calculate_morgan_level_model as calculate_shared_morgan_level_model,
+    calculate_morgan_levels as calculate_shared_morgan_levels,
+    resolve_morgan_levels_from_model as resolve_shared_morgan_levels_from_model,
+)
+
 H4_MORGAN_SECONDS = 4 * 60 * 60
 XAU_SESSION_ANCHOR_SECONDS = 22 * 60 * 60
 MORGAN_LEVEL_RATIOS = (-1, -0.786, -0.618, -0.5, -0.382, -0.236, -0.177, -0.118, -0.059, 0, 0.059, 0.118, 0.177, 0.236, 0.382, 0.5, 0.618, 0.786, 1)
@@ -13,8 +19,9 @@ MMF_HIGH_STOCH_ZONE_LEVEL = 70
 MMF_HIGH_STOCH_REVERSAL_LEVEL = 65
 MMF_LOW_STOCH_ZONE_LEVEL = 30
 MMF_LOW_STOCH_REVERSAL_LEVEL = 35
-MMF_HIGH_CROSS_MIN_LEVEL = 60
-MMF_LOW_CROSS_MAX_LEVEL = 40
+MMF_HIGH_CROSS_MIN_LEVEL = 70
+MMF_LOW_CROSS_MAX_LEVEL = 30
+MMF_MID_CYCLE_LEVEL = 50
 MMF_STOCH_CONFIRM_DISTANCE = 7
 MMF_CROSS_WINDOW_RADIUS = 7
 
@@ -144,82 +151,15 @@ def _h4_morgan_bucket_key(timestamp_seconds: int) -> int:
 
 
 def calculate_morgan_level_model(frame: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
-    if frame.empty:
-        return pd.Series(dtype="float64"), pd.Series(dtype="float64")
-    buckets: list[dict[str, Any]] = []
-    bucket_by_row: list[int] = []
-    active_key: int | None = None
-    active: dict[str, Any] | None = None
-    times = frame["time"].to_numpy()
-    highs = frame["high"].to_numpy()
-    lows = frame["low"].to_numpy()
-    closes = frame["close"].to_numpy()
-    for index in range(len(frame)):
-        key = _h4_morgan_bucket_key(int(times[index]))
-        if active_key != key or active is None:
-            active = {
-                "key": key,
-                "start_index": int(index),
-                "time": int(times[index]),
-                "high": float(highs[index]),
-                "low": float(lows[index]),
-                "close": float(closes[index]),
-            }
-            buckets.append(active)
-            active_key = key
-        else:
-            active["high"] = max(float(active["high"]), float(highs[index]))
-            active["low"] = min(float(active["low"]), float(lows[index]))
-            active["close"] = float(closes[index])
-        bucket_by_row.append(len(buckets) - 1)
-
-    true_ranges: list[float] = []
-    for index, bucket in enumerate(buckets):
-        if index == 0:
-            true_ranges.append(float(bucket["high"]) - float(bucket["low"]))
-            continue
-        previous_close = float(buckets[index - 1]["close"])
-        true_ranges.append(max(float(bucket["high"]) - float(bucket["low"]), abs(float(bucket["high"]) - previous_close), abs(float(bucket["low"]) - previous_close)))
-
-    atr7: list[float | None] = []
-    rolling_tr_sum = 0.0
-    for index in range(len(true_ranges)):
-        rolling_tr_sum += true_ranges[index]
-        if index >= 7:
-            rolling_tr_sum -= true_ranges[index - 7]
-        if index < 6:
-            atr7.append(None)
-        else:
-            atr7.append(rolling_tr_sum / 7)
-
-    level_bases: list[float | None] = []
-    segment_indexes: list[int | None] = []
-    for bucket_index in bucket_by_row:
-        if bucket_index <= 0:
-            level_bases.append(None)
-            segment_indexes.append(None)
-            continue
-        previous = buckets[bucket_index - 1]
-        previous_atr = atr7[bucket_index - 1]
-        if previous_atr is None or previous_atr <= 0:
-            level_bases.append(None)
-            segment_indexes.append(None)
-            continue
-        center = (float(previous["high"]) + float(previous["low"]) + float(previous["close"])) / 3
-        level_bases.append((center, 3 * float(previous_atr)))
-        segment_indexes.append(bucket_index)
-    return pd.Series(level_bases, index=frame.index, dtype="object"), pd.Series(segment_indexes, index=frame.index, dtype="float64")
+    return calculate_shared_morgan_level_model(frame)
 
 
 def resolve_morgan_levels_from_model(level_model: pd.Series, ratio: float) -> pd.Series:
-    return level_model.map(
-        lambda item: float(item[0]) + (float(item[1]) * ratio) if isinstance(item, tuple) and len(item) == 2 else None,
-    ).astype("float64")
+    return resolve_shared_morgan_levels_from_model(level_model, ratio)
 
 
 def calculate_morgan_levels(frame: pd.DataFrame, ratio: float) -> tuple[pd.Series, pd.Series]:
-    level_model, segment_indexes = calculate_morgan_level_model(frame)
-    return resolve_morgan_levels_from_model(level_model, ratio), segment_indexes
+    return calculate_shared_morgan_levels(frame, ratio)
 
 
 def _stoch_lines_break_below(previous_k: Any, previous_d: Any, k: Any, d: Any, threshold: float) -> bool:
@@ -503,12 +443,20 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
     marker_records: list[dict[str, Any]] = []
     active_high_cross: dict[str, float | int] | None = None
     active_low_cross: dict[str, float | int] | None = None
+    high_cycle_armed = False
+    low_cycle_armed = False
 
     for index in range(1, precomputed.rows_count):
         k = stoch_k[index]
         d = stoch_d[index]
         previous_k = stoch_k[index - 1]
         previous_d = stoch_d[index - 1]
+
+        if _finite_number(previous_k) and _finite_number(k):
+            if not high_cycle_armed and float(previous_k) < MMF_MID_CYCLE_LEVEL and float(k) >= MMF_MID_CYCLE_LEVEL:
+                high_cycle_armed = True
+            if not low_cycle_armed and float(previous_k) > MMF_MID_CYCLE_LEVEL and float(k) <= MMF_MID_CYCLE_LEVEL:
+                low_cycle_armed = True
 
         if settings.show_high:
             if active_high_cross is not None and index > int(active_high_cross["index"]) and _finite_number(k):
@@ -537,9 +485,10 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
                             "crossValue": cross_value,
                         })
                     active_high_cross = None
+                    high_cycle_armed = False
 
             dead_cross_value = _stoch_dead_cross_value(previous_k, previous_d, k, d)
-            if dead_cross_value is not None and dead_cross_value >= MMF_HIGH_CROSS_MIN_LEVEL:
+            if high_cycle_armed and dead_cross_value is not None and dead_cross_value >= MMF_HIGH_CROSS_MIN_LEVEL:
                 active_high_cross = {"index": index, "value": float(dead_cross_value)}
 
         if settings.show_low:
@@ -569,9 +518,10 @@ def calculate_mmf_markers_from_precomputed(precomputed: MmfPrecomputedData, sett
                             "crossValue": cross_value,
                         })
                     active_low_cross = None
+                    low_cycle_armed = False
 
             golden_cross_value = _stoch_golden_cross_value(previous_k, previous_d, k, d)
-            if golden_cross_value is not None and golden_cross_value <= MMF_LOW_CROSS_MAX_LEVEL:
+            if low_cycle_armed and golden_cross_value is not None and golden_cross_value <= MMF_LOW_CROSS_MAX_LEVEL:
                 active_low_cross = {"index": index, "value": float(golden_cross_value)}
 
     marker_records = _dedupe_extreme_markers(marker_records)

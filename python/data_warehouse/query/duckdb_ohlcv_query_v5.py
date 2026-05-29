@@ -16,6 +16,37 @@ def _parquet_part_files(ds_root: Path) -> list[str]:
     return sorted(str(path) for path in ds_root.rglob("part-*.parquet"))
 
 
+def _month_start(timestamp_seconds: int) -> pd.Timestamp:
+    dt = pd.to_datetime(int(timestamp_seconds), unit="s", utc=True)
+    return pd.Timestamp(year=dt.year, month=dt.month, day=1, tz="UTC")
+
+
+def _month_partition_files(ds_root: Path, *, time_from: int | None, time_to: int | None) -> list[str]:
+    if time_from is None and time_to is None:
+        return _parquet_part_files(ds_root)
+    if time_from is not None and time_to is not None and int(time_from) > int(time_to):
+        return []
+
+    start = _month_start(int(time_from)) if time_from is not None else None
+    end = _month_start(int(time_to)) if time_to is not None else None
+    out: list[str] = []
+    for month_dir in ds_root.glob("year=*/month=*"):
+        if not month_dir.is_dir():
+            continue
+        try:
+            year = int(month_dir.parent.name.split("=", 1)[1])
+            month = int(month_dir.name.split("=", 1)[1])
+        except (IndexError, ValueError):
+            continue
+        partition_month = pd.Timestamp(year=year, month=month, day=1, tz="UTC")
+        if start is not None and partition_month < start:
+            continue
+        if end is not None and partition_month > end:
+            continue
+        out.extend(str(path) for path in month_dir.glob("part-*.parquet"))
+    return sorted(out)
+
+
 def _fetch_rows(sql: str, params: list[Any]) -> list[dict[str, Any]]:
     con = duckdb.connect(database=":memory:")
     try:
@@ -115,7 +146,7 @@ def query_ohlcv_store_v5(
         anchor=anchor,
         store_root=root,
     )
-    files = _parquet_part_files(ds_root)
+    files = _month_partition_files(ds_root, time_from=time_from, time_to=time_to)
     if not files:
         return {"ok": False, "error": "dataset_has_no_parquet_parts", "datasetKey": key, "rows": []}
 

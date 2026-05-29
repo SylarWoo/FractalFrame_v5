@@ -17,7 +17,8 @@ export type MmfHighStateMachineSettings = {
   dpoThreshold: number
 }
 
-const highCrossMinLevel = 60
+const highCrossMinLevel = 70
+const highCycleStartLevel = 50
 const stochConfirmDistance = 7
 const crossWindowRadius = 7
 
@@ -112,10 +113,21 @@ export function calculateMmfHighStateMachineRows(
 ): MmfHighMarkerRow[] {
   const rows: MmfHighMarkerRow[] = inputRows.map(() => ({}))
   let activeCross: { index: number, value: number } | null = null
+  let highCycleArmed = false
 
   for (let index = 1; index < inputRows.length; index += 1) {
     const row = inputRows[index]
     const previousRow = inputRows[index - 1]
+
+    if (
+      !highCycleArmed
+      && finiteNumber(previousRow.k)
+      && finiteNumber(row.k)
+      && previousRow.k < highCycleStartLevel
+      && row.k >= highCycleStartLevel
+    ) {
+      highCycleArmed = true
+    }
 
     if (activeCross && index > activeCross.index && finiteNumber(row.k) && row.k <= activeCross.value - stochConfirmDistance) {
       const { startIndex, endIndex } = getCenteredWindow(activeCross.index, inputRows.length)
@@ -137,10 +149,11 @@ export function calculateMmfHighStateMachineRows(
         }
       }
       activeCross = null
+      highCycleArmed = false
     }
 
     const deadCrossValue = resolveDeadCrossValue(previousRow.k, previousRow.d, row.k, row.d)
-    if (deadCrossValue != null && deadCrossValue >= highCrossMinLevel) {
+    if (highCycleArmed && deadCrossValue != null && deadCrossValue >= highCrossMinLevel) {
       activeCross = { index, value: deadCrossValue }
     }
   }

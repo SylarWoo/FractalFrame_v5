@@ -207,6 +207,23 @@ class MmfV2RegressionTest(unittest.TestCase):
         self.assertGreater(int(features["vdoCrossUpUpper2"].sum()), 0)
         self.assertGreater(int(features["vdoCrossDownLower2"].sum()), 0)
 
+    def test_mmf_v2_internal_ma_uses_sma120_hlc3(self) -> None:
+        rows = []
+        hlc3_values = []
+        for index in range(121):
+            close = 100 + index
+            row = synthetic_row(index, close)
+            row["high"] = close + 3
+            row["low"] = close - 1
+            rows.append(row)
+            hlc3_values.append((row["high"] + row["low"] + row["close"]) / 3)
+
+        features = build_mmf_v2_features(pd.DataFrame(rows), MmfV2Settings())
+        expected = sum(hlc3_values[1:121]) / 120
+
+        self.assertTrue(pd.isna(features["ma"].iloc[118]))
+        self.assertAlmostEqual(float(features["ma"].iloc[120]), expected)
+
     def test_support_level_replaces_low_marker_inside_vdo_window(self) -> None:
         rows = [synthetic_row(index, close) for index, close in enumerate([100, 99, 97, 98, 100, 101, 102])]
         features = pd.DataFrame(rows)
@@ -250,6 +267,257 @@ class MmfV2RegressionTest(unittest.TestCase):
         self.assertEqual(markers[0].type, "MMF_V2_RESISTANCE")
         self.assertEqual(markers[0].marker.index, 2)
         self.assertIn("resistance_vdo_up_down_0_05_no_above_0_10", markers[0].reason)
+
+    def test_vdo_break_markers_are_created_on_threshold_cross_bars(self) -> None:
+        rows = [synthetic_row(index, close) for index, close in enumerate([100, 101, 102, 103, 104, 105, 106, 107])]
+        features = pd.DataFrame(rows)
+        features["stochK"] = [50] * len(rows)
+        features["stochD"] = [50] * len(rows)
+        _attach_vdo_test_columns(features, [-0.09, -0.11, -0.12, -0.08, 0.08, 0.11, 0.12, 0.09])
+        settings = MmfV2Settings(
+            show_high=False,
+            show_low=False,
+            show_support_down_break_point=True,
+            show_support_up_break_point=True,
+            show_resistance_up_break_point=True,
+            show_resistance_down_break_point=True,
+        )
+
+        markers = calculate_mmf_v2_state_machine_markers(features, settings)
+        by_type = {marker.type: marker for marker in markers}
+
+        self.assertEqual(by_type["MMF_V2_SUPPORT_DOWN_BREAK"].marker.index, 1)
+        self.assertEqual(by_type["MMF_V2_SUPPORT_DOWN_BREAK"].marker.price, rows[1]["high"])
+        self.assertEqual(by_type["MMF_V2_SUPPORT_UP_BREAK"].marker.index, 3)
+        self.assertEqual(by_type["MMF_V2_SUPPORT_UP_BREAK"].marker.price, rows[3]["low"])
+        self.assertEqual(by_type["MMF_V2_RESISTANCE_UP_BREAK"].marker.index, 5)
+        self.assertEqual(by_type["MMF_V2_RESISTANCE_UP_BREAK"].marker.price, rows[5]["low"])
+        self.assertEqual(by_type["MMF_V2_RESISTANCE_DOWN_BREAK"].marker.index, 7)
+        self.assertEqual(by_type["MMF_V2_RESISTANCE_DOWN_BREAK"].marker.price, rows[7]["high"])
+
+    def test_expected_levels_are_created_from_later_stoch_extremes_after_trend_close(self) -> None:
+        rows = [synthetic_row(index, close) for index, close in enumerate([100, 99, 100, 101, 103, 102, 100, 99, 98, 99, 100])]
+        features = pd.DataFrame(rows)
+        features["stochK"] = [50, 50, 70, 72, 76, 58, 46, 42, 30, 42, 52]
+        features["stochD"] = [50, 50, 65, 66, 70, 60, 55, 48, 35, 40, 45]
+        _attach_vdo_test_columns(features, [-0.12, -0.08, 0.01, 0.02, 0.03, 0.02, 0.01, -0.01, -0.02, -0.03, -0.02])
+        features["morgan_center"] = 100.0
+        features["morgan_true_range"] = 2.0
+        settings = MmfV2Settings(
+            show_expected_resistance_level=True,
+            show_expected_support_level=True,
+            high_anchor_lookback_bars=3,
+            high_stoch_k_advance=10,
+            high_confirm_lookahead_bars=2,
+            low_anchor_lookback_bars=3,
+            low_stoch_k_advance=10,
+            low_confirm_lookahead_bars=2,
+        )
+
+        markers = calculate_mmf_v2_state_machine_markers(features, settings)
+        by_type = {marker.type: marker for marker in markers}
+
+        self.assertEqual(by_type["MMF_V2_EXPECTED_RESISTANCE"].marker.index, 4)
+        self.assertIn("expected_resistance_after_trend_close", by_type["MMF_V2_EXPECTED_RESISTANCE"].reason)
+        self.assertEqual(by_type["MMF_V2_EXPECTED_SUPPORT"].marker.index, 8)
+        self.assertIn("expected_support_after_trend_close", by_type["MMF_V2_EXPECTED_SUPPORT"].reason)
+
+    def test_expected_levels_stop_after_trend_open(self) -> None:
+        rows = [synthetic_row(index, close) for index, close in enumerate([100, 99, 100, 101, 103, 102, 100])]
+        features = pd.DataFrame(rows)
+        features["stochK"] = [50, 50, 70, 72, 76, 58, 46]
+        features["stochD"] = [50, 50, 65, 66, 70, 60, 55]
+        _attach_vdo_test_columns(features, [-0.12, -0.08, 0.08, 0.11, 0.12, 0.07, 0.06])
+        features["morgan_center"] = 100.0
+        features["morgan_true_range"] = 2.0
+        settings = MmfV2Settings(
+            show_expected_resistance_level=True,
+            show_expected_support_level=True,
+            high_anchor_lookback_bars=3,
+            high_stoch_k_advance=10,
+            high_confirm_lookahead_bars=2,
+            low_anchor_lookback_bars=3,
+            low_stoch_k_advance=10,
+            low_confirm_lookahead_bars=2,
+        )
+
+        markers = calculate_mmf_v2_state_machine_markers(features, settings)
+
+        self.assertNotIn("MMF_V2_EXPECTED_RESISTANCE", {marker.type for marker in markers})
+
+    def test_trend_retrace_points_are_created_only_while_trend_is_active(self) -> None:
+        rows = [synthetic_row(index, close) for index, close in enumerate([100, 99, 100, 101, 103, 102, 100, 99, 98, 99, 100])]
+        features = pd.DataFrame(rows)
+        features["stochK"] = [50, 50, 70, 72, 76, 58, 46, 42, 30, 42, 52]
+        features["stochD"] = [50, 50, 65, 66, 70, 60, 55, 48, 35, 40, 45]
+        _attach_vdo_test_columns(features, [-0.09, -0.11, -0.12, -0.12, -0.12, -0.08, 0.08, 0.11, 0.12, 0.12, 0.08])
+        settings = MmfV2Settings(
+            show_trend_down_rebound_point=True,
+            show_trend_up_pullback_point=True,
+            high_anchor_lookback_bars=3,
+            high_stoch_k_advance=10,
+            high_confirm_lookahead_bars=2,
+            low_anchor_lookback_bars=3,
+            low_stoch_k_advance=10,
+            low_confirm_lookahead_bars=2,
+        )
+
+        markers = calculate_mmf_v2_state_machine_markers(features, settings)
+        by_type = {marker.type: marker for marker in markers}
+
+        self.assertEqual(by_type["MMF_V2_TREND_DOWN_REBOUND"].marker.index, 4)
+        self.assertIn("trend_down_rebound_after_support_down_break", by_type["MMF_V2_TREND_DOWN_REBOUND"].reason)
+        self.assertEqual(by_type["MMF_V2_TREND_UP_PULLBACK"].marker.index, 8)
+        self.assertIn("trend_up_pullback_after_resistance_up_break", by_type["MMF_V2_TREND_UP_PULLBACK"].reason)
+
+    def test_trend_return_points_upgrade_retrace_points_near_ma_by_morgan_threshold(self) -> None:
+        rows = [synthetic_row(index, close) for index, close in enumerate([100, 99, 100, 101, 103, 102, 100, 99, 98, 99, 100])]
+        features = pd.DataFrame(rows)
+        features["stochK"] = [50, 50, 70, 72, 76, 58, 46, 42, 30, 42, 52]
+        features["stochD"] = [50, 50, 65, 66, 70, 60, 55, 48, 35, 40, 45]
+        _attach_vdo_test_columns(features, [-0.09, -0.11, -0.12, -0.12, -0.12, -0.08, 0.08, 0.11, 0.12, 0.12, 0.08])
+        features["ma"] = [100.0] * len(features)
+        features.loc[4, "ma"] = 104.0
+        features.loc[8, "ma"] = 96.0
+        features["morgan_true_range"] = 8.0
+        settings = MmfV2Settings(
+            show_trend_down_return_point=True,
+            show_trend_up_return_point=True,
+            trend_down_return_morgan_ratio=0.25,
+            trend_up_return_morgan_ratio=0.25,
+            high_anchor_lookback_bars=3,
+            high_stoch_k_advance=10,
+            high_confirm_lookahead_bars=2,
+            low_anchor_lookback_bars=3,
+            low_stoch_k_advance=10,
+            low_confirm_lookahead_bars=2,
+        )
+
+        markers = calculate_mmf_v2_state_machine_markers(features, settings)
+        by_type = {marker.type: marker for marker in markers}
+
+        self.assertEqual(by_type["MMF_V2_TREND_DOWN_RETURN"].marker.index, 4)
+        self.assertIn("trend_down_return_near_or_above_ma", by_type["MMF_V2_TREND_DOWN_RETURN"].reason)
+        self.assertEqual(by_type["MMF_V2_TREND_UP_RETURN"].marker.index, 8)
+        self.assertIn("trend_up_return_near_or_below_ma", by_type["MMF_V2_TREND_UP_RETURN"].reason)
+
+    def test_trend_return_points_do_not_replace_retrace_marker_records_in_backend(self) -> None:
+        rows = [synthetic_row(index, close) for index, close in enumerate([100, 99, 100, 101, 103, 102, 100, 99, 98, 99, 100])]
+        features = pd.DataFrame(rows)
+        features["stochK"] = [50, 50, 70, 72, 76, 58, 46, 42, 30, 42, 52]
+        features["stochD"] = [50, 50, 65, 66, 70, 60, 55, 48, 35, 40, 45]
+        _attach_vdo_test_columns(features, [-0.09, -0.11, -0.12, -0.12, -0.12, -0.08, 0.08, 0.11, 0.12, 0.12, 0.08])
+        features["ma"] = [100.0] * len(features)
+        features.loc[4, "ma"] = 104.0
+        features.loc[8, "ma"] = 96.0
+        features["morgan_true_range"] = 8.0
+        settings = MmfV2Settings(
+            show_trend_down_rebound_point=True,
+            show_trend_up_pullback_point=True,
+            show_trend_down_return_point=True,
+            show_trend_up_return_point=True,
+            trend_down_return_morgan_ratio=0.25,
+            trend_up_return_morgan_ratio=0.25,
+            high_anchor_lookback_bars=3,
+            high_stoch_k_advance=10,
+            high_confirm_lookahead_bars=2,
+            low_anchor_lookback_bars=3,
+            low_stoch_k_advance=10,
+            low_confirm_lookahead_bars=2,
+        )
+
+        markers = calculate_mmf_v2_state_machine_markers(features, settings)
+        by_type = {marker.type: marker for marker in markers}
+
+        self.assertEqual(by_type["MMF_V2_TREND_DOWN_REBOUND"].marker.index, 4)
+        self.assertEqual(by_type["MMF_V2_TREND_DOWN_RETURN"].marker.index, 4)
+        self.assertEqual(by_type["MMF_V2_TREND_UP_PULLBACK"].marker.index, 8)
+        self.assertEqual(by_type["MMF_V2_TREND_UP_RETURN"].marker.index, 8)
+
+    def test_trend_return_points_do_not_need_threshold_when_anchor_bar_touches_ma(self) -> None:
+        rows = [synthetic_row(index, close) for index, close in enumerate([100, 99, 100, 101, 103, 102, 100, 99, 98, 99, 100])]
+        features = pd.DataFrame(rows)
+        features["stochK"] = [50, 50, 70, 72, 76, 58, 46, 42, 30, 42, 52]
+        features["stochD"] = [50, 50, 65, 66, 70, 60, 55, 48, 35, 40, 45]
+        _attach_vdo_test_columns(features, [-0.09, -0.11, -0.12, -0.12, -0.12, -0.08, 0.08, 0.11, 0.12, 0.12, 0.08])
+        features["ma"] = [100.0] * len(features)
+        features.loc[4, "ma"] = rows[4]["high"]
+        features.loc[8, "ma"] = rows[8]["low"]
+        features["morgan_true_range"] = 0.0
+        settings = MmfV2Settings(
+            show_trend_down_return_point=True,
+            show_trend_up_return_point=True,
+            trend_down_return_morgan_ratio=0,
+            trend_up_return_morgan_ratio=0,
+            high_anchor_lookback_bars=3,
+            high_stoch_k_advance=10,
+            high_confirm_lookahead_bars=2,
+            low_anchor_lookback_bars=3,
+            low_stoch_k_advance=10,
+            low_confirm_lookahead_bars=2,
+        )
+
+        markers = calculate_mmf_v2_state_machine_markers(features, settings)
+        marker_types = {marker.type for marker in markers}
+
+        self.assertIn("MMF_V2_TREND_DOWN_RETURN", marker_types)
+        self.assertIn("MMF_V2_TREND_UP_RETURN", marker_types)
+
+    def test_trend_divergence_points_require_previous_matching_return_point(self) -> None:
+        rows = [synthetic_row(index, close) for index, close in enumerate([100, 99, 100, 101, 103, 102, 100, 99, 98, 99, 100])]
+        features = pd.DataFrame(rows)
+        features["stochK"] = [50, 50, 70, 72, 76, 58, 46, 42, 30, 42, 52]
+        features["stochD"] = [50, 50, 65, 66, 70, 60, 55, 48, 35, 40, 45]
+        _attach_vdo_test_columns(features, [-0.09, -0.11, -0.12, -0.12, -0.12, -0.08, 0.08, 0.11, 0.12, 0.12, 0.08])
+        features["ma"] = [100.0] * len(features)
+        features.loc[4, "ma"] = 104.0
+        features["morgan_center"] = 100.0
+        features["morgan_true_range"] = 4.0
+        settings = MmfV2Settings(
+            show_trend_down_divergence_point=True,
+            trend_down_return_morgan_ratio=0.25,
+            trend_down_divergence_morgan_ratio=0.375,
+            high_anchor_lookback_bars=3,
+            high_stoch_k_advance=10,
+            high_confirm_lookahead_bars=2,
+            low_anchor_lookback_bars=3,
+            low_stoch_k_advance=10,
+            low_confirm_lookahead_bars=2,
+        )
+
+        markers = calculate_mmf_v2_state_machine_markers(features, settings)
+        by_type = {marker.type: marker for marker in markers}
+
+        self.assertEqual(by_type["MMF_V2_TREND_DOWN_DIVERGENCE"].marker.index, 8)
+        self.assertIn("trend_down_divergence_after_return_low_below_morgan", by_type["MMF_V2_TREND_DOWN_DIVERGENCE"].reason)
+
+    def test_trend_up_divergence_points_require_previous_matching_return_point(self) -> None:
+        rows = [synthetic_row(index, close) for index, close in enumerate([100, 101, 102, 99, 97, 99, 101, 103, 104, 102, 101])]
+        features = pd.DataFrame(rows)
+        features["stochK"] = [50, 50, 30, 28, 24, 42, 55, 70, 76, 58, 46]
+        features["stochD"] = [50, 50, 35, 34, 30, 40, 50, 65, 70, 60, 55]
+        _attach_vdo_test_columns(features, [0.09, 0.11, 0.12, 0.12, 0.12, 0.08, -0.08, -0.11, -0.12, -0.12, -0.08])
+        features["ma"] = [100.0] * len(features)
+        features.loc[4, "ma"] = 96.0
+        features["morgan_center"] = 100.0
+        features["morgan_true_range"] = 4.0
+        settings = MmfV2Settings(
+            show_trend_up_divergence_point=True,
+            trend_up_return_morgan_ratio=0.25,
+            trend_up_divergence_morgan_ratio=0.375,
+            high_anchor_lookback_bars=3,
+            high_stoch_k_advance=10,
+            high_confirm_lookahead_bars=2,
+            low_anchor_lookback_bars=3,
+            low_stoch_k_advance=10,
+            low_confirm_lookahead_bars=2,
+        )
+
+        markers = calculate_mmf_v2_state_machine_markers(features, settings)
+        by_type = {marker.type: marker for marker in markers}
+
+        self.assertEqual(by_type["MMF_V2_TREND_UP_DIVERGENCE"].marker.index, 8)
+        self.assertIn("trend_up_divergence_after_return_high_above_morgan", by_type["MMF_V2_TREND_UP_DIVERGENCE"].reason)
 
 
 def _attach_vdo_test_columns(features: pd.DataFrame, values: list[float]) -> None:

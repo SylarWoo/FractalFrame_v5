@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import './RightDrawer.css'
 import '../mt5DataCenter/Mt5DataCenterPanel.css'
@@ -12,11 +12,7 @@ import { useRightDrawerResize } from './useRightDrawerResize'
 import { useRightDrawerSelection } from './useRightDrawerSelection'
 import { useStoreV5Jobs } from './useStoreV5Jobs'
 import { useWatchlistRealtime } from './useWatchlistRealtime'
-import { DrawingsDrawer } from './DrawingsDrawer'
-import { IndicatorsDrawer } from './IndicatorsDrawer'
-import { ObjectTreeDrawer } from './ObjectTreeDrawer'
 import { RightDrawerFrame } from './RightDrawerFrame'
-import { RightDrawerMt5Body } from './RightDrawerMt5Body'
 import { RightDrawerSettingsHost } from './RightDrawerSettingsHost'
 import type { RightDrawerProps } from './RightDrawerTypes'
 import {
@@ -24,6 +20,11 @@ import {
   fetchMt5Symbols,
 } from '../../services/mt5/mt5SymbolsApi'
 import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
+
+const DrawingsDrawer = lazy(() => import('./DrawingsDrawer').then((module) => ({ default: module.DrawingsDrawer })))
+const IndicatorsDrawer = lazy(() => import('./IndicatorsDrawer').then((module) => ({ default: module.IndicatorsDrawer })))
+const ObjectTreeDrawer = lazy(() => import('./ObjectTreeDrawer').then((module) => ({ default: module.ObjectTreeDrawer })))
+const RightDrawerMt5Body = lazy(() => import('./RightDrawerMt5Body').then((module) => ({ default: module.RightDrawerMt5Body })))
 
 function hasLoadedSymbolSessions(row: Mt5SymbolRow | undefined) {
   if (!row?.sessions) return false
@@ -416,6 +417,7 @@ export function RightDrawer({
 
   return (
     <RightDrawerFrame activeDrawer={activeDrawer} onClose={onClose} onResize={onResize} onResizePointerDown={handleResizePointerDown} onToggleDrawer={onToggleDrawer} open={open} topPaneHeight={topPaneHeight}>
+      <Suspense fallback={null}>
         {renderedActiveDrawer === 'drawings' ? (
           <DrawingsDrawer />
         ) : renderedActiveDrawer === 'objectTree' ? (
@@ -479,6 +481,7 @@ export function RightDrawer({
             watchlistTableWrapRef={watchlistTableWrapRef} watchlistTicks={watchlistTicks}
           />
         ) : null}
+      </Suspense>
     </RightDrawerFrame>
   )
 }

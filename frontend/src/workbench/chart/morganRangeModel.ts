@@ -27,6 +27,7 @@ export type MorganRangeSegment = {
   range: number
   startIndex: number
   startTimestamp: number
+  trueRange: number
   upper: number
 }
 
@@ -158,6 +159,7 @@ export function calculateMorganRangeSegments(dataList: KLineData[], futureBars =
       range,
       startIndex: anchor.startIndex,
       startTimestamp: anchor.startTimestamp,
+      trueRange: range * (0.236 - (-0.236)),
       upper: center + range,
     })
   }

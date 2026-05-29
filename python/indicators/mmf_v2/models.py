@@ -10,6 +10,18 @@ MmfV2SignalType = Literal[
     "MMF_V2_LOW",
     "MMF_V2_SUPPORT",
     "MMF_V2_RESISTANCE",
+    "MMF_V2_EXPECTED_SUPPORT",
+    "MMF_V2_EXPECTED_RESISTANCE",
+    "MMF_V2_TREND_DOWN_REBOUND",
+    "MMF_V2_TREND_UP_PULLBACK",
+    "MMF_V2_TREND_DOWN_RETURN",
+    "MMF_V2_TREND_UP_RETURN",
+    "MMF_V2_TREND_DOWN_DIVERGENCE",
+    "MMF_V2_TREND_UP_DIVERGENCE",
+    "MMF_V2_SUPPORT_DOWN_BREAK",
+    "MMF_V2_SUPPORT_UP_BREAK",
+    "MMF_V2_RESISTANCE_DOWN_BREAK",
+    "MMF_V2_RESISTANCE_UP_BREAK",
     "MMF_V2_LOW_POSITION_HIGH",
     "MMF_V2_HIGH_POSITION_LOW",
 ]
@@ -35,9 +47,9 @@ class MmfV2VdoSettings:
 
 @dataclass(frozen=True)
 class MmfV2MaSettings:
-    length: int = 20
+    length: int = 120
     ma_type: str = "sma"
-    source: str = "close"
+    source: str = "hlc3"
 
 
 @dataclass(frozen=True)
@@ -57,10 +69,26 @@ class MmfV2Settings:
     show_low: bool = True
     show_support_level: bool = False
     show_resistance_level: bool = False
+    show_expected_support_level: bool = False
+    show_expected_resistance_level: bool = False
+    show_trend_down_rebound_point: bool = False
+    show_trend_up_pullback_point: bool = False
+    show_trend_down_return_point: bool = False
+    show_trend_up_return_point: bool = False
+    show_trend_down_divergence_point: bool = False
+    show_trend_up_divergence_point: bool = False
+    show_support_down_break_point: bool = False
+    show_support_up_break_point: bool = False
+    show_resistance_down_break_point: bool = False
+    show_resistance_up_break_point: bool = False
     high_anchor_lookback_bars: int = 14
     low_anchor_lookback_bars: int = 14
     high_stoch_k_advance: float = 10
     low_stoch_k_advance: float = 10
+    trend_down_return_morgan_ratio: float = 0.25
+    trend_up_return_morgan_ratio: float = 0.25
+    trend_down_divergence_morgan_ratio: float = 0.375
+    trend_up_divergence_morgan_ratio: float = 0.375
     high_confirm_lookahead_bars: int = 7
     low_confirm_lookahead_bars: int = 7
     stoch: MmfV2StochSettings = field(default_factory=MmfV2StochSettings)
