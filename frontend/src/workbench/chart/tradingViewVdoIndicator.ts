@@ -124,23 +124,38 @@ function drawHorizontalLine(
   ctx.restore()
 }
 
-function drawHorizontalBand(
+function drawBandBetweenValues(
   ctx: CanvasRenderingContext2D,
   bounding: { left: number; width: number },
   yAxis: { convertToPixel: (value: number) => number },
-  settings: VdoIndicatorSettings,
+  visible: boolean,
+  upperValue: number,
+  lowerValue: number,
+  color: string,
+  opacity: number,
 ) {
-  if (!settings.backgroundVisible) return
-  const upY = yAxis.convertToPixel(settings.upLineValue)
-  const downY = yAxis.convertToPixel(settings.downLineValue)
+  if (!visible || !Number.isFinite(upperValue) || !Number.isFinite(lowerValue)) return
+  const upY = yAxis.convertToPixel(upperValue)
+  const downY = yAxis.convertToPixel(lowerValue)
   const top = Math.min(upY, downY)
   const height = Math.abs(downY - upY)
   if (height <= 0) return
 
   ctx.save()
-  ctx.fillStyle = colorWithAlpha(settings.backgroundColor, settings.backgroundOpacity)
+  ctx.fillStyle = colorWithAlpha(color, opacity)
   ctx.fillRect(bounding.left, top, bounding.width, height)
   ctx.restore()
+}
+
+function drawHorizontalBands(
+  ctx: CanvasRenderingContext2D,
+  bounding: { left: number; width: number },
+  yAxis: { convertToPixel: (value: number) => number },
+  settings: VdoIndicatorSettings,
+) {
+  drawBandBetweenValues(ctx, bounding, yAxis, settings.backgroundUpperVisible, settings.upLineValue, settings.upLine2Value, settings.backgroundUpperColor, settings.backgroundUpperOpacity)
+  drawBandBetweenValues(ctx, bounding, yAxis, settings.backgroundVisible, settings.upLine2Value, settings.downLine2Value, settings.backgroundColor, settings.backgroundOpacity)
+  drawBandBetweenValues(ctx, bounding, yAxis, settings.backgroundLowerVisible, settings.downLine2Value, settings.downLineValue, settings.backgroundLowerColor, settings.backgroundLowerOpacity)
 }
 
 function drawLineSeries(
@@ -269,7 +284,7 @@ export function ensureTradingViewVdoIndicator() {
     },
     draw: ({ bounding, ctx, indicator, visibleRange, xAxis, yAxis }) => {
       const settings = normalizeVdoSettings(indicator.calcParams[0] as Partial<VdoIndicatorSettings>)
-      drawHorizontalBand(ctx, bounding, yAxis, settings)
+      drawHorizontalBands(ctx, bounding, yAxis, settings)
       drawHorizontalLine(ctx, bounding, yAxis, settings.zeroLineVisible, 0, settings.zeroLineColor, settings.zeroLineStyle, settings.zeroLineWidth, settings.zeroLineOpacity)
       drawHorizontalLine(ctx, bounding, yAxis, settings.upLineVisible, settings.upLineValue, settings.upLineColor, settings.upLineStyle, settings.upLineWidth, settings.upLineOpacity)
       drawHorizontalLine(ctx, bounding, yAxis, settings.upLine2Visible, settings.upLine2Value, settings.upLine2Color, settings.upLine2Style, settings.upLine2Width, settings.upLine2Opacity)

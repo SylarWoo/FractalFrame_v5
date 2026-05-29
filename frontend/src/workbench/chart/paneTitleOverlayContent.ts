@@ -4,6 +4,7 @@ import {
   defaultMacdIndicatorSettings,
   defaultMaIndicatorSettings,
   defaultRsiIndicatorSettings,
+  defaultSqzmomIndicatorSettings,
   defaultStochIndicatorSettings,
   defaultTsiIndicatorSettings,
   defaultVdoIndicatorSettings,
@@ -59,6 +60,7 @@ export const titlePaneSpecs = [
   { paneId: 'dpo_pane', name: 'DPO' },
   { paneId: 'rsi_pane', name: 'RSI' },
   { paneId: 'stoch_pane', name: 'Stoch' },
+  { paneId: 'sqzmom_pane', name: 'SQZMOM' },
   { paneId: 'tsi_pane', name: 'TSI' },
   { paneId: 'vdo_pane', name: 'VDO' },
   { paneId: 'vi_pane', name: 'VI' },
@@ -280,6 +282,20 @@ function createStochParts(chart: Chart, indicator: IndicatorLike, crosshairIndex
   return parts
 }
 
+function createSqzmomParts(chart: Chart, indicator: IndicatorLike, crosshairIndex: number | null): PaneTitlePart[] {
+  const settings = mergeSettings(defaultSqzmomIndicatorSettings, indicator.calcParams?.[0])
+  const row = readIndicatorRow(chart, indicator, crosshairIndex)
+  const parts: PaneTitlePart[] = [titlePart(`SQZMOM${booleanValue(settings.inputStatusLineVisible, true) && readStatusInputsVisible() ? ` ${settings.bbLength} ${settings.bbMultiplier} ${settings.kcLength} ${settings.kcMultiplier}` : ''}`)]
+  if (booleanValue(settings.statusLineValuesVisible, true) && readStatusValuesVisible() && booleanValue(settings.histogramVisible, true)) {
+    const momentum = numberValue(row.momentum) ?? 0
+    const color = momentum >= 0
+      ? stringValue(settings.histogramPositiveRisingColor, '#00e676')
+      : stringValue(settings.histogramNegativeFallingColor, '#ff5252')
+    parts.push(titlePart(`Momentum ${formatNumber(row.momentum, settings.precision, 4)}`, color))
+  }
+  return parts
+}
+
 function createDpoParts(chart: Chart, indicator: IndicatorLike, crosshairIndex: number | null): PaneTitlePart[] {
   const settings = mergeSettings(defaultDpoIndicatorSettings, indicator.calcParams?.[0])
   const row = readIndicatorRow(chart, indicator, crosshairIndex)
@@ -389,6 +405,7 @@ function createIndicatorParts(chart: Chart, paneId: string, name: string, crossh
   if (name === 'MACD') return createMacdParts(chart, indicator, crosshairIndex)
   if (name === 'DPO') return createDpoParts(chart, indicator, crosshairIndex)
   if (name === 'RSI') return createRsiParts(chart, indicator, crosshairIndex)
+  if (name === 'SQZMOM') return createSqzmomParts(chart, indicator, crosshairIndex)
   if (name === 'Stoch') return createStochParts(chart, indicator, crosshairIndex)
   if (name === 'TSI') return createTsiParts(chart, indicator, crosshairIndex)
   if (name === 'VDO') return createVdoParts(chart, indicator, crosshairIndex)

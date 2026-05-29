@@ -1,4 +1,4 @@
-export type RsiSource = 'close' | 'open' | 'high' | 'low' | 'hl2' | 'hlc3' | 'ohlc4'
+﻿export type RsiSource = 'close' | 'open' | 'high' | 'low' | 'hl2' | 'hlc3' | 'ohlc4'
 export type RsiSmoothingType = 'none' | 'sma' | 'sma_bb' | 'ema' | 'smma' | 'wma' | 'vwma'
 export type RsiPrecision = 'system' | '0' | '1' | '2' | '3' | '4'
 export type RsiLineStyle = 'solid' | 'dashed' | 'dotted'
@@ -11,6 +11,38 @@ export type VwapBandCalculationMode = 'standard_deviation' | 'percentage'
 export type VwapSource = 'hlc3' | 'close' | 'open' | 'high' | 'low' | 'hl2' | 'ohlc4'
 export type VwapTimeframe = 'chart' | '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d'
 export type MacdMaType = 'ema' | 'sma'
+
+export type SqzmomIndicatorSettings = {
+  bbLength: number
+  bbMultiplier: number
+  kcLength: number
+  kcMultiplier: number
+  useTrueRange: boolean
+  timeframe: VwapTimeframe
+  waitForTimeframeClose: boolean
+  histogramVisible: boolean
+  histogramPositiveRisingColor: string
+  histogramPositiveRisingOpacity: number
+  histogramPositiveFallingColor: string
+  histogramPositiveFallingOpacity: number
+  histogramNegativeFallingColor: string
+  histogramNegativeFallingOpacity: number
+  histogramNegativeRisingColor: string
+  histogramNegativeRisingOpacity: number
+  squeezeOnVisible: boolean
+  squeezeOnColor: string
+  squeezeOnOpacity: number
+  squeezeOffVisible: boolean
+  squeezeOffColor: string
+  squeezeOffOpacity: number
+  noSqueezeVisible: boolean
+  noSqueezeColor: string
+  noSqueezeOpacity: number
+  precision: RsiPrecision
+  priceScaleLabelsVisible: boolean
+  statusLineValuesVisible: boolean
+  inputStatusLineVisible: boolean
+}
 
 export type DpoIndicatorSettings = {
   backgroundColor: string
@@ -62,6 +94,12 @@ export type DpoIndicatorSettings = {
 }
 
 export type VdoIndicatorSettings = DpoIndicatorSettings & {
+  backgroundLowerColor: string
+  backgroundLowerOpacity: number
+  backgroundLowerVisible: boolean
+  backgroundUpperColor: string
+  backgroundUpperOpacity: number
+  backgroundUpperVisible: boolean
   emaSmoothing: number
 }
 
@@ -307,13 +345,31 @@ export type MmfIndicatorSettings = {
   highMorganRatio: MmfMorganRatio
   highOffsetPercent: number
   highSize: number
+  highAnchorLookbackBars: number
+  highStochKAdvance: number
+  highConfirmLookaheadBars: number
   highSymbol: string
+  deadCrossColor: string
+  deadCrossSize: number
+  deadCrossSymbol: string
+  highConfirmPointColor: string
+  highConfirmPointSize: number
+  highConfirmPointSymbol: string
   lowColor: string
   lowDpoValue: number
   lowMorganRatio: MmfMorganRatio
   lowOffsetPercent: number
   lowSize: number
+  lowAnchorLookbackBars: number
+  lowStochKAdvance: number
+  lowConfirmLookaheadBars: number
   lowSymbol: string
+  goldenCrossColor: string
+  goldenCrossSize: number
+  goldenCrossSymbol: string
+  lowConfirmPointColor: string
+  lowConfirmPointSize: number
+  lowConfirmPointSymbol: string
   lowPositionHighColor: string
   lowPositionHighSize: number
   lowPositionHighSymbol: string
@@ -387,6 +443,10 @@ export type MmfIndicatorSettings = {
   showHighPositionLowPoint: boolean
   showLow: boolean
   showLowPositionHighPoint: boolean
+  showDeadCross: boolean
+  showGoldenCross: boolean
+  showHighConfirmPoint: boolean
+  showLowConfirmPoint: boolean
   showOscHighDivergencePoint: boolean
   showOscLowDivergencePoint: boolean
   showPullbackPoint: boolean
@@ -507,6 +567,7 @@ export type PersistedIndicatorsState = {
     MMF_V2?: boolean
     MR?: boolean
     RSI?: boolean
+    SQZMOM?: boolean
     Stoch?: boolean
     TSI?: boolean
     VDO?: boolean
@@ -520,6 +581,7 @@ export type PersistedIndicatorsState = {
   mmf: MmfIndicatorSettings
   mr: MrIndicatorSettings
   rsi: RsiIndicatorSettings
+  sqzmom: SqzmomIndicatorSettings
   stoch: StochIndicatorSettings
   tsi: TsiIndicatorSettings
   vdo: VdoIndicatorSettings
@@ -692,6 +754,38 @@ export const defaultMacdIndicatorSettings: MacdIndicatorSettings = {
   inputStatusLineVisible: true,
 }
 
+export const defaultSqzmomIndicatorSettings: SqzmomIndicatorSettings = {
+  bbLength: 20,
+  bbMultiplier: 2,
+  kcLength: 20,
+  kcMultiplier: 1.5,
+  useTrueRange: true,
+  timeframe: 'chart',
+  waitForTimeframeClose: true,
+  histogramVisible: true,
+  histogramPositiveRisingColor: '#00e676',
+  histogramPositiveRisingOpacity: 1,
+  histogramPositiveFallingColor: '#2e7d32',
+  histogramPositiveFallingOpacity: 1,
+  histogramNegativeFallingColor: '#ff5252',
+  histogramNegativeFallingOpacity: 1,
+  histogramNegativeRisingColor: '#880e4f',
+  histogramNegativeRisingOpacity: 1,
+  squeezeOnVisible: true,
+  squeezeOnColor: '#000000',
+  squeezeOnOpacity: 1,
+  squeezeOffVisible: true,
+  squeezeOffColor: '#9e9e9e',
+  squeezeOffOpacity: 1,
+  noSqueezeVisible: true,
+  noSqueezeColor: '#2962ff',
+  noSqueezeOpacity: 1,
+  precision: 'system',
+  priceScaleLabelsVisible: true,
+  statusLineValuesVisible: true,
+  inputStatusLineVisible: true,
+}
+
 export const defaultTsiIndicatorSettings: TsiIndicatorSettings = {
   longLength: 25,
   shortLength: 13,
@@ -814,13 +908,31 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   highMorganRatio: 0.118,
   highOffsetPercent: 0,
   highSize: 24,
+  highAnchorLookbackBars: 14,
+  highStochKAdvance: 10,
+  highConfirmLookaheadBars: 7,
   highSymbol: '\u25c6',
+  deadCrossColor: '#ef5350',
+  deadCrossSize: 16,
+  deadCrossSymbol: '\u2715',
+  highConfirmPointColor: '#ef5350',
+  highConfirmPointSize: 16,
+  highConfirmPointSymbol: '\u2193',
   lowColor: '#26a69a',
   lowDpoValue: -11,
   lowMorganRatio: -0.118,
   lowOffsetPercent: 0,
   lowSize: 24,
+  lowAnchorLookbackBars: 14,
+  lowStochKAdvance: 10,
+  lowConfirmLookaheadBars: 7,
   lowSymbol: '\u25c6',
+  goldenCrossColor: '#26a69a',
+  goldenCrossSize: 16,
+  goldenCrossSymbol: '\u2715',
+  lowConfirmPointColor: '#26a69a',
+  lowConfirmPointSize: 16,
+  lowConfirmPointSymbol: '\u2191',
   lowPositionHighColor: '#ef5350',
   lowPositionHighSize: 24,
   lowPositionHighSymbol: '\u21d3',
@@ -894,6 +1006,10 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   showHighPositionLowPoint: false,
   showLow: false,
   showLowPositionHighPoint: false,
+  showDeadCross: false,
+  showGoldenCross: false,
+  showHighConfirmPoint: true,
+  showLowConfirmPoint: true,
   showOscHighDivergencePoint: false,
   showOscLowDivergencePoint: false,
   showPullbackPoint: false,
@@ -982,17 +1098,25 @@ export const defaultDpoIndicatorSettings: DpoIndicatorSettings = {
 
 export const defaultVdoIndicatorSettings: VdoIndicatorSettings = {
   ...defaultDpoIndicatorSettings,
+  backgroundColor: '#2962ff',
+  backgroundLowerColor: '#ef5350',
+  backgroundLowerOpacity: 0.08,
+  backgroundLowerVisible: true,
+  backgroundOpacity: 0.08,
+  backgroundUpperColor: '#26a69a',
+  backgroundUpperOpacity: 0.08,
+  backgroundUpperVisible: true,
   backgroundVisible: true,
   downLine2Value: -0.05,
   downLine2Visible: true,
-  downLineValue: -0.236,
+  downLineValue: -0.1,
   downLineVisible: true,
   dpoColor: '#2962ff',
   emaSmoothing: 0,
   length: 120,
   upLine2Value: 0.05,
   upLine2Visible: true,
-  upLineValue: 0.236,
+  upLineValue: 0.1,
   upLineVisible: true,
 }
 
@@ -1211,6 +1335,46 @@ export function normalizeMacdSettings(input?: Partial<MacdIndicatorSettings>): M
   }
 }
 
+export function normalizeSqzmomSettings(input?: Partial<SqzmomIndicatorSettings>): SqzmomIndicatorSettings {
+  const merged = { ...defaultSqzmomIndicatorSettings, ...(input ?? {}) }
+  const bbLength = Math.round(Number(merged.bbLength))
+  const kcLength = Math.round(Number(merged.kcLength))
+  const bbMultiplier = Number(merged.bbMultiplier)
+  const kcMultiplier = Number(merged.kcMultiplier)
+  const histogramPositiveRisingOpacity = Number(merged.histogramPositiveRisingOpacity)
+  const histogramPositiveFallingOpacity = Number(merged.histogramPositiveFallingOpacity)
+  const histogramNegativeFallingOpacity = Number(merged.histogramNegativeFallingOpacity)
+  const histogramNegativeRisingOpacity = Number(merged.histogramNegativeRisingOpacity)
+  const squeezeOnOpacity = Number(merged.squeezeOnOpacity)
+  const squeezeOffOpacity = Number(merged.squeezeOffOpacity)
+  const noSqueezeOpacity = Number(merged.noSqueezeOpacity)
+  return {
+    ...merged,
+    bbLength: Number.isFinite(bbLength) ? Math.max(1, Math.min(bbLength, 500)) : defaultSqzmomIndicatorSettings.bbLength,
+    bbMultiplier: Number.isFinite(bbMultiplier) ? Math.max(0, Math.min(bbMultiplier, 100)) : defaultSqzmomIndicatorSettings.bbMultiplier,
+    histogramNegativeFallingOpacity: Number.isFinite(histogramNegativeFallingOpacity) ? Math.max(0, Math.min(histogramNegativeFallingOpacity, 1)) : defaultSqzmomIndicatorSettings.histogramNegativeFallingOpacity,
+    histogramNegativeRisingOpacity: Number.isFinite(histogramNegativeRisingOpacity) ? Math.max(0, Math.min(histogramNegativeRisingOpacity, 1)) : defaultSqzmomIndicatorSettings.histogramNegativeRisingOpacity,
+    histogramPositiveFallingOpacity: Number.isFinite(histogramPositiveFallingOpacity) ? Math.max(0, Math.min(histogramPositiveFallingOpacity, 1)) : defaultSqzmomIndicatorSettings.histogramPositiveFallingOpacity,
+    histogramPositiveRisingOpacity: Number.isFinite(histogramPositiveRisingOpacity) ? Math.max(0, Math.min(histogramPositiveRisingOpacity, 1)) : defaultSqzmomIndicatorSettings.histogramPositiveRisingOpacity,
+    histogramVisible: merged.histogramVisible !== false,
+    inputStatusLineVisible: merged.inputStatusLineVisible !== false,
+    kcLength: Number.isFinite(kcLength) ? Math.max(1, Math.min(kcLength, 500)) : defaultSqzmomIndicatorSettings.kcLength,
+    kcMultiplier: Number.isFinite(kcMultiplier) ? Math.max(0, Math.min(kcMultiplier, 100)) : defaultSqzmomIndicatorSettings.kcMultiplier,
+    noSqueezeOpacity: Number.isFinite(noSqueezeOpacity) ? Math.max(0, Math.min(noSqueezeOpacity, 1)) : defaultSqzmomIndicatorSettings.noSqueezeOpacity,
+    noSqueezeVisible: merged.noSqueezeVisible !== false,
+    precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
+    priceScaleLabelsVisible: merged.priceScaleLabelsVisible !== false,
+    squeezeOffOpacity: Number.isFinite(squeezeOffOpacity) ? Math.max(0, Math.min(squeezeOffOpacity, 1)) : defaultSqzmomIndicatorSettings.squeezeOffOpacity,
+    squeezeOffVisible: merged.squeezeOffVisible !== false,
+    squeezeOnOpacity: Number.isFinite(squeezeOnOpacity) ? Math.max(0, Math.min(squeezeOnOpacity, 1)) : defaultSqzmomIndicatorSettings.squeezeOnOpacity,
+    squeezeOnVisible: merged.squeezeOnVisible !== false,
+    statusLineValuesVisible: merged.statusLineValuesVisible !== false,
+    timeframe: ['chart', '1m', '5m', '15m', '30m', '1h', '4h', '1d'].includes(merged.timeframe) ? merged.timeframe : 'chart',
+    useTrueRange: merged.useTrueRange !== false,
+    waitForTimeframeClose: merged.waitForTimeframeClose !== false,
+  }
+}
+
 export function normalizeTsiSettings(input?: Partial<TsiIndicatorSettings>): TsiIndicatorSettings {
   const merged = { ...defaultTsiIndicatorSettings, ...(input ?? {}) }
   const longLength = Math.round(Number(merged.longLength))
@@ -1327,15 +1491,62 @@ export function normalizeMrSettings(input?: Partial<MrIndicatorSettings>): MrInd
 }
 
 export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): MmfIndicatorSettings {
+  const legacy = (input ?? {}) as Partial<Record<string, unknown>>
   const merged = { ...defaultMmfIndicatorSettings, ...(input ?? {}) }
+  const hasHighConfirmPointColor = Object.prototype.hasOwnProperty.call(legacy, 'highConfirmPointColor')
+  const hasHighConfirmPointSize = Object.prototype.hasOwnProperty.call(legacy, 'highConfirmPointSize')
+  const hasHighConfirmPointSymbol = Object.prototype.hasOwnProperty.call(legacy, 'highConfirmPointSymbol')
+  const hasLowConfirmPointColor = Object.prototype.hasOwnProperty.call(legacy, 'lowConfirmPointColor')
+  const hasLowConfirmPointSize = Object.prototype.hasOwnProperty.call(legacy, 'lowConfirmPointSize')
+  const hasLowConfirmPointSymbol = Object.prototype.hasOwnProperty.call(legacy, 'lowConfirmPointSymbol')
+  const hasShowHighConfirmPoint = Object.prototype.hasOwnProperty.call(legacy, 'showHighConfirmPoint')
+  const hasShowLowConfirmPoint = Object.prototype.hasOwnProperty.call(legacy, 'showLowConfirmPoint')
   const highOffsetPercent = Number(merged.highOffsetPercent)
   const lowOffsetPercent = Number(merged.lowOffsetPercent)
   const highSize = Math.round(Number(merged.highSize))
   const lowSize = Math.round(Number(merged.lowSize))
+  const deadCrossSize = Math.round(Number(merged.deadCrossSize))
+  const goldenCrossSize = Math.round(Number(merged.goldenCrossSize))
+  const highConfirmPointSize = Math.round(Number(hasHighConfirmPointSize ? merged.highConfirmPointSize : legacy.sellSize ?? merged.highConfirmPointSize))
+  const lowConfirmPointSize = Math.round(Number(hasLowConfirmPointSize ? merged.lowConfirmPointSize : legacy.buySize ?? merged.lowConfirmPointSize))
+  const highAnchorLookbackBars = Math.round(Number(merged.highAnchorLookbackBars))
+  const lowAnchorLookbackBars = Math.round(Number(merged.lowAnchorLookbackBars))
+  const highStochKAdvance = Number(merged.highStochKAdvance)
+  const lowStochKAdvance = Number(merged.lowStochKAdvance)
+  const highConfirmLookaheadBars = Math.round(Number(merged.highConfirmLookaheadBars))
+  const lowConfirmLookaheadBars = Math.round(Number(merged.lowConfirmLookaheadBars))
   const highColor = typeof merged.highColor === 'string' && merged.highColor.trim() ? merged.highColor : defaultMmfIndicatorSettings.highColor
   const highSymbol = typeof merged.highSymbol === 'string' && merged.highSymbol.trim() ? merged.highSymbol : defaultMmfIndicatorSettings.highSymbol
+  const deadCrossColor = typeof merged.deadCrossColor === 'string' && merged.deadCrossColor.trim() ? merged.deadCrossColor : defaultMmfIndicatorSettings.deadCrossColor
+  const deadCrossSymbol = typeof merged.deadCrossSymbol === 'string' && merged.deadCrossSymbol.trim() ? merged.deadCrossSymbol : defaultMmfIndicatorSettings.deadCrossSymbol
+  const legacySellColor = legacy.sellColor
+  const legacySellSymbol = legacy.sellSymbol
+  const highConfirmPointColor = hasHighConfirmPointColor && typeof merged.highConfirmPointColor === 'string' && merged.highConfirmPointColor.trim()
+    ? merged.highConfirmPointColor
+    : typeof legacySellColor === 'string' && legacySellColor.trim()
+      ? legacySellColor
+      : defaultMmfIndicatorSettings.highConfirmPointColor
+  const highConfirmPointSymbol = hasHighConfirmPointSymbol && typeof merged.highConfirmPointSymbol === 'string' && merged.highConfirmPointSymbol.trim()
+    ? merged.highConfirmPointSymbol
+    : typeof legacySellSymbol === 'string' && legacySellSymbol.trim()
+      ? legacySellSymbol
+      : defaultMmfIndicatorSettings.highConfirmPointSymbol
   const lowColor = typeof merged.lowColor === 'string' && merged.lowColor.trim() ? merged.lowColor : defaultMmfIndicatorSettings.lowColor
   const lowSymbol = typeof merged.lowSymbol === 'string' && merged.lowSymbol.trim() ? merged.lowSymbol : defaultMmfIndicatorSettings.lowSymbol
+  const goldenCrossColor = typeof merged.goldenCrossColor === 'string' && merged.goldenCrossColor.trim() ? merged.goldenCrossColor : defaultMmfIndicatorSettings.goldenCrossColor
+  const goldenCrossSymbol = typeof merged.goldenCrossSymbol === 'string' && merged.goldenCrossSymbol.trim() ? merged.goldenCrossSymbol : defaultMmfIndicatorSettings.goldenCrossSymbol
+  const legacyBuyColor = legacy.buyColor
+  const legacyBuySymbol = legacy.buySymbol
+  const lowConfirmPointColor = hasLowConfirmPointColor && typeof merged.lowConfirmPointColor === 'string' && merged.lowConfirmPointColor.trim()
+    ? merged.lowConfirmPointColor
+    : typeof legacyBuyColor === 'string' && legacyBuyColor.trim()
+      ? legacyBuyColor
+      : defaultMmfIndicatorSettings.lowConfirmPointColor
+  const lowConfirmPointSymbol = hasLowConfirmPointSymbol && typeof merged.lowConfirmPointSymbol === 'string' && merged.lowConfirmPointSymbol.trim()
+    ? merged.lowConfirmPointSymbol
+    : typeof legacyBuySymbol === 'string' && legacyBuySymbol.trim()
+      ? legacyBuySymbol
+      : defaultMmfIndicatorSettings.lowConfirmPointSymbol
   const lowPositionHighColor = typeof merged.lowPositionHighColor === 'string' && merged.lowPositionHighColor.trim() ? merged.lowPositionHighColor : defaultMmfIndicatorSettings.lowPositionHighColor
   const lowPositionHighSymbol = typeof merged.lowPositionHighSymbol === 'string' && merged.lowPositionHighSymbol.trim() ? merged.lowPositionHighSymbol : defaultMmfIndicatorSettings.lowPositionHighSymbol
   const highPositionLowColor = typeof merged.highPositionLowColor === 'string' && merged.highPositionLowColor.trim() ? merged.highPositionLowColor : defaultMmfIndicatorSettings.highPositionLowColor
@@ -1429,14 +1640,32 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     highMorganRatio: Number.isFinite(highMorganRatio) ? Math.max(0.118, Math.min(highMorganRatio, 0.236)) : defaultMmfIndicatorSettings.highMorganRatio,
     highOffsetPercent: Number.isFinite(highOffsetPercent) ? Math.max(-99, Math.min(Math.round(highOffsetPercent), 99)) : defaultMmfIndicatorSettings.highOffsetPercent,
     highSize: Number.isFinite(highSize) ? Math.max(8, Math.min(highSize, 96)) : defaultMmfIndicatorSettings.highSize,
+    highAnchorLookbackBars: Number.isFinite(highAnchorLookbackBars) ? Math.max(1, Math.min(highAnchorLookbackBars, 200)) : defaultMmfIndicatorSettings.highAnchorLookbackBars,
+    highStochKAdvance: Number.isFinite(highStochKAdvance) ? Math.max(0, Math.min(highStochKAdvance, 100)) : defaultMmfIndicatorSettings.highStochKAdvance,
+    highConfirmLookaheadBars: Number.isFinite(highConfirmLookaheadBars) ? Math.max(1, Math.min(highConfirmLookaheadBars, 200)) : defaultMmfIndicatorSettings.highConfirmLookaheadBars,
     highSymbol,
+    deadCrossColor,
+    deadCrossSize: Number.isFinite(deadCrossSize) ? Math.max(8, Math.min(deadCrossSize, 96)) : defaultMmfIndicatorSettings.deadCrossSize,
+    deadCrossSymbol,
+    highConfirmPointColor,
+    highConfirmPointSize: Number.isFinite(highConfirmPointSize) ? Math.max(8, Math.min(highConfirmPointSize, 96)) : defaultMmfIndicatorSettings.highConfirmPointSize,
+    highConfirmPointSymbol,
     dpoValue: Number.isFinite(Number(merged.dpoValue)) ? Math.max(0, Math.min(Math.round(Number(merged.dpoValue)), 40)) : defaultMmfIndicatorSettings.dpoValue,
     lowColor,
     lowDpoValue: Number.isFinite(Number(merged.lowDpoValue)) ? Math.max(-40, Math.min(Math.round(Number(merged.lowDpoValue)), 0)) : defaultMmfIndicatorSettings.lowDpoValue,
     lowMorganRatio: Number.isFinite(lowMorganRatio) ? Math.max(-0.236, Math.min(lowMorganRatio, -0.118)) : defaultMmfIndicatorSettings.lowMorganRatio,
     lowOffsetPercent: Number.isFinite(lowOffsetPercent) ? Math.max(-99, Math.min(Math.round(lowOffsetPercent), 99)) : defaultMmfIndicatorSettings.lowOffsetPercent,
     lowSize: Number.isFinite(lowSize) ? Math.max(8, Math.min(lowSize, 96)) : defaultMmfIndicatorSettings.lowSize,
+    lowAnchorLookbackBars: Number.isFinite(lowAnchorLookbackBars) ? Math.max(1, Math.min(lowAnchorLookbackBars, 200)) : defaultMmfIndicatorSettings.lowAnchorLookbackBars,
+    lowStochKAdvance: Number.isFinite(lowStochKAdvance) ? Math.max(0, Math.min(lowStochKAdvance, 100)) : defaultMmfIndicatorSettings.lowStochKAdvance,
+    lowConfirmLookaheadBars: Number.isFinite(lowConfirmLookaheadBars) ? Math.max(1, Math.min(lowConfirmLookaheadBars, 200)) : defaultMmfIndicatorSettings.lowConfirmLookaheadBars,
     lowSymbol,
+    goldenCrossColor,
+    goldenCrossSize: Number.isFinite(goldenCrossSize) ? Math.max(8, Math.min(goldenCrossSize, 96)) : defaultMmfIndicatorSettings.goldenCrossSize,
+    goldenCrossSymbol,
+    lowConfirmPointColor,
+    lowConfirmPointSize: Number.isFinite(lowConfirmPointSize) ? Math.max(8, Math.min(lowConfirmPointSize, 96)) : defaultMmfIndicatorSettings.lowConfirmPointSize,
+    lowConfirmPointSymbol,
     lowPositionHighColor,
     lowPositionHighSize: Number.isFinite(lowPositionHighSize) ? Math.max(8, Math.min(lowPositionHighSize, 96)) : defaultMmfIndicatorSettings.lowPositionHighSize,
     lowPositionHighSymbol,
@@ -1510,6 +1739,10 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     showHighPositionLowPoint: merged.showHighPositionLowPoint === true,
     showLow: merged.showLow === true,
     showLowPositionHighPoint: merged.showLowPositionHighPoint === true,
+    showDeadCross: merged.showDeadCross === true,
+    showGoldenCross: merged.showGoldenCross === true,
+    showHighConfirmPoint: hasShowHighConfirmPoint ? merged.showHighConfirmPoint !== false : legacy.showSell !== false,
+    showLowConfirmPoint: hasShowLowConfirmPoint ? merged.showLowConfirmPoint !== false : legacy.showBuy !== false,
     showOscHighDivergencePoint: merged.showOscHighDivergencePoint === true,
     showOscLowDivergencePoint: merged.showOscLowDivergencePoint === true,
     showPullbackPoint: merged.showPullbackPoint === true,
@@ -1551,8 +1784,16 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
 export function normalizeVdoSettings(input?: Partial<VdoIndicatorSettings>): VdoIndicatorSettings {
   const merged = { ...defaultVdoIndicatorSettings, ...(input ?? {}) }
   const emaSmoothing = Math.round(Number(merged.emaSmoothing))
+  const backgroundLowerOpacity = Number(merged.backgroundLowerOpacity)
+  const backgroundUpperOpacity = Number(merged.backgroundUpperOpacity)
   return {
     ...normalizeDpoSettings(merged),
+    backgroundLowerColor: merged.backgroundLowerColor ?? defaultVdoIndicatorSettings.backgroundLowerColor,
+    backgroundLowerOpacity: Number.isFinite(backgroundLowerOpacity) ? Math.max(0, Math.min(backgroundLowerOpacity, 1)) : defaultVdoIndicatorSettings.backgroundLowerOpacity,
+    backgroundLowerVisible: merged.backgroundLowerVisible !== false,
+    backgroundUpperColor: merged.backgroundUpperColor ?? defaultVdoIndicatorSettings.backgroundUpperColor,
+    backgroundUpperOpacity: Number.isFinite(backgroundUpperOpacity) ? Math.max(0, Math.min(backgroundUpperOpacity, 1)) : defaultVdoIndicatorSettings.backgroundUpperOpacity,
+    backgroundUpperVisible: merged.backgroundUpperVisible !== false,
     emaSmoothing: Number.isFinite(emaSmoothing) ? Math.max(0, Math.min(emaSmoothing, 500)) : defaultVdoIndicatorSettings.emaSmoothing,
   }
 }
@@ -1621,3 +1862,4 @@ export function normalizeDpoSettings(input?: Partial<DpoIndicatorSettings>): Dpo
     zeroLineVisible: merged.zeroLineVisible !== false,
   }
 }
+

@@ -5,7 +5,7 @@ import { mainVolumeIndicatorName } from './mainVolumeIndicator'
 import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
 import type { VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 
-export type IndicatorPaneCommandName = 'DPO' | 'MACD' | 'RSI' | 'Stoch' | 'TSI' | 'VDO' | 'VI'
+export type IndicatorPaneCommandName = 'DPO' | 'MACD' | 'RSI' | 'SQZMOM' | 'Stoch' | 'TSI' | 'VDO' | 'VI'
 export type CandleIndicatorCommandName = 'MA' | 'VWAP'
 
 export type IndicatorPaneConfig = {

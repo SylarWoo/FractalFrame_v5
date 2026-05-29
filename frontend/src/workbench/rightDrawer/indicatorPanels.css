@@ -4,7 +4,6 @@
 }
 
 .ff-indicators-ma-panel-v1__row {
-  grid-template-columns: 42px auto;
   gap: 8px 12px;
   margin-bottom: 10px;
 }
@@ -36,22 +35,6 @@
   max-width: 104px;
 }
 
-.ff-indicators-ma-panel-v1__shift-check {
-  width: auto !important;
-  max-width: none !important;
-}
-
-.ff-indicators-ma-panel-v1__caret {
-  display: inline-flex;
-  width: 14px;
-  align-items: center;
-  justify-content: center;
-  color: #334155;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
-}
-
 .ff-indicators-ma-panel-v1__colors {
   display: inline-flex;
   align-items: center;
@@ -68,12 +51,8 @@
   font-weight: 400;
 }
 
-.ff-indicators-vi-panel-v1 .ff-indicators-input-panel-v1__row {
-  grid-template-columns: 128px auto;
-}
-
 .ff-indicators-compact-input-panel-v1 .ff-indicators-input-panel-v1__row {
-  grid-template-columns: 150px 120px;
+  grid-template-columns: 104px 72px;
 }
 
 .ff-indicators-stoch-panel-v1 .ff-indicators-input-panel-v1__row {
@@ -86,16 +65,14 @@
   max-width: 72px;
 }
 
-.ff-indicators-vwap-panel-v1__row {
-  grid-template-columns: 82px 120px;
-  gap: 8px;
-  margin-bottom: 12px;
+.ff-indicators-vdo-panel-v1 .ff-indicators-input-panel-v1__row {
+  grid-template-columns: 104px 72px;
 }
 
-.ff-indicators-vwap-panel-v1__row .ff-indicators-input-panel-v1__control,
-.ff-indicators-vwap-panel-v1__row .ff-indicators-input-panel-v1__control .ff-openable-select {
-  width: 120px;
-  max-width: 120px;
+.ff-indicators-vdo-panel-v1 .ff-indicators-input-panel-v1__control,
+.ff-indicators-vdo-panel-v1 .ff-indicators-input-panel-v1__control--wide {
+  width: 72px;
+  max-width: 72px;
 }
 
 .ff-indicators-vwap-panel-v1__row .ff-openable-select__button {
@@ -169,10 +146,6 @@
   gap: 16px;
 }
 
-.ff-indicators-ma-style-panel-v1 .ff-indicators-style-row-v1 {
-  grid-template-columns: 176px max-content;
-}
-
 .ff-indicators-ma-style-panel-v1__divider {
   height: 1px;
   background: #eef2f7;
@@ -188,19 +161,16 @@
   max-width: 104px;
 }
 
-.ff-indicators-ma-style-panel-v1__precision-row {
-  grid-template-columns: 176px max-content;
-}
-
 .ff-indicators-style-panel-v1 {
   display: grid;
+  align-content: start;
   gap: 18px;
   padding-top: 2px;
 }
 
 .ff-indicators-style-row-v1 {
   display: grid;
-  grid-template-columns: 176px max-content;
+  grid-template-columns: 112px max-content;
   justify-content: start;
   min-height: 34px;
   align-items: center;
@@ -228,6 +198,9 @@
 }
 
 .ff-indicators-style-row-v1__check button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -250,34 +223,28 @@
   font: 14px/1.35 Arial, Tahoma, 'Segoe UI', sans-serif;
 }
 
-.ff-indicators-vol-style-panel-v1 .ff-indicators-style-row-v1,
-.ff-indicators-vol-style-panel-v1__precision-row {
-  grid-template-columns: 128px max-content;
-}
-
-.ff-indicators-vwap-style-panel-v1 .ff-indicators-style-row-v1,
-.ff-indicators-vwap-style-panel-v1__precision-row {
-  grid-template-columns: 150px max-content;
-}
-
 .ff-indicators-stoch-style-panel-v1 .ff-indicators-style-row-v1,
 .ff-indicators-stoch-style-panel-v1__precision-row {
   grid-template-columns: 176px max-content;
 }
 
-.ff-indicators-macd-style-panel-v1 .ff-indicators-style-row-v1,
-.ff-indicators-macd-style-panel-v1__precision-row {
-  grid-template-columns: 176px max-content;
+.ff-indicators-stoch-style-panel-v1 .ff-indicators-style-row-v1__check button {
+  overflow: visible;
+  text-overflow: clip;
 }
 
-.ff-indicators-tsi-style-panel-v1 .ff-indicators-style-row-v1,
-.ff-indicators-tsi-style-panel-v1__precision-row {
+.ff-indicators-vdo-style-panel-v1 .ff-indicators-style-row-v1 {
   grid-template-columns: 176px max-content;
+  min-height: 28px;
 }
 
-.ff-indicators-vi-style-panel-v1 .ff-indicators-style-row-v1,
-.ff-indicators-vi-style-panel-v1__precision-row {
-  grid-template-columns: 128px max-content;
+.ff-indicators-vdo-style-panel-v1 .ff-indicators-style-row-v1__check button {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.ff-indicators-vdo-style-panel-v1 {
+  gap: 8px;
 }
 
 .ff-indicators-mmf-panel-v1__signal-block {
@@ -349,6 +316,59 @@
   color: #334155;
   font-size: 14px;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.ff-indicators-mmf-v2-panel__signal-block {
+  margin-bottom: 12px;
+}
+
+.ff-indicators-mmf-v2-panel__check-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  pointer-events: auto;
+}
+
+.ff-indicators-mmf-v2-panel__check-row .ff-indicators-style-row-v1__check {
+  max-width: none;
+}
+
+.ff-indicators-mmf-v2-panel__check-row .ff-indicators-style-row-v1__check button {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.ff-indicators-mmf-v2-panel__advance-row {
+  display: inline-grid;
+  grid-template-columns: 74px 80px max-content;
+  align-items: center;
+  column-gap: 8px;
+  margin-left: 24px;
+  margin-bottom: 6px;
+  pointer-events: auto;
+}
+
+.ff-indicators-mmf-v2-panel__advance-label {
+  color: #334155;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ff-indicators-mmf-v2-panel__advance-input,
+.ff-indicators-mmf-v2-panel__advance-input .ff-numeric-stepper-v1,
+.ff-indicators-mmf-v2-panel__advance-input .ff-indicators-number-box-v1 {
+  width: 80px;
+  max-width: 80px;
+}
+
+.ff-indicators-mmf-v2-panel__trade-toggle-inline .ff-indicators-style-row-v1__check {
+  max-width: none;
+}
+
+.ff-indicators-mmf-v2-panel__trade-toggle-inline .ff-indicators-style-row-v1__check button {
+  font-size: 14px;
   white-space: nowrap;
 }
 
@@ -467,36 +487,6 @@
   border-color: #2962ff;
   box-shadow: inset 0 0 0 1px #2962ff;
   outline: none;
-}
-
-.ff-indicators-dpo-style-panel-v1 .ff-indicators-style-row-v1 {
-  grid-template-columns: 64px max-content max-content;
-}
-
-.ff-indicators-dpo-style-panel-v1--offset-controls .ff-indicators-style-row-v1 {
-  grid-template-columns: calc(64px + var(--ff-indicators-dpo-controls-offset, 0px)) max-content max-content;
-}
-
-.ff-indicators-dpo-style-panel-v1__precision-row {
-  grid-template-columns: 64px max-content;
-  justify-content: start;
-  gap: 8px;
-}
-
-.ff-indicators-dpo-style-panel-v1__precision-row .ff-indicators-input-panel-v1__control,
-.ff-indicators-dpo-style-panel-v1__precision-row .ff-openable-select {
-  width: 120px;
-  max-width: 120px;
-}
-
-.ff-indicators-dpo-style-panel-v1__zero-value,
-.ff-indicators-dpo-style-panel-v1__zero-value input[type='number'],
-.ff-indicators-dpo-style-panel-v1__zero-value .ff-indicators-number-box-v1,
-.ff-indicators-dpo-style-panel-v1__level-value,
-.ff-indicators-dpo-style-panel-v1__level-value input[type='number'],
-.ff-indicators-dpo-style-panel-v1__level-value .ff-indicators-number-box-v1 {
-  width: 80px;
-  max-width: 80px;
 }
 
 .ff-indicators-mr-level-table-v1 {

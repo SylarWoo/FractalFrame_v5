@@ -10,6 +10,7 @@ import type {
   MmfIndicatorSettings,
   MrIndicatorSettings,
   RsiIndicatorSettings,
+  SqzmomIndicatorSettings,
   StochIndicatorSettings,
   TsiIndicatorSettings,
   VdoIndicatorSettings,
@@ -28,8 +29,12 @@ import {
   MrStylePanelV3,
   MmfInputPanel,
   MmfStylePanel,
+  MmfV2InputPanel,
+  MmfV2StylePanel,
   RsiInputPanel,
   RsiStylePanel,
+  SqzmomInputPanel,
+  SqzmomStylePanel,
   StochInputPanel,
   StochStylePanel,
   TsiInputPanel,
@@ -55,8 +60,10 @@ export function LoadedIndicatorSettingsPanel({
   onMacdSettingsChange,
   onMaSettingsChange,
   onMmfSettingsChange,
+  onMmfV2SettingsChange,
   onMrSettingsChange,
   onSettingsChange,
+  onSqzmomSettingsChange,
   onStochSettingsChange,
   onTsiSettingsChange,
   onVdoSettingsChange,
@@ -66,6 +73,7 @@ export function LoadedIndicatorSettingsPanel({
   settingsTab,
   selectedKey,
   settings,
+  sqzmomSettings,
   stochSettings,
   tsiSettings,
   vdoSettings,
@@ -83,8 +91,10 @@ export function LoadedIndicatorSettingsPanel({
   onMacdSettingsChange: (settings: MacdIndicatorSettings) => void
   onMaSettingsChange: (settings: MaIndicatorSettings) => void
   onMmfSettingsChange: (settings: MmfIndicatorSettings) => void
+  onMmfV2SettingsChange: (settings: MmfIndicatorSettings) => void
   onMrSettingsChange: (settings: MrIndicatorSettings) => void
   onSettingsChange: (settings: RsiIndicatorSettings) => void
+  onSqzmomSettingsChange: (settings: SqzmomIndicatorSettings) => void
   onStochSettingsChange: (settings: StochIndicatorSettings) => void
   onTsiSettingsChange: (settings: TsiIndicatorSettings) => void
   onVdoSettingsChange: (settings: VdoIndicatorSettings) => void
@@ -94,6 +104,7 @@ export function LoadedIndicatorSettingsPanel({
   settingsTab: IndicatorSettingsTab
   selectedKey: string
   settings: RsiIndicatorSettings
+  sqzmomSettings: SqzmomIndicatorSettings
   stochSettings: StochIndicatorSettings
   tsiSettings: TsiIndicatorSettings
   vdoSettings: VdoIndicatorSettings
@@ -104,7 +115,7 @@ export function LoadedIndicatorSettingsPanel({
   const panelRegistry: Partial<Record<SupportedChartIndicator, Record<Extract<IndicatorSettingsTab, 'input' | 'style'>, ReactNode>>> = {
     DPO: {
       input: <DpoInputPanel onSettingsChange={onDpoSettingsChange} settings={dpoSettings} />,
-      style: <DpoStylePanel controlsOffsetPx={80} onSettingsChange={onDpoSettingsChange} settings={dpoSettings} showBand2Levels />,
+      style: <DpoStylePanel onSettingsChange={onDpoSettingsChange} settings={dpoSettings} showBand2Levels />,
     },
     MA: {
       input: <MaInputPanel onSettingsChange={onMaSettingsChange} settings={maSettings} />,
@@ -123,12 +134,16 @@ export function LoadedIndicatorSettingsPanel({
       style: <MmfStylePanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
     },
     MMF_V2: {
-      input: <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mmf-panel-v1" role="tabpanel" />,
-      style: <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-mmf-style-panel-v1" role="tabpanel" />,
+      input: <MmfV2InputPanel settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
+      style: <MmfV2StylePanel settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
     },
     RSI: {
       input: <RsiInputPanel onSettingsChange={onSettingsChange} settings={settings} />,
       style: <RsiStylePanel onSettingsChange={onSettingsChange} settings={settings} />,
+    },
+    SQZMOM: {
+      input: <SqzmomInputPanel onSettingsChange={onSqzmomSettingsChange} settings={sqzmomSettings} />,
+      style: <SqzmomStylePanel onSettingsChange={onSqzmomSettingsChange} settings={sqzmomSettings} />,
     },
     Stoch: {
       input: <StochInputPanel onSettingsChange={onStochSettingsChange} settings={stochSettings} />,

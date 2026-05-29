@@ -8,6 +8,7 @@ import type {
   MrIndicatorSettings,
   PersistedIndicatorsState,
   RsiIndicatorSettings,
+  SqzmomIndicatorSettings,
   StochIndicatorSettings,
   TsiIndicatorSettings,
   VdoIndicatorSettings,
@@ -23,6 +24,7 @@ export type IndicatorSettings =
   | MmfIndicatorSettings
   | MrIndicatorSettings
   | RsiIndicatorSettings
+  | SqzmomIndicatorSettings
   | StochIndicatorSettings
   | TsiIndicatorSettings
   | VdoIndicatorSettings
@@ -40,6 +42,7 @@ type IndicatorControllerDefinition = {
 export const indicatorControllerDefinitions = [
   { key: 'RSI', stateField: 'rsi' },
   { key: 'Stoch', stateField: 'stoch' },
+  { key: 'SQZMOM', stateField: 'sqzmom' },
   { key: 'MACD', stateField: 'macd' },
   { key: 'DPO', stateField: 'dpo' },
   { key: 'VDO', stateField: 'vdo' },

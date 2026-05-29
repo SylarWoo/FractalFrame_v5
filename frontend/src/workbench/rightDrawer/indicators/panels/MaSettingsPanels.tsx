@@ -12,7 +12,7 @@ export function MaInputPanel({
   const patch = (next: Partial<MaIndicatorSettings>) => onSettingsChange(updateMaSettings(settings, next))
 
   return (
-    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-ma-panel-v1" role="tabpanel">
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-ma-panel-v1" role="tabpanel">
       <section className="ff-indicators-input-panel-v1__section">
         <h3 className="ff-indicators-input-panel-v1__section-title">MA</h3>
         <label className="ff-indicators-input-panel-v1__row ff-indicators-ma-panel-v1__row">

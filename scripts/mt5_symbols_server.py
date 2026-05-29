@@ -32,7 +32,7 @@ from http_bridge.response import write_sse_event
 from http_bridge.mt5_m1_check_routes import handle_mt5_m1_check_get
 from http_bridge.mt5_symbol_routes import handle_mt5_symbols_get
 from http_bridge.indicator_routes import handle_indicator_get, handle_indicator_post
-from http_bridge.indicator_service import calculate_mmf_indicator_from_rows, query_mmf_indicator
+from http_bridge.indicator_service import calculate_mmf_indicator_from_rows, calculate_mmf_v2_indicator_from_rows, query_mmf_indicator
 from http_bridge.sse import send_aggregate_job_events as send_aggregate_job_events_sse
 from http_bridge.sse import send_mt5_tick_events as send_mt5_tick_events_sse
 from http_bridge.sse import send_pull_job_events as send_pull_job_events_sse
@@ -69,6 +69,8 @@ DEFAULT_CACHE_ROOT = ROOT / "runtime_data" / "instruments" / "mt5"
 SERVER_SOURCE_VERSION = "mt5_symbols_server_source_v2_local_imports"
 LOGGER = get_logger("mt5_symbols_server")
 QUIET_ACCESS_LOG_PATHS = {
+    "/api/indicators/v1/mmf/calculate",
+    "/api/indicators/v2/mmf/calculate",
     "/api/market-data/v1/mt5/tick",
     "/api/market-data/v1/mt5/ticks/events",
 }

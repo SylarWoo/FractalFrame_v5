@@ -3,6 +3,7 @@ import type { IndicatorTableRow } from './IndicatorsTable'
 export const indicatorRows = [
   { key: 'RSI', name: '相对强弱指数', type: '副图指标', description: 'Relative Strength Index' },
   { key: 'Stoch', name: '随机指数', type: '副图指标', description: 'Stochastic' },
+  { key: 'SQZMOM', name: 'SQZMOM - Squeeze Momentum', type: '副图指标', description: 'Squeeze Momentum Indicator [LazyBear]' },
   { key: 'MACD', name: '平滑异同移动平均线', type: '副图指标', description: 'Moving Average Convergence Divergence' },
   { key: 'DPO', name: '非趋势价格摆动指标', type: '副图指标', description: 'Detrended Price Oscillator' },
   { key: 'VDO', name: '漩涡差值指标', type: '副图指标', description: 'Vortex Difference Oscillator' },

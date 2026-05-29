@@ -15,9 +15,11 @@ import { calculateMorganRangeSegments, findMorganRangeSegmentByDataIndex, h4Morg
 import { readCrosshairDataIndex } from './paneTitleOverlayContent'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMmfIndicator } from './tradingViewMmfIndicator'
+import { ensureTradingViewMmfV2Indicator } from './tradingViewMmfV2Indicator'
 import { ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
 import { ensureTradingViewDpoIndicator } from './tradingViewDpoIndicator'
 import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
+import { ensureTradingViewSqzmomIndicator } from './tradingViewSqzmomIndicator'
 import { ensureTradingViewStochIndicator } from './tradingViewStochIndicator'
 import { ensureTradingViewTsiIndicator } from './tradingViewTsiIndicator'
 import { ensureTradingViewVdoIndicator } from './tradingViewVdoIndicator'
@@ -34,13 +36,14 @@ import type {
   IndicatorPaneCommandName,
   IndicatorPaneConfig,
 } from './chartIndicatorCommandHandlers'
-import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MmfIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MmfIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, SqzmomIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import { readString, writeString } from '../persistence/jsonStorage'
 import './ChartCoreHost.css'
 
 const rsiPaneId = 'rsi_pane'
 const stochPaneId = 'stoch_pane'
+const sqzmomPaneId = 'sqzmom_pane'
 const macdPaneId = 'macd_pane'
 const dpoPaneId = 'dpo_pane'
 const vdoPaneId = 'vdo_pane'
@@ -49,6 +52,7 @@ const viPaneId = 'vi_pane'
 const mmfIndicatorZLevel = 30
 const rsiPaneHeightStorageKey = 'fractalframe.chart.rsiPaneHeight'
 const stochPaneHeightStorageKey = 'fractalframe.chart.stochPaneHeight'
+const sqzmomPaneHeightStorageKey = 'fractalframe.chart.sqzmomPaneHeight'
 const macdPaneHeightStorageKey = 'fractalframe.chart.macdPaneHeight'
 const dpoPaneHeightStorageKey = 'fractalframe.chart.dpoPaneHeight'
 const vdoPaneHeightStorageKey = 'fractalframe.chart.vdoPaneHeight'
@@ -81,6 +85,7 @@ type ChartCoreHostProps = {
   stochSettings?: StochIndicatorSettings
   symbol: string
   totalRows?: number | null
+  vdoSettings?: VdoIndicatorSettings
 }
 
 export type ChartPageTarget = {
@@ -101,6 +106,7 @@ export type ChartIndicatorCommand = {
   | { name: 'DPO'; settings?: DpoIndicatorSettings }
   | { name: 'MR'; settings?: MrIndicatorSettings }
   | { name: 'RSI'; settings?: RsiIndicatorSettings }
+  | { name: 'SQZMOM'; settings?: SqzmomIndicatorSettings }
   | { name: 'Stoch'; settings?: StochIndicatorSettings }
   | { name: 'TSI'; settings?: TsiIndicatorSettings }
   | { name: 'VDO'; settings?: VdoIndicatorSettings }
@@ -153,7 +159,7 @@ function refreshPane(chart: unknown, paneId: string) {
   })
 }
 
-export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfLoaded = false, mmfSettings, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows }: ChartCoreHostProps) {
+export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfLoaded = false, mmfSettings, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, vdoSettings }: ChartCoreHostProps) {
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
   const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, page, period, reloadId, symbol, totalRows })
   const realtimeDataReady = !loadState.loading &&
@@ -165,6 +171,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
   const candleCountdown = useCurrentCandleCountdown({ chartInstanceRef, dataReady: realtimeDataReady && realtimePageActive, period, symbol })
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const stochPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const sqzmomPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const macdPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const dpoPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const vdoPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
@@ -190,6 +197,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
     const paneHeights = [
       [rsiPaneId, rsiPaneHeightStorageKey],
       [stochPaneId, stochPaneHeightStorageKey],
+      [sqzmomPaneId, sqzmomPaneHeightStorageKey],
       [macdPaneId, macdPaneHeightStorageKey],
       [dpoPaneId, dpoPaneHeightStorageKey],
       [vdoPaneId, vdoPaneHeightStorageKey],
@@ -268,6 +276,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
 
   const observeRsiPaneHeight = useCallback(() => observeIndicatorPaneHeight(rsiPaneId, rsiPaneHeightStorageKey, rsiPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const observeStochPaneHeight = useCallback(() => observeIndicatorPaneHeight(stochPaneId, stochPaneHeightStorageKey, stochPaneHeightObserverRef), [observeIndicatorPaneHeight])
+  const observeSqzmomPaneHeight = useCallback(() => observeIndicatorPaneHeight(sqzmomPaneId, sqzmomPaneHeightStorageKey, sqzmomPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const observeMacdPaneHeight = useCallback(() => observeIndicatorPaneHeight(macdPaneId, macdPaneHeightStorageKey, macdPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const observeDpoPaneHeight = useCallback(() => observeIndicatorPaneHeight(dpoPaneId, dpoPaneHeightStorageKey, dpoPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const observeVdoPaneHeight = useCallback(() => observeIndicatorPaneHeight(vdoPaneId, vdoPaneHeightStorageKey, vdoPaneHeightObserverRef), [observeIndicatorPaneHeight])
@@ -285,6 +294,14 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
       symbol,
     },
   ], [period, stochSettings?.dSmoothing, stochSettings?.kSmoothing, stochSettings?.length, symbol])
+
+  const buildMmfV2CalcParams = useCallback((settings?: MmfIndicatorSettings) => [{
+    maSettings: undefined,
+    period,
+    settings,
+    symbol,
+    vdoSettings,
+  }], [period, symbol, vdoSettings])
 
   const publishMorganRangeSegment = useCallback((dataIndex: number | null = morganRangeCrosshairIndexRef.current) => {
     const chart = chartInstanceRef.current
@@ -341,6 +358,23 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
       chart.createIndicator({ name: 'MMF', calcParams, zLevel: mmfIndicatorZLevel }, true, { id: 'candle_pane' })
     }
   }, [buildMmfCalcParams, isIndicatorVisibleInCurrentPeriod])
+
+  const applyMmfV2Command = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    ensureTradingViewMmfV2Indicator()
+
+    if (command.action === 'unload' || !isIndicatorVisibleInCurrentPeriod('MMF_V2')) {
+      chart.removeIndicator('candle_pane', 'MMF_V2')
+      return
+    }
+
+    const settings = command.name === 'MMF_V2' ? command.settings : undefined
+    const calcParams = buildMmfV2CalcParams(settings)
+    if (chart.getIndicatorByPaneId('candle_pane', 'MMF_V2')) {
+      chart.overrideIndicator({ name: 'MMF_V2', calcParams, zLevel: mmfIndicatorZLevel }, 'candle_pane')
+    } else {
+      chart.createIndicator({ name: 'MMF_V2', calcParams, zLevel: mmfIndicatorZLevel }, true, { id: 'candle_pane' })
+    }
+  }, [buildMmfV2CalcParams, isIndicatorVisibleInCurrentPeriod])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -402,6 +436,16 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
         paneId: stochPaneId,
         storageKey: stochPaneHeightStorageKey,
       },
+      SQZMOM: {
+        ensureRegistered: ensureTradingViewSqzmomIndicator,
+        minHeight: minRsiPaneHeight,
+        name: 'SQZMOM',
+        observeHeight: observeSqzmomPaneHeight,
+        observerRef: sqzmomPaneHeightObserverRef,
+        paneId: sqzmomPaneId,
+        resetPaneIds: [sqzmomPaneId],
+        storageKey: sqzmomPaneHeightStorageKey,
+      },
       TSI: {
         ensureRegistered: ensureTradingViewTsiIndicator,
         minHeight: minRsiPaneHeight,
@@ -447,6 +491,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
       applyMmfCommand(chart, indicatorCommand)
       return
     }
+    if (indicatorCommand.name === 'MMF_V2') {
+      applyMmfV2Command(chart, indicatorCommand)
+      return
+    }
     const candleIndicatorConfigs: Record<CandleIndicatorCommandName, CandleIndicatorConfig> = {
       MA: {
         ensureRegistered: ensureTradingViewMaShiftIndicator,
@@ -487,6 +535,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
     }
   }, [
     applyMmfCommand,
+    applyMmfV2Command,
     applyMorganRangeCommand,
     chartInstanceRef,
     indicatorCommand,
@@ -494,6 +543,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
     observeDpoPaneHeight,
     observeMacdPaneHeight,
     observeRsiPaneHeight,
+    observeSqzmomPaneHeight,
     observeStochPaneHeight,
     observeTsiPaneHeight,
     observeVdoPaneHeight,
@@ -564,6 +614,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
     if (chart) clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
     rsiPaneHeightObserverRef.current?.disconnect()
     stochPaneHeightObserverRef.current?.disconnect()
+    sqzmomPaneHeightObserverRef.current?.disconnect()
     macdPaneHeightObserverRef.current?.disconnect()
     tsiPaneHeightObserverRef.current?.disconnect()
     viPaneHeightObserverRef.current?.disconnect()

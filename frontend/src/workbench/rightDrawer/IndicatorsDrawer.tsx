@@ -110,8 +110,10 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
               onMacdSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MACD', settings)}
               onMaSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MA', settings)}
               onMmfSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MMF', settings)}
+              onMmfV2SettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MMF_V2', settings)}
               onMrSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MR', settings)}
               onSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('RSI', settings)}
+              onSqzmomSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('SQZMOM', settings)}
               onStochSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('Stoch', settings)}
               onTsiSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('TSI', settings)}
               onVdoSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('VDO', settings)}
@@ -121,6 +123,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
               settingsTab={settingsTab}
               selectedKey={selected.key}
               settings={indicatorsController.settings.rsi}
+              sqzmomSettings={indicatorsController.settings.sqzmom}
               stochSettings={indicatorsController.settings.stoch}
               tsiSettings={indicatorsController.settings.tsi}
               vdoSettings={indicatorsController.settings.vdo}

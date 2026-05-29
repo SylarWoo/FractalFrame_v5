@@ -15,6 +15,7 @@ import type {
   RsiPrecision,
   RsiSmoothingType,
   RsiSource,
+  SqzmomIndicatorSettings,
   StochIndicatorSettings,
   TsiIndicatorSettings,
   VdoIndicatorSettings,
@@ -221,6 +222,13 @@ export function updateMacdSettings(
   current: MacdIndicatorSettings,
   patch: Partial<MacdIndicatorSettings>,
 ): MacdIndicatorSettings {
+  return { ...current, ...patch }
+}
+
+export function updateSqzmomSettings(
+  current: SqzmomIndicatorSettings,
+  patch: Partial<SqzmomIndicatorSettings>,
+): SqzmomIndicatorSettings {
   return { ...current, ...patch }
 }
 

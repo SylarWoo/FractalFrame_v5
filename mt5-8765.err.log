@@ -1,0 +1,64 @@
+2026-05-29 01:28:14,384 INFO mt5_symbols_server - listening on http://127.0.0.1:8765
+2026-05-29 01:28:14,384 INFO mt5_symbols_server - endpoint /api/market-data/v1/mt5/symbols?refresh=1
+2026-05-29 01:28:14,385 INFO mt5_symbols_server - endpoint /api/market-data/v1/mt5/rates?symbol=XAUUSDm&timeframe=M5
+2026-05-29 01:28:14,385 INFO mt5_symbols_server - endpoint /api/market-data/v1/mt5/m1/check?symbol=XAUUSDm
+2026-05-29 01:28:14,385 INFO mt5_symbols_server - endpoint /api/market-data/v1/store-v5/status?symbol=XAUUSDm
+2026-05-29 01:28:14,385 INFO mt5_symbols_server - endpoint /api/market-data/v1/store-v5/pull?symbol=XAUUSDm
+2026-05-29 01:28:14,386 INFO mt5_symbols_server - endpoint /api/market-data/v1/store-v5/aggregate?symbol=XAUUSDm
+2026-05-29 01:28:14,386 INFO mt5_symbols_server - endpoint /api/market-data/v1/store-v5/query?symbol=XAUUSDm&timeframe=M1
+2026-05-29 01:28:14,386 INFO mt5_symbols_server - cache G:\PythonProject\FractalFrame_v5\runtime_data\instruments\mt5
+2026-05-29 01:28:14,387 INFO mt5_symbols_server - store default runtime_data/store_v5
+2026-05-29 01:28:14,387 INFO mt5_symbols_server - cors origin configured by FRACTALFRAME_CORS_ORIGIN
+2026-05-29 01:28:28,847 INFO mt5_symbols_server - 127.0.0.1 - "GET /api/market-data/v1/store-v5/status?symbol=XAUUSDm HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 3206)
+Traceback (most recent call last):
+  File "F:\Anaconda3\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\Anaconda3\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\Anaconda3\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "F:\Anaconda3\Lib\http\server.py", line 438, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "F:\Anaconda3\Lib\http\server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "F:\Anaconda3\Lib\socket.py", line 719, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+----------------------------------------
+2026-05-29 01:28:46,875 INFO mt5_symbols_server - 127.0.0.1 - "GET /api/market-data/v1/mt5/symbols?limit=50000 HTTP/1.1" 200 -
+2026-05-29 01:28:46,883 INFO mt5_symbols_server - 127.0.0.1 - "GET /api/market-data/v1/mt5/symbols?limit=50000 HTTP/1.1" 200 -
+2026-05-29 01:28:47,124 INFO mt5_symbols_server - 127.0.0.1 - "GET /api/market-data/v1/store-v5/status?symbol=XAUUSDm HTTP/1.1" 200 -
+2026-05-29 01:28:47,512 INFO mt5_symbols_server - 127.0.0.1 - "GET /api/market-data/v1/store-v5/query?symbol=XAUUSDm&timeframe=M5&mode=aggregated&baseTimeframe=M1&anchor=UTC2200&limit=3000 HTTP/1.1" 200 -
+2026-05-29 01:28:47,723 INFO mt5_symbols_server - 127.0.0.1 - "GET /api/market-data/v1/mt5/rates?symbol=XAUUSDm&timeframe=M5&limit=5000 HTTP/1.1" 200 -
+2026-05-29 01:28:48,212 INFO mt5_symbols_server - 127.0.0.1 - "GET /api/market-data/v1/store-v5/query?symbol=XAUUSDm&timeframe=M5&mode=aggregated&baseTimeframe=M1&anchor=UTC2200&timeTo=1777897199&limit=20000 HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 10501)
+Traceback (most recent call last):
+  File "F:\Anaconda3\Lib\socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\Anaconda3\Lib\socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\Anaconda3\Lib\socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "F:\Anaconda3\Lib\http\server.py", line 438, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "F:\Anaconda3\Lib\http\server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "F:\Anaconda3\Lib\socket.py", line 719, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+ConnectionAbortedError: [WinError 10053] 你的主机中的软件中止了一个已建立的连接。
+----------------------------------------

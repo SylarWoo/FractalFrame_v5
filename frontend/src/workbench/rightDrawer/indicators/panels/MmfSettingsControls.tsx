@@ -202,6 +202,8 @@ export function MmfMarkerStyleRow({
   onColorChange,
   onSizeChange,
   onSymbolChange,
+  options = mmfHighSymbolOptions,
+  resolveSize = resolveMmfSymbolSize,
   size,
   symbol,
 }: {
@@ -210,6 +212,8 @@ export function MmfMarkerStyleRow({
   onColorChange: (color: string) => void
   onSizeChange: (size: number) => void
   onSymbolChange: (symbol: string) => void
+  options?: readonly string[]
+  resolveSize?: (symbol: string) => SymbolSelectSize
   size: number
   symbol: string
 }) {
@@ -220,8 +224,8 @@ export function MmfMarkerStyleRow({
         <SymbolSelect
           ariaLabel={`MMF ${label} symbol`}
           onChange={onSymbolChange}
-          options={mmfHighSymbolOptions}
-          resolveSize={resolveMmfSymbolSize}
+          options={options}
+          resolveSize={resolveSize}
           value={symbol}
           width={60}
         />

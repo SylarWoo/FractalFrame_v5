@@ -21,3 +21,15 @@ export const mmfHighSymbolOptions = [
   '\u21d1',
   '\u21d3',
 ] as const
+
+export const mmfCrossSymbolOptions = [
+  '\u2715',
+  '\u25cf',
+] as const
+
+export const mmfTradeArrowSymbolOptions = [
+  '\u2191',
+  '\u2193',
+  '\u2190',
+  '\u2192',
+] as const

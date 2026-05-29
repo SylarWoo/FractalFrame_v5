@@ -173,7 +173,7 @@
 
 .ff-indicators-input-panel-v1__row {
   display: grid;
-  grid-template-columns: 220px auto;
+  grid-template-columns: 104px 72px;
   align-items: center;
   justify-content: start;
   gap: 8px 12px;
@@ -193,8 +193,8 @@
 }
 
 .ff-indicators-input-panel-v1__control {
-  width: 120px;
-  max-width: 120px;
+  width: 72px;
+  max-width: 72px;
   justify-self: start;
   pointer-events: auto;
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import './SymbolSelect.css'
 
-export type SymbolSelectSize = 'circle' | 'diamond' | 'small' | 'star' | 'triangle' | 'default'
+export type SymbolSelectSize = 'circle' | 'compact' | 'diamond' | 'small' | 'star' | 'triangle' | 'default'
 
 export function SymbolSelect({
   ariaLabel = 'Symbol',

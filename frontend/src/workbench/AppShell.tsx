@@ -68,6 +68,7 @@ const leftToolbarItems = [
 const indicatorShortcutLabels: Record<string, string> = {
   RSI: '相对强弱指数',
   Stoch: '随机指标',
+  SQZMOM: 'SQZMOM - Squeeze Momentum',
   MACD: '平滑异同移动平均线',
   DPO: '非趋势价格摆动指标',
   VDO: '漩涡差值指标',
@@ -350,7 +351,7 @@ export function AppShell() {
   }
 
   function handleToggleIndicatorShortcutLoad(name: string) {
-    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF' && name !== 'MMF_V2' && name !== 'MR' && name !== 'RSI' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'VWAP' && name !== 'Vol') return
+    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF' && name !== 'MMF_V2' && name !== 'MR' && name !== 'RSI' && name !== 'SQZMOM' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'VWAP' && name !== 'Vol') return
     if (loadedIndicatorKeys.includes(name)) {
       indicatorsController.unloadIndicator(name)
       return
@@ -417,6 +418,7 @@ export function AppShell() {
             mmfLoaded={loadedIndicatorKeys.includes('MMF')}
             mmfSettings={indicatorsController.settings.mmf}
             stochSettings={indicatorsController.settings.stoch}
+            vdoSettings={indicatorsController.settings.vdo}
             onLoadStateChange={setChartLoadState}
             onMorganRangeSegmentChange={setMorganRangeSegment}
             page={chartTarget.page}
