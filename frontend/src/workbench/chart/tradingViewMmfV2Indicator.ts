@@ -10,6 +10,7 @@ import { calculateMmfV2MomentumStats, publishMmfV2MomentumStats } from './mmfV2M
 import { createEmptyMmfV2Rows, createMmfV2RowsFromMarkers as createRowsFromMarkers } from './mmfV2MarkerMapping'
 import { mmfV2MarkerSpecs } from './mmfV2MarkerSpecs'
 import type { MmfV2CalcContext, MmfV2IndicatorRow } from './mmfV2Types'
+import { calculateTradingViewStochRows } from './tradingViewStochIndicator'
 import { calculateTradingViewVdoRows } from './tradingViewVdoIndicator'
 
 export type { MmfV2IndicatorRow } from './mmfV2Types'
@@ -189,6 +190,18 @@ function createRemoteMmfV2Signature(realRows: KLineData[], context: ReturnType<t
     context.settings.resistanceUpBreakSymbol,
     context.settings.resistanceUpBreakSize,
     context.settings.resistanceUpBreakColor,
+    context.settings.arbitrageLongCloseMode,
+    context.settings.arbitrageLongEntryMomentum,
+    context.settings.arbitrageLongPosition,
+    context.settings.arbitrageLongStopLoss,
+    context.settings.arbitrageLongStochExitThreshold,
+    context.settings.arbitrageLongTakeProfit,
+    context.settings.arbitrageShortCloseMode,
+    context.settings.arbitrageShortEntryMomentum,
+    context.settings.arbitrageShortPosition,
+    context.settings.arbitrageShortStopLoss,
+    context.settings.arbitrageShortStochExitThreshold,
+    context.settings.arbitrageShortTakeProfit,
     context.settings.vdoBreakoutMomentumDownLookback,
     context.settings.vdoBreakoutMomentumUpLookback,
     context.settings.vdoCloseMomentumDownLookback,
@@ -324,7 +337,24 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
         upLineValue: Number(context.vdoSettings.upLineValue ?? defaultVdoIndicatorSettings.upLineValue),
         zeroLineValue: Number(context.vdoSettings.zeroLineValue ?? defaultVdoIndicatorSettings.zeroLineValue),
       })
+      const stochRows = calculateTradingViewStochRows(realRows, {
+        dSmoothing: normalizePositiveInteger(context.stochSettings.dSmoothing, mmfV2InternalStochSettings.dSmoothing),
+        kSmoothing: normalizePositiveInteger(context.stochSettings.kSmoothing, mmfV2InternalStochSettings.kSmoothing),
+        length: normalizePositiveInteger(context.stochSettings.length, mmfV2InternalStochSettings.length),
+      })
       publishMmfV2MomentumStats(calculateMmfV2MomentumStats({
+        arbitrageLongCloseMode: context.settings.arbitrageLongCloseMode,
+        arbitrageLongEntryMomentum: Number(context.settings.arbitrageLongEntryMomentum),
+        arbitrageLongPosition: Number(context.settings.arbitrageLongPosition),
+        arbitrageLongStopLoss: Number(context.settings.arbitrageLongStopLoss),
+        arbitrageLongStochExitThreshold: Number(context.settings.arbitrageLongStochExitThreshold),
+        arbitrageLongTakeProfit: Number(context.settings.arbitrageLongTakeProfit),
+        arbitrageShortCloseMode: context.settings.arbitrageShortCloseMode,
+        arbitrageShortEntryMomentum: Number(context.settings.arbitrageShortEntryMomentum),
+        arbitrageShortPosition: Number(context.settings.arbitrageShortPosition),
+        arbitrageShortStopLoss: Number(context.settings.arbitrageShortStopLoss),
+        arbitrageShortStochExitThreshold: Number(context.settings.arbitrageShortStochExitThreshold),
+        arbitrageShortTakeProfit: Number(context.settings.arbitrageShortTakeProfit),
         breakoutDownLookback: Number(context.settings.vdoBreakoutMomentumDownLookback),
         breakoutUpLookback: Number(context.settings.vdoBreakoutMomentumUpLookback),
         closeDownLookback: Number(context.settings.vdoCloseMomentumDownLookback),
@@ -332,6 +362,8 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
         downLookback: Number(context.settings.vdoMomentumDownLookback),
         markers,
         periodSeconds: resolvePeriodSeconds(context.period),
+        rows: realRows,
+        stochRows,
         symbol: context.symbol,
         timeframe: context.period,
         upLookback: Number(context.settings.vdoMomentumUpLookback),
