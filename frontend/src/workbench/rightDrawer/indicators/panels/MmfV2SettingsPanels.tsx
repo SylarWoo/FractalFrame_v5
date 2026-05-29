@@ -517,6 +517,7 @@ export function MmfV2StrategyPanel({
   const patch = (next: Partial<MmfIndicatorSettings>) => onSettingsChange(updateMmfSettings(settings, next))
   const showMomentumStats = Number(settings.vdoMomentumUpLookback) > 0 || Number(settings.vdoMomentumDownLookback) > 0
   const showBreakoutMomentumStats = Number(settings.vdoBreakoutMomentumUpLookback) > 0 || Number(settings.vdoBreakoutMomentumDownLookback) > 0
+  const showCloseMomentumStats = Number(settings.vdoCloseMomentumUpLookback) > 0 || Number(settings.vdoCloseMomentumDownLookback) > 0
 
   return (
     <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mmf-panel-v1" role="tabpanel">
@@ -581,6 +582,37 @@ export function MmfV2StrategyPanel({
             label={'\u5411\u4e0b\u7a81\u7834\u52a8\u91cf'}
             lookback={settings.vdoBreakoutMomentumDownLookback}
             onLookbackChange={(vdoBreakoutMomentumDownLookback) => patch({ vdoBreakoutMomentumDownLookback })}
+          />
+        </div>
+        <div className="ff-indicators-mmf-v2-panel__signal-block">
+          <div className="ff-indicators-mmf-v2-panel__check-row">
+            <span className="ff-indicators-mmf-v2-panel__advance-label">{'VDO \u5173\u95ed\u70b9\u52a8\u91cf'}</span>
+          </div>
+          {showCloseMomentumStats ? (
+            <MmfV2MomentumStatsCard
+              currentDownLabel={'\u5411\u4e0b\u5173\u95ed\u52a8\u91cf'}
+              currentUpLabel={'\u5411\u4e0a\u5173\u95ed\u52a8\u91cf'}
+              downLookback={settings.vdoCloseMomentumDownLookback}
+              downMomentumLabel={'VDO \u5411\u4e0b\u5173\u95ed\u52a8\u91cf'}
+              downStats={momentumStats?.closeDown ?? null}
+              downTitle={'\u5411\u4e0b\u5173\u95ed\u70b9\u5230\u9ad8\u70b9'}
+              momentumCrosshairIndex={momentumCrosshairIndex}
+              periodSeconds={momentumStats?.periodSeconds ?? 60}
+              upLookback={settings.vdoCloseMomentumUpLookback}
+              upMomentumLabel={'VDO \u5411\u4e0a\u5173\u95ed\u52a8\u91cf'}
+              upStats={momentumStats?.closeUp ?? null}
+              upTitle={'\u5411\u4e0a\u5173\u95ed\u70b9\u5230\u4f4e\u70b9'}
+            />
+          ) : null}
+          <MmfV2MomentumRow
+            label={'\u5411\u4e0a\u5173\u95ed\u52a8\u91cf'}
+            lookback={settings.vdoCloseMomentumUpLookback}
+            onLookbackChange={(vdoCloseMomentumUpLookback) => patch({ vdoCloseMomentumUpLookback })}
+          />
+          <MmfV2MomentumRow
+            label={'\u5411\u4e0b\u5173\u95ed\u52a8\u91cf'}
+            lookback={settings.vdoCloseMomentumDownLookback}
+            onLookbackChange={(vdoCloseMomentumDownLookback) => patch({ vdoCloseMomentumDownLookback })}
           />
         </div>
         <label className="ff-indicators-mmf-v2-momentum-floating-toggle">

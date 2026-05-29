@@ -602,18 +602,30 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
     const chart = chartInstanceRef.current
     if (!chart) return
 
+    const clearMomentumCrosshair = () => {
+      morganRangeCrosshairIndexRef.current = null
+      setMmfV2MomentumCrosshairIndex(null)
+      publishMorganRangeSegment(null)
+      publishMmfV2MomentumCrosshairIndex(null)
+    }
+
     const handleCrosshairChange = (payload: unknown) => {
       morganRangeCrosshairIndexRef.current = readCrosshairDataIndex(payload)
       setMmfV2MomentumCrosshairIndex(morganRangeCrosshairIndexRef.current)
       publishMorganRangeSegment(morganRangeCrosshairIndexRef.current)
       publishMmfV2MomentumCrosshairIndex(morganRangeCrosshairIndexRef.current)
     }
+    const chartRoot = chartRef.current
     chart.subscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
+    chartRoot?.addEventListener('pointerleave', clearMomentumCrosshair)
+    window.addEventListener('blur', clearMomentumCrosshair)
     publishMorganRangeSegment()
     return () => {
       chart.unsubscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
+      chartRoot?.removeEventListener('pointerleave', clearMomentumCrosshair)
+      window.removeEventListener('blur', clearMomentumCrosshair)
     }
-  }, [chartInstanceRef, publishMorganRangeSegment])
+  }, [chartInstanceRef, chartRef, publishMorganRangeSegment])
 
   useEffect(() => {
     const handleStats = (event: Event) => {
@@ -734,7 +746,8 @@ function MmfV2MomentumScaleTable({
   if (settings?.showVdoMomentumFloatingPanel === false) return null
   const highLow = resolveScaleMomentumValue(stats.up, stats.down, crosshairIndex)
   const breakout = resolveScaleMomentumValue(stats.breakoutUp, stats.breakoutDown, crosshairIndex)
-  if (!highLow && !breakout) return null
+  const close = resolveScaleMomentumValue(stats.closeUp, stats.closeDown, crosshairIndex)
+  if (!highLow && !breakout && !close) return null
 
   const highLowColor = highLow?.direction === 'up'
     ? settings?.lowColor ?? '#26a69a'
@@ -745,6 +758,11 @@ function MmfV2MomentumScaleTable({
     ? settings?.resistanceUpBreakColor ?? '#26a69a'
     : breakout?.direction === 'down'
       ? settings?.supportDownBreakColor ?? '#ef5350'
+      : '#334155'
+  const closeColor = close?.direction === 'up'
+    ? settings?.supportUpBreakColor ?? '#26a69a'
+    : close?.direction === 'down'
+      ? settings?.resistanceDownBreakColor ?? '#ef5350'
       : '#334155'
 
   return (
@@ -761,6 +779,8 @@ function MmfV2MomentumScaleTable({
       <div className="ff-chart-mmf-v2-momentum-scale-table__value" style={{ color: highLowColor }}>{formatScaleMomentumValue(highLow?.sample.momentum)}</div>
       <div className="ff-chart-mmf-v2-momentum-scale-table__label">{'\u7a81\u7834\u70b9\u52a8\u91cf'}</div>
       <div className="ff-chart-mmf-v2-momentum-scale-table__value" style={{ color: breakoutColor }}>{formatScaleMomentumValue(breakout?.sample.momentum)}</div>
+      <div className="ff-chart-mmf-v2-momentum-scale-table__label">{'\u5173\u95ed\u70b9\u52a8\u91cf'}</div>
+      <div className="ff-chart-mmf-v2-momentum-scale-table__value" style={{ color: closeColor }}>{formatScaleMomentumValue(close?.sample.momentum)}</div>
     </div>
   )
 }

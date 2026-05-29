@@ -24,6 +24,8 @@ export type MmfV2MomentumStatsSide = {
 export type MmfV2MomentumStats = {
   breakoutDown: MmfV2MomentumStatsSide | null
   breakoutUp: MmfV2MomentumStatsSide | null
+  closeDown: MmfV2MomentumStatsSide | null
+  closeUp: MmfV2MomentumStatsSide | null
   down: MmfV2MomentumStatsSide | null
   periodSeconds: number
   symbol: string
@@ -42,6 +44,8 @@ export function publishMmfV2MomentumCrosshairIndex(dataIndex: number | null) {
 export function calculateMmfV2MomentumStats({
   breakoutDownLookback,
   breakoutUpLookback,
+  closeDownLookback,
+  closeUpLookback,
   downLookback,
   markers,
   periodSeconds,
@@ -52,6 +56,8 @@ export function calculateMmfV2MomentumStats({
 }: {
   breakoutDownLookback: number
   breakoutUpLookback: number
+  closeDownLookback: number
+  closeUpLookback: number
   downLookback: number
   markers: MmfV2IndicatorMarker[]
   periodSeconds: number
@@ -63,6 +69,8 @@ export function calculateMmfV2MomentumStats({
   return {
     breakoutDown: summarizeMomentumSamples(createBreakoutMomentumSamples(markers, vdoRows, periodSeconds, 'MMF_V2_SUPPORT_DOWN_BREAK', ['MMF_V2_HIGH', 'MMF_V2_RESISTANCE'], breakoutDownLookback, -1)),
     breakoutUp: summarizeMomentumSamples(createBreakoutMomentumSamples(markers, vdoRows, periodSeconds, 'MMF_V2_RESISTANCE_UP_BREAK', ['MMF_V2_LOW', 'MMF_V2_SUPPORT'], breakoutUpLookback, 1)),
+    closeDown: summarizeMomentumSamples(createBreakoutMomentumSamples(markers, vdoRows, periodSeconds, 'MMF_V2_RESISTANCE_DOWN_BREAK', ['MMF_V2_HIGH', 'MMF_V2_RESISTANCE'], closeDownLookback, -1)),
+    closeUp: summarizeMomentumSamples(createBreakoutMomentumSamples(markers, vdoRows, periodSeconds, 'MMF_V2_SUPPORT_UP_BREAK', ['MMF_V2_LOW', 'MMF_V2_SUPPORT'], closeUpLookback, 1)),
     down: summarizeMomentumSamples(createMomentumSamples(markers, vdoRows, periodSeconds, ['MMF_V2_HIGH', 'MMF_V2_RESISTANCE'], downLookback, -1)),
     periodSeconds,
     symbol,
@@ -75,7 +83,7 @@ function createBreakoutMomentumSamples(
   markers: MmfV2IndicatorMarker[],
   vdoRows: VdoIndicatorRow[],
   periodSeconds: number,
-  breakType: 'MMF_V2_RESISTANCE_UP_BREAK' | 'MMF_V2_SUPPORT_DOWN_BREAK',
+  breakType: 'MMF_V2_RESISTANCE_DOWN_BREAK' | 'MMF_V2_RESISTANCE_UP_BREAK' | 'MMF_V2_SUPPORT_DOWN_BREAK' | 'MMF_V2_SUPPORT_UP_BREAK',
   previousTypes: Array<'MMF_V2_HIGH' | 'MMF_V2_LOW' | 'MMF_V2_SUPPORT' | 'MMF_V2_RESISTANCE'>,
   lookback: number,
   direction: -1 | 1,
