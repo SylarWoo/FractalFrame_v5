@@ -1,19 +1,6 @@
 export type MmfMorganRatio = number
-export type MmfArbitrageCloseMode = 'point' | 'stoch' | 'target'
 
 export type MmfIndicatorSettings = {
-  arbitrageLongCloseMode: MmfArbitrageCloseMode
-  arbitrageLongEntryMomentum: number
-  arbitrageLongPosition: number
-  arbitrageLongStopLoss: number
-  arbitrageLongStochExitThreshold: number
-  arbitrageLongTakeProfit: number
-  arbitrageShortCloseMode: MmfArbitrageCloseMode
-  arbitrageShortEntryMomentum: number
-  arbitrageShortPosition: number
-  arbitrageShortStopLoss: number
-  arbitrageShortStochExitThreshold: number
-  arbitrageShortTakeProfit: number
   dpoValue: number
   highColor: string
   highMorganRatio: MmfMorganRatio
@@ -211,18 +198,6 @@ export type MmfIndicatorSettings = {
 }
 
 export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
-  arbitrageLongCloseMode: 'target',
-  arbitrageLongEntryMomentum: 0,
-  arbitrageLongPosition: 0,
-  arbitrageLongStopLoss: 0,
-  arbitrageLongStochExitThreshold: 0,
-  arbitrageLongTakeProfit: 0,
-  arbitrageShortCloseMode: 'target',
-  arbitrageShortEntryMomentum: 0,
-  arbitrageShortPosition: 0,
-  arbitrageShortStopLoss: 0,
-  arbitrageShortStochExitThreshold: 0,
-  arbitrageShortTakeProfit: 0,
   dpoValue: 11,
   highColor: '#ef5350',
   highMorganRatio: 0.118,
@@ -419,25 +394,9 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   vdoMomentumUpLookback: 0,
 }
 
-function normalizeArbitrageCloseMode(value: unknown): MmfArbitrageCloseMode {
-  return value === 'point' || value === 'stoch' || value === 'target' ? value : 'target'
-}
-
 export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): MmfIndicatorSettings {
   const legacy = (input ?? {}) as Partial<Record<string, unknown>>
   const merged = { ...defaultMmfIndicatorSettings, ...(input ?? {}) }
-  const arbitrageLongCloseMode = normalizeArbitrageCloseMode(merged.arbitrageLongCloseMode)
-  const arbitrageLongEntryMomentum = Number(merged.arbitrageLongEntryMomentum)
-  const arbitrageLongPosition = Number(merged.arbitrageLongPosition)
-  const arbitrageLongStopLoss = Number(merged.arbitrageLongStopLoss)
-  const arbitrageLongStochExitThreshold = Number(merged.arbitrageLongStochExitThreshold)
-  const arbitrageLongTakeProfit = Number(merged.arbitrageLongTakeProfit)
-  const arbitrageShortCloseMode = normalizeArbitrageCloseMode(merged.arbitrageShortCloseMode)
-  const arbitrageShortEntryMomentum = Number(merged.arbitrageShortEntryMomentum)
-  const arbitrageShortPosition = Number(merged.arbitrageShortPosition)
-  const arbitrageShortStopLoss = Number(merged.arbitrageShortStopLoss)
-  const arbitrageShortStochExitThreshold = Number(merged.arbitrageShortStochExitThreshold)
-  const arbitrageShortTakeProfit = Number(merged.arbitrageShortTakeProfit)
   const hasHighConfirmPointColor = Object.prototype.hasOwnProperty.call(legacy, 'highConfirmPointColor')
   const hasHighConfirmPointSize = Object.prototype.hasOwnProperty.call(legacy, 'highConfirmPointSize')
   const hasHighConfirmPointSymbol = Object.prototype.hasOwnProperty.call(legacy, 'highConfirmPointSymbol')
@@ -622,18 +581,6 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const vdoMomentumUpAverage = Number(merged.vdoMomentumUpAverage)
   const vdoMomentumUpLookback = Math.round(Number(merged.vdoMomentumUpLookback))
   return {
-    arbitrageLongCloseMode,
-    arbitrageLongEntryMomentum: Number.isFinite(arbitrageLongEntryMomentum) ? Math.max(0, arbitrageLongEntryMomentum) : defaultMmfIndicatorSettings.arbitrageLongEntryMomentum,
-    arbitrageLongPosition: Number.isFinite(arbitrageLongPosition) ? Math.max(0, arbitrageLongPosition) : defaultMmfIndicatorSettings.arbitrageLongPosition,
-    arbitrageLongStopLoss: Number.isFinite(arbitrageLongStopLoss) ? Math.max(0, arbitrageLongStopLoss) : defaultMmfIndicatorSettings.arbitrageLongStopLoss,
-    arbitrageLongStochExitThreshold: Number.isFinite(arbitrageLongStochExitThreshold) ? arbitrageLongStochExitThreshold : defaultMmfIndicatorSettings.arbitrageLongStochExitThreshold,
-    arbitrageLongTakeProfit: Number.isFinite(arbitrageLongTakeProfit) ? Math.max(0, arbitrageLongTakeProfit) : defaultMmfIndicatorSettings.arbitrageLongTakeProfit,
-    arbitrageShortCloseMode,
-    arbitrageShortEntryMomentum: Number.isFinite(arbitrageShortEntryMomentum) ? Math.max(0, arbitrageShortEntryMomentum) : defaultMmfIndicatorSettings.arbitrageShortEntryMomentum,
-    arbitrageShortPosition: Number.isFinite(arbitrageShortPosition) ? Math.max(0, arbitrageShortPosition) : defaultMmfIndicatorSettings.arbitrageShortPosition,
-    arbitrageShortStopLoss: Number.isFinite(arbitrageShortStopLoss) ? Math.max(0, arbitrageShortStopLoss) : defaultMmfIndicatorSettings.arbitrageShortStopLoss,
-    arbitrageShortStochExitThreshold: Number.isFinite(arbitrageShortStochExitThreshold) ? arbitrageShortStochExitThreshold : defaultMmfIndicatorSettings.arbitrageShortStochExitThreshold,
-    arbitrageShortTakeProfit: Number.isFinite(arbitrageShortTakeProfit) ? Math.max(0, arbitrageShortTakeProfit) : defaultMmfIndicatorSettings.arbitrageShortTakeProfit,
     highColor,
     highMorganRatio: Number.isFinite(highMorganRatio) ? Math.max(0.118, Math.min(highMorganRatio, 0.236)) : defaultMmfIndicatorSettings.highMorganRatio,
     highOffsetPercent: Number.isFinite(highOffsetPercent) ? Math.max(-99, Math.min(Math.round(highOffsetPercent), 99)) : defaultMmfIndicatorSettings.highOffsetPercent,

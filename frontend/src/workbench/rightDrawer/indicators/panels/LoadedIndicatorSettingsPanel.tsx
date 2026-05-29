@@ -31,7 +31,6 @@ import {
   MrStylePanelV3,
   MmfInputPanel,
   MmfStylePanel,
-  MmfV2ArbitrageStrategyPanel,
   MmfV2InputPanel,
   MmfV2StrategyPanel,
   MmfV2StylePanel,
@@ -143,7 +142,6 @@ export function LoadedIndicatorSettingsPanel({
     },
     MMF_V2: {
       input: <MmfV2InputPanel settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
-      strategy: <MmfV2ArbitrageStrategyPanel momentumStats={mmfV2MomentumStats} onSettingsChange={onMmfV2SettingsChange} settings={mmfSettings} />,
       style: <MmfV2StylePanel settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
     },
     RSI: {
