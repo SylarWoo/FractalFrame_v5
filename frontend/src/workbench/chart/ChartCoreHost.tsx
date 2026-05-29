@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import type { Chart } from 'klinecharts'
@@ -12,7 +12,8 @@ import { useChartStepLoad } from './useChartStepLoad'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay } from './mainVolumeIndicator'
 import { applyMorganRangeOverlays, clearMorganRangeOverlays } from './useMorganRangeOverlays'
 import { calculateMorganRangeSegments, findMorganRangeSegmentByDataIndex, h4MorganSeconds, type MorganRangeSegment } from './morganRangeModel'
-import { publishMmfV2MomentumCrosshairIndex } from './mmfV2MomentumStats'
+import { mmfV2MomentumStatsEvent, publishMmfV2MomentumCrosshairIndex } from './mmfV2MomentumStats'
+import type { MmfV2MomentumSample, MmfV2MomentumStats, MmfV2MomentumStatsSide } from './mmfV2MomentumStats'
 import { readCrosshairDataIndex } from './paneTitleOverlayContent'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMmfIndicator } from './tradingViewMmfIndicator'
@@ -162,6 +163,10 @@ function refreshPane(chart: unknown, paneId: string) {
 
 export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfLoaded = false, mmfSettings, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, vdoSettings }: ChartCoreHostProps) {
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
+  const [mmfV2MomentumStats, setMmfV2MomentumStats] = useState<MmfV2MomentumStats | null>(null)
+  const [mmfV2MomentumCrosshairIndex, setMmfV2MomentumCrosshairIndex] = useState<number | null>(null)
+  const [mmfV2MomentumClockTime, setMmfV2MomentumClockTime] = useState(() => formatMomentumClockTime())
+  const [mmfV2MomentumOverlayStyle, setMmfV2MomentumOverlayStyle] = useState({ right: 96, top: 180 })
   const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, page, period, reloadId, symbol, totalRows })
   const realtimeDataReady = !loadState.loading &&
     loadState.rows > 0 &&
@@ -599,6 +604,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
 
     const handleCrosshairChange = (payload: unknown) => {
       morganRangeCrosshairIndexRef.current = readCrosshairDataIndex(payload)
+      setMmfV2MomentumCrosshairIndex(morganRangeCrosshairIndexRef.current)
       publishMorganRangeSegment(morganRangeCrosshairIndexRef.current)
       publishMmfV2MomentumCrosshairIndex(morganRangeCrosshairIndexRef.current)
     }
@@ -608,6 +614,52 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
       chart.unsubscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
     }
   }, [chartInstanceRef, publishMorganRangeSegment])
+
+  useEffect(() => {
+    const handleStats = (event: Event) => {
+      setMmfV2MomentumStats((event as CustomEvent<MmfV2MomentumStats>).detail ?? null)
+    }
+    window.addEventListener(mmfV2MomentumStatsEvent, handleStats)
+    return () => window.removeEventListener(mmfV2MomentumStatsEvent, handleStats)
+  }, [])
+
+  useEffect(() => {
+    const updateClock = () => setMmfV2MomentumClockTime(formatMomentumClockTime())
+    updateClock()
+    const timer = window.setInterval(updateClock, 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const updatePosition = () => {
+      const chart = chartInstanceRef.current
+      const chartRoot = chartRef.current
+      if (!chart || !chartRoot) return
+      const candleSize = chart.getSize('candle_pane')
+      const paneHeight = Number(candleSize?.height)
+      const top = Number.isFinite(paneHeight) && paneHeight > 0 ? Math.round(8 + paneHeight / 2) : Math.round(chartRoot.clientHeight / 2)
+      const axisWidth = resolveRightAxisWidth(chartRoot)
+      const right = Math.round(axisWidth + 10)
+      setMmfV2MomentumOverlayStyle((current) => current.top === top && current.right === right ? current : { right, top })
+    }
+
+    updatePosition()
+    const chartRoot = chartRef.current
+    const observer = chartRoot ? new ResizeObserver(updatePosition) : null
+    if (chartRoot && observer) observer.observe(chartRoot)
+    const actions = [
+      ActionType.OnDataReady,
+      ActionType.OnPaneDrag,
+      ActionType.OnVisibleRangeChange,
+      ActionType.OnZoom,
+    ]
+    const chart = chartInstanceRef.current
+    actions.forEach((action) => chart?.subscribeAction(action, updatePosition))
+    return () => {
+      observer?.disconnect()
+      actions.forEach((action) => chart?.unsubscribeAction(action, updatePosition))
+    }
+  }, [chartInstanceRef, chartRef])
 
   useEffect(() => () => {
     mainVolumeOverlayRef.current?.destroy()
@@ -638,6 +690,109 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
           <span>{candleCountdown.text}</span>
         </div>
       )}
+      <MmfV2MomentumScaleTable
+        crosshairIndex={mmfV2MomentumCrosshairIndex}
+        displayTime={mmfV2MomentumClockTime}
+        overlayStyle={mmfV2MomentumOverlayStyle}
+        settings={mmfSettings}
+        stats={mmfV2MomentumStats}
+      />
     </section>
   )
+}
+
+function resolveRightAxisWidth(chartRoot: HTMLElement) {
+  const rootRect = chartRoot.getBoundingClientRect()
+  const candidates = Array.from(chartRoot.querySelectorAll('canvas, div'))
+    .map((element) => {
+      const rect = element.getBoundingClientRect()
+      return {
+        height: rect.height,
+        rightGap: Math.abs(rootRect.right - rect.right),
+        width: rect.width,
+      }
+    })
+    .filter((rect) => rect.width >= 36 && rect.width <= 120 && rect.height > Math.max(80, rootRect.height * 0.25) && rect.rightGap <= 4)
+    .sort((left, right) => right.height - left.height)
+  return Math.round(candidates[0]?.width ?? 88)
+}
+
+function MmfV2MomentumScaleTable({
+  crosshairIndex,
+  displayTime,
+  overlayStyle,
+  settings,
+  stats,
+}: {
+  crosshairIndex: number | null
+  displayTime: string
+  overlayStyle: { right: number; top: number }
+  settings?: MmfIndicatorSettings
+  stats: MmfV2MomentumStats | null
+}) {
+  if (!stats) return null
+  if (settings?.showVdoMomentumFloatingPanel === false) return null
+  const highLow = resolveScaleMomentumValue(stats.up, stats.down, crosshairIndex)
+  const breakout = resolveScaleMomentumValue(stats.breakoutUp, stats.breakoutDown, crosshairIndex)
+  if (!highLow && !breakout) return null
+
+  const highLowColor = highLow?.direction === 'up'
+    ? settings?.lowColor ?? '#26a69a'
+    : highLow?.direction === 'down'
+      ? settings?.highColor ?? '#ef5350'
+      : '#334155'
+  const breakoutColor = breakout?.direction === 'up'
+    ? settings?.resistanceUpBreakColor ?? '#26a69a'
+    : breakout?.direction === 'down'
+      ? settings?.supportDownBreakColor ?? '#ef5350'
+      : '#334155'
+
+  return (
+    <div
+      className="ff-chart-mmf-v2-momentum-scale-table"
+      aria-label="MMF V2 momentum current values"
+      style={{
+        right: `${overlayStyle.right}px`,
+        top: `${overlayStyle.top}px`,
+      }}
+    >
+      <div className="ff-chart-mmf-v2-momentum-scale-table__time">{displayTime}</div>
+      <div className="ff-chart-mmf-v2-momentum-scale-table__label">{'\u9ad8\u4f4e\u70b9\u52a8\u91cf'}</div>
+      <div className="ff-chart-mmf-v2-momentum-scale-table__value" style={{ color: highLowColor }}>{formatScaleMomentumValue(highLow?.sample.momentum)}</div>
+      <div className="ff-chart-mmf-v2-momentum-scale-table__label">{'\u7a81\u7834\u70b9\u52a8\u91cf'}</div>
+      <div className="ff-chart-mmf-v2-momentum-scale-table__value" style={{ color: breakoutColor }}>{formatScaleMomentumValue(breakout?.sample.momentum)}</div>
+    </div>
+  )
+}
+
+function resolveScaleMomentumValue(upStats: MmfV2MomentumStatsSide | null, downStats: MmfV2MomentumStatsSide | null, crosshairIndex: number | null): { direction: 'down' | 'up'; sample: MmfV2MomentumSample } | null {
+  const upSamples = upStats?.samplesList ?? []
+  const downSamples = downStats?.samplesList ?? []
+  const safeCrosshairIndex = Number.isFinite(Number(crosshairIndex)) ? Math.round(Number(crosshairIndex)) : null
+  if (safeCrosshairIndex != null) {
+    const upHit = upSamples.find((sample) => sample.markerIndex === safeCrosshairIndex)
+    if (upHit) return { direction: 'up', sample: upHit }
+    const downHit = downSamples.find((sample) => sample.markerIndex === safeCrosshairIndex)
+    if (downHit) return { direction: 'down', sample: downHit }
+  }
+  const latest = [
+    ...upSamples.map((sample) => ({ direction: 'up' as const, sample })),
+    ...downSamples.map((sample) => ({ direction: 'down' as const, sample })),
+  ].sort((left, right) => right.sample.entryIndex - left.sample.entryIndex)[0]
+  return latest ?? null
+}
+
+function formatScaleMomentumValue(value: unknown) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  return number.toFixed(2).replace(/\.?0+$/, '')
+}
+
+function formatMomentumClockTime() {
+  const date = new Date()
+  return [
+    String(date.getHours()).padStart(2, '0'),
+    String(date.getMinutes()).padStart(2, '0'),
+    String(date.getSeconds()).padStart(2, '0'),
+  ].join(':')
 }

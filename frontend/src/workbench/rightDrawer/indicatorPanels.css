@@ -477,6 +477,26 @@
   scrollbar-gutter: stable;
 }
 
+.ff-indicators-mmf-v2-momentum-floating-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  color: #334155;
+  cursor: default;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 18px;
+  user-select: none;
+}
+
+.ff-indicators-mmf-v2-momentum-floating-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #2f2f33;
+}
+
 .ff-indicators-mmf-v2-panel__trade-toggle-inline .ff-indicators-style-row-v1__check button {
   font-size: 14px;
   white-space: nowrap;

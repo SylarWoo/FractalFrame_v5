@@ -583,6 +583,14 @@ export function MmfV2StrategyPanel({
             onLookbackChange={(vdoBreakoutMomentumDownLookback) => patch({ vdoBreakoutMomentumDownLookback })}
           />
         </div>
+        <label className="ff-indicators-mmf-v2-momentum-floating-toggle">
+          <input
+            checked={settings.showVdoMomentumFloatingPanel !== false}
+            onChange={(event) => patch({ showVdoMomentumFloatingPanel: event.currentTarget.checked })}
+            type="checkbox"
+          />
+          <span>{'\u663e\u793a\u6d6e\u52a8\u9762\u677f'}</span>
+        </label>
       </section>
     </div>
   )

@@ -185,6 +185,7 @@ export type MmfIndicatorSettings = {
   upBreakSymbol: string
   upBreakVdoLower: number
   upBreakVdoUpper: number
+  showVdoMomentumFloatingPanel: boolean
   vdoBreakoutMomentumDownLookback: number
   vdoBreakoutMomentumUpLookback: number
   vdoMomentumDownAverage: number
@@ -379,6 +380,7 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   upBreakSymbol: '\u25c6',
   upBreakVdoLower: -0.05,
   upBreakVdoUpper: 0.05,
+  showVdoMomentumFloatingPanel: true,
   vdoBreakoutMomentumDownLookback: 0,
   vdoBreakoutMomentumUpLookback: 0,
   vdoMomentumDownAverage: 20,
@@ -728,6 +730,7 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     showTrendDownPoint: merged.showTrendDownPoint === true,
     showTrendUpPoint: merged.showTrendUpPoint === true,
     showUpBreakPoint: merged.showUpBreakPoint === true,
+    showVdoMomentumFloatingPanel: merged.showVdoMomentumFloatingPanel !== false,
     supportColor,
     supportSize: Number.isFinite(supportSize) ? Math.max(8, Math.min(supportSize, 96)) : defaultMmfIndicatorSettings.supportSize,
     supportSymbol,

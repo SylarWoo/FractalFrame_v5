@@ -78,3 +78,43 @@
   line-height: 12px;
   margin-top: 3px;
 }
+
+.ff-chart-mmf-v2-momentum-scale-table {
+  position: absolute;
+  z-index: 9;
+  display: grid;
+  min-width: 86px;
+  transform: translateY(-50%);
+  border: 1px solid #d1d4dc;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.16);
+  color: #131722;
+  font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, Arial, sans-serif;
+  pointer-events: none;
+  text-align: center;
+}
+
+.ff-chart-mmf-v2-momentum-scale-table__time {
+  padding: 5px 6px 4px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #131722;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 14px;
+}
+
+.ff-chart-mmf-v2-momentum-scale-table__label {
+  padding: 5px 6px 1px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.ff-chart-mmf-v2-momentum-scale-table__value {
+  padding: 0 6px 6px;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 18px;
+}
