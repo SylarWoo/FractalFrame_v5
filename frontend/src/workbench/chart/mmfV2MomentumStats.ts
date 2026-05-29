@@ -22,6 +22,8 @@ export type MmfV2MomentumStatsSide = {
 }
 
 export type MmfV2MomentumStats = {
+  breakoutDown: MmfV2MomentumStatsSide | null
+  breakoutUp: MmfV2MomentumStatsSide | null
   down: MmfV2MomentumStatsSide | null
   periodSeconds: number
   symbol: string
@@ -38,6 +40,8 @@ export function publishMmfV2MomentumCrosshairIndex(dataIndex: number | null) {
 }
 
 export function calculateMmfV2MomentumStats({
+  breakoutDownLookback,
+  breakoutUpLookback,
   downLookback,
   markers,
   periodSeconds,
@@ -46,6 +50,8 @@ export function calculateMmfV2MomentumStats({
   upLookback,
   vdoRows,
 }: {
+  breakoutDownLookback: number
+  breakoutUpLookback: number
   downLookback: number
   markers: MmfV2IndicatorMarker[]
   periodSeconds: number
@@ -55,12 +61,52 @@ export function calculateMmfV2MomentumStats({
   vdoRows: VdoIndicatorRow[]
 }): MmfV2MomentumStats {
   return {
+    breakoutDown: summarizeMomentumSamples(createBreakoutMomentumSamples(markers, vdoRows, periodSeconds, 'MMF_V2_SUPPORT_DOWN_BREAK', ['MMF_V2_HIGH', 'MMF_V2_RESISTANCE'], breakoutDownLookback, -1)),
+    breakoutUp: summarizeMomentumSamples(createBreakoutMomentumSamples(markers, vdoRows, periodSeconds, 'MMF_V2_RESISTANCE_UP_BREAK', ['MMF_V2_LOW', 'MMF_V2_SUPPORT'], breakoutUpLookback, 1)),
     down: summarizeMomentumSamples(createMomentumSamples(markers, vdoRows, periodSeconds, ['MMF_V2_HIGH', 'MMF_V2_RESISTANCE'], downLookback, -1)),
     periodSeconds,
     symbol,
     timeframe,
     up: summarizeMomentumSamples(createMomentumSamples(markers, vdoRows, periodSeconds, ['MMF_V2_LOW', 'MMF_V2_SUPPORT'], upLookback, 1)),
   }
+}
+
+function createBreakoutMomentumSamples(
+  markers: MmfV2IndicatorMarker[],
+  vdoRows: VdoIndicatorRow[],
+  periodSeconds: number,
+  breakType: 'MMF_V2_RESISTANCE_UP_BREAK' | 'MMF_V2_SUPPORT_DOWN_BREAK',
+  previousTypes: Array<'MMF_V2_HIGH' | 'MMF_V2_LOW' | 'MMF_V2_SUPPORT' | 'MMF_V2_RESISTANCE'>,
+  lookback: number,
+  direction: -1 | 1,
+) {
+  const safeLookback = Math.max(0, Math.round(Number(lookback)))
+  if (safeLookback <= 0 || !Number.isFinite(periodSeconds) || periodSeconds <= 0) return []
+  const sortedMarkers = [...markers]
+    .map((marker) => ({ marker, markerIndex: Math.round(Number(marker.markerIndex ?? marker.index)) }))
+    .filter((entry) => Number.isFinite(entry.markerIndex))
+    .sort((left, right) => left.markerIndex - right.markerIndex)
+
+  return sortedMarkers
+    .filter((entry) => entry.marker.type === breakType)
+    .map((entry): MmfV2MomentumSample | null => {
+      const markerIndex = entry.markerIndex
+      const previous = [...sortedMarkers]
+        .reverse()
+        .find((candidate) => candidate.markerIndex < markerIndex && previousTypes.includes(candidate.marker.type as 'MMF_V2_HIGH' | 'MMF_V2_LOW' | 'MMF_V2_SUPPORT' | 'MMF_V2_RESISTANCE'))
+      if (!previous) return null
+      const startVdo = Number(vdoRows[previous.markerIndex]?.vdo)
+      const endVdo = Number(vdoRows[markerIndex]?.vdo)
+      const bars = markerIndex - previous.markerIndex
+      const seconds = bars * periodSeconds
+      if (!Number.isFinite(startVdo) || !Number.isFinite(endVdo) || bars <= 0 || seconds <= 0) return null
+      const momentum = Math.abs(direction * (endVdo - startVdo)) * 1_000_000 / seconds
+      if (!Number.isFinite(momentum)) return null
+      return { bars, entryIndex: markerIndex, markerIndex, momentum }
+    })
+    .filter((sample): sample is MmfV2MomentumSample => sample != null)
+    .sort((left, right) => right.entryIndex - left.entryIndex)
+    .slice(0, safeLookback)
 }
 
 function createMomentumSamples(

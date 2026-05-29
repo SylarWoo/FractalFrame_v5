@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useState } from 'react'
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import type { MorganRangeSegment } from '../../../chart/morganRangeModel'
 import type { MmfV2MomentumStats } from '../../../chart/mmfV2MomentumStats'
 import { VisibilityRangePanel } from '../../../visibilityRange/VisibilityRangePanel'
@@ -141,7 +142,6 @@ export function LoadedIndicatorSettingsPanel({
     },
     MMF_V2: {
       input: <MmfV2InputPanel settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
-      strategy: <MmfV2StrategyPanel momentumCrosshairIndex={mmfV2MomentumCrosshairIndex} momentumStats={mmfV2MomentumStats} settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
       style: <MmfV2StylePanel settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
     },
     RSI: {
@@ -188,10 +188,88 @@ export function LoadedIndicatorSettingsPanel({
         <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel" />
       ) : null}
       {settingsTab === 'visibility' ? (
-        <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">
-          <VisibilityRangePanel storageKey={`indicator:${selectedKey || 'default'}`} />
-        </div>
+        selectedKey === 'MMF_V2' ? (
+          <MmfV2VisibilityMomentumPanel
+            momentumCrosshairIndex={mmfV2MomentumCrosshairIndex}
+            momentumStats={mmfV2MomentumStats}
+            onSettingsChange={onMmfV2SettingsChange}
+            settings={mmfSettings}
+            storageKey={`indicator:${selectedKey || 'default'}`}
+          />
+        ) : (
+          <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">
+            <VisibilityRangePanel storageKey={`indicator:${selectedKey || 'default'}`} />
+          </div>
+        )
       ) : null}
     </>
+  )
+}
+
+function MmfV2VisibilityMomentumPanel({
+  momentumCrosshairIndex,
+  momentumStats,
+  onSettingsChange,
+  settings,
+  storageKey,
+}: {
+  momentumCrosshairIndex?: number | null
+  momentumStats?: MmfV2MomentumStats | null
+  onSettingsChange: (settings: MmfIndicatorSettings) => void
+  settings: MmfIndicatorSettings
+  storageKey: string
+}) {
+  const [topHeight, setTopHeight] = useState(42)
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    const startY = event.clientY
+    const startHeight = topHeight
+    const pointerId = event.pointerId
+    const target = event.currentTarget
+    target.setPointerCapture(pointerId)
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const nextHeight = startHeight + (moveEvent.clientY - startY)
+      setTopHeight(Math.max(0, Math.min(190, Math.round(nextHeight))))
+    }
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      try {
+        target.releasePointerCapture(pointerId)
+      } catch {
+        // Pointer capture may already be released.
+      }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp, { once: true })
+  }
+
+  return (
+    <div
+      className="ff-indicators-input-panel-v1__tab-panel ff-indicators-mmf-v2-visibility-momentum-panel"
+      role="tabpanel"
+      style={{ ['--ff-mmf-v2-visibility-height' as string]: `${topHeight}px` }}
+    >
+      <div className="ff-indicators-mmf-v2-visibility-momentum-panel__visibility">
+        <VisibilityRangePanel storageKey={storageKey} />
+      </div>
+      <button
+        aria-label="Resize MMF V2 momentum panel"
+        className="ff-indicators-mmf-v2-visibility-momentum-panel__handle"
+        onPointerDown={handlePointerDown}
+        title="\u4e0a\u4e0b\u62d6\u52a8\u8c03\u6574\u53ef\u89c1\u8303\u56f4"
+        type="button"
+      />
+      <MmfV2StrategyPanel
+        momentumCrosshairIndex={momentumCrosshairIndex}
+        momentumStats={momentumStats}
+        settings={settings}
+        onSettingsChange={onSettingsChange}
+      />
+    </div>
   )
 }

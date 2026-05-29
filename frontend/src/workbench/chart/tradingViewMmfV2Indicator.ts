@@ -189,6 +189,8 @@ function createRemoteMmfV2Signature(realRows: KLineData[], context: ReturnType<t
     context.settings.resistanceUpBreakSymbol,
     context.settings.resistanceUpBreakSize,
     context.settings.resistanceUpBreakColor,
+    context.settings.vdoBreakoutMomentumDownLookback,
+    context.settings.vdoBreakoutMomentumUpLookback,
     context.settings.vdoMomentumDownLookback,
     context.settings.vdoMomentumUpLookback,
     context.vdoSettings.length,
@@ -321,6 +323,8 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
         zeroLineValue: Number(context.vdoSettings.zeroLineValue ?? defaultVdoIndicatorSettings.zeroLineValue),
       })
       publishMmfV2MomentumStats(calculateMmfV2MomentumStats({
+        breakoutDownLookback: Number(context.settings.vdoBreakoutMomentumDownLookback),
+        breakoutUpLookback: Number(context.settings.vdoBreakoutMomentumUpLookback),
         downLookback: Number(context.settings.vdoMomentumDownLookback),
         markers,
         periodSeconds: resolvePeriodSeconds(context.period),

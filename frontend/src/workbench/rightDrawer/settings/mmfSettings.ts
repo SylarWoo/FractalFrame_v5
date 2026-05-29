@@ -185,6 +185,8 @@ export type MmfIndicatorSettings = {
   upBreakSymbol: string
   upBreakVdoLower: number
   upBreakVdoUpper: number
+  vdoBreakoutMomentumDownLookback: number
+  vdoBreakoutMomentumUpLookback: number
   vdoMomentumDownAverage: number
   vdoMomentumDownLookback: number
   vdoMomentumExceedPercent: number
@@ -377,6 +379,8 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   upBreakSymbol: '\u25c6',
   upBreakVdoLower: -0.05,
   upBreakVdoUpper: 0.05,
+  vdoBreakoutMomentumDownLookback: 0,
+  vdoBreakoutMomentumUpLookback: 0,
   vdoMomentumDownAverage: 20,
   vdoMomentumDownLookback: 0,
   vdoMomentumExceedPercent: 0,
@@ -562,6 +566,8 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const trendUpVdoLower = Number(merged.trendUpVdoLower)
   const trendUpVdoUpper = Number(merged.trendUpVdoUpper)
   const vdoMomentumDownAverage = Number(merged.vdoMomentumDownAverage)
+  const vdoBreakoutMomentumDownLookback = Math.round(Number(merged.vdoBreakoutMomentumDownLookback))
+  const vdoBreakoutMomentumUpLookback = Math.round(Number(merged.vdoBreakoutMomentumUpLookback))
   const vdoMomentumDownLookback = Math.round(Number(merged.vdoMomentumDownLookback))
   const vdoMomentumExceedPercent = Number(merged.vdoMomentumExceedPercent)
   const vdoMomentumUpAverage = Number(merged.vdoMomentumUpAverage)
@@ -751,6 +757,8 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     upBreakSymbol,
     upBreakVdoLower: Number.isFinite(upBreakVdoLower) ? upBreakVdoLower : defaultMmfIndicatorSettings.upBreakVdoLower,
     upBreakVdoUpper: Number.isFinite(upBreakVdoUpper) ? upBreakVdoUpper : defaultMmfIndicatorSettings.upBreakVdoUpper,
+    vdoBreakoutMomentumDownLookback: Number.isFinite(vdoBreakoutMomentumDownLookback) ? Math.max(0, Math.min(vdoBreakoutMomentumDownLookback, 100000)) : defaultMmfIndicatorSettings.vdoBreakoutMomentumDownLookback,
+    vdoBreakoutMomentumUpLookback: Number.isFinite(vdoBreakoutMomentumUpLookback) ? Math.max(0, Math.min(vdoBreakoutMomentumUpLookback, 100000)) : defaultMmfIndicatorSettings.vdoBreakoutMomentumUpLookback,
     vdoMomentumDownAverage: Number.isFinite(vdoMomentumDownAverage) ? Math.max(0, vdoMomentumDownAverage) : defaultMmfIndicatorSettings.vdoMomentumDownAverage,
     vdoMomentumDownLookback: Number.isFinite(vdoMomentumDownLookback) ? Math.max(0, Math.min(vdoMomentumDownLookback, 100000)) : defaultMmfIndicatorSettings.vdoMomentumDownLookback,
     vdoMomentumExceedPercent: Number.isFinite(vdoMomentumExceedPercent) ? Math.max(0, Math.min(vdoMomentumExceedPercent, 1000)) : defaultMmfIndicatorSettings.vdoMomentumExceedPercent,

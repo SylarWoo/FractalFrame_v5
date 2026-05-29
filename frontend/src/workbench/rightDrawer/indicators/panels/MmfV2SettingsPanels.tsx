@@ -516,22 +516,29 @@ export function MmfV2StrategyPanel({
 }) {
   const patch = (next: Partial<MmfIndicatorSettings>) => onSettingsChange(updateMmfSettings(settings, next))
   const showMomentumStats = Number(settings.vdoMomentumUpLookback) > 0 || Number(settings.vdoMomentumDownLookback) > 0
+  const showBreakoutMomentumStats = Number(settings.vdoBreakoutMomentumUpLookback) > 0 || Number(settings.vdoBreakoutMomentumDownLookback) > 0
 
   return (
     <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mmf-panel-v1" role="tabpanel">
       <section className="ff-indicators-input-panel-v1__section ff-indicators-mmf-panel-v1__scroll-section">
         <div className="ff-indicators-mmf-v2-panel__signal-block">
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <span className="ff-indicators-mmf-v2-panel__advance-label">{'VDO \u52a8\u91cf'}</span>
+            <span className="ff-indicators-mmf-v2-panel__advance-label">{'VDO \u9ad8\u4f4e\u70b9\u52a8\u91cf'}</span>
           </div>
           {showMomentumStats ? (
             <MmfV2MomentumStatsCard
+              currentDownLabel={'\u5411\u4e0b\u52a8\u91cf'}
+              currentUpLabel={'\u5411\u4e0a\u52a8\u91cf'}
               downLookback={settings.vdoMomentumDownLookback}
               downStats={momentumStats?.down ?? null}
+              downTitle={'\u9ad8\u70b9\u5230\u786e\u8ba4\u503c'}
               momentumCrosshairIndex={momentumCrosshairIndex}
               periodSeconds={momentumStats?.periodSeconds ?? 60}
+              upMomentumLabel={'VDO \u5411\u4e0a\u52a8\u91cf'}
               upStats={momentumStats?.up ?? null}
+              downMomentumLabel={'VDO \u5411\u4e0b\u52a8\u91cf'}
               upLookback={settings.vdoMomentumUpLookback}
+              upTitle={'\u4f4e\u70b9\u5230\u786e\u8ba4\u503c'}
             />
           ) : null}
           <MmfV2MomentumRow
@@ -545,27 +552,70 @@ export function MmfV2StrategyPanel({
             onLookbackChange={(vdoMomentumDownLookback) => patch({ vdoMomentumDownLookback })}
           />
         </div>
+        <div className="ff-indicators-mmf-v2-panel__signal-block">
+          <div className="ff-indicators-mmf-v2-panel__check-row">
+            <span className="ff-indicators-mmf-v2-panel__advance-label">{'VDO \u7a81\u7834\u70b9\u52a8\u91cf'}</span>
+          </div>
+          {showBreakoutMomentumStats ? (
+            <MmfV2MomentumStatsCard
+              currentDownLabel={'\u5411\u4e0b\u7a81\u7834\u52a8\u91cf'}
+              currentUpLabel={'\u5411\u4e0a\u7a81\u7834\u52a8\u91cf'}
+              downLookback={settings.vdoBreakoutMomentumDownLookback}
+              downMomentumLabel={'VDO \u5411\u4e0b\u7a81\u7834\u52a8\u91cf'}
+              downStats={momentumStats?.breakoutDown ?? null}
+              downTitle={'\u5411\u4e0b\u7a81\u7834\u70b9\u5230\u9ad8\u70b9'}
+              momentumCrosshairIndex={momentumCrosshairIndex}
+              periodSeconds={momentumStats?.periodSeconds ?? 60}
+              upLookback={settings.vdoBreakoutMomentumUpLookback}
+              upMomentumLabel={'VDO \u5411\u4e0a\u7a81\u7834\u52a8\u91cf'}
+              upStats={momentumStats?.breakoutUp ?? null}
+              upTitle={'\u5411\u4e0a\u7a81\u7834\u70b9\u5230\u4f4e\u70b9'}
+            />
+          ) : null}
+          <MmfV2MomentumRow
+            label={'\u5411\u4e0a\u7a81\u7834\u52a8\u91cf'}
+            lookback={settings.vdoBreakoutMomentumUpLookback}
+            onLookbackChange={(vdoBreakoutMomentumUpLookback) => patch({ vdoBreakoutMomentumUpLookback })}
+          />
+          <MmfV2MomentumRow
+            label={'\u5411\u4e0b\u7a81\u7834\u52a8\u91cf'}
+            lookback={settings.vdoBreakoutMomentumDownLookback}
+            onLookbackChange={(vdoBreakoutMomentumDownLookback) => patch({ vdoBreakoutMomentumDownLookback })}
+          />
+        </div>
       </section>
     </div>
   )
 }
 
 function MmfV2MomentumStatsCard({
+  currentDownLabel,
+  currentUpLabel,
   downLookback,
+  downMomentumLabel,
   downStats,
+  downTitle,
   momentumCrosshairIndex,
   periodSeconds,
+  upMomentumLabel,
   upStats,
   upLookback,
+  upTitle,
 }: {
+  currentDownLabel: string
+  currentUpLabel: string
   downLookback: number
+  downMomentumLabel: string
   downStats: MmfV2MomentumStatsSide | null
+  downTitle: string
   momentumCrosshairIndex?: number | null
   periodSeconds: number
+  upMomentumLabel: string
   upStats: MmfV2MomentumStatsSide | null
   upLookback: number
+  upTitle: string
 }) {
-  const current = resolveCurrentMomentumSample(upStats, downStats, momentumCrosshairIndex)
+  const current = resolveCurrentMomentumSample(upStats, downStats, momentumCrosshairIndex, currentUpLabel, currentDownLabel)
 
   return (
     <div className="ff-indicators-mmf-v2-momentum-card">
@@ -576,38 +626,38 @@ function MmfV2MomentumStatsCard({
       {Number(upLookback) > 0 ? (
         <MmfV2MomentumStatsSection
           lookback={upLookback}
-          momentumLabel={'VDO \u5411\u4e0a\u52a8\u91cf'}
+          momentumLabel={upMomentumLabel}
           periodSeconds={periodSeconds}
           stats={upStats}
-          title={'\u4f4e\u70b9\u5230\u786e\u8ba4\u503c'}
+          title={upTitle}
         />
       ) : null}
       {Number(downLookback) > 0 ? (
         <MmfV2MomentumStatsSection
           lookback={downLookback}
-          momentumLabel={'VDO \u5411\u4e0b\u52a8\u91cf'}
+          momentumLabel={downMomentumLabel}
           periodSeconds={periodSeconds}
           stats={downStats}
-          title={'\u9ad8\u70b9\u5230\u786e\u8ba4\u503c'}
+          title={downTitle}
         />
       ) : null}
     </div>
   )
 }
 
-function resolveCurrentMomentumSample(upStats: MmfV2MomentumStatsSide | null, downStats: MmfV2MomentumStatsSide | null, crosshairIndex?: number | null): { label: string; sample: MmfV2MomentumSample } | null {
+function resolveCurrentMomentumSample(upStats: MmfV2MomentumStatsSide | null, downStats: MmfV2MomentumStatsSide | null, crosshairIndex: number | null | undefined, upLabel: string, downLabel: string): { label: string; sample: MmfV2MomentumSample } | null {
   const upSamples = upStats?.samplesList ?? []
   const downSamples = downStats?.samplesList ?? []
   const safeCrosshairIndex = Number.isFinite(Number(crosshairIndex)) ? Math.round(Number(crosshairIndex)) : null
   if (safeCrosshairIndex != null) {
     const upHit = upSamples.find((sample) => sample.markerIndex === safeCrosshairIndex)
-    if (upHit) return { label: '\u5411\u4e0a\u52a8\u91cf', sample: upHit }
+    if (upHit) return { label: upLabel, sample: upHit }
     const downHit = downSamples.find((sample) => sample.markerIndex === safeCrosshairIndex)
-    if (downHit) return { label: '\u5411\u4e0b\u52a8\u91cf', sample: downHit }
+    if (downHit) return { label: downLabel, sample: downHit }
   }
   const latest = [
-    ...upSamples.map((sample) => ({ label: '\u5411\u4e0a\u52a8\u91cf', sample })),
-    ...downSamples.map((sample) => ({ label: '\u5411\u4e0b\u52a8\u91cf', sample })),
+    ...upSamples.map((sample) => ({ label: upLabel, sample })),
+    ...downSamples.map((sample) => ({ label: downLabel, sample })),
   ].sort((left, right) => right.sample.entryIndex - left.sample.entryIndex)[0]
   return latest ?? null
 }

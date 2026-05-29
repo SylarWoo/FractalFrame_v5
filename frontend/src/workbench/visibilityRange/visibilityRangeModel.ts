@@ -35,6 +35,14 @@ const mrVisibilityRangeRows: VisibilityRangeRow[] = [
   { enabled: false, from: 1, key: 'months', label: '\u4e2a\u6708', max: 12, min: 1, to: 12 },
 ]
 
+const mmfV2VisibilityRangeRows: VisibilityRangeRow[] = [
+  { enabled: true, from: 5, key: 'minutes', label: '\u5206\u949f', max: 59, min: 1, to: 5 },
+  { enabled: false, from: 1, key: 'hours', label: '\u5c0f\u65f6', max: 24, min: 1, to: 24 },
+  { enabled: false, from: 1, key: 'days', label: '\u65e5', max: 366, min: 1, to: 366 },
+  { enabled: false, from: 1, key: 'weeks', label: '\u5468', max: 52, min: 1, to: 52 },
+  { enabled: false, from: 1, key: 'months', label: '\u4e2a\u6708', max: 12, min: 1, to: 12 },
+]
+
 export function clampVisibilityRangeValue(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, Math.round(value)))
 }
@@ -67,7 +75,12 @@ export function visibilityRangeStorageKey(key?: string) {
 
 export function readVisibilityRangeRows(key?: string) {
   const resolvedKey = visibilityRangeStorageKey(key)
-  const fallbackRows = key === 'indicator:MR' ? mrVisibilityRangeRows : defaultVisibilityRangeRows
+  if (key === 'indicator:MMF_V2') return mmfV2VisibilityRangeRows
+  const fallbackRows = key === 'indicator:MR'
+    ? mrVisibilityRangeRows
+    : key === 'indicator:MMF_V2'
+      ? mmfV2VisibilityRangeRows
+      : defaultVisibilityRangeRows
   return resolvedKey
     ? normalizeVisibilityRangeRowsWithFallback(readJson(resolvedKey, null), fallbackRows)
     : normalizeVisibilityRangeRowsWithFallback(null, fallbackRows)

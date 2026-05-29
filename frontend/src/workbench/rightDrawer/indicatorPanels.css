@@ -438,6 +438,45 @@
   max-width: none;
 }
 
+.ff-indicators-mmf-v2-visibility-momentum-panel {
+  display: grid;
+  grid-template-rows: var(--ff-mmf-v2-visibility-height, 42px) 8px minmax(0, 1fr);
+  gap: 0;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.ff-indicators-mmf-v2-visibility-momentum-panel__visibility {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ff-indicators-mmf-v2-visibility-momentum-panel__visibility .ff-visibility-range-panel {
+  gap: 8px;
+  padding-top: 0;
+}
+
+.ff-indicators-mmf-v2-visibility-momentum-panel__handle {
+  width: 100%;
+  height: 8px;
+  margin: 0 0 8px;
+  border: 0;
+  border-top: 1px solid #e0e3eb;
+  border-bottom: 1px solid #e0e3eb;
+  background: #f8fafc;
+  cursor: ns-resize;
+}
+
+.ff-indicators-mmf-v2-visibility-momentum-panel__handle:hover {
+  background: #eff6ff;
+}
+
+.ff-indicators-mmf-v2-visibility-momentum-panel > .ff-indicators-input-panel-v1__tab-panel {
+  padding: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
 .ff-indicators-mmf-v2-panel__trade-toggle-inline .ff-indicators-style-row-v1__check button {
   font-size: 14px;
   white-space: nowrap;
