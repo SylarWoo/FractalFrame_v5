@@ -1,78 +1,19 @@
-﻿import { IndicatorSeries, registerIndicator } from 'klinecharts'
+import { IndicatorSeries, registerIndicator } from 'klinecharts'
 import type { IndicatorCreateTooltipDataSourceParams, KLineData } from 'klinecharts'
 import { defaultMmfIndicatorSettings, defaultVdoIndicatorSettings } from '../rightDrawer/indicatorPersistence'
-import type { MaIndicatorSettings, MmfIndicatorSettings, VdoIndicatorSettings } from '../rightDrawer/indicatorPersistence'
-import { calculateMmfV2IndicatorMarkers, type MmfV2IndicatorMarker } from '../../services/mt5/mmfV2IndicatorApi'
-import { assignBarKey, createBarIndexResolver, getKLineTimeSeconds } from './barIdentity'
+import type { MmfIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { calculateMmfV2IndicatorMarkers } from '../../services/mt5/mmfV2IndicatorApi'
+import { assignBarKey, getKLineTimeSeconds } from './barIdentity'
+import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { isFuturePlaceholder, stripFuturePlaceholders } from './chartFuturePlaceholders'
+import { calculateMmfV2MomentumStats, publishMmfV2MomentumStats } from './mmfV2MomentumStats'
+import { createEmptyMmfV2Rows, createMmfV2RowsFromMarkers as createRowsFromMarkers } from './mmfV2MarkerMapping'
+import { mmfV2MarkerSpecs } from './mmfV2MarkerSpecs'
+import type { MmfV2CalcContext, MmfV2IndicatorRow } from './mmfV2Types'
+import { calculateTradingViewVdoRows } from './tradingViewVdoIndicator'
 
-export type MmfV2IndicatorRow = {
-  highMarker?: number
-  highMarkerPrice?: number
-  deadCrossMarker?: number
-  deadCrossMarkerPrice?: number
-  lowMarker?: number
-  lowMarkerPrice?: number
-  goldenCrossMarker?: number
-  goldenCrossMarkerPrice?: number
-  highConfirmPointMarker?: number
-  highConfirmPointMarkerPrice?: number
-  highConfirmPointDistance?: number
-  resistanceMarker?: number
-  resistanceMarkerPrice?: number
-  lowConfirmPointMarker?: number
-  lowConfirmPointMarkerPrice?: number
-  lowConfirmPointDistance?: number
-  supportMarker?: number
-  supportMarkerPrice?: number
-  expectedSupportMarker?: number
-  expectedSupportMarkerPrice?: number
-  expectedResistanceMarker?: number
-  expectedResistanceMarkerPrice?: number
-  trendDownReboundMarker?: number
-  trendDownReboundMarkerPrice?: number
-  trendUpPullbackMarker?: number
-  trendUpPullbackMarkerPrice?: number
-  trendDownReturnMarker?: number
-  trendDownReturnMarkerPrice?: number
-  trendUpReturnMarker?: number
-  trendUpReturnMarkerPrice?: number
-  trendDownDivergenceMarker?: number
-  trendDownDivergenceMarkerPrice?: number
-  trendUpDivergenceMarker?: number
-  trendUpDivergenceMarkerPrice?: number
-  supportDownBreakMarker?: number
-  supportDownBreakMarkerPrice?: number
-  supportUpBreakMarker?: number
-  supportUpBreakMarkerPrice?: number
-  resistanceDownBreakMarker?: number
-  resistanceDownBreakMarkerPrice?: number
-  resistanceUpBreakMarker?: number
-  resistanceUpBreakMarkerPrice?: number
-}
-
-type MmfV2CalcContext = {
-  maSettings?: Partial<MaIndicatorSettings>
-  period?: string
-  settings?: Partial<MmfIndicatorSettings>
-  symbol?: string
-  vdoSettings?: Partial<VdoIndicatorSettings>
-}
-
-type MmfV2MarkerSpec = {
-  color: (settings: MmfIndicatorSettings) => string
-  distanceKey?: keyof Pick<MmfV2IndicatorRow, 'highConfirmPointDistance' | 'lowConfirmPointDistance'>
-  markerKey: keyof Pick<MmfV2IndicatorRow, 'highMarker' | 'deadCrossMarker' | 'lowMarker' | 'goldenCrossMarker' | 'highConfirmPointMarker' | 'lowConfirmPointMarker' | 'supportMarker' | 'resistanceMarker' | 'expectedSupportMarker' | 'expectedResistanceMarker' | 'trendDownReboundMarker' | 'trendUpPullbackMarker' | 'trendDownReturnMarker' | 'trendUpReturnMarker' | 'trendDownDivergenceMarker' | 'trendUpDivergenceMarker' | 'supportDownBreakMarker' | 'supportUpBreakMarker' | 'resistanceDownBreakMarker' | 'resistanceUpBreakMarker'>
-  markerType: MmfV2IndicatorMarker['type']
-  offsetMultiplier: number
-  priceKey: keyof Pick<MmfV2IndicatorRow, 'highMarkerPrice' | 'deadCrossMarkerPrice' | 'lowMarkerPrice' | 'goldenCrossMarkerPrice' | 'highConfirmPointMarkerPrice' | 'lowConfirmPointMarkerPrice' | 'supportMarkerPrice' | 'resistanceMarkerPrice' | 'expectedSupportMarkerPrice' | 'expectedResistanceMarkerPrice' | 'trendDownReboundMarkerPrice' | 'trendUpPullbackMarkerPrice' | 'trendDownReturnMarkerPrice' | 'trendUpReturnMarkerPrice' | 'trendDownDivergenceMarkerPrice' | 'trendUpDivergenceMarkerPrice' | 'supportDownBreakMarkerPrice' | 'supportUpBreakMarkerPrice' | 'resistanceDownBreakMarkerPrice' | 'resistanceUpBreakMarkerPrice'>
-  show: (settings: MmfIndicatorSettings) => boolean
-  size: (settings: MmfIndicatorSettings) => number
-  symbol: (settings: MmfIndicatorSettings) => string
-  textBaseline: CanvasTextBaseline
-  title: string
-  yDirection: -1 | 1
-}
+export type { MmfV2IndicatorRow } from './mmfV2Types'
+export { createMmfV2RowsFromMarkers } from './mmfV2MarkerMapping'
 
 let registered = false
 const mmfV2EngineVersion = 'mmf-v2-trend-divergence-v1'
@@ -87,271 +28,6 @@ const mmfV2InternalStochSettings = {
   kSmoothing: 6,
   length: 28,
 }
-
-const mmfV2MarkerSpecs: MmfV2MarkerSpec[] = [
-  {
-    color: (settings) => settings.deadCrossColor || defaultMmfIndicatorSettings.deadCrossColor,
-    markerKey: 'deadCrossMarker',
-    markerType: 'MMF_V2_HIGH',
-    offsetMultiplier: 0.55,
-    priceKey: 'deadCrossMarkerPrice',
-    show: (settings) => settings.showDeadCross,
-    size: (settings) => clampMarkerSize(settings.deadCrossSize, defaultMmfIndicatorSettings.deadCrossSize),
-    symbol: (settings) => settings.deadCrossSymbol || defaultMmfIndicatorSettings.deadCrossSymbol,
-    textBaseline: 'bottom',
-    title: '\u6b7b\u53c9 ',
-    yDirection: -1,
-  },
-  {
-    color: (settings) => settings.highColor || defaultMmfIndicatorSettings.highColor,
-    markerKey: 'highMarker',
-    markerType: 'MMF_V2_HIGH',
-    offsetMultiplier: 0.25,
-    priceKey: 'highMarkerPrice',
-    show: (settings) => settings.showHigh,
-    size: (settings) => clampMarkerSize(settings.highSize, defaultMmfIndicatorSettings.highSize),
-    symbol: (settings) => settings.highSymbol || defaultMmfIndicatorSettings.highSymbol,
-    textBaseline: 'bottom',
-    title: 'High ',
-    yDirection: -1,
-  },
-  {
-    color: (settings) => settings.trendUpDivergencePointColor || defaultMmfIndicatorSettings.trendUpDivergencePointColor,
-    markerKey: 'trendUpDivergenceMarker',
-    markerType: 'MMF_V2_TREND_UP_DIVERGENCE',
-    offsetMultiplier: 0.25,
-    priceKey: 'trendUpDivergenceMarkerPrice',
-    show: (settings) => settings.showTrendUpDivergencePointV2,
-    size: (settings) => clampMarkerSize(settings.trendUpDivergencePointSize, defaultMmfIndicatorSettings.trendUpDivergencePointSize),
-    symbol: (settings) => settings.trendUpDivergencePointSymbol || defaultMmfIndicatorSettings.trendUpDivergencePointSymbol,
-    textBaseline: 'bottom',
-    title: '\u4e0a\u5347\u8d8b\u52bf - \u80cc\u79bb\u70b9 ',
-    yDirection: -1,
-  },
-  {
-    color: (settings) => settings.expectedResistanceColor || defaultMmfIndicatorSettings.expectedResistanceColor,
-    markerKey: 'expectedResistanceMarker',
-    markerType: 'MMF_V2_EXPECTED_RESISTANCE',
-    offsetMultiplier: 0.25,
-    priceKey: 'expectedResistanceMarkerPrice',
-    show: (settings) => settings.showExpectedResistanceLevel,
-    size: (settings) => clampMarkerSize(settings.expectedResistanceSize, defaultMmfIndicatorSettings.expectedResistanceSize),
-    symbol: (settings) => settings.expectedResistanceSymbol || defaultMmfIndicatorSettings.expectedResistanceSymbol,
-    textBaseline: 'bottom',
-    title: '\u9884\u671f\u963b\u529b\u4f4d ',
-    yDirection: -1,
-  },
-  {
-    color: (settings) => settings.resistanceColor || defaultMmfIndicatorSettings.resistanceColor,
-    markerKey: 'resistanceMarker',
-    markerType: 'MMF_V2_RESISTANCE',
-    offsetMultiplier: 0.25,
-    priceKey: 'resistanceMarkerPrice',
-    show: (settings) => settings.showResistanceLevel,
-    size: (settings) => clampMarkerSize(settings.resistanceSize, defaultMmfIndicatorSettings.resistanceSize),
-    symbol: (settings) => settings.resistanceSymbol || defaultMmfIndicatorSettings.resistanceSymbol,
-    textBaseline: 'bottom',
-    title: '\u963b\u529b\u4f4d ',
-    yDirection: -1,
-  },
-  {
-    color: (settings) => settings.trendDownReboundColor || defaultMmfIndicatorSettings.trendDownReboundColor,
-    markerKey: 'trendDownReboundMarker',
-    markerType: 'MMF_V2_TREND_DOWN_REBOUND',
-    offsetMultiplier: 0.25,
-    priceKey: 'trendDownReboundMarkerPrice',
-    show: (settings) => settings.showTrendDownReboundPoint,
-    size: (settings) => clampMarkerSize(settings.trendDownReboundSize, defaultMmfIndicatorSettings.trendDownReboundSize),
-    symbol: (settings) => settings.trendDownReboundSymbol || defaultMmfIndicatorSettings.trendDownReboundSymbol,
-    textBaseline: 'bottom',
-    title: '\u4e0b\u964d\u8d8b\u52bf - \u53cd\u5f39\u70b9 ',
-    yDirection: -1,
-  },
-  {
-    color: (settings) => settings.trendDownReturnColor || defaultMmfIndicatorSettings.trendDownReturnColor,
-    markerKey: 'trendDownReturnMarker',
-    markerType: 'MMF_V2_TREND_DOWN_RETURN',
-    offsetMultiplier: 0.25,
-    priceKey: 'trendDownReturnMarkerPrice',
-    show: (settings) => settings.showTrendDownReturnPoint,
-    size: (settings) => clampMarkerSize(settings.trendDownReturnSize, defaultMmfIndicatorSettings.trendDownReturnSize),
-    symbol: (settings) => settings.trendDownReturnSymbol || defaultMmfIndicatorSettings.trendDownReturnSymbol,
-    textBaseline: 'bottom',
-    title: '\u4e0b\u964d\u8d8b\u52bf - \u56de\u5f52\u70b9 ',
-    yDirection: -1,
-  },
-  {
-    color: (settings) => settings.goldenCrossColor || defaultMmfIndicatorSettings.goldenCrossColor,
-    markerKey: 'goldenCrossMarker',
-    markerType: 'MMF_V2_LOW',
-    offsetMultiplier: 0.55,
-    priceKey: 'goldenCrossMarkerPrice',
-    show: (settings) => settings.showGoldenCross,
-    size: (settings) => clampMarkerSize(settings.goldenCrossSize, defaultMmfIndicatorSettings.goldenCrossSize),
-    symbol: (settings) => settings.goldenCrossSymbol || defaultMmfIndicatorSettings.goldenCrossSymbol,
-    textBaseline: 'top',
-    title: '\u91d1\u53c9 ',
-    yDirection: 1,
-  },
-  {
-    color: (settings) => settings.highConfirmPointColor || defaultMmfIndicatorSettings.highConfirmPointColor,
-    distanceKey: 'highConfirmPointDistance',
-    markerKey: 'highConfirmPointMarker',
-    markerType: 'MMF_V2_HIGH',
-    offsetMultiplier: 0.75,
-    priceKey: 'highConfirmPointMarkerPrice',
-    show: (settings) => settings.showHighConfirmPoint,
-    size: (settings) => clampMarkerSize(settings.highConfirmPointSize, defaultMmfIndicatorSettings.highConfirmPointSize),
-    symbol: (settings) => settings.highConfirmPointSymbol || defaultMmfIndicatorSettings.highConfirmPointSymbol,
-    textBaseline: 'bottom',
-    title: '\u9ad8\u70b9\u786e\u8ba4\u70b9 ',
-    yDirection: -1,
-  },
-  {
-    color: (settings) => settings.lowColor || defaultMmfIndicatorSettings.lowColor,
-    markerKey: 'lowMarker',
-    markerType: 'MMF_V2_LOW',
-    offsetMultiplier: 0.25,
-    priceKey: 'lowMarkerPrice',
-    show: (settings) => settings.showLow,
-    size: (settings) => clampMarkerSize(settings.lowSize, defaultMmfIndicatorSettings.lowSize),
-    symbol: (settings) => settings.lowSymbol || defaultMmfIndicatorSettings.lowSymbol,
-    textBaseline: 'top',
-    title: 'Low ',
-    yDirection: 1,
-  },
-  {
-    color: (settings) => settings.trendDownDivergencePointColor || defaultMmfIndicatorSettings.trendDownDivergencePointColor,
-    markerKey: 'trendDownDivergenceMarker',
-    markerType: 'MMF_V2_TREND_DOWN_DIVERGENCE',
-    offsetMultiplier: 0.25,
-    priceKey: 'trendDownDivergenceMarkerPrice',
-    show: (settings) => settings.showTrendDownDivergencePointV2,
-    size: (settings) => clampMarkerSize(settings.trendDownDivergencePointSize, defaultMmfIndicatorSettings.trendDownDivergencePointSize),
-    symbol: (settings) => settings.trendDownDivergencePointSymbol || defaultMmfIndicatorSettings.trendDownDivergencePointSymbol,
-    textBaseline: 'top',
-    title: '\u4e0b\u964d\u8d8b\u52bf - \u80cc\u79bb\u70b9 ',
-    yDirection: 1,
-  },
-  {
-    color: (settings) => settings.expectedSupportColor || defaultMmfIndicatorSettings.expectedSupportColor,
-    markerKey: 'expectedSupportMarker',
-    markerType: 'MMF_V2_EXPECTED_SUPPORT',
-    offsetMultiplier: 0.25,
-    priceKey: 'expectedSupportMarkerPrice',
-    show: (settings) => settings.showExpectedSupportLevel,
-    size: (settings) => clampMarkerSize(settings.expectedSupportSize, defaultMmfIndicatorSettings.expectedSupportSize),
-    symbol: (settings) => settings.expectedSupportSymbol || defaultMmfIndicatorSettings.expectedSupportSymbol,
-    textBaseline: 'top',
-    title: '\u9884\u671f\u652f\u6491\u4f4d ',
-    yDirection: 1,
-  },
-  {
-    color: (settings) => settings.supportColor || defaultMmfIndicatorSettings.supportColor,
-    markerKey: 'supportMarker',
-    markerType: 'MMF_V2_SUPPORT',
-    offsetMultiplier: 0.25,
-    priceKey: 'supportMarkerPrice',
-    show: (settings) => settings.showSupportLevel,
-    size: (settings) => clampMarkerSize(settings.supportSize, defaultMmfIndicatorSettings.supportSize),
-    symbol: (settings) => settings.supportSymbol || defaultMmfIndicatorSettings.supportSymbol,
-    textBaseline: 'top',
-    title: '\u652f\u6491\u4f4d ',
-    yDirection: 1,
-  },
-  {
-    color: (settings) => settings.trendUpPullbackColor || defaultMmfIndicatorSettings.trendUpPullbackColor,
-    markerKey: 'trendUpPullbackMarker',
-    markerType: 'MMF_V2_TREND_UP_PULLBACK',
-    offsetMultiplier: 0.25,
-    priceKey: 'trendUpPullbackMarkerPrice',
-    show: (settings) => settings.showTrendUpPullbackPoint,
-    size: (settings) => clampMarkerSize(settings.trendUpPullbackSize, defaultMmfIndicatorSettings.trendUpPullbackSize),
-    symbol: (settings) => settings.trendUpPullbackSymbol || defaultMmfIndicatorSettings.trendUpPullbackSymbol,
-    textBaseline: 'top',
-    title: '\u4e0a\u5347\u8d8b\u52bf - \u56de\u64a4\u70b9 ',
-    yDirection: 1,
-  },
-  {
-    color: (settings) => settings.trendUpReturnColor || defaultMmfIndicatorSettings.trendUpReturnColor,
-    markerKey: 'trendUpReturnMarker',
-    markerType: 'MMF_V2_TREND_UP_RETURN',
-    offsetMultiplier: 0.25,
-    priceKey: 'trendUpReturnMarkerPrice',
-    show: (settings) => settings.showTrendUpReturnPoint,
-    size: (settings) => clampMarkerSize(settings.trendUpReturnSize, defaultMmfIndicatorSettings.trendUpReturnSize),
-    symbol: (settings) => settings.trendUpReturnSymbol || defaultMmfIndicatorSettings.trendUpReturnSymbol,
-    textBaseline: 'top',
-    title: '\u4e0a\u5347\u8d8b\u52bf - \u56de\u5f52\u70b9 ',
-    yDirection: 1,
-  },
-  {
-    color: (settings) => settings.supportDownBreakColor || defaultMmfIndicatorSettings.supportDownBreakColor,
-    markerKey: 'supportDownBreakMarker',
-    markerType: 'MMF_V2_SUPPORT_DOWN_BREAK',
-    offsetMultiplier: 0.25,
-    priceKey: 'supportDownBreakMarkerPrice',
-    show: (settings) => settings.showSupportDownBreakPoint,
-    size: (settings) => clampMarkerSize(settings.supportDownBreakSize, defaultMmfIndicatorSettings.supportDownBreakSize),
-    symbol: (settings) => settings.supportDownBreakSymbol || defaultMmfIndicatorSettings.supportDownBreakSymbol,
-    textBaseline: 'bottom',
-    title: '\u652f\u6491\u4f4d\u5411\u4e0b\u7a81\u7834 ',
-    yDirection: -1,
-  },
-  {
-    color: (settings) => settings.supportUpBreakColor || defaultMmfIndicatorSettings.supportUpBreakColor,
-    markerKey: 'supportUpBreakMarker',
-    markerType: 'MMF_V2_SUPPORT_UP_BREAK',
-    offsetMultiplier: 0.25,
-    priceKey: 'supportUpBreakMarkerPrice',
-    show: (settings) => settings.showSupportUpBreakPoint,
-    size: (settings) => clampMarkerSize(settings.supportUpBreakSize, defaultMmfIndicatorSettings.supportUpBreakSize),
-    symbol: (settings) => settings.supportUpBreakSymbol || defaultMmfIndicatorSettings.supportUpBreakSymbol,
-    textBaseline: 'top',
-    title: '\u652f\u6491\u4f4d\u5411\u4e0a\u7a81\u7834 ',
-    yDirection: 1,
-  },
-  {
-    color: (settings) => settings.resistanceUpBreakColor || defaultMmfIndicatorSettings.resistanceUpBreakColor,
-    markerKey: 'resistanceUpBreakMarker',
-    markerType: 'MMF_V2_RESISTANCE_UP_BREAK',
-    offsetMultiplier: 0.25,
-    priceKey: 'resistanceUpBreakMarkerPrice',
-    show: (settings) => settings.showResistanceUpBreakPoint,
-    size: (settings) => clampMarkerSize(settings.resistanceUpBreakSize, defaultMmfIndicatorSettings.resistanceUpBreakSize),
-    symbol: (settings) => settings.resistanceUpBreakSymbol || defaultMmfIndicatorSettings.resistanceUpBreakSymbol,
-    textBaseline: 'top',
-    title: '\u963b\u529b\u4f4d\u5411\u4e0a\u7a81\u7834 ',
-    yDirection: 1,
-  },
-  {
-    color: (settings) => settings.resistanceDownBreakColor || defaultMmfIndicatorSettings.resistanceDownBreakColor,
-    markerKey: 'resistanceDownBreakMarker',
-    markerType: 'MMF_V2_RESISTANCE_DOWN_BREAK',
-    offsetMultiplier: 0.25,
-    priceKey: 'resistanceDownBreakMarkerPrice',
-    show: (settings) => settings.showResistanceDownBreakPoint,
-    size: (settings) => clampMarkerSize(settings.resistanceDownBreakSize, defaultMmfIndicatorSettings.resistanceDownBreakSize),
-    symbol: (settings) => settings.resistanceDownBreakSymbol || defaultMmfIndicatorSettings.resistanceDownBreakSymbol,
-    textBaseline: 'bottom',
-    title: '\u963b\u529b\u4f4d\u5411\u4e0b\u7a81\u7834 ',
-    yDirection: -1,
-  },
-  {
-    color: (settings) => settings.lowConfirmPointColor || defaultMmfIndicatorSettings.lowConfirmPointColor,
-    distanceKey: 'lowConfirmPointDistance',
-    markerKey: 'lowConfirmPointMarker',
-    markerType: 'MMF_V2_LOW',
-    offsetMultiplier: 0.75,
-    priceKey: 'lowConfirmPointMarkerPrice',
-    show: (settings) => settings.showLowConfirmPoint,
-    size: (settings) => clampMarkerSize(settings.lowConfirmPointSize, defaultMmfIndicatorSettings.lowConfirmPointSize),
-    symbol: (settings) => settings.lowConfirmPointSymbol || defaultMmfIndicatorSettings.lowConfirmPointSymbol,
-    textBaseline: 'top',
-    title: '\u4f4e\u70b9\u786e\u8ba4\u70b9 ',
-    yDirection: 1,
-  },
-]
 
 function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): MmfIndicatorSettings {
   const legacy = (input ?? {}) as Partial<Record<string, unknown>>
@@ -393,10 +69,6 @@ function normalizeMmfV2Context(input: unknown) {
     symbol: typeof context.symbol === 'string' && context.symbol.trim() ? context.symbol.trim() : '',
     vdoSettings,
   }
-}
-
-function createEmptyMmfV2Rows(length: number): MmfV2IndicatorRow[] {
-  return Array.from({ length }, () => ({}))
 }
 
 function mergeRealRowsWithPlaceholders(dataList: KLineData[], realRows: MmfV2IndicatorRow[]) {
@@ -517,6 +189,8 @@ function createRemoteMmfV2Signature(realRows: KLineData[], context: ReturnType<t
     context.settings.resistanceUpBreakSymbol,
     context.settings.resistanceUpBreakSize,
     context.settings.resistanceUpBreakColor,
+    context.settings.vdoMomentumDownLookback,
+    context.settings.vdoMomentumUpLookback,
     context.vdoSettings.length,
     context.vdoSettings.emaSmoothing,
     context.vdoSettings.zeroLineValue,
@@ -546,197 +220,6 @@ function setCachedRemoteMmfV2Rows(signature: string, rows: Promise<MmfV2Indicato
     if (oldest == null) break
     remoteMmfV2RowsBySignature.delete(oldest)
   }
-}
-
-export function createMmfV2RowsFromMarkers(realRows: KLineData[], markers: MmfV2IndicatorMarker[]) {
-  const rows = createEmptyMmfV2Rows(realRows.length)
-  const resolveRowIndex = createBarIndexResolver(realRows)
-
-  markers.forEach((marker) => {
-    const index = resolveRowIndex(marker.markerBarKey, marker.time, marker.index ?? marker.markerIndex)
-    const price = Number(marker.price)
-    if (!Number.isFinite(index) || index < 0 || index >= rows.length || !Number.isFinite(price)) return
-    const entryIndex = resolveRowIndex(marker.entryBarKey ?? marker.confirmBarKey, marker.entryTime ?? marker.confirmTime, marker.entryIndex ?? marker.confirmIndex)
-    const eventIndex = resolveRowIndex(marker.eventBarKey, marker.eventTime, marker.eventIndex)
-    const entryPrice = Number(marker.entryPrice)
-    const pointDistance = Number(marker.pointDistance)
-    if (marker.type === 'MMF_V2_SUPPORT_DOWN_BREAK') {
-      rows[index] = { ...rows[index], supportDownBreakMarker: price, supportDownBreakMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_SUPPORT_UP_BREAK') {
-      rows[index] = { ...rows[index], supportUpBreakMarker: price, supportUpBreakMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_RESISTANCE_UP_BREAK') {
-      rows[index] = { ...rows[index], resistanceUpBreakMarker: price, resistanceUpBreakMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_RESISTANCE_DOWN_BREAK') {
-      rows[index] = { ...rows[index], resistanceDownBreakMarker: price, resistanceDownBreakMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_EXPECTED_RESISTANCE') {
-      rows[index] = { ...rows[index], expectedResistanceMarker: price, expectedResistanceMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_EXPECTED_SUPPORT') {
-      rows[index] = { ...rows[index], expectedSupportMarker: price, expectedSupportMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_TREND_DOWN_REBOUND') {
-      rows[index] = { ...rows[index], trendDownReboundMarker: price, trendDownReboundMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_TREND_UP_PULLBACK') {
-      rows[index] = { ...rows[index], trendUpPullbackMarker: price, trendUpPullbackMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_TREND_DOWN_RETURN') {
-      rows[index] = { ...rows[index], trendDownReturnMarker: price, trendDownReturnMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_TREND_UP_RETURN') {
-      rows[index] = { ...rows[index], trendUpReturnMarker: price, trendUpReturnMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_TREND_DOWN_DIVERGENCE') {
-      rows[index] = { ...rows[index], trendDownDivergenceMarker: price, trendDownDivergenceMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_TREND_UP_DIVERGENCE') {
-      rows[index] = { ...rows[index], trendUpDivergenceMarker: price, trendUpDivergenceMarkerPrice: price }
-      return
-    }
-    if (marker.type === 'MMF_V2_HIGH' || marker.type === 'MMF_V2_RESISTANCE') {
-      const markerPatch = marker.type === 'MMF_V2_RESISTANCE'
-        ? { highMarker: price, highMarkerPrice: price, resistanceMarker: price, resistanceMarkerPrice: price }
-        : { highMarker: price, highMarkerPrice: price }
-      rows[index] = { ...rows[index], ...markerPatch }
-      if (Number.isFinite(eventIndex) && eventIndex >= 0 && eventIndex < rows.length) {
-        const deadCrossY = Number(realRows[eventIndex]?.high)
-        rows[eventIndex] = {
-          ...rows[eventIndex],
-          deadCrossMarker: Number.isFinite(deadCrossY) ? deadCrossY : price,
-          deadCrossMarkerPrice: Number.isFinite(deadCrossY) ? deadCrossY : price,
-        }
-      }
-      if (Number.isFinite(entryIndex) && entryIndex >= 0 && entryIndex < rows.length && Number.isFinite(entryPrice)) {
-        const highConfirmPointY = Number(realRows[entryIndex]?.high)
-        rows[entryIndex] = {
-          ...rows[entryIndex],
-          highConfirmPointMarker: Number.isFinite(highConfirmPointY) ? highConfirmPointY : entryPrice,
-          highConfirmPointMarkerPrice: entryPrice,
-          highConfirmPointDistance: pointDistance,
-        }
-      }
-    }
-    if (marker.type === 'MMF_V2_LOW' || marker.type === 'MMF_V2_SUPPORT') {
-      const markerPatch = marker.type === 'MMF_V2_SUPPORT'
-        ? { lowMarker: price, lowMarkerPrice: price, supportMarker: price, supportMarkerPrice: price }
-        : { lowMarker: price, lowMarkerPrice: price }
-      rows[index] = { ...rows[index], ...markerPatch }
-      if (Number.isFinite(eventIndex) && eventIndex >= 0 && eventIndex < rows.length) {
-        const goldenCrossY = Number(realRows[eventIndex]?.low)
-        rows[eventIndex] = {
-          ...rows[eventIndex],
-          goldenCrossMarker: Number.isFinite(goldenCrossY) ? goldenCrossY : price,
-          goldenCrossMarkerPrice: Number.isFinite(goldenCrossY) ? goldenCrossY : price,
-        }
-      }
-      if (Number.isFinite(entryIndex) && entryIndex >= 0 && entryIndex < rows.length && Number.isFinite(entryPrice)) {
-        const lowConfirmPointY = Number(realRows[entryIndex]?.low)
-        rows[entryIndex] = {
-          ...rows[entryIndex],
-          lowConfirmPointMarker: Number.isFinite(lowConfirmPointY) ? lowConfirmPointY : entryPrice,
-          lowConfirmPointMarkerPrice: entryPrice,
-          lowConfirmPointDistance: pointDistance,
-        }
-      }
-    }
-  })
-  applyMmfV2TrendReturnMarkerOverrides(rows)
-  applyMmfV2TrendDivergenceMarkerOverrides(rows)
-  applyMmfV2TrendRetraceMarkerOverrides(rows)
-  applyMmfV2ExpectedMarkerOverrides(rows)
-  applyMmfV2BreakMarkerOverrides(rows)
-  return rows
-}
-
-function applyMmfV2TrendRetraceMarkerOverrides(rows: MmfV2IndicatorRow[]) {
-  rows.forEach((row) => {
-    if (Number.isFinite(row.trendDownReboundMarker)) {
-      delete row.highMarker
-      delete row.highMarkerPrice
-    }
-    if (Number.isFinite(row.trendUpPullbackMarker)) {
-      delete row.lowMarker
-      delete row.lowMarkerPrice
-    }
-  })
-}
-
-function applyMmfV2TrendReturnMarkerOverrides(rows: MmfV2IndicatorRow[]) {
-  rows.forEach((row) => {
-    if (Number.isFinite(row.trendDownReturnMarker)) {
-      delete row.trendDownReboundMarker
-      delete row.trendDownReboundMarkerPrice
-      delete row.highMarker
-      delete row.highMarkerPrice
-    }
-    if (Number.isFinite(row.trendUpReturnMarker)) {
-      delete row.trendUpPullbackMarker
-      delete row.trendUpPullbackMarkerPrice
-      delete row.lowMarker
-      delete row.lowMarkerPrice
-    }
-  })
-}
-
-function applyMmfV2TrendDivergenceMarkerOverrides(rows: MmfV2IndicatorRow[]) {
-  rows.forEach((row) => {
-    if (Number.isFinite(row.trendDownDivergenceMarker)) {
-      delete row.lowMarker
-      delete row.lowMarkerPrice
-    }
-    if (Number.isFinite(row.trendUpDivergenceMarker)) {
-      delete row.highMarker
-      delete row.highMarkerPrice
-    }
-  })
-}
-
-function applyMmfV2ExpectedMarkerOverrides(rows: MmfV2IndicatorRow[]) {
-  rows.forEach((row) => {
-    if (Number.isFinite(row.expectedResistanceMarker)) {
-      delete row.highMarker
-      delete row.highMarkerPrice
-    }
-    if (Number.isFinite(row.expectedSupportMarker)) {
-      delete row.lowMarker
-      delete row.lowMarkerPrice
-    }
-  })
-}
-
-function applyMmfV2BreakMarkerOverrides(rows: MmfV2IndicatorRow[]) {
-  rows.forEach((row) => {
-    const hasTopBreak = Number.isFinite(row.supportDownBreakMarker) || Number.isFinite(row.resistanceDownBreakMarker)
-    if (hasTopBreak) {
-      delete row.highMarker
-      delete row.highMarkerPrice
-      delete row.resistanceMarker
-      delete row.resistanceMarkerPrice
-    }
-
-    const hasBottomBreak = Number.isFinite(row.supportUpBreakMarker) || Number.isFinite(row.resistanceUpBreakMarker)
-    if (hasBottomBreak) {
-      delete row.lowMarker
-      delete row.lowMarkerPrice
-      delete row.supportMarker
-      delete row.supportMarkerPrice
-    }
-  })
 }
 
 async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: unknown): Promise<MmfV2IndicatorRow[]> {
@@ -828,7 +311,25 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
   })
     .then((payload) => {
       const markers = payload.markers ?? []
-      return createMmfV2RowsFromMarkers(realRows, markers)
+      const vdoRows = calculateTradingViewVdoRows(realRows, {
+        downLine2Value: Number(context.vdoSettings.downLine2Value ?? defaultVdoIndicatorSettings.downLine2Value),
+        downLineValue: Number(context.vdoSettings.downLineValue ?? defaultVdoIndicatorSettings.downLineValue),
+        emaSmoothing: normalizePositiveInteger(context.vdoSettings.emaSmoothing, defaultVdoIndicatorSettings.emaSmoothing, 0),
+        length: normalizePositiveInteger(context.vdoSettings.length, defaultVdoIndicatorSettings.length),
+        upLine2Value: Number(context.vdoSettings.upLine2Value ?? defaultVdoIndicatorSettings.upLine2Value),
+        upLineValue: Number(context.vdoSettings.upLineValue ?? defaultVdoIndicatorSettings.upLineValue),
+        zeroLineValue: Number(context.vdoSettings.zeroLineValue ?? defaultVdoIndicatorSettings.zeroLineValue),
+      })
+      publishMmfV2MomentumStats(calculateMmfV2MomentumStats({
+        downLookback: Number(context.settings.vdoMomentumDownLookback),
+        markers,
+        periodSeconds: resolvePeriodSeconds(context.period),
+        symbol: context.symbol,
+        timeframe: context.period,
+        upLookback: Number(context.settings.vdoMomentumUpLookback),
+        vdoRows,
+      }))
+      return createRowsFromMarkers(realRows, markers)
     })
     .catch(() => createEmptyMmfV2Rows(realRows.length))
 
@@ -836,11 +337,6 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
   const calculated = await request
   setCachedRemoteMmfV2Rows(signature, calculated)
   return mergeRealRowsWithPlaceholders(dataList, calculated)
-}
-
-function clampMarkerSize(value: unknown, fallback = defaultMmfIndicatorSettings.highSize) {
-  const size = Math.round(Number(value))
-  return Number.isFinite(size) ? Math.max(8, Math.min(size, 96)) : fallback
 }
 
 function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<MmfV2IndicatorRow>) {

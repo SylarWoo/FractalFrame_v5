@@ -7,6 +7,7 @@ import pandas as pd
 from .debug import create_debug_rows
 from .features import build_mmf_v2_features, normalize_ohlcv_frame
 from .models import MmfV2Settings
+from .signal_catalog import get_mmf_v2_signal_catalog
 from .state_machine import calculate_mmf_v2_state_machine_markers
 from python.market_data import create_bar_alignment_debug
 from python.signals import signals_to_records
@@ -31,6 +32,7 @@ def calculate_mmf_v2_markers(
             "markersCount": 0,
             "markers": [],
             "signals": [],
+            "signalCatalog": get_mmf_v2_signal_catalog(),
             "debug": {"alignment": alignment_debug, "rows": []} if include_debug else None,
         }
 
@@ -48,6 +50,7 @@ def calculate_mmf_v2_markers(
         "markers": [marker.to_payload() for marker in markers],
         "signals": signal_records,
         "signalsCount": len(signal_records),
+        "signalCatalog": get_mmf_v2_signal_catalog(),
         "debug": {
             "alignment": alignment_debug,
             "signals": {

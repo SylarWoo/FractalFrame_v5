@@ -12,6 +12,7 @@ import { useChartStepLoad } from './useChartStepLoad'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay } from './mainVolumeIndicator'
 import { applyMorganRangeOverlays, clearMorganRangeOverlays } from './useMorganRangeOverlays'
 import { calculateMorganRangeSegments, findMorganRangeSegmentByDataIndex, h4MorganSeconds, type MorganRangeSegment } from './morganRangeModel'
+import { publishMmfV2MomentumCrosshairIndex } from './mmfV2MomentumStats'
 import { readCrosshairDataIndex } from './paneTitleOverlayContent'
 import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMmfIndicator } from './tradingViewMmfIndicator'
@@ -599,6 +600,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
     const handleCrosshairChange = (payload: unknown) => {
       morganRangeCrosshairIndexRef.current = readCrosshairDataIndex(payload)
       publishMorganRangeSegment(morganRangeCrosshairIndexRef.current)
+      publishMmfV2MomentumCrosshairIndex(morganRangeCrosshairIndexRef.current)
     }
     chart.subscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
     publishMorganRangeSegment()

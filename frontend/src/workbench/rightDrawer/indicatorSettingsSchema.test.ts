@@ -43,4 +43,20 @@ describe('indicatorSettingsSchema', () => {
     expect(settings.lowConfirmPointSymbol).toBe('\u2190')
     expect(settings.showLowConfirmPoint).toBe(false)
   })
+
+  it('normalizes MMF v2 VDO momentum strategy settings', () => {
+    const settings = normalizeMmfSettings({
+      vdoMomentumDownAverage: -8,
+      vdoMomentumDownLookback: 1000000,
+      vdoMomentumExceedPercent: 1200,
+      vdoMomentumUpAverage: 34.5,
+      vdoMomentumUpLookback: -9,
+    })
+
+    expect(settings.vdoMomentumDownAverage).toBe(0)
+    expect(settings.vdoMomentumDownLookback).toBe(100000)
+    expect(settings.vdoMomentumExceedPercent).toBe(1000)
+    expect(settings.vdoMomentumUpAverage).toBe(34.5)
+    expect(settings.vdoMomentumUpLookback).toBe(0)
+  })
 })

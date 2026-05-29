@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { IndicatorSettingsShell } from './IndicatorSettingsShell'
 import { IndicatorsTable } from './IndicatorsTable'
@@ -6,6 +6,8 @@ import { indicatorRows, isSupportedChartIndicator } from './indicatorDefinitions
 import { LoadedIndicatorSettingsPanel } from './indicatorSettingsPanels'
 import type { IndicatorsController } from '../indicators/useIndicatorsController'
 import type { MorganRangeSegment } from '../chart/morganRangeModel'
+import { mmfV2MomentumCrosshairEvent, mmfV2MomentumStatsEvent } from '../chart/mmfV2MomentumStats'
+import type { MmfV2MomentumStats } from '../chart/mmfV2MomentumStats'
 import './IndicatorsDrawer.css'
 
 type IndicatorsDrawerProps = {
@@ -17,6 +19,8 @@ type IndicatorsDrawerProps = {
 }
 
 export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, loadedIndicatorKeys, morganRangeSegment, onIndicatorShortcutKeysChange }: IndicatorsDrawerProps) {
+  const [mmfV2MomentumStats, setMmfV2MomentumStats] = useState<MmfV2MomentumStats | null>(null)
+  const [mmfV2MomentumCrosshairIndex, setMmfV2MomentumCrosshairIndex] = useState<number | null>(null)
   const [topHeight, setTopHeight] = useState(254)
   const loadedKeySet = new Set(loadedIndicatorKeys)
   const selectedKey = indicatorsController.selectedKey
@@ -66,6 +70,23 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
     window.addEventListener('pointerup', handlePointerUp, { once: true })
   }
 
+  useEffect(() => {
+    const handleStats = (event: Event) => {
+      setMmfV2MomentumStats((event as CustomEvent<MmfV2MomentumStats>).detail ?? null)
+    }
+    window.addEventListener(mmfV2MomentumStatsEvent, handleStats)
+    return () => window.removeEventListener(mmfV2MomentumStatsEvent, handleStats)
+  }, [])
+
+  useEffect(() => {
+    const handleCrosshair = (event: Event) => {
+      const dataIndex = Number((event as CustomEvent<{ dataIndex: number | null }>).detail?.dataIndex)
+      setMmfV2MomentumCrosshairIndex(Number.isFinite(dataIndex) ? Math.round(dataIndex) : null)
+    }
+    window.addEventListener(mmfV2MomentumCrosshairEvent, handleCrosshair)
+    return () => window.removeEventListener(mmfV2MomentumCrosshairEvent, handleCrosshair)
+  }, [])
+
   return (
     <section className="ff-indicators-drawer" data-right-widget-panel="indicators" data-testid="ff-indicators-drawer-panel">
       <div
@@ -103,7 +124,9 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
               dpoSettings={indicatorsController.settings.dpo}
               macdSettings={indicatorsController.settings.macd}
               maSettings={indicatorsController.settings.ma}
+              mmfV2MomentumCrosshairIndex={mmfV2MomentumCrosshairIndex}
               mmfSettings={indicatorsController.settings.mmf}
+              mmfV2MomentumStats={mmfV2MomentumStats}
               morganRangeSegment={morganRangeSegment}
               mrSettings={indicatorsController.settings.mr}
               onDpoSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('DPO', settings)}

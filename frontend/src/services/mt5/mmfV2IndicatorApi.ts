@@ -2,6 +2,22 @@ import { buildMt5ApiUrl } from './mt5ApiClient'
 
 export type MmfV2IndicatorMarker = {
   signalId?: string
+  catalogId?: string
+  label?: string
+  category?: string
+  direction?: string
+  role?: string
+  timing?: string
+  layer?: string
+  strategyIntent?: string
+  defaultStyle?: {
+    color?: string
+    placement?: string
+    size?: number
+    symbol?: string
+  }
+  replaces?: string[]
+  preserves?: string[]
   indicator?: 'MMF_V2' | string
   type: 'MMF_V2_HIGH' | 'MMF_V2_LOW' | 'MMF_V2_SUPPORT' | 'MMF_V2_RESISTANCE' | 'MMF_V2_EXPECTED_SUPPORT' | 'MMF_V2_EXPECTED_RESISTANCE' | 'MMF_V2_TREND_DOWN_REBOUND' | 'MMF_V2_TREND_UP_PULLBACK' | 'MMF_V2_TREND_DOWN_RETURN' | 'MMF_V2_TREND_UP_RETURN' | 'MMF_V2_TREND_DOWN_DIVERGENCE' | 'MMF_V2_TREND_UP_DIVERGENCE' | 'MMF_V2_SUPPORT_DOWN_BREAK' | 'MMF_V2_SUPPORT_UP_BREAK' | 'MMF_V2_RESISTANCE_DOWN_BREAK' | 'MMF_V2_RESISTANCE_UP_BREAK' | 'MMF_V2_LOW_POSITION_HIGH' | 'MMF_V2_HIGH_POSITION_LOW'
   eventIndex: number
@@ -34,6 +50,17 @@ export type MmfV2SignalRecord = {
   signalId: string
   indicator: string
   type: MmfV2IndicatorMarker['type'] | string
+  catalogId?: string
+  label?: string
+  category?: string
+  direction?: string
+  role?: string
+  timing?: string
+  layer?: string
+  strategyIntent?: string
+  defaultStyle?: MmfV2IndicatorMarker['defaultStyle']
+  replaces?: string[]
+  preserves?: string[]
   eventBarKey: string
   eventTime: number
   eventIndex: number
@@ -69,6 +96,7 @@ export type MmfV2IndicatorPayload = {
   rowsCount: number
   markersCount: number
   markers: MmfV2IndicatorMarker[]
+  signalCatalog?: Array<Record<string, unknown>>
   signals?: MmfV2SignalRecord[]
   signalsCount?: number
   debug?: {

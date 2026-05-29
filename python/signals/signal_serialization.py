@@ -12,6 +12,7 @@ def signal_to_record(signal: SignalRecord) -> dict[str, Any]:
         "signalId": signal.signal_id,
         "indicator": signal.indicator,
         "type": signal.type,
+        **signal.catalog,
         "eventBarKey": signal.event.bar_key,
         "eventTime": signal.event.time,
         "eventIndex": signal.event.index,

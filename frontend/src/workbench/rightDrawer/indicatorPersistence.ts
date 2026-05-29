@@ -1,21 +1,23 @@
 import { readBooleanFlag, readJson, removeStorageItem, writeBooleanFlag, writeJson } from '../persistence/jsonStorage'
 import {
-  defaultMaIndicatorSettings,
   defaultRsiIndicatorSettings,
-  normalizeDpoSettings,
   normalizeIndicatorSettingsTab,
   normalizeMacdSettings,
-  normalizeMmfSettings,
   normalizeMrSettings,
   normalizeSqzmomSettings,
   normalizeStochSettings,
   normalizeTsiSettings,
-  normalizeVdoSettings,
   normalizeViSettings,
   normalizeVolSettings,
   normalizeVwapSettings,
 } from './indicatorSettingsSchema'
 import type { PersistedIndicatorsState } from './indicatorSettingsSchema'
+import {
+  defaultMaIndicatorSettings,
+  normalizeDpoSettings,
+  normalizeMmfSettings,
+  normalizeVdoSettings,
+} from './settings'
 
 export type {
   DpoIndicatorSettings,
@@ -49,20 +51,24 @@ export type {
 } from './indicatorSettingsSchema'
 
 export {
-  defaultDpoIndicatorSettings,
   defaultMacdIndicatorSettings,
-  defaultMaIndicatorSettings,
-  defaultMmfIndicatorSettings,
   defaultMrIndicatorSettings,
   defaultRsiIndicatorSettings,
   defaultSqzmomIndicatorSettings,
   defaultStochIndicatorSettings,
   defaultTsiIndicatorSettings,
-  defaultVdoIndicatorSettings,
   defaultViIndicatorSettings,
   defaultVolIndicatorSettings,
   defaultVwapIndicatorSettings,
 } from './indicatorSettingsSchema'
+export {
+  defaultDpoIndicatorSettings,
+  defaultMaIndicatorSettings,
+  defaultMmfIndicatorSettings,
+  defaultMmfV2IndicatorSettings,
+  defaultVdoIndicatorSettings,
+  normalizeMmfV2Settings,
+} from './settings'
 
 const persistEnabledKey = 'fractalframe:v5:indicators:persistEnabled:v1'
 const persistedStateKey = 'fractalframe:v5:indicators:state:v1'

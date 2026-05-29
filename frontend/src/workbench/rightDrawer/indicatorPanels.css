@@ -369,6 +369,71 @@
   max-width: 80px;
 }
 
+.ff-indicators-mmf-v2-panel__momentum-control-row {
+  display: grid;
+  grid-template-columns: 74px 28px 80px;
+  width: 100%;
+  margin-left: 0;
+}
+
+.ff-indicators-mmf-v2-momentum-card {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 10px;
+  border: 1px solid #dbe3ef;
+  border-radius: 0;
+  padding: 7px 8px 8px;
+  background: #ffffff;
+  pointer-events: auto;
+}
+
+.ff-indicators-mmf-v2-momentum-card__section {
+  display: grid;
+  gap: 3px;
+}
+
+.ff-indicators-mmf-v2-momentum-card__current {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 7px;
+}
+
+.ff-indicators-mmf-v2-momentum-card__current strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ff-indicators-mmf-v2-momentum-card__current span {
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ff-indicators-mmf-v2-momentum-card__section + .ff-indicators-mmf-v2-momentum-card__section {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 7px;
+}
+
+.ff-indicators-mmf-v2-momentum-card__section strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 17px;
+}
+
+.ff-indicators-mmf-v2-momentum-card__section span {
+  color: #334155;
+  font-size: 12px;
+  line-height: 16px;
+}
+
 .ff-indicators-mmf-v2-panel__trade-toggle-inline .ff-indicators-style-row-v1__check {
   max-width: none;
 }

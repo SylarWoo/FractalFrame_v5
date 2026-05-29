@@ -1,5 +1,6 @@
 ﻿import type { MmfIndicatorSettings } from '../../indicatorPersistence'
 import type { SymbolSelectSize } from '../../../controls/SymbolSelect'
+import type { MmfV2MomentumSample, MmfV2MomentumStats, MmfV2MomentumStatsSide } from '../../../chart/mmfV2MomentumStats'
 import { mmfCrossSymbolOptions, mmfTradeArrowSymbolOptions } from '../../stickerSymbols'
 import { CheckControl, NumberBox, updateMmfSettings } from './indicatorPanelShared'
 import { MmfMarkerStyleRow } from './MmfSettingsControls'
@@ -498,6 +499,193 @@ export function MmfV2StylePanel({
           symbol={settings.trendUpDivergencePointSymbol}
         />
       </section>
+    </div>
+  )
+}
+
+export function MmfV2StrategyPanel({
+  momentumCrosshairIndex,
+  momentumStats,
+  onSettingsChange,
+  settings,
+}: {
+  momentumCrosshairIndex?: number | null
+  momentumStats?: MmfV2MomentumStats | null
+  onSettingsChange: (settings: MmfIndicatorSettings) => void
+  settings: MmfIndicatorSettings
+}) {
+  const patch = (next: Partial<MmfIndicatorSettings>) => onSettingsChange(updateMmfSettings(settings, next))
+  const showMomentumStats = Number(settings.vdoMomentumUpLookback) > 0 || Number(settings.vdoMomentumDownLookback) > 0
+
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mmf-panel-v1" role="tabpanel">
+      <section className="ff-indicators-input-panel-v1__section ff-indicators-mmf-panel-v1__scroll-section">
+        <div className="ff-indicators-mmf-v2-panel__signal-block">
+          <div className="ff-indicators-mmf-v2-panel__check-row">
+            <span className="ff-indicators-mmf-v2-panel__advance-label">{'VDO \u52a8\u91cf'}</span>
+          </div>
+          {showMomentumStats ? (
+            <MmfV2MomentumStatsCard
+              downLookback={settings.vdoMomentumDownLookback}
+              downStats={momentumStats?.down ?? null}
+              momentumCrosshairIndex={momentumCrosshairIndex}
+              periodSeconds={momentumStats?.periodSeconds ?? 60}
+              upStats={momentumStats?.up ?? null}
+              upLookback={settings.vdoMomentumUpLookback}
+            />
+          ) : null}
+          <MmfV2MomentumRow
+            label={'\u4e0a\u5347\u52a8\u91cf'}
+            lookback={settings.vdoMomentumUpLookback}
+            onLookbackChange={(vdoMomentumUpLookback) => patch({ vdoMomentumUpLookback })}
+          />
+          <MmfV2MomentumRow
+            label={'\u4e0b\u964d\u52a8\u91cf'}
+            lookback={settings.vdoMomentumDownLookback}
+            onLookbackChange={(vdoMomentumDownLookback) => patch({ vdoMomentumDownLookback })}
+          />
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function MmfV2MomentumStatsCard({
+  downLookback,
+  downStats,
+  momentumCrosshairIndex,
+  periodSeconds,
+  upStats,
+  upLookback,
+}: {
+  downLookback: number
+  downStats: MmfV2MomentumStatsSide | null
+  momentumCrosshairIndex?: number | null
+  periodSeconds: number
+  upStats: MmfV2MomentumStatsSide | null
+  upLookback: number
+}) {
+  const current = resolveCurrentMomentumSample(upStats, downStats, momentumCrosshairIndex)
+
+  return (
+    <div className="ff-indicators-mmf-v2-momentum-card">
+      <div className="ff-indicators-mmf-v2-momentum-card__current">
+        <strong>{'\u5f53\u524d\u503c'}</strong>
+        <span>{current ? `${current.label} ${formatMomentum(current.sample.momentum)}` : '-'}</span>
+      </div>
+      {Number(upLookback) > 0 ? (
+        <MmfV2MomentumStatsSection
+          lookback={upLookback}
+          momentumLabel={'VDO \u5411\u4e0a\u52a8\u91cf'}
+          periodSeconds={periodSeconds}
+          stats={upStats}
+          title={'\u4f4e\u70b9\u5230\u786e\u8ba4\u503c'}
+        />
+      ) : null}
+      {Number(downLookback) > 0 ? (
+        <MmfV2MomentumStatsSection
+          lookback={downLookback}
+          momentumLabel={'VDO \u5411\u4e0b\u52a8\u91cf'}
+          periodSeconds={periodSeconds}
+          stats={downStats}
+          title={'\u9ad8\u70b9\u5230\u786e\u8ba4\u503c'}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function resolveCurrentMomentumSample(upStats: MmfV2MomentumStatsSide | null, downStats: MmfV2MomentumStatsSide | null, crosshairIndex?: number | null): { label: string; sample: MmfV2MomentumSample } | null {
+  const upSamples = upStats?.samplesList ?? []
+  const downSamples = downStats?.samplesList ?? []
+  const safeCrosshairIndex = Number.isFinite(Number(crosshairIndex)) ? Math.round(Number(crosshairIndex)) : null
+  if (safeCrosshairIndex != null) {
+    const upHit = upSamples.find((sample) => sample.markerIndex === safeCrosshairIndex)
+    if (upHit) return { label: '\u5411\u4e0a\u52a8\u91cf', sample: upHit }
+    const downHit = downSamples.find((sample) => sample.markerIndex === safeCrosshairIndex)
+    if (downHit) return { label: '\u5411\u4e0b\u52a8\u91cf', sample: downHit }
+  }
+  const latest = [
+    ...upSamples.map((sample) => ({ label: '\u5411\u4e0a\u52a8\u91cf', sample })),
+    ...downSamples.map((sample) => ({ label: '\u5411\u4e0b\u52a8\u91cf', sample })),
+  ].sort((left, right) => right.sample.entryIndex - left.sample.entryIndex)[0]
+  return latest ?? null
+}
+
+function MmfV2MomentumStatsSection({
+  lookback,
+  momentumLabel,
+  periodSeconds,
+  stats,
+  title,
+}: {
+  lookback: number
+  momentumLabel: string
+  periodSeconds: number
+  stats: MmfV2MomentumStatsSide | null
+  title: string
+}) {
+  const sampleText = `${Math.round(Number(lookback)).toLocaleString()} \u4e2a\u53d6\u503c`
+  if (!stats) {
+    return (
+      <div className="ff-indicators-mmf-v2-momentum-card__section">
+        <strong>{sampleText}</strong>
+        <span>{`${title}\uff1a\u6682\u65e0\u53ef\u8ba1\u7b97\u53d6\u503c`}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="ff-indicators-mmf-v2-momentum-card__section">
+      <strong>{`${stats.samples.toLocaleString()} / ${sampleText}`}</strong>
+      <span>{`${title}\u6700\u5c0f\u8ddd\u79bb\uff1a${formatBarsDuration(stats.minBars, periodSeconds)}`}</span>
+      <span>{`${title}\u6700\u5927\u8ddd\u79bb\uff1a${formatBarsDuration(stats.maxBars, periodSeconds)}`}</span>
+      <span>{`${momentumLabel}\uff1a\u6700\u5927\u503c ${formatMomentum(stats.maxMomentum)}\uff0c\u6700\u5c0f\u503c ${formatMomentum(stats.minMomentum)}\uff0c\u5e73\u5747\u503c ${formatMomentum(stats.averageMomentum)}`}</span>
+    </div>
+  )
+}
+
+function formatBarsDuration(bars: number | null, periodSeconds: number) {
+  if (!Number.isFinite(Number(bars))) return '-'
+  const safeBars = Math.max(0, Math.round(Number(bars)))
+  const seconds = safeBars * Math.max(1, Math.round(Number(periodSeconds) || 60))
+  const minutes = seconds / 60
+  return `${safeBars} \u6839K\u7ebf\uff0c${formatDurationNumber(minutes)} \u5206\u949f\uff0c${seconds.toLocaleString()} \u79d2`
+}
+
+function formatDurationNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '')
+}
+
+function formatMomentum(value: number | null) {
+  if (!Number.isFinite(Number(value))) return '-'
+  return Number(value).toFixed(2).replace(/\.?0+$/, '')
+}
+
+function MmfV2MomentumRow({
+  label,
+  lookback,
+  onLookbackChange,
+}: {
+  label: string
+  lookback: number
+  onLookbackChange: (value: number) => void
+}) {
+  return (
+    <div className="ff-indicators-mmf-v2-panel__advance-row ff-indicators-mmf-v2-panel__momentum-control-row">
+      <span className="ff-indicators-mmf-v2-panel__advance-label">{label}</span>
+      <span className="ff-indicators-mmf-v2-panel__advance-label ff-indicators-mmf-v2-panel__advance-label-part--compact">{'\u53d6\u503c'}</span>
+      <span className="ff-indicators-mmf-panel-v1__vdo-input ff-indicators-mmf-v2-panel__advance-input">
+        <NumberBox
+          formatValue={(numberValue) => String(Math.round(numberValue))}
+          max={100000}
+          min={0}
+          onChange={onLookbackChange}
+          parseValue={(inputValue) => Number(inputValue)}
+          step={1}
+          value={Number(lookback)}
+        />
+      </span>
     </div>
   )
 }

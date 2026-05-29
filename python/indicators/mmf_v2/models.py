@@ -127,6 +127,8 @@ def create_mmf_v2_marker(
     window_end_time: int,
     reason: tuple[str, ...] = (),
 ) -> SignalRecord:
+    from .signal_catalog import get_mmf_v2_signal_catalog_payload
+
     return SignalRecord(
         indicator="MMF_V2",
         type=type,
@@ -140,4 +142,5 @@ def create_mmf_v2_marker(
         ),
         metrics={"pointDistance": point_distance},
         reason=reason,
+        catalog=get_mmf_v2_signal_catalog_payload(type),
     )

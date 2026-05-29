@@ -15,6 +15,7 @@ def test_signal_record_serializes_for_backtest_and_api() -> None:
         ),
         metrics={"pointDistance": 5.25},
         reason=("stoch_dead_cross",),
+        catalog={"catalogId": "MMF_V2_HIGH", "role": "base_high", "strategyIntent": "structure_reference"},
     )
 
     records = signals_to_records([signal])
@@ -22,6 +23,8 @@ def test_signal_record_serializes_for_backtest_and_api() -> None:
     assert records[0]["entryPrice"] == 2005.25
     assert records[0]["markerPrice"] == 2010.5
     assert records[0]["pointDistance"] == 5.25
+    assert records[0]["catalogId"] == "MMF_V2_HIGH"
+    assert records[0]["role"] == "base_high"
 
     frame = signals_to_frame([signal])
     assert list(frame["signalId"]) == [records[0]["signalId"]]

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { MorganRangeSegment } from '../../../chart/morganRangeModel'
+import type { MmfV2MomentumStats } from '../../../chart/mmfV2MomentumStats'
 import { VisibilityRangePanel } from '../../../visibilityRange/VisibilityRangePanel'
 import type { SupportedChartIndicator } from '../../indicatorDefinitions'
 import type {
@@ -30,6 +31,7 @@ import {
   MmfInputPanel,
   MmfStylePanel,
   MmfV2InputPanel,
+  MmfV2StrategyPanel,
   MmfV2StylePanel,
   RsiInputPanel,
   RsiStylePanel,
@@ -53,7 +55,9 @@ export function LoadedIndicatorSettingsPanel({
   dpoSettings,
   macdSettings,
   maSettings,
+  mmfV2MomentumCrosshairIndex,
   mmfSettings,
+  mmfV2MomentumStats,
   mrSettings,
   morganRangeSegment,
   onDpoSettingsChange,
@@ -84,7 +88,9 @@ export function LoadedIndicatorSettingsPanel({
   dpoSettings: DpoIndicatorSettings
   macdSettings: MacdIndicatorSettings
   maSettings: MaIndicatorSettings
+  mmfV2MomentumCrosshairIndex?: number | null
   mmfSettings: MmfIndicatorSettings
+  mmfV2MomentumStats?: MmfV2MomentumStats | null
   mrSettings: MrIndicatorSettings
   morganRangeSegment?: MorganRangeSegment | null
   onDpoSettingsChange: (settings: DpoIndicatorSettings) => void
@@ -112,7 +118,7 @@ export function LoadedIndicatorSettingsPanel({
   volSettings: VolIndicatorSettings
   vwapSettings: VwapIndicatorSettings
 }) {
-  const panelRegistry: Partial<Record<SupportedChartIndicator, Record<Extract<IndicatorSettingsTab, 'input' | 'style'>, ReactNode>>> = {
+  const panelRegistry: Partial<Record<SupportedChartIndicator, Partial<Record<Extract<IndicatorSettingsTab, 'input' | 'style' | 'strategy'>, ReactNode>>>> = {
     DPO: {
       input: <DpoInputPanel onSettingsChange={onDpoSettingsChange} settings={dpoSettings} />,
       style: <DpoStylePanel onSettingsChange={onDpoSettingsChange} settings={dpoSettings} showBand2Levels />,
@@ -135,6 +141,7 @@ export function LoadedIndicatorSettingsPanel({
     },
     MMF_V2: {
       input: <MmfV2InputPanel settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
+      strategy: <MmfV2StrategyPanel momentumCrosshairIndex={mmfV2MomentumCrosshairIndex} momentumStats={mmfV2MomentumStats} settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
       style: <MmfV2StylePanel settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
     },
     RSI: {
@@ -170,14 +177,14 @@ export function LoadedIndicatorSettingsPanel({
       style: <VolStylePanel onSettingsChange={onVolSettingsChange} settings={volSettings} />,
     },
   }
-  const selectedPanel = settingsTab === 'input' || settingsTab === 'style'
+  const selectedPanel = settingsTab === 'input' || settingsTab === 'style' || settingsTab === 'strategy'
     ? panelRegistry[selectedKey as SupportedChartIndicator]?.[settingsTab]
     : null
 
   return (
     <>
       {selectedPanel ?? null}
-      {settingsTab === 'strategy' ? (
+      {settingsTab === 'strategy' && selectedPanel == null ? (
         <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel" />
       ) : null}
       {settingsTab === 'visibility' ? (

@@ -1,6 +1,7 @@
 ﻿import { describe, expect, it } from 'vitest'
 import type { KLineData } from 'klinecharts'
 import { createBarKey } from './barIdentity'
+import { mmfV2MarkerPriorityRules } from './mmfV2MarkerMapping'
 import { createMmfV2RowsFromMarkers } from './tradingViewMmfV2Indicator'
 import type { MmfV2IndicatorMarker } from '../../services/mt5/mmfV2IndicatorApi'
 
@@ -543,6 +544,23 @@ describe('tradingViewMmfV2Indicator row mapping', () => {
     expect(mappedRows[1]?.trendUpDivergenceMarker).toBe(rows[1].high)
     expect(mappedRows[1]?.highMarker).toBeUndefined()
     expect(mappedRows[1]?.resistanceMarker).toBe(rows[1].high)
+  })
+
+  it('keeps marker priority rules as a single ordered table', () => {
+    expect(mmfV2MarkerPriorityRules).toEqual([
+      expect.objectContaining({ triggerKeys: ['trendDownReturnMarker'], removeKeys: ['trendDownReboundMarker', 'trendDownReboundMarkerPrice', 'highMarker', 'highMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['trendUpReturnMarker'], removeKeys: ['trendUpPullbackMarker', 'trendUpPullbackMarkerPrice', 'lowMarker', 'lowMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['trendDownDivergenceMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['trendUpDivergenceMarker'], removeKeys: ['highMarker', 'highMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['trendDownReboundMarker'], removeKeys: ['highMarker', 'highMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['trendUpPullbackMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['expectedResistanceMarker'], removeKeys: ['highMarker', 'highMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['expectedSupportMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['supportDownBreakMarker'], removeKeys: ['highMarker', 'highMarkerPrice', 'resistanceMarker', 'resistanceMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['supportUpBreakMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice', 'supportMarker', 'supportMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['resistanceUpBreakMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice', 'supportMarker', 'supportMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['resistanceDownBreakMarker'], removeKeys: ['highMarker', 'highMarkerPrice', 'resistanceMarker', 'resistanceMarkerPrice'] }),
+    ])
   })
 })
 

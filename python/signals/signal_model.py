@@ -49,6 +49,7 @@ class SignalRecord:
     window: SignalWindow
     metrics: dict[str, float] = field(default_factory=dict)
     reason: tuple[str, ...] = ()
+    catalog: dict[str, Any] = field(default_factory=dict)
 
     @property
     def signal_id(self) -> str:
@@ -65,6 +66,7 @@ class SignalRecord:
             "signalId": self.signal_id,
             "indicator": self.indicator,
             "type": self.type,
+            **self.catalog,
             **self.event.to_payload("event"),
             **self.confirm.to_payload("confirm"),
             "markerIndex": self.marker.index,
