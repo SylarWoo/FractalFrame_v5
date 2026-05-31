@@ -25,6 +25,7 @@ const DrawingsDrawer = lazy(() => import('./DrawingsDrawer').then((module) => ({
 const IndicatorsDrawer = lazy(() => import('./IndicatorsDrawer').then((module) => ({ default: module.IndicatorsDrawer })))
 const ObjectTreeDrawer = lazy(() => import('./ObjectTreeDrawer').then((module) => ({ default: module.ObjectTreeDrawer })))
 const RightDrawerMt5Body = lazy(() => import('./RightDrawerMt5Body').then((module) => ({ default: module.RightDrawerMt5Body })))
+const StrategyDrawer = lazy(() => import('./StrategyDrawer').then((module) => ({ default: module.StrategyDrawer })))
 
 function hasLoadedSymbolSessions(row: Mt5SymbolRow | undefined) {
   if (!row?.sessions) return false
@@ -435,6 +436,8 @@ export function RightDrawer({
             morganRangeSegment={morganRangeSegment}
             onIndicatorShortcutKeysChange={onIndicatorShortcutKeysChange}
           />
+        ) : renderedActiveDrawer === 'strategy' ? (
+          <StrategyDrawer />
         ) : renderedActiveDrawer === 'mt5' ? (
           <RightDrawerMt5Body
             canAggregateStoreV5={canAggregateStoreV5}

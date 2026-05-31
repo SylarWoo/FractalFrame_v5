@@ -1,6 +1,5 @@
 ﻿import type { MmfIndicatorSettings } from '../../indicatorPersistence'
 import type { SymbolSelectSize } from '../../../controls/SymbolSelect'
-import type { MmfV2MomentumSample, MmfV2MomentumStats, MmfV2MomentumStatsSide } from '../../../chart/mmfV2MomentumStats'
 import { mmfCrossSymbolOptions, mmfTradeArrowSymbolOptions } from '../../stickerSymbols'
 import { CheckControl, NumberBox, updateMmfSettings } from './indicatorPanelShared'
 import { MmfMarkerStyleRow } from './MmfSettingsControls'
@@ -21,6 +20,7 @@ export function MmfV2InputPanel({
   return (
     <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mmf-panel-v1" role="tabpanel">
       <section className="ff-indicators-input-panel-v1__section ff-indicators-mmf-panel-v1__scroll-section">
+        <h3 className="ff-indicators-input-panel-v1__section-title ff-indicators-mmf-v2-panel__group-title">{'Stoch \u9ad8/\u4f4e\u70b9'}</h3>
         <MmfV2StochKAdvanceBlock
           checked={settings.showHigh}
           confirmLookaheadValue={settings.highConfirmLookaheadBars}
@@ -57,151 +57,66 @@ export function MmfV2InputPanel({
           tradeLabel={'\u4f4e\u70b9\u786e\u8ba4\u70b9'}
           value={settings.lowStochKAdvance}
         />
+        <h3 className="ff-indicators-input-panel-v1__section-title ff-indicators-mmf-v2-panel__group-title">{'TSI \u4ea4\u53c9\u786e\u8ba4'}</h3>
+        <MmfV2TsiCrossBlock
+          checked={settings.showTsiDeadCrossPoint}
+          confirmChecked={settings.showTsiDeadCrossConfirmPoint}
+          confirmLabel={'\u663e\u793a\u6b7b\u53c9\u786e\u8ba4\u70b9'}
+          confirmValue={settings.tsiDeadCrossConfirmDistance}
+          label={'TSI - \u6b7b\u53c9'}
+          onCheckedChange={(showTsiDeadCrossPoint) => patch({ showTsiDeadCrossPoint })}
+          onConfirmCheckedChange={(showTsiDeadCrossConfirmPoint) => patch({ showTsiDeadCrossConfirmPoint })}
+          onConfirmValueChange={(tsiDeadCrossConfirmDistance) => patch({ tsiDeadCrossConfirmDistance })}
+        />
+        <MmfV2TsiCrossBlock
+          checked={settings.showTsiGoldenCrossPoint}
+          confirmChecked={settings.showTsiGoldenCrossConfirmPoint}
+          confirmLabel={'\u663e\u793a\u91d1\u53c9\u786e\u8ba4\u70b9'}
+          confirmValue={settings.tsiGoldenCrossConfirmDistance}
+          label={'TSI - \u91d1\u53c9'}
+          onCheckedChange={(showTsiGoldenCrossPoint) => patch({ showTsiGoldenCrossPoint })}
+          onConfirmCheckedChange={(showTsiGoldenCrossConfirmPoint) => patch({ showTsiGoldenCrossConfirmPoint })}
+          onConfirmValueChange={(tsiGoldenCrossConfirmDistance) => patch({ tsiGoldenCrossConfirmDistance })}
+        />
         <div className="ff-indicators-mmf-v2-panel__signal-block">
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showSupportLevel}
-              label={'\u652f\u6491\u4f4d'}
-              onChange={(showSupportLevel) => patch({ showSupportLevel })}
-            />
+            <CheckControl checked={settings.showResistanceLevel} label={'\u963b\u529b\u4f4d'} onChange={(showResistanceLevel) => patch({ showResistanceLevel })} />
           </div>
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showExpectedSupportLevel}
-              label={'\u9884\u671f\u652f\u6491\u4f4d'}
-              onChange={(showExpectedSupportLevel) => patch({ showExpectedSupportLevel })}
-            />
+            <CheckControl checked={settings.showSupportLevel} label={'\u652f\u6491\u4f4d'} onChange={(showSupportLevel) => patch({ showSupportLevel })} />
           </div>
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showSupportDownBreakPoint}
-              label={'\u652f\u6491\u4f4d\u5411\u4e0b\u7a81\u7834 - \u4e0b\u964d\u8d8b\u52bf\u5f00\u542f'}
-              onChange={(showSupportDownBreakPoint) => patch({ showSupportDownBreakPoint })}
-            />
+            <CheckControl checked={settings.showBullMarketPoint} label={'\u591a\u5934\u5e02\u573a'} onChange={(showBullMarketPoint) => patch({ showBullMarketPoint })} />
           </div>
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showSupportUpBreakPoint}
-              label={'\u652f\u6491\u4f4d\u5411\u4e0a\u7a81\u7834 - \u4e0b\u964d\u8d8b\u52bf\u5173\u95ed'}
-              onChange={(showSupportUpBreakPoint) => patch({ showSupportUpBreakPoint })}
-            />
+            <CheckControl checked={settings.showBearMarketPoint} label={'\u7a7a\u5934\u5e02\u573a'} onChange={(showBearMarketPoint) => patch({ showBearMarketPoint })} />
           </div>
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showResistanceLevel}
-              label={'\u963b\u529b\u4f4d'}
-              onChange={(showResistanceLevel) => patch({ showResistanceLevel })}
-            />
+            <CheckControl checked={settings.showOverboughtPoint} label={'\u8d85\u4e70 - \u5f00\u542f'} onChange={(showOverboughtPoint) => patch({ showOverboughtPoint })} />
           </div>
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showExpectedResistanceLevel}
-              label={'\u9884\u671f\u963b\u529b\u4f4d'}
-              onChange={(showExpectedResistanceLevel) => patch({ showExpectedResistanceLevel })}
-            />
+            <CheckControl checked={settings.showOverboughtClosePoint} label={'\u8d85\u4e70 - \u5173\u95ed'} onChange={(showOverboughtClosePoint) => patch({ showOverboughtClosePoint })} />
           </div>
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showResistanceUpBreakPoint}
-              label={'\u963b\u529b\u4f4d\u5411\u4e0a\u7a81\u7834 - \u4e0a\u5347\u8d8b\u52bf\u5f00\u542f'}
-              onChange={(showResistanceUpBreakPoint) => patch({ showResistanceUpBreakPoint })}
-            />
+            <CheckControl checked={settings.showOversoldPoint} label={'\u8d85\u5356 - \u5f00\u542f'} onChange={(showOversoldPoint) => patch({ showOversoldPoint })} />
           </div>
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showResistanceDownBreakPoint}
-              label={'\u963b\u529b\u4f4d\u5411\u4e0b\u7a81\u7834 - \u4e0a\u5347\u8d8b\u52bf\u5173\u95ed'}
-              onChange={(showResistanceDownBreakPoint) => patch({ showResistanceDownBreakPoint })}
-            />
+            <CheckControl checked={settings.showOversoldClosePoint} label={'\u8d85\u5356 - \u5173\u95ed'} onChange={(showOversoldClosePoint) => patch({ showOversoldClosePoint })} />
           </div>
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showTrendDownReboundPoint}
-              label={'\u4e0b\u964d\u8d8b\u52bf - \u53cd\u5f39\u70b9'}
-              onChange={(showTrendDownReboundPoint) => patch({ showTrendDownReboundPoint })}
-            />
+            <CheckControl checked={settings.showTopDivergencePoint} label={'\u9876\u80cc\u79bb'} onChange={(showTopDivergencePoint) => patch({ showTopDivergencePoint })} />
           </div>
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showTrendDownReturnPoint}
-              label={'\u4e0b\u964d\u8d8b\u52bf - \u56de\u5f52\u70b9'}
-              onChange={(showTrendDownReturnPoint) => patch({ showTrendDownReturnPoint })}
-            />
-          </div>
-          <MmfV2MorganThresholdRow
-            onChange={(trendDownReturnMorganRatio) => patch({ trendDownReturnMorganRatio })}
-            value={settings.trendDownReturnMorganRatio}
-          />
-          <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showTrendDownDivergencePointV2}
-              label={'\u4e0b\u964d\u8d8b\u52bf - \u80cc\u79bb\u70b9'}
-              onChange={(showTrendDownDivergencePointV2) => patch({ showTrendDownDivergencePointV2 })}
-            />
-          </div>
-          <MmfV2MorganThresholdRow
-            onChange={(trendDownDivergenceMorganRatio) => patch({ trendDownDivergenceMorganRatio })}
-            value={settings.trendDownDivergenceMorganRatio}
-          />
-          <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showTrendUpPullbackPoint}
-              label={'\u4e0a\u5347\u8d8b\u52bf - \u56de\u64a4\u70b9'}
-              onChange={(showTrendUpPullbackPoint) => patch({ showTrendUpPullbackPoint })}
-            />
+            <CheckControl checked={settings.showBottomDivergencePoint} label={'\u5e95\u80cc\u79bb'} onChange={(showBottomDivergencePoint) => patch({ showBottomDivergencePoint })} />
           </div>
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showTrendUpReturnPoint}
-              label={'\u4e0a\u5347\u8d8b\u52bf - \u56de\u5f52\u70b9'}
-              onChange={(showTrendUpReturnPoint) => patch({ showTrendUpReturnPoint })}
-            />
+            <CheckControl checked={settings.showTrendUpPullbackPoint} label={'\u4e0a\u5347\u8d8b\u52bf - \u56de\u64a4\u70b9'} onChange={(showTrendUpPullbackPoint) => patch({ showTrendUpPullbackPoint })} />
           </div>
-          <MmfV2MorganThresholdRow
-            onChange={(trendUpReturnMorganRatio) => patch({ trendUpReturnMorganRatio })}
-            value={settings.trendUpReturnMorganRatio}
-          />
           <div className="ff-indicators-mmf-v2-panel__check-row">
-            <CheckControl
-              checked={settings.showTrendUpDivergencePointV2}
-              label={'\u4e0a\u5347\u8d8b\u52bf - \u80cc\u79bb\u70b9'}
-              onChange={(showTrendUpDivergencePointV2) => patch({ showTrendUpDivergencePointV2 })}
-            />
+            <CheckControl checked={settings.showTrendDownReboundPoint} label={'\u4e0b\u964d\u8d8b\u52bf - \u53cd\u5f39\u70b9'} onChange={(showTrendDownReboundPoint) => patch({ showTrendDownReboundPoint })} />
           </div>
-          <MmfV2MorganThresholdRow
-            onChange={(trendUpDivergenceMorganRatio) => patch({ trendUpDivergenceMorganRatio })}
-            value={settings.trendUpDivergenceMorganRatio}
-          />
         </div>
       </section>
-    </div>
-  )
-}
-
-function MmfV2MorganThresholdRow({
-  onChange,
-  value,
-}: {
-  onChange: (value: number) => void
-  value: number
-}) {
-  return (
-    <div className="ff-indicators-mmf-v2-panel__advance-row">
-      <span className="ff-indicators-mmf-v2-panel__advance-label">
-        {'\u6469\u6839\u533a\u95f4 '}
-        <span className="ff-indicators-mmf-v2-panel__advance-label-part--compact">{'\u9608\u503c'}</span>
-      </span>
-      <span className="ff-indicators-mmf-panel-v1__vdo-input ff-indicators-mmf-v2-panel__advance-input">
-        <NumberBox
-          formatValue={(numberValue) => numberValue.toFixed(3).replace(/\.?0+$/, '')}
-          max={1}
-          min={0}
-          onChange={onChange}
-          parseValue={(inputValue) => Number(inputValue)}
-          step={0.001}
-          value={Number(value)}
-        />
-      </span>
     </div>
   )
 }
@@ -298,6 +213,51 @@ function MmfV2StochKAdvanceBlock({
   )
 }
 
+function MmfV2TsiCrossBlock({
+  checked,
+  confirmChecked,
+  confirmLabel,
+  confirmValue,
+  label,
+  onCheckedChange,
+  onConfirmCheckedChange,
+  onConfirmValueChange,
+}: {
+  checked: boolean
+  confirmChecked: boolean
+  confirmLabel: string
+  confirmValue: number
+  label: string
+  onCheckedChange: (checked: boolean) => void
+  onConfirmCheckedChange: (checked: boolean) => void
+  onConfirmValueChange: (value: number) => void
+}) {
+  return (
+    <div className="ff-indicators-mmf-v2-panel__signal-block">
+      <div className="ff-indicators-mmf-v2-panel__check-row">
+        <CheckControl checked={checked} label={label} onChange={onCheckedChange} />
+      </div>
+      <div className="ff-indicators-mmf-v2-panel__advance-row">
+        <span className="ff-indicators-mmf-v2-panel__advance-label">{'\u786e\u8ba4\u8303\u56f4'}</span>
+        <span className="ff-indicators-mmf-panel-v1__vdo-input ff-indicators-mmf-v2-panel__advance-input">
+          <NumberBox
+            formatValue={(numberValue) => numberValue.toFixed(2).replace(/\.?0+$/, '')}
+            max={1000}
+            min={0}
+            onChange={onConfirmValueChange}
+            parseValue={(inputValue) => Number(inputValue)}
+            step={0.1}
+            value={Number(confirmValue)}
+          />
+        </span>
+        <span className="ff-indicators-mmf-v2-panel__trade-toggle-inline">
+          <CheckControl checked={confirmChecked} label={confirmLabel} onChange={onConfirmCheckedChange} />
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export function MmfV2StylePanel({
   onSettingsChange,
   settings,
@@ -342,6 +302,24 @@ export function MmfV2StylePanel({
           symbol={settings.highConfirmPointSymbol}
         />
         <MmfMarkerStyleRow
+          color={settings.resistanceColor}
+          label={'\u963b\u529b\u4f4d'}
+          onColorChange={(resistanceColor) => patch({ resistanceColor })}
+          onSizeChange={(resistanceSize) => patch({ resistanceSize })}
+          onSymbolChange={(resistanceSymbol) => patch({ resistanceSymbol })}
+          size={settings.resistanceSize}
+          symbol={settings.resistanceSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.topDivergenceColor}
+          label={'\u9876\u80cc\u79bb'}
+          onColorChange={(topDivergenceColor) => patch({ topDivergenceColor })}
+          onSizeChange={(topDivergenceSize) => patch({ topDivergenceSize })}
+          onSymbolChange={(topDivergenceSymbol) => patch({ topDivergenceSymbol })}
+          size={settings.topDivergenceSize}
+          symbol={settings.topDivergenceSymbol}
+        />
+        <MmfMarkerStyleRow
           color={settings.lowColor}
           label={'\u4f4e\u70b9'}
           onColorChange={(lowColor) => patch({ lowColor })}
@@ -382,94 +360,13 @@ export function MmfV2StylePanel({
           symbol={settings.supportSymbol}
         />
         <MmfMarkerStyleRow
-          color={settings.expectedSupportColor}
-          label={'\u9884\u671f\u652f\u6491\u4f4d'}
-          onColorChange={(expectedSupportColor) => patch({ expectedSupportColor })}
-          onSizeChange={(expectedSupportSize) => patch({ expectedSupportSize })}
-          onSymbolChange={(expectedSupportSymbol) => patch({ expectedSupportSymbol })}
-          size={settings.expectedSupportSize}
-          symbol={settings.expectedSupportSymbol}
-        />
-        <MmfMarkerStyleRow
-          color={settings.supportUpBreakColor}
-          label={'\u652f\u6491\u4f4d\u5411\u4e0a\u7a81\u7834'}
-          onColorChange={(supportUpBreakColor) => patch({ supportUpBreakColor })}
-          onSizeChange={(supportUpBreakSize) => patch({ supportUpBreakSize })}
-          onSymbolChange={(supportUpBreakSymbol) => patch({ supportUpBreakSymbol })}
-          size={settings.supportUpBreakSize}
-          symbol={settings.supportUpBreakSymbol}
-        />
-        <MmfMarkerStyleRow
-          color={settings.supportDownBreakColor}
-          label={'\u652f\u6491\u4f4d\u5411\u4e0b\u7a81\u7834'}
-          onColorChange={(supportDownBreakColor) => patch({ supportDownBreakColor })}
-          onSizeChange={(supportDownBreakSize) => patch({ supportDownBreakSize })}
-          onSymbolChange={(supportDownBreakSymbol) => patch({ supportDownBreakSymbol })}
-          size={settings.supportDownBreakSize}
-          symbol={settings.supportDownBreakSymbol}
-        />
-        <MmfMarkerStyleRow
-          color={settings.resistanceColor}
-          label={'\u963b\u529b\u4f4d'}
-          onColorChange={(resistanceColor) => patch({ resistanceColor })}
-          onSizeChange={(resistanceSize) => patch({ resistanceSize })}
-          onSymbolChange={(resistanceSymbol) => patch({ resistanceSymbol })}
-          size={settings.resistanceSize}
-          symbol={settings.resistanceSymbol}
-        />
-        <MmfMarkerStyleRow
-          color={settings.expectedResistanceColor}
-          label={'\u9884\u671f\u963b\u529b\u4f4d'}
-          onColorChange={(expectedResistanceColor) => patch({ expectedResistanceColor })}
-          onSizeChange={(expectedResistanceSize) => patch({ expectedResistanceSize })}
-          onSymbolChange={(expectedResistanceSymbol) => patch({ expectedResistanceSymbol })}
-          size={settings.expectedResistanceSize}
-          symbol={settings.expectedResistanceSymbol}
-        />
-        <MmfMarkerStyleRow
-          color={settings.resistanceDownBreakColor}
-          label={'\u963b\u529b\u4f4d\u5411\u4e0b\u7a81\u7834'}
-          onColorChange={(resistanceDownBreakColor) => patch({ resistanceDownBreakColor })}
-          onSizeChange={(resistanceDownBreakSize) => patch({ resistanceDownBreakSize })}
-          onSymbolChange={(resistanceDownBreakSymbol) => patch({ resistanceDownBreakSymbol })}
-          size={settings.resistanceDownBreakSize}
-          symbol={settings.resistanceDownBreakSymbol}
-        />
-        <MmfMarkerStyleRow
-          color={settings.resistanceUpBreakColor}
-          label={'\u963b\u529b\u4f4d\u5411\u4e0a\u7a81\u7834'}
-          onColorChange={(resistanceUpBreakColor) => patch({ resistanceUpBreakColor })}
-          onSizeChange={(resistanceUpBreakSize) => patch({ resistanceUpBreakSize })}
-          onSymbolChange={(resistanceUpBreakSymbol) => patch({ resistanceUpBreakSymbol })}
-          size={settings.resistanceUpBreakSize}
-          symbol={settings.resistanceUpBreakSymbol}
-        />
-        <MmfMarkerStyleRow
-          color={settings.trendDownReboundColor}
-          label={'\u4e0b\u964d\u8d8b\u52bf - \u53cd\u5f39\u70b9'}
-          onColorChange={(trendDownReboundColor) => patch({ trendDownReboundColor })}
-          onSizeChange={(trendDownReboundSize) => patch({ trendDownReboundSize })}
-          onSymbolChange={(trendDownReboundSymbol) => patch({ trendDownReboundSymbol })}
-          size={settings.trendDownReboundSize}
-          symbol={settings.trendDownReboundSymbol}
-        />
-        <MmfMarkerStyleRow
-          color={settings.trendDownReturnColor}
-          label={'\u4e0b\u964d\u8d8b\u52bf - \u56de\u5f52\u70b9'}
-          onColorChange={(trendDownReturnColor) => patch({ trendDownReturnColor })}
-          onSizeChange={(trendDownReturnSize) => patch({ trendDownReturnSize })}
-          onSymbolChange={(trendDownReturnSymbol) => patch({ trendDownReturnSymbol })}
-          size={settings.trendDownReturnSize}
-          symbol={settings.trendDownReturnSymbol}
-        />
-        <MmfMarkerStyleRow
-          color={settings.trendDownDivergencePointColor}
-          label={'\u4e0b\u964d\u8d8b\u52bf - \u80cc\u79bb\u70b9'}
-          onColorChange={(trendDownDivergencePointColor) => patch({ trendDownDivergencePointColor })}
-          onSizeChange={(trendDownDivergencePointSize) => patch({ trendDownDivergencePointSize })}
-          onSymbolChange={(trendDownDivergencePointSymbol) => patch({ trendDownDivergencePointSymbol })}
-          size={settings.trendDownDivergencePointSize}
-          symbol={settings.trendDownDivergencePointSymbol}
+          color={settings.bottomDivergenceColor}
+          label={'\u5e95\u80cc\u79bb'}
+          onColorChange={(bottomDivergenceColor) => patch({ bottomDivergenceColor })}
+          onSizeChange={(bottomDivergenceSize) => patch({ bottomDivergenceSize })}
+          onSymbolChange={(bottomDivergenceSymbol) => patch({ bottomDivergenceSymbol })}
+          size={settings.bottomDivergenceSize}
+          symbol={settings.bottomDivergenceSymbol}
         />
         <MmfMarkerStyleRow
           color={settings.trendUpPullbackColor}
@@ -481,301 +378,113 @@ export function MmfV2StylePanel({
           symbol={settings.trendUpPullbackSymbol}
         />
         <MmfMarkerStyleRow
-          color={settings.trendUpReturnColor}
-          label={'\u4e0a\u5347\u8d8b\u52bf - \u56de\u5f52\u70b9'}
-          onColorChange={(trendUpReturnColor) => patch({ trendUpReturnColor })}
-          onSizeChange={(trendUpReturnSize) => patch({ trendUpReturnSize })}
-          onSymbolChange={(trendUpReturnSymbol) => patch({ trendUpReturnSymbol })}
-          size={settings.trendUpReturnSize}
-          symbol={settings.trendUpReturnSymbol}
+          color={settings.trendDownReboundColor}
+          label={'\u4e0b\u964d\u8d8b\u52bf - \u53cd\u5f39\u70b9'}
+          onColorChange={(trendDownReboundColor) => patch({ trendDownReboundColor })}
+          onSizeChange={(trendDownReboundSize) => patch({ trendDownReboundSize })}
+          onSymbolChange={(trendDownReboundSymbol) => patch({ trendDownReboundSymbol })}
+          size={settings.trendDownReboundSize}
+          symbol={settings.trendDownReboundSymbol}
         />
         <MmfMarkerStyleRow
-          color={settings.trendUpDivergencePointColor}
-          label={'\u4e0a\u5347\u8d8b\u52bf - \u80cc\u79bb\u70b9'}
-          onColorChange={(trendUpDivergencePointColor) => patch({ trendUpDivergencePointColor })}
-          onSizeChange={(trendUpDivergencePointSize) => patch({ trendUpDivergencePointSize })}
-          onSymbolChange={(trendUpDivergencePointSymbol) => patch({ trendUpDivergencePointSymbol })}
-          size={settings.trendUpDivergencePointSize}
-          symbol={settings.trendUpDivergencePointSymbol}
+          color={settings.bullMarketColor}
+          label={'\u591a\u5934\u5e02\u573a'}
+          onColorChange={(bullMarketColor) => patch({ bullMarketColor })}
+          onSizeChange={(bullMarketSize) => patch({ bullMarketSize })}
+          onSymbolChange={(bullMarketSymbol) => patch({ bullMarketSymbol })}
+          size={settings.bullMarketSize}
+          symbol={settings.bullMarketSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.bearMarketColor}
+          label={'\u7a7a\u5934\u5e02\u573a'}
+          onColorChange={(bearMarketColor) => patch({ bearMarketColor })}
+          onSizeChange={(bearMarketSize) => patch({ bearMarketSize })}
+          onSymbolChange={(bearMarketSymbol) => patch({ bearMarketSymbol })}
+          size={settings.bearMarketSize}
+          symbol={settings.bearMarketSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.overboughtColor}
+          label={'\u8d85\u4e70 - \u5f00\u542f'}
+          onColorChange={(overboughtColor) => patch({ overboughtColor })}
+          onSizeChange={(overboughtSize) => patch({ overboughtSize })}
+          onSymbolChange={(overboughtSymbol) => patch({ overboughtSymbol })}
+          size={settings.overboughtSize}
+          symbol={settings.overboughtSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.overboughtCloseColor}
+          label={'\u8d85\u4e70 - \u5173\u95ed'}
+          onColorChange={(overboughtCloseColor) => patch({ overboughtCloseColor })}
+          onSizeChange={(overboughtCloseSize) => patch({ overboughtCloseSize })}
+          onSymbolChange={(overboughtCloseSymbol) => patch({ overboughtCloseSymbol })}
+          size={settings.overboughtCloseSize}
+          symbol={settings.overboughtCloseSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.oversoldColor}
+          label={'\u8d85\u5356 - \u5f00\u542f'}
+          onColorChange={(oversoldColor) => patch({ oversoldColor })}
+          onSizeChange={(oversoldSize) => patch({ oversoldSize })}
+          onSymbolChange={(oversoldSymbol) => patch({ oversoldSymbol })}
+          size={settings.oversoldSize}
+          symbol={settings.oversoldSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.oversoldCloseColor}
+          label={'\u8d85\u5356 - \u5173\u95ed'}
+          onColorChange={(oversoldCloseColor) => patch({ oversoldCloseColor })}
+          onSizeChange={(oversoldCloseSize) => patch({ oversoldCloseSize })}
+          onSymbolChange={(oversoldCloseSymbol) => patch({ oversoldCloseSymbol })}
+          size={settings.oversoldCloseSize}
+          symbol={settings.oversoldCloseSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.tsiDeadCrossColor}
+          label={'TSI - \u6b7b\u53c9'}
+          onColorChange={(tsiDeadCrossColor) => patch({ tsiDeadCrossColor })}
+          onSizeChange={(tsiDeadCrossSize) => patch({ tsiDeadCrossSize })}
+          onSymbolChange={(tsiDeadCrossSymbol) => patch({ tsiDeadCrossSymbol })}
+          options={mmfCrossSymbolOptions}
+          resolveSize={resolveCompactSymbolSize}
+          size={settings.tsiDeadCrossSize}
+          symbol={settings.tsiDeadCrossSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.tsiDeadCrossConfirmColor}
+          label={'TSI - \u6b7b\u53c9\u786e\u8ba4\u70b9'}
+          onColorChange={(tsiDeadCrossConfirmColor) => patch({ tsiDeadCrossConfirmColor })}
+          onSizeChange={(tsiDeadCrossConfirmSize) => patch({ tsiDeadCrossConfirmSize })}
+          onSymbolChange={(tsiDeadCrossConfirmSymbol) => patch({ tsiDeadCrossConfirmSymbol })}
+          options={mmfTradeArrowSymbolOptions}
+          resolveSize={resolveCompactSymbolSize}
+          size={settings.tsiDeadCrossConfirmSize}
+          symbol={settings.tsiDeadCrossConfirmSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.tsiGoldenCrossColor}
+          label={'TSI - \u91d1\u53c9'}
+          onColorChange={(tsiGoldenCrossColor) => patch({ tsiGoldenCrossColor })}
+          onSizeChange={(tsiGoldenCrossSize) => patch({ tsiGoldenCrossSize })}
+          onSymbolChange={(tsiGoldenCrossSymbol) => patch({ tsiGoldenCrossSymbol })}
+          options={mmfCrossSymbolOptions}
+          resolveSize={resolveCompactSymbolSize}
+          size={settings.tsiGoldenCrossSize}
+          symbol={settings.tsiGoldenCrossSymbol}
+        />
+        <MmfMarkerStyleRow
+          color={settings.tsiGoldenCrossConfirmColor}
+          label={'TSI - \u91d1\u53c9\u786e\u8ba4\u70b9'}
+          onColorChange={(tsiGoldenCrossConfirmColor) => patch({ tsiGoldenCrossConfirmColor })}
+          onSizeChange={(tsiGoldenCrossConfirmSize) => patch({ tsiGoldenCrossConfirmSize })}
+          onSymbolChange={(tsiGoldenCrossConfirmSymbol) => patch({ tsiGoldenCrossConfirmSymbol })}
+          options={mmfTradeArrowSymbolOptions}
+          resolveSize={resolveCompactSymbolSize}
+          size={settings.tsiGoldenCrossConfirmSize}
+          symbol={settings.tsiGoldenCrossConfirmSymbol}
         />
       </section>
-    </div>
-  )
-}
-
-export function MmfV2StrategyPanel({
-  momentumCrosshairIndex,
-  momentumStats,
-  onSettingsChange,
-  settings,
-}: {
-  momentumCrosshairIndex?: number | null
-  momentumStats?: MmfV2MomentumStats | null
-  onSettingsChange: (settings: MmfIndicatorSettings) => void
-  settings: MmfIndicatorSettings
-}) {
-  const patch = (next: Partial<MmfIndicatorSettings>) => onSettingsChange(updateMmfSettings(settings, next))
-  const showMomentumStats = Number(settings.vdoMomentumUpLookback) > 0 || Number(settings.vdoMomentumDownLookback) > 0
-  const showBreakoutMomentumStats = Number(settings.vdoBreakoutMomentumUpLookback) > 0 || Number(settings.vdoBreakoutMomentumDownLookback) > 0
-  const showCloseMomentumStats = Number(settings.vdoCloseMomentumUpLookback) > 0 || Number(settings.vdoCloseMomentumDownLookback) > 0
-
-  return (
-    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-mmf-panel-v1" role="tabpanel">
-      <section className="ff-indicators-input-panel-v1__section ff-indicators-mmf-panel-v1__scroll-section">
-        <div className="ff-indicators-mmf-v2-panel__signal-block">
-          <div className="ff-indicators-mmf-v2-panel__check-row">
-            <span className="ff-indicators-mmf-v2-panel__advance-label">{'VDO \u9ad8\u4f4e\u70b9\u52a8\u91cf'}</span>
-          </div>
-          {showMomentumStats ? (
-            <MmfV2MomentumStatsCard
-              currentDownLabel={'\u5411\u4e0b\u52a8\u91cf'}
-              currentUpLabel={'\u5411\u4e0a\u52a8\u91cf'}
-              downLookback={settings.vdoMomentumDownLookback}
-              downStats={momentumStats?.down ?? null}
-              downTitle={'\u9ad8\u70b9\u5230\u786e\u8ba4\u503c'}
-              momentumCrosshairIndex={momentumCrosshairIndex}
-              periodSeconds={momentumStats?.periodSeconds ?? 60}
-              upMomentumLabel={'VDO \u5411\u4e0a\u52a8\u91cf'}
-              upStats={momentumStats?.up ?? null}
-              downMomentumLabel={'VDO \u5411\u4e0b\u52a8\u91cf'}
-              upLookback={settings.vdoMomentumUpLookback}
-              upTitle={'\u4f4e\u70b9\u5230\u786e\u8ba4\u503c'}
-            />
-          ) : null}
-          <MmfV2MomentumRow
-            label={'\u4e0a\u5347\u52a8\u91cf'}
-            lookback={settings.vdoMomentumUpLookback}
-            onLookbackChange={(vdoMomentumUpLookback) => patch({ vdoMomentumUpLookback })}
-          />
-          <MmfV2MomentumRow
-            label={'\u4e0b\u964d\u52a8\u91cf'}
-            lookback={settings.vdoMomentumDownLookback}
-            onLookbackChange={(vdoMomentumDownLookback) => patch({ vdoMomentumDownLookback })}
-          />
-        </div>
-        <div className="ff-indicators-mmf-v2-panel__signal-block">
-          <div className="ff-indicators-mmf-v2-panel__check-row">
-            <span className="ff-indicators-mmf-v2-panel__advance-label">{'VDO \u7a81\u7834\u70b9\u52a8\u91cf'}</span>
-          </div>
-          {showBreakoutMomentumStats ? (
-            <MmfV2MomentumStatsCard
-              currentDownLabel={'\u5411\u4e0b\u7a81\u7834\u52a8\u91cf'}
-              currentUpLabel={'\u5411\u4e0a\u7a81\u7834\u52a8\u91cf'}
-              downLookback={settings.vdoBreakoutMomentumDownLookback}
-              downMomentumLabel={'VDO \u5411\u4e0b\u7a81\u7834\u52a8\u91cf'}
-              downStats={momentumStats?.breakoutDown ?? null}
-              downTitle={'\u5411\u4e0b\u7a81\u7834\u70b9\u5230\u9ad8\u70b9'}
-              momentumCrosshairIndex={momentumCrosshairIndex}
-              periodSeconds={momentumStats?.periodSeconds ?? 60}
-              upLookback={settings.vdoBreakoutMomentumUpLookback}
-              upMomentumLabel={'VDO \u5411\u4e0a\u7a81\u7834\u52a8\u91cf'}
-              upStats={momentumStats?.breakoutUp ?? null}
-              upTitle={'\u5411\u4e0a\u7a81\u7834\u70b9\u5230\u4f4e\u70b9'}
-            />
-          ) : null}
-          <MmfV2MomentumRow
-            label={'\u5411\u4e0a\u7a81\u7834\u52a8\u91cf'}
-            lookback={settings.vdoBreakoutMomentumUpLookback}
-            onLookbackChange={(vdoBreakoutMomentumUpLookback) => patch({ vdoBreakoutMomentumUpLookback })}
-          />
-          <MmfV2MomentumRow
-            label={'\u5411\u4e0b\u7a81\u7834\u52a8\u91cf'}
-            lookback={settings.vdoBreakoutMomentumDownLookback}
-            onLookbackChange={(vdoBreakoutMomentumDownLookback) => patch({ vdoBreakoutMomentumDownLookback })}
-          />
-        </div>
-        <div className="ff-indicators-mmf-v2-panel__signal-block">
-          <div className="ff-indicators-mmf-v2-panel__check-row">
-            <span className="ff-indicators-mmf-v2-panel__advance-label">{'VDO \u5173\u95ed\u70b9\u52a8\u91cf'}</span>
-          </div>
-          {showCloseMomentumStats ? (
-            <MmfV2MomentumStatsCard
-              currentDownLabel={'\u5411\u4e0b\u5173\u95ed\u52a8\u91cf'}
-              currentUpLabel={'\u5411\u4e0a\u5173\u95ed\u52a8\u91cf'}
-              downLookback={settings.vdoCloseMomentumDownLookback}
-              downMomentumLabel={'VDO \u5411\u4e0b\u5173\u95ed\u52a8\u91cf'}
-              downStats={momentumStats?.closeDown ?? null}
-              downTitle={'\u5411\u4e0b\u5173\u95ed\u70b9\u5230\u9ad8\u70b9'}
-              momentumCrosshairIndex={momentumCrosshairIndex}
-              periodSeconds={momentumStats?.periodSeconds ?? 60}
-              upLookback={settings.vdoCloseMomentumUpLookback}
-              upMomentumLabel={'VDO \u5411\u4e0a\u5173\u95ed\u52a8\u91cf'}
-              upStats={momentumStats?.closeUp ?? null}
-              upTitle={'\u5411\u4e0a\u5173\u95ed\u70b9\u5230\u4f4e\u70b9'}
-            />
-          ) : null}
-          <MmfV2MomentumRow
-            label={'\u5411\u4e0a\u5173\u95ed\u52a8\u91cf'}
-            lookback={settings.vdoCloseMomentumUpLookback}
-            onLookbackChange={(vdoCloseMomentumUpLookback) => patch({ vdoCloseMomentumUpLookback })}
-          />
-          <MmfV2MomentumRow
-            label={'\u5411\u4e0b\u5173\u95ed\u52a8\u91cf'}
-            lookback={settings.vdoCloseMomentumDownLookback}
-            onLookbackChange={(vdoCloseMomentumDownLookback) => patch({ vdoCloseMomentumDownLookback })}
-          />
-        </div>
-        <label className="ff-indicators-mmf-v2-momentum-floating-toggle">
-          <input
-            checked={settings.showVdoMomentumFloatingPanel !== false}
-            onChange={(event) => patch({ showVdoMomentumFloatingPanel: event.currentTarget.checked })}
-            type="checkbox"
-          />
-          <span>{'\u663e\u793a\u6d6e\u52a8\u9762\u677f'}</span>
-        </label>
-      </section>
-    </div>
-  )
-}
-
-function MmfV2MomentumStatsCard({
-  currentDownLabel,
-  currentUpLabel,
-  downLookback,
-  downMomentumLabel,
-  downStats,
-  downTitle,
-  momentumCrosshairIndex,
-  periodSeconds,
-  upMomentumLabel,
-  upStats,
-  upLookback,
-  upTitle,
-}: {
-  currentDownLabel: string
-  currentUpLabel: string
-  downLookback: number
-  downMomentumLabel: string
-  downStats: MmfV2MomentumStatsSide | null
-  downTitle: string
-  momentumCrosshairIndex?: number | null
-  periodSeconds: number
-  upMomentumLabel: string
-  upStats: MmfV2MomentumStatsSide | null
-  upLookback: number
-  upTitle: string
-}) {
-  const current = resolveCurrentMomentumSample(upStats, downStats, momentumCrosshairIndex, currentUpLabel, currentDownLabel)
-
-  return (
-    <div className="ff-indicators-mmf-v2-momentum-card">
-      <div className="ff-indicators-mmf-v2-momentum-card__current">
-        <strong>{'\u5f53\u524d\u503c'}</strong>
-        <span>{current ? `${current.label} ${formatMomentum(current.sample.momentum)}` : '-'}</span>
-      </div>
-      {Number(upLookback) > 0 ? (
-        <MmfV2MomentumStatsSection
-          lookback={upLookback}
-          momentumLabel={upMomentumLabel}
-          periodSeconds={periodSeconds}
-          stats={upStats}
-          title={upTitle}
-        />
-      ) : null}
-      {Number(downLookback) > 0 ? (
-        <MmfV2MomentumStatsSection
-          lookback={downLookback}
-          momentumLabel={downMomentumLabel}
-          periodSeconds={periodSeconds}
-          stats={downStats}
-          title={downTitle}
-        />
-      ) : null}
-    </div>
-  )
-}
-
-function resolveCurrentMomentumSample(upStats: MmfV2MomentumStatsSide | null, downStats: MmfV2MomentumStatsSide | null, crosshairIndex: number | null | undefined, upLabel: string, downLabel: string): { label: string; sample: MmfV2MomentumSample } | null {
-  const upSamples = upStats?.samplesList ?? []
-  const downSamples = downStats?.samplesList ?? []
-  const safeCrosshairIndex = Number.isFinite(Number(crosshairIndex)) ? Math.round(Number(crosshairIndex)) : null
-  if (safeCrosshairIndex != null) {
-    const upHit = upSamples.find((sample) => sample.markerIndex === safeCrosshairIndex)
-    if (upHit) return { label: upLabel, sample: upHit }
-    const downHit = downSamples.find((sample) => sample.markerIndex === safeCrosshairIndex)
-    if (downHit) return { label: downLabel, sample: downHit }
-  }
-  const latest = [
-    ...upSamples.map((sample) => ({ label: upLabel, sample })),
-    ...downSamples.map((sample) => ({ label: downLabel, sample })),
-  ].sort((left, right) => right.sample.entryIndex - left.sample.entryIndex)[0]
-  return latest ?? null
-}
-
-function MmfV2MomentumStatsSection({
-  lookback,
-  momentumLabel,
-  periodSeconds,
-  stats,
-  title,
-}: {
-  lookback: number
-  momentumLabel: string
-  periodSeconds: number
-  stats: MmfV2MomentumStatsSide | null
-  title: string
-}) {
-  const sampleText = `${Math.round(Number(lookback)).toLocaleString()} \u4e2a\u53d6\u503c`
-  if (!stats) {
-    return (
-      <div className="ff-indicators-mmf-v2-momentum-card__section">
-        <strong>{sampleText}</strong>
-        <span>{`${title}\uff1a\u6682\u65e0\u53ef\u8ba1\u7b97\u53d6\u503c`}</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="ff-indicators-mmf-v2-momentum-card__section">
-      <strong>{`${stats.samples.toLocaleString()} / ${sampleText}`}</strong>
-      <span>{`${title}\u6700\u5c0f\u8ddd\u79bb\uff1a${formatBarsDuration(stats.minBars, periodSeconds)}`}</span>
-      <span>{`${title}\u6700\u5927\u8ddd\u79bb\uff1a${formatBarsDuration(stats.maxBars, periodSeconds)}`}</span>
-      <span>{`${momentumLabel}\uff1a\u6700\u5927\u503c ${formatMomentum(stats.maxMomentum)}\uff0c\u6700\u5c0f\u503c ${formatMomentum(stats.minMomentum)}\uff0c\u5e73\u5747\u503c ${formatMomentum(stats.averageMomentum)}`}</span>
-    </div>
-  )
-}
-
-function formatBarsDuration(bars: number | null, periodSeconds: number) {
-  if (!Number.isFinite(Number(bars))) return '-'
-  const safeBars = Math.max(0, Math.round(Number(bars)))
-  const seconds = safeBars * Math.max(1, Math.round(Number(periodSeconds) || 60))
-  const minutes = seconds / 60
-  return `${safeBars} \u6839K\u7ebf\uff0c${formatDurationNumber(minutes)} \u5206\u949f\uff0c${seconds.toLocaleString()} \u79d2`
-}
-
-function formatDurationNumber(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '')
-}
-
-function formatMomentum(value: number | null) {
-  if (!Number.isFinite(Number(value))) return '-'
-  return Number(value).toFixed(2).replace(/\.?0+$/, '')
-}
-
-function MmfV2MomentumRow({
-  label,
-  lookback,
-  onLookbackChange,
-}: {
-  label: string
-  lookback: number
-  onLookbackChange: (value: number) => void
-}) {
-  return (
-    <div className="ff-indicators-mmf-v2-panel__advance-row ff-indicators-mmf-v2-panel__momentum-control-row">
-      <span className="ff-indicators-mmf-v2-panel__advance-label">{label}</span>
-      <span className="ff-indicators-mmf-v2-panel__advance-label ff-indicators-mmf-v2-panel__advance-label-part--compact">{'\u53d6\u503c'}</span>
-      <span className="ff-indicators-mmf-panel-v1__vdo-input ff-indicators-mmf-v2-panel__advance-input">
-        <NumberBox
-          formatValue={(numberValue) => String(Math.round(numberValue))}
-          max={100000}
-          min={0}
-          onChange={onLookbackChange}
-          parseValue={(inputValue) => Number(inputValue)}
-          step={1}
-          value={Number(lookback)}
-        />
-      </span>
     </div>
   )
 }

@@ -11,7 +11,13 @@ import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
 import { useChartStepLoad } from './useChartStepLoad'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay } from './mainVolumeIndicator'
 import { applyMorganRangeOverlays, clearMorganRangeOverlays } from './useMorganRangeOverlays'
-import { calculateMorganRangeSegments, findMorganRangeSegmentByDataIndex, h4MorganSeconds, type MorganRangeSegment } from './morganRangeModel'
+import {
+  calculateMorganRangeSegmentsForMode,
+  findMorganRangeSegmentByDataIndex,
+  resolveMorganRangeBucketSeconds,
+  type MorganRangeMode,
+  type MorganRangeSegment,
+} from './morganRangeModel'
 import { mmfV2MomentumStatsEvent, publishMmfV2MomentumCrosshairIndex } from './mmfV2MomentumStats'
 import type { MmfV2MomentumSample, MmfV2MomentumStats, MmfV2MomentumStatsSide } from './mmfV2MomentumStats'
 import { readCrosshairDataIndex } from './paneTitleOverlayContent'
@@ -26,7 +32,10 @@ import { ensureTradingViewStochIndicator } from './tradingViewStochIndicator'
 import { ensureTradingViewTsiIndicator } from './tradingViewTsiIndicator'
 import { ensureTradingViewVdoIndicator } from './tradingViewVdoIndicator'
 import { ensureTradingViewViIndicator } from './tradingViewViIndicator'
+import { ensureTradingViewAoIndicator } from './tradingViewAoIndicator'
+import { ensureTradingViewVmiIndicator } from './tradingViewVmiIndicator'
 import { ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
+import { ensureTradingViewMrIndicator, resolveTradingViewMrIndicatorName } from './tradingViewMrIndicator'
 import {
   applyCandleIndicatorCommand,
   applyPaneIndicatorCommand,
@@ -38,7 +47,7 @@ import type {
   IndicatorPaneCommandName,
   IndicatorPaneConfig,
 } from './chartIndicatorCommandHandlers'
-import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MmfIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, SqzmomIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MmfIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, SqzmomIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, AoIndicatorSettings, VmiIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import { readString, writeString } from '../persistence/jsonStorage'
 import './ChartCoreHost.css'
@@ -51,6 +60,8 @@ const dpoPaneId = 'dpo_pane'
 const vdoPaneId = 'vdo_pane'
 const tsiPaneId = 'tsi_pane'
 const viPaneId = 'vi_pane'
+const aoPaneId = 'ao_pane'
+const vmiPaneId = 'vmi_pane'
 const mmfIndicatorZLevel = 30
 const rsiPaneHeightStorageKey = 'fractalframe.chart.rsiPaneHeight'
 const stochPaneHeightStorageKey = 'fractalframe.chart.stochPaneHeight'
@@ -60,10 +71,19 @@ const dpoPaneHeightStorageKey = 'fractalframe.chart.dpoPaneHeight'
 const vdoPaneHeightStorageKey = 'fractalframe.chart.vdoPaneHeight'
 const tsiPaneHeightStorageKey = 'fractalframe.chart.tsiPaneHeight'
 const viPaneHeightStorageKey = 'fractalframe.chart.viPaneHeight'
+const aoPaneHeightStorageKey = 'fractalframe.chart.aoPaneHeight'
+const vmiPaneHeightStorageKey = 'fractalframe.chart.vmiPaneHeight'
 const defaultRsiPaneHeight = 128
 const minRsiPaneHeight = 80
 const maxStoredRsiPaneHeight = 720
 const updateLevelAll = 4
+
+type MorganRangeIndicatorName = 'MR-M5' | 'MR-M30'
+
+function resolveMorganRangeMode(name: MorganRangeIndicatorName): MorganRangeMode {
+  return name === 'MR-M30' ? 'D1_M30' : 'H4_M5'
+}
+
 function refreshChartDrawings() {
   window.dispatchEvent(new Event(chartDrawingVisibilityRefreshEvent))
   window.requestAnimationFrame(() => {
@@ -77,7 +97,9 @@ type ChartCoreHostProps = {
   jump?: { id: number; timestamp?: number } | null
   limit?: number
   mmfLoaded?: boolean
+  maSettings?: MaIndicatorSettings
   mmfSettings?: MmfIndicatorSettings
+  morganRangeMode?: MorganRangeMode
   onLoadStateChange?: (state: ChartLoadState) => void
   onMorganRangeSegmentChange?: (segment: MorganRangeSegment | null) => void
   page?: ChartPageTarget | null
@@ -85,9 +107,11 @@ type ChartCoreHostProps = {
   reloadId?: number
   stepLoad?: { direction: 'left' | 'right'; id: number } | null
   stochSettings?: StochIndicatorSettings
+  tsiSettings?: TsiIndicatorSettings
   symbol: string
   totalRows?: number | null
   vdoSettings?: VdoIndicatorSettings
+  vmiSettings?: VmiIndicatorSettings
 }
 
 export type ChartPageTarget = {
@@ -106,13 +130,16 @@ export type ChartIndicatorCommand = {
   | { name: 'MMF'; settings?: MmfIndicatorSettings }
   | { name: 'MMF_V2'; settings?: MmfIndicatorSettings }
   | { name: 'DPO'; settings?: DpoIndicatorSettings }
-  | { name: 'MR'; settings?: MrIndicatorSettings }
+  | { name: 'MR-M5'; settings?: MrIndicatorSettings }
+  | { name: 'MR-M30'; settings?: MrIndicatorSettings }
   | { name: 'RSI'; settings?: RsiIndicatorSettings }
   | { name: 'SQZMOM'; settings?: SqzmomIndicatorSettings }
   | { name: 'Stoch'; settings?: StochIndicatorSettings }
   | { name: 'TSI'; settings?: TsiIndicatorSettings }
   | { name: 'VDO'; settings?: VdoIndicatorSettings }
   | { name: 'VI'; settings?: ViIndicatorSettings }
+  | { name: 'AO'; settings?: AoIndicatorSettings }
+  | { name: 'VMI'; settings?: VmiIndicatorSettings }
   | { name: 'VWAP'; settings?: VwapIndicatorSettings }
   | { name: 'Vol'; settings?: VolIndicatorSettings }
 )
@@ -161,7 +188,7 @@ function refreshPane(chart: unknown, paneId: string) {
   })
 }
 
-export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfLoaded = false, mmfSettings, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, vdoSettings }: ChartCoreHostProps) {
+export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings }: ChartCoreHostProps) {
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
   const [mmfV2MomentumStats, setMmfV2MomentumStats] = useState<MmfV2MomentumStats | null>(null)
   const [mmfV2MomentumCrosshairIndex, setMmfV2MomentumCrosshairIndex] = useState<number | null>(null)
@@ -183,10 +210,13 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
   const vdoPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const tsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const viPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const aoPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
+  const vmiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const paneResizeActiveRef = useRef(false)
   const paneResizeEndTimerRef = useRef(0)
   const mainVolumeOverlayRef = useRef<ReturnType<typeof installMainVolumeOverlay> | null>(null)
-  const morganRangeLoadedRef = useRef(false)
+  const morganRangeModeRef = useRef<MorganRangeMode | null>(null)
+  const morganRangeIndicatorNameRef = useRef<MorganRangeIndicatorName | null>(null)
   const morganRangeOverlayIdsRef = useRef<Set<string>>(new Set())
   const morganRangeSettingsRef = useRef<MrIndicatorSettings | null>(null)
   const morganRangeCrosshairIndexRef = useRef<number | null>(null)
@@ -209,6 +239,8 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
       [vdoPaneId, vdoPaneHeightStorageKey],
       [tsiPaneId, tsiPaneHeightStorageKey],
       [viPaneId, viPaneHeightStorageKey],
+      [aoPaneId, aoPaneHeightStorageKey],
+      [vmiPaneId, vmiPaneHeightStorageKey],
     ] as const
     paneHeights.forEach(([paneId, storageKey]) => {
       const size = chart.getSize(paneId)
@@ -288,6 +320,8 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
   const observeVdoPaneHeight = useCallback(() => observeIndicatorPaneHeight(vdoPaneId, vdoPaneHeightStorageKey, vdoPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const observeTsiPaneHeight = useCallback(() => observeIndicatorPaneHeight(tsiPaneId, tsiPaneHeightStorageKey, tsiPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const observeViPaneHeight = useCallback(() => observeIndicatorPaneHeight(viPaneId, viPaneHeightStorageKey, viPaneHeightObserverRef), [observeIndicatorPaneHeight])
+  const observeAoPaneHeight = useCallback(() => observeIndicatorPaneHeight(aoPaneId, aoPaneHeightStorageKey, aoPaneHeightObserverRef), [observeIndicatorPaneHeight])
+  const observeVmiPaneHeight = useCallback(() => observeIndicatorPaneHeight(vmiPaneId, vmiPaneHeightStorageKey, vmiPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const isIndicatorVisibleInCurrentPeriod = useCallback((name: ChartIndicatorCommand['name']) => isStoredVisibilityRangePeriodVisible(`indicator:${name}`, period), [period])
 
   const buildMmfCalcParams = useCallback((settings?: MmfIndicatorSettings) => [
@@ -302,16 +336,25 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
   ], [period, stochSettings?.dSmoothing, stochSettings?.kSmoothing, stochSettings?.length, symbol])
 
   const buildMmfV2CalcParams = useCallback((settings?: MmfIndicatorSettings) => [{
-    maSettings: undefined,
+    maSettings,
+    morganRangeMode,
     period,
     settings,
     symbol,
+    stochSettings,
     vdoSettings,
-  }], [period, symbol, vdoSettings])
+    vmiSettings,
+    tsiSettings,
+  }], [maSettings, morganRangeMode, period, stochSettings, symbol, tsiSettings, vdoSettings, vmiSettings])
 
   const publishMorganRangeSegment = useCallback((dataIndex: number | null = morganRangeCrosshairIndexRef.current) => {
     const chart = chartInstanceRef.current
+    const mode = morganRangeModeRef.current
     if (!chart) {
+      onMorganRangeSegmentChange?.(null)
+      return
+    }
+    if (!mode) {
       onMorganRangeSegmentChange?.(null)
       return
     }
@@ -320,31 +363,41 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
       onMorganRangeSegmentChange?.(null)
       return
     }
-    const futureBars = Math.round(h4MorganSeconds / periodSeconds)
-    const segments = calculateMorganRangeSegments(chart.getDataList(), futureBars)
+    const futureBars = Math.round(resolveMorganRangeBucketSeconds(mode) / periodSeconds)
+    const segments = calculateMorganRangeSegmentsForMode(chart.getDataList(), mode, futureBars)
     const fallbackIndex = chart.getDataList().length - 1
     onMorganRangeSegmentChange?.(findMorganRangeSegmentByDataIndex(segments, dataIndex ?? fallbackIndex) ?? segments[segments.length - 1] ?? null)
   }, [chartInstanceRef, onMorganRangeSegmentChange, period])
 
   const applyMorganRangeCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
-    chart.removeIndicator('candle_pane', 'MR')
+    if (command.name !== 'MR-M5' && command.name !== 'MR-M30') return
 
     if (command.action === 'unload') {
-      morganRangeLoadedRef.current = false
+      if (morganRangeIndicatorNameRef.current !== command.name) return
+      chart.removeIndicator('candle_pane', resolveTradingViewMrIndicatorName(command.name))
+      morganRangeModeRef.current = null
+      morganRangeIndicatorNameRef.current = null
       morganRangeSettingsRef.current = null
       clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
       onMorganRangeSegmentChange?.(null)
       return
     }
 
-    morganRangeLoadedRef.current = true
-    morganRangeSettingsRef.current = command.name === 'MR' ? command.settings ?? null : null
-    if (!isIndicatorVisibleInCurrentPeriod('MR')) {
+    const chartIndicatorName = resolveTradingViewMrIndicatorName(command.name)
+    ensureTradingViewMrIndicator(chartIndicatorName)
+    chart.removeIndicator('candle_pane', 'MR_M5')
+    chart.removeIndicator('candle_pane', 'MR_M30')
+    const mode = resolveMorganRangeMode(command.name)
+    morganRangeModeRef.current = mode
+    morganRangeIndicatorNameRef.current = command.name
+    morganRangeSettingsRef.current = command.settings ?? null
+    if (!isIndicatorVisibleInCurrentPeriod(command.name)) {
       clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
       onMorganRangeSegmentChange?.(null)
       return
     }
-    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+    chart.createIndicator({ name: chartIndicatorName, calcParams: [command.settings] }, true, { id: 'candle_pane' })
+    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, mode)
     publishMorganRangeSegment()
   }, [isIndicatorVisibleInCurrentPeriod, onMorganRangeSegmentChange, period, publishMorganRangeSegment])
 
@@ -479,6 +532,30 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
         paneId: viPaneId,
         storageKey: viPaneHeightStorageKey,
       },
+      AO: {
+        ensureRegistered: ensureTradingViewAoIndicator,
+        minHeight: minRsiPaneHeight,
+        name: 'AO',
+        observeHeight: observeAoPaneHeight,
+        observerRef: aoPaneHeightObserverRef,
+        paneId: aoPaneId,
+        storageKey: aoPaneHeightStorageKey,
+      },
+      VMI: {
+        ensureRegistered: ensureTradingViewVmiIndicator,
+        minHeight: minRsiPaneHeight,
+        name: 'VMI',
+        observeHeight: observeVmiPaneHeight,
+        observerRef: vmiPaneHeightObserverRef,
+        paneId: vmiPaneId,
+        resolveCalcParams: (command) => ({
+          period,
+          settings: command.name === 'VMI' ? command.settings : undefined,
+          symbol,
+          vdoSettings,
+        }),
+        storageKey: vmiPaneHeightStorageKey,
+      },
     }
     const paneConfig = paneIndicatorConfigs[indicatorCommand.name as IndicatorPaneCommandName]
     if (paneConfig) {
@@ -523,7 +600,8 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
       return
     }
     const overlayIndicatorHandlers: Partial<Record<ChartIndicatorCommand['name'], () => void>> = {
-      MR: () => applyMorganRangeCommand(chart, indicatorCommand),
+      'MR-M5': () => applyMorganRangeCommand(chart, indicatorCommand),
+      'MR-M30': () => applyMorganRangeCommand(chart, indicatorCommand),
       Vol: () => applyVolumeCommand({
         chart,
         command: indicatorCommand,
@@ -554,18 +632,22 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
     observeTsiPaneHeight,
     observeVdoPaneHeight,
     observeViPaneHeight,
+    observeAoPaneHeight,
+    observeVmiPaneHeight,
     symbol,
   ])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
-    if (!chart || !morganRangeLoadedRef.current || loadState.loading) return
-    if (!isIndicatorVisibleInCurrentPeriod('MR')) {
+    const indicatorName = morganRangeIndicatorNameRef.current
+    const mode = morganRangeModeRef.current
+    if (!chart || !indicatorName || !mode || loadState.loading) return
+    if (!isIndicatorVisibleInCurrentPeriod(indicatorName)) {
       clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
       onMorganRangeSegmentChange?.(null)
       return
     }
-    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, mode)
     publishMorganRangeSegment()
   }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, loadState.rows, onMorganRangeSegmentChange, period, publishMorganRangeSegment])
 
@@ -575,15 +657,17 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
 
     let frame = 0
     const scheduleRefresh = () => {
-      if (!morganRangeLoadedRef.current || loadState.loading) return
+      const indicatorName = morganRangeIndicatorNameRef.current
+      const mode = morganRangeModeRef.current
+      if (!indicatorName || !mode || loadState.loading) return
       window.cancelAnimationFrame(frame)
       frame = window.requestAnimationFrame(() => {
-        if (!isIndicatorVisibleInCurrentPeriod('MR')) {
+        if (!isIndicatorVisibleInCurrentPeriod(indicatorName)) {
           clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
           onMorganRangeSegmentChange?.(null)
           return
         }
-        applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current)
+        applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, mode)
         publishMorganRangeSegment()
       })
     }
@@ -682,8 +766,12 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, mmfL
     stochPaneHeightObserverRef.current?.disconnect()
     sqzmomPaneHeightObserverRef.current?.disconnect()
     macdPaneHeightObserverRef.current?.disconnect()
+    dpoPaneHeightObserverRef.current?.disconnect()
+    vdoPaneHeightObserverRef.current?.disconnect()
     tsiPaneHeightObserverRef.current?.disconnect()
     viPaneHeightObserverRef.current?.disconnect()
+    aoPaneHeightObserverRef.current?.disconnect()
+    vmiPaneHeightObserverRef.current?.disconnect()
   }, [chartInstanceRef])
 
   return (

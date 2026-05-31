@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { KLineData } from 'klinecharts'
-import { calculateMorganRangeSegments, getMorganRangeLevel, collectH4MorganCandles, resolveH4MorganBucketKey } from './morganRangeModel'
+import {
+  calculateMorganRangeSegments,
+  calculateMorganRangeSegmentsForMode,
+  collectD1MorganCandles,
+  collectH4MorganCandles,
+  getMorganRangeLevel,
+  resolveD1MorganBucketKey,
+  resolveH4MorganBucketKey,
+} from './morganRangeModel'
 
 const utc = (value: string) => Date.parse(value)
 
@@ -30,6 +38,22 @@ describe('morganRangeModel', () => {
     expect(candles).toHaveLength(2)
     expect(candles[1].startTimestamp).toBe(utc('2026-05-25T02:00:00.000Z'))
     expect(candles[1].close).toBe(104)
+  })
+
+  it('groups M30 rows after 06:00 Asia/Shanghai into the new D1 bucket', () => {
+    const before = utc('2026-05-24T21:30:00.000Z')
+    const boundary = utc('2026-05-24T22:00:00.000Z')
+    const after = utc('2026-05-24T22:30:00.000Z')
+    const candles = collectD1MorganCandles([
+      row(before, 100),
+      row(boundary, 101),
+      row(after, 102),
+    ])
+
+    expect(resolveD1MorganBucketKey(boundary)).toBe(resolveD1MorganBucketKey(before) + 1)
+    expect(candles).toHaveLength(2)
+    expect(candles[1].startTimestamp).toBe(boundary)
+    expect(candles[1].close).toBe(102)
   })
 
   it('calculates callable Morgan range levels with the red zone split into eighths', () => {
@@ -66,5 +90,30 @@ describe('morganRangeModel', () => {
     ])
     expect(getMorganRangeLevel(segment, 0.236)?.price).toBeCloseTo(101.416)
     expect(getMorganRangeLevel(segment, -0.059)?.price).toBeCloseTo(99.646)
+  })
+
+  it('calculates D1-M30 Morgan range segments with daily buckets', () => {
+    const start = utc('2026-05-24T22:00:00.000Z')
+    const rows = Array.from({ length: 8 }, (_, index) => row(start + index * 24 * 60 * 60 * 1000, 100))
+    const segments = calculateMorganRangeSegmentsForMode(rows, 'D1_M30', 48)
+    const segment = segments[0]
+
+    expect(segment.center).toBe(100)
+    expect(segment.range).toBe(6)
+    expect(segment.startTimestamp).toBe(utc('2026-05-31T22:00:00.000Z'))
+    expect(segment.endIndex).toBe(segment.startIndex + 48)
+  })
+
+  it('keeps D1-M30 to one Morgan range per day when source rows are M30', () => {
+    const start = utc('2026-05-24T22:00:00.000Z')
+    const historicalDailyRows = Array.from({ length: 7 }, (_, index) => row(start + index * 24 * 60 * 60 * 1000, 100))
+    const m30Rows = Array.from({ length: 48 }, (_, index) => row(start + (7 * 48 + index) * 30 * 60 * 1000, 100))
+    const nextDayFirstRow = row(start + 8 * 24 * 60 * 60 * 1000, 100)
+    const segments = calculateMorganRangeSegmentsForMode([...historicalDailyRows, ...m30Rows, nextDayFirstRow], 'D1_M30', 48)
+
+    expect(segments).toHaveLength(2)
+    expect(segments[0].startIndex).toBe(7)
+    expect(segments[0].endIndex).toBe(54)
+    expect(segments[1].startIndex).toBe(55)
   })
 })

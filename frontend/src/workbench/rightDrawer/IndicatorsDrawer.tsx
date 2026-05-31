@@ -6,9 +6,13 @@ import { indicatorRows, isSupportedChartIndicator } from './indicatorDefinitions
 import { LoadedIndicatorSettingsPanel } from './indicatorSettingsPanels'
 import type { IndicatorsController } from '../indicators/useIndicatorsController'
 import type { MorganRangeSegment } from '../chart/morganRangeModel'
-import { mmfV2MomentumCrosshairEvent, mmfV2MomentumStatsEvent } from '../chart/mmfV2MomentumStats'
-import type { MmfV2MomentumStats } from '../chart/mmfV2MomentumStats'
 import './IndicatorsDrawer.css'
+
+const defaultIndicatorSettingsTabs = [
+  { id: 'input', label: '\u8f93\u5165' },
+  { id: 'style', label: '\u6837\u5f0f' },
+  { id: 'visibility', label: '\u53ef\u89c1\u8303\u56f4' },
+] as const
 
 type IndicatorsDrawerProps = {
   indicatorShortcutKeys: string[]
@@ -19,14 +23,13 @@ type IndicatorsDrawerProps = {
 }
 
 export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, loadedIndicatorKeys, morganRangeSegment, onIndicatorShortcutKeysChange }: IndicatorsDrawerProps) {
-  const [mmfV2MomentumStats, setMmfV2MomentumStats] = useState<MmfV2MomentumStats | null>(null)
-  const [mmfV2MomentumCrosshairIndex, setMmfV2MomentumCrosshairIndex] = useState<number | null>(null)
   const [topHeight, setTopHeight] = useState(254)
   const loadedKeySet = new Set(loadedIndicatorKeys)
   const selectedKey = indicatorsController.selectedKey
   const settingsTab = indicatorsController.settingsTab
   const selected = indicatorRows.find((row) => row.key === selectedKey) ?? indicatorRows[0]
   const selectedLoaded = loadedKeySet.has(selected.key)
+  const settingsTabs = defaultIndicatorSettingsTabs
 
   function handleLoadSelected() {
     if (!isSupportedChartIndicator(selected.key)) return
@@ -71,21 +74,10 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
   }
 
   useEffect(() => {
-    const handleStats = (event: Event) => {
-      setMmfV2MomentumStats((event as CustomEvent<MmfV2MomentumStats>).detail ?? null)
+    if (settingsTab === 'strategy') {
+      indicatorsController.setSettingsTab('input')
     }
-    window.addEventListener(mmfV2MomentumStatsEvent, handleStats)
-    return () => window.removeEventListener(mmfV2MomentumStatsEvent, handleStats)
-  }, [])
-
-  useEffect(() => {
-    const handleCrosshair = (event: Event) => {
-      const dataIndex = Number((event as CustomEvent<{ dataIndex: number | null }>).detail?.dataIndex)
-      setMmfV2MomentumCrosshairIndex(Number.isFinite(dataIndex) ? Math.round(dataIndex) : null)
-    }
-    window.addEventListener(mmfV2MomentumCrosshairEvent, handleCrosshair)
-    return () => window.removeEventListener(mmfV2MomentumCrosshairEvent, handleCrosshair)
-  }, [])
+  }, [indicatorsController, settingsTab])
 
   return (
     <section className="ff-indicators-drawer" data-right-widget-panel="indicators" data-testid="ff-indicators-drawer-panel">
@@ -114,6 +106,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
             activeTab={settingsTab}
             loaded={selectedLoaded}
             persistenceEnabled={indicatorsController.persistenceEnabled}
+            tabs={settingsTabs}
             title={`${selected.key} - ${selected.name}`}
             onLoad={handleLoadSelected}
             onPersistenceChange={indicatorsController.setPersistenceEnabled}
@@ -124,9 +117,7 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
               dpoSettings={indicatorsController.settings.dpo}
               macdSettings={indicatorsController.settings.macd}
               maSettings={indicatorsController.settings.ma}
-              mmfV2MomentumCrosshairIndex={mmfV2MomentumCrosshairIndex}
               mmfSettings={indicatorsController.settings.mmf}
-              mmfV2MomentumStats={mmfV2MomentumStats}
               morganRangeSegment={morganRangeSegment}
               mrSettings={indicatorsController.settings.mr}
               onDpoSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('DPO', settings)}
@@ -134,13 +125,15 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
               onMaSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MA', settings)}
               onMmfSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MMF', settings)}
               onMmfV2SettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MMF_V2', settings)}
-              onMrSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MR', settings)}
+              onMrSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MR-M5', settings)}
               onSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('RSI', settings)}
               onSqzmomSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('SQZMOM', settings)}
               onStochSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('Stoch', settings)}
               onTsiSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('TSI', settings)}
               onVdoSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('VDO', settings)}
               onViSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('VI', settings)}
+              onAoSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('AO', settings)}
+              onVmiSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('VMI', settings)}
               onVolSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('Vol', settings)}
               onVwapSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('VWAP', settings)}
               settingsTab={settingsTab}
@@ -151,6 +144,8 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
               tsiSettings={indicatorsController.settings.tsi}
               vdoSettings={indicatorsController.settings.vdo}
               viSettings={indicatorsController.settings.vi}
+              aoSettings={indicatorsController.settings.ao}
+              vmiSettings={indicatorsController.settings.vmi}
               volSettings={indicatorsController.settings.vol}
               vwapSettings={indicatorsController.settings.vwap}
             />

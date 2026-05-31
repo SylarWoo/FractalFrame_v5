@@ -3,6 +3,7 @@ import type { MutableRefObject } from 'react'
 import { ActionType, DomPosition } from 'klinecharts'
 import type { Chart, Coordinate } from 'klinecharts'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
+import { marketStatusTitleChangedEvent } from '../mt5DataCenter/marketStatusTitleState'
 import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
 import { readCandleBarStyle, resolveCandleValueColor } from './chartStyleReaders'
 import { formatGlobalPrice } from './globalPricePrecision'
@@ -52,12 +53,16 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
 
   useEffect(() => {
     const syncVisible = () => setSettingVisible(readCurrentCandleCountdownActive(symbol))
+    const intervalId = window.setInterval(syncVisible, 1_000)
     window.addEventListener(settingsSymbolChangedEvent, syncVisible)
+    window.addEventListener(marketStatusTitleChangedEvent, syncVisible)
     window.addEventListener(realtimeEnabledChangedEvent, syncVisible)
     window.addEventListener('storage', syncVisible)
     syncVisible()
     return () => {
+      window.clearInterval(intervalId)
       window.removeEventListener(settingsSymbolChangedEvent, syncVisible)
+      window.removeEventListener(marketStatusTitleChangedEvent, syncVisible)
       window.removeEventListener(realtimeEnabledChangedEvent, syncVisible)
       window.removeEventListener('storage', syncVisible)
     }

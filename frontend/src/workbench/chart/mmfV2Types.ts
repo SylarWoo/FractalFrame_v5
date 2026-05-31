@@ -1,4 +1,4 @@
-import type { MaIndicatorSettings, MmfIndicatorSettings, VdoIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { MaIndicatorSettings, MmfIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, VmiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MmfV2IndicatorMarker } from '../../services/mt5/mmfV2IndicatorApi'
 
 export type MmfV2IndicatorRow = {
@@ -15,11 +15,15 @@ export type MmfV2IndicatorRow = {
   highConfirmPointDistance?: number
   resistanceMarker?: number
   resistanceMarkerPrice?: number
+  topDivergenceMarker?: number
+  topDivergenceMarkerPrice?: number
   lowConfirmPointMarker?: number
   lowConfirmPointMarkerPrice?: number
   lowConfirmPointDistance?: number
   supportMarker?: number
   supportMarkerPrice?: number
+  bottomDivergenceMarker?: number
+  bottomDivergenceMarkerPrice?: number
   expectedSupportMarker?: number
   expectedSupportMarkerPrice?: number
   expectedResistanceMarker?: number
@@ -44,23 +48,51 @@ export type MmfV2IndicatorRow = {
   resistanceDownBreakMarkerPrice?: number
   resistanceUpBreakMarker?: number
   resistanceUpBreakMarkerPrice?: number
+  trueCloseDownMarker?: number
+  trueCloseDownMarkerPrice?: number
+  trueCloseUpMarker?: number
+  trueCloseUpMarkerPrice?: number
+  bullMarketMarker?: number
+  bullMarketMarkerPrice?: number
+  bearMarketMarker?: number
+  bearMarketMarkerPrice?: number
+  overboughtMarker?: number
+  overboughtMarkerPrice?: number
+  overboughtCloseMarker?: number
+  overboughtCloseMarkerPrice?: number
+  oversoldMarker?: number
+  oversoldMarkerPrice?: number
+  oversoldCloseMarker?: number
+  oversoldCloseMarkerPrice?: number
+  tsiDeadCrossMarker?: number
+  tsiDeadCrossMarkerPrice?: number
+  tsiDeadCrossConfirmMarker?: number
+  tsiDeadCrossConfirmMarkerPrice?: number
+  tsiGoldenCrossMarker?: number
+  tsiGoldenCrossMarkerPrice?: number
+  tsiGoldenCrossConfirmMarker?: number
+  tsiGoldenCrossConfirmMarkerPrice?: number
 }
 
 export type MmfV2CalcContext = {
   maSettings?: Partial<MaIndicatorSettings>
+  morganRangeMode?: 'D1_M30' | 'H4_M5'
   period?: string
   settings?: Partial<MmfIndicatorSettings>
+  stochSettings?: Partial<StochIndicatorSettings>
   symbol?: string
+  tsiSettings?: Partial<TsiIndicatorSettings>
   vdoSettings?: Partial<VdoIndicatorSettings>
+  vmiSettings?: Partial<VmiIndicatorSettings>
 }
 
 export type MmfV2MarkerSpec = {
   color: (settings: MmfIndicatorSettings) => string
   distanceKey?: keyof Pick<MmfV2IndicatorRow, 'highConfirmPointDistance' | 'lowConfirmPointDistance'>
-  markerKey: keyof Pick<MmfV2IndicatorRow, 'highMarker' | 'deadCrossMarker' | 'lowMarker' | 'goldenCrossMarker' | 'highConfirmPointMarker' | 'lowConfirmPointMarker' | 'supportMarker' | 'resistanceMarker' | 'expectedSupportMarker' | 'expectedResistanceMarker' | 'trendDownReboundMarker' | 'trendUpPullbackMarker' | 'trendDownReturnMarker' | 'trendUpReturnMarker' | 'trendDownDivergenceMarker' | 'trendUpDivergenceMarker' | 'supportDownBreakMarker' | 'supportUpBreakMarker' | 'resistanceDownBreakMarker' | 'resistanceUpBreakMarker'>
+  markerKey: keyof Pick<MmfV2IndicatorRow, 'highMarker' | 'deadCrossMarker' | 'lowMarker' | 'goldenCrossMarker' | 'highConfirmPointMarker' | 'lowConfirmPointMarker' | 'supportMarker' | 'resistanceMarker' | 'topDivergenceMarker' | 'bottomDivergenceMarker' | 'expectedSupportMarker' | 'expectedResistanceMarker' | 'trendDownReboundMarker' | 'trendUpPullbackMarker' | 'trendDownReturnMarker' | 'trendUpReturnMarker' | 'trendDownDivergenceMarker' | 'trendUpDivergenceMarker' | 'supportDownBreakMarker' | 'supportUpBreakMarker' | 'resistanceDownBreakMarker' | 'resistanceUpBreakMarker' | 'trueCloseDownMarker' | 'trueCloseUpMarker' | 'bullMarketMarker' | 'bearMarketMarker' | 'overboughtMarker' | 'overboughtCloseMarker' | 'oversoldMarker' | 'oversoldCloseMarker' | 'tsiDeadCrossMarker' | 'tsiDeadCrossConfirmMarker' | 'tsiGoldenCrossMarker' | 'tsiGoldenCrossConfirmMarker'>
   markerType: MmfV2IndicatorMarker['type']
   offsetMultiplier: number
-  priceKey: keyof Pick<MmfV2IndicatorRow, 'highMarkerPrice' | 'deadCrossMarkerPrice' | 'lowMarkerPrice' | 'goldenCrossMarkerPrice' | 'highConfirmPointMarkerPrice' | 'lowConfirmPointMarkerPrice' | 'supportMarkerPrice' | 'resistanceMarkerPrice' | 'expectedSupportMarkerPrice' | 'expectedResistanceMarkerPrice' | 'trendDownReboundMarkerPrice' | 'trendUpPullbackMarkerPrice' | 'trendDownReturnMarkerPrice' | 'trendUpReturnMarkerPrice' | 'trendDownDivergenceMarkerPrice' | 'trendUpDivergenceMarkerPrice' | 'supportDownBreakMarkerPrice' | 'supportUpBreakMarkerPrice' | 'resistanceDownBreakMarkerPrice' | 'resistanceUpBreakMarkerPrice'>
+  priceKey: keyof Pick<MmfV2IndicatorRow, 'highMarkerPrice' | 'deadCrossMarkerPrice' | 'lowMarkerPrice' | 'goldenCrossMarkerPrice' | 'highConfirmPointMarkerPrice' | 'lowConfirmPointMarkerPrice' | 'supportMarkerPrice' | 'resistanceMarkerPrice' | 'topDivergenceMarkerPrice' | 'bottomDivergenceMarkerPrice' | 'expectedSupportMarkerPrice' | 'expectedResistanceMarkerPrice' | 'trendDownReboundMarkerPrice' | 'trendUpPullbackMarkerPrice' | 'trendDownReturnMarkerPrice' | 'trendUpReturnMarkerPrice' | 'trendDownDivergenceMarkerPrice' | 'trendUpDivergenceMarkerPrice' | 'supportDownBreakMarkerPrice' | 'supportUpBreakMarkerPrice' | 'resistanceDownBreakMarkerPrice' | 'resistanceUpBreakMarkerPrice' | 'trueCloseDownMarkerPrice' | 'trueCloseUpMarkerPrice' | 'bullMarketMarkerPrice' | 'bearMarketMarkerPrice' | 'overboughtMarkerPrice' | 'overboughtCloseMarkerPrice' | 'oversoldMarkerPrice' | 'oversoldCloseMarkerPrice' | 'tsiDeadCrossMarkerPrice' | 'tsiDeadCrossConfirmMarkerPrice' | 'tsiGoldenCrossMarkerPrice' | 'tsiGoldenCrossConfirmMarkerPrice'>
   show: (settings: MmfIndicatorSettings) => boolean
   size: (settings: MmfIndicatorSettings) => number
   symbol: (settings: MmfIndicatorSettings) => string

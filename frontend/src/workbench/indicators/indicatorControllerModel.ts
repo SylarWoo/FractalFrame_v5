@@ -13,6 +13,8 @@ import type {
   TsiIndicatorSettings,
   VdoIndicatorSettings,
   ViIndicatorSettings,
+  AoIndicatorSettings,
+  VmiIndicatorSettings,
   VolIndicatorSettings,
   VwapIndicatorSettings,
 } from '../rightDrawer/indicatorPersistence'
@@ -29,6 +31,8 @@ export type IndicatorSettings =
   | TsiIndicatorSettings
   | VdoIndicatorSettings
   | ViIndicatorSettings
+  | AoIndicatorSettings
+  | VmiIndicatorSettings
   | VolIndicatorSettings
   | VwapIndicatorSettings
 
@@ -46,10 +50,13 @@ export const indicatorControllerDefinitions = [
   { key: 'MACD', stateField: 'macd' },
   { key: 'DPO', stateField: 'dpo' },
   { key: 'VDO', stateField: 'vdo' },
+  { key: 'AO', stateField: 'ao' },
+  { key: 'VMI', stateField: 'vmi' },
   { key: 'TSI', stateField: 'tsi' },
   { key: 'VI', stateField: 'vi' },
   { key: 'MA', stateField: 'ma' },
-  { key: 'MR', stateField: 'mr' },
+  { key: 'MR-M5', stateField: 'mr' },
+  { key: 'MR-M30', stateField: 'mr' },
   { key: 'MMF', stateField: 'mmf' },
   { key: 'MMF_V2', stateField: 'mmf' },
   { key: 'VWAP', stateField: 'vwap' },

@@ -1,23 +1,29 @@
 import { IndicatorSeries, registerIndicator } from 'klinecharts'
 import type { IndicatorCreateTooltipDataSourceParams, KLineData } from 'klinecharts'
-import { defaultMmfIndicatorSettings, defaultVdoIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { defaultMaIndicatorSettings, defaultMmfIndicatorSettings, defaultStochIndicatorSettings, defaultTsiIndicatorSettings, defaultVdoIndicatorSettings, defaultVmiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MmfIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { calculateMmfV2IndicatorMarkers } from '../../services/mt5/mmfV2IndicatorApi'
 import { assignBarKey, getKLineTimeSeconds } from './barIdentity'
-import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { isFuturePlaceholder, stripFuturePlaceholders } from './chartFuturePlaceholders'
-import { calculateMmfV2MomentumStats, publishMmfV2MomentumStats } from './mmfV2MomentumStats'
 import { createEmptyMmfV2Rows, createMmfV2RowsFromMarkers as createRowsFromMarkers } from './mmfV2MarkerMapping'
 import { mmfV2MarkerSpecs } from './mmfV2MarkerSpecs'
 import type { MmfV2CalcContext, MmfV2IndicatorRow } from './mmfV2Types'
-import { calculateTradingViewVdoRows } from './tradingViewVdoIndicator'
 
 export type { MmfV2IndicatorRow } from './mmfV2Types'
 export { createMmfV2RowsFromMarkers } from './mmfV2MarkerMapping'
 
 let registered = false
-const mmfV2EngineVersion = 'mmf-v2-trend-divergence-v1'
+const mmfV2EngineVersion = 'mmf-v2-tsi-confirmed-cross-only-v2'
+const maxRemoteMmfV2CalculationRows = 8000
+const maxRemoteMmfV2IncrementalRows = 1600
 const remoteMmfV2RowsBySignature = new Map<string, Promise<MmfV2IndicatorRow[]> | MmfV2IndicatorRow[]>()
+let lastRemoteMmfV2Result: {
+  firstTimestamp?: unknown
+  lastTimestamp?: unknown
+  resultRows: MmfV2IndicatorRow[]
+  rowsLength: number
+  settingsSignature: string
+} | null = null
 const mmfV2InternalMaSettings = {
   length: 120,
   source: 'hlc3',
@@ -60,14 +66,20 @@ function normalizePositiveInteger(value: unknown, fallback: number, minimum = 1)
 
 function normalizeMmfV2Context(input: unknown) {
   const context = input && typeof input === 'object' ? input as MmfV2CalcContext : {}
+  const stochSettings = { ...defaultStochIndicatorSettings, ...(context.stochSettings ?? {}) }
   const vdoSettings = { ...defaultVdoIndicatorSettings, ...(context.vdoSettings ?? {}) }
+  const vmiSettings = { ...defaultVmiIndicatorSettings, ...(context.vmiSettings ?? {}) }
+  const tsiSettings = { ...defaultTsiIndicatorSettings, ...(context.tsiSettings ?? {}) }
   return {
-    maSettings: mmfV2InternalMaSettings,
+    maSettings: { ...defaultMaIndicatorSettings, ...mmfV2InternalMaSettings, ...(context.maSettings ?? {}) },
+    morganRangeMode: context.morganRangeMode === 'D1_M30' ? 'D1_M30' : 'H4_M5',
     period: normalizeStoreTimeframe(context.period),
     settings: normalizeMmfSettings(context.settings),
-    stochSettings: mmfV2InternalStochSettings,
+    stochSettings,
     symbol: typeof context.symbol === 'string' && context.symbol.trim() ? context.symbol.trim() : '',
     vdoSettings,
+    vmiSettings,
+    tsiSettings,
   }
 }
 
@@ -85,17 +97,11 @@ function mergeRealRowsWithPlaceholders(dataList: KLineData[], realRows: MmfV2Ind
   return rows
 }
 
-function createRemoteMmfV2Signature(realRows: KLineData[], context: ReturnType<typeof normalizeMmfV2Context>) {
-  const first = realRows[0]
-  const last = realRows[realRows.length - 1]
+function createRemoteMmfV2SettingsSignature(context: ReturnType<typeof normalizeMmfV2Context>) {
   return [
     mmfV2EngineVersion,
     context.symbol,
     context.period,
-    realRows.length,
-    first?.timestamp,
-    last?.timestamp,
-    last?.close,
     context.stochSettings.length,
     context.stochSettings.kSmoothing,
     context.stochSettings.dSmoothing,
@@ -103,108 +109,80 @@ function createRemoteMmfV2Signature(realRows: KLineData[], context: ReturnType<t
     context.settings.showLow,
     context.settings.showSupportLevel,
     context.settings.showResistanceLevel,
-    context.settings.showExpectedSupportLevel,
-    context.settings.showExpectedResistanceLevel,
+    context.settings.showTopDivergencePoint,
+    context.settings.showBottomDivergencePoint,
     context.settings.showTrendDownReboundPoint,
     context.settings.showTrendUpPullbackPoint,
-    context.settings.showTrendDownReturnPoint,
-    context.settings.showTrendUpReturnPoint,
-    context.settings.showTrendDownDivergencePointV2,
-    context.settings.showTrendUpDivergencePointV2,
-    context.settings.showDeadCross,
-    context.settings.showGoldenCross,
-    context.settings.showHighConfirmPoint,
-    context.settings.showLowConfirmPoint,
-    context.settings.showSupportDownBreakPoint,
-    context.settings.showSupportUpBreakPoint,
-    context.settings.showResistanceDownBreakPoint,
-    context.settings.showResistanceUpBreakPoint,
-    context.settings.highSymbol,
-    context.settings.highSize,
-    context.settings.highColor,
-    context.settings.deadCrossSymbol,
-    context.settings.deadCrossSize,
-    context.settings.deadCrossColor,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    context.settings.showBullMarketPoint,
+    context.settings.showBearMarketPoint,
+    context.settings.showOverboughtPoint,
+    context.settings.showOverboughtClosePoint,
+    context.settings.showOversoldPoint,
+    context.settings.showOversoldClosePoint,
+    context.settings.showTsiDeadCrossPoint,
+    context.settings.showTsiDeadCrossConfirmPoint,
+    context.settings.tsiDeadCrossConfirmDistance,
+    context.settings.showTsiGoldenCrossPoint,
+    context.settings.showTsiGoldenCrossConfirmPoint,
+    context.settings.tsiGoldenCrossConfirmDistance,
     context.settings.highAnchorLookbackBars,
     context.settings.highStochKAdvance,
     context.settings.highConfirmLookaheadBars,
-    context.settings.highConfirmPointSymbol,
-    context.settings.highConfirmPointSize,
-    context.settings.highConfirmPointColor,
-    context.settings.lowSymbol,
-    context.settings.lowSize,
-    context.settings.lowColor,
-    context.settings.goldenCrossSymbol,
-    context.settings.goldenCrossSize,
-    context.settings.goldenCrossColor,
     context.settings.lowAnchorLookbackBars,
     context.settings.lowStochKAdvance,
     context.settings.lowConfirmLookaheadBars,
-    context.settings.lowConfirmPointSymbol,
-    context.settings.lowConfirmPointSize,
-    context.settings.lowConfirmPointColor,
-    context.settings.supportSymbol,
-    context.settings.supportSize,
-    context.settings.supportColor,
-    context.settings.expectedSupportSymbol,
-    context.settings.expectedSupportSize,
-    context.settings.expectedSupportColor,
-    context.settings.trendDownReboundSymbol,
-    context.settings.trendDownReboundSize,
-    context.settings.trendDownReboundColor,
-    context.settings.trendDownReturnSymbol,
-    context.settings.trendDownReturnSize,
-    context.settings.trendDownReturnColor,
-    context.settings.trendDownReturnMorganRatio,
-    context.settings.trendDownDivergencePointSymbol,
-    context.settings.trendDownDivergencePointSize,
-    context.settings.trendDownDivergencePointColor,
-    context.settings.trendDownDivergenceMorganRatio,
-    context.settings.trendUpPullbackSymbol,
-    context.settings.trendUpPullbackSize,
-    context.settings.trendUpPullbackColor,
-    context.settings.trendUpReturnSymbol,
-    context.settings.trendUpReturnSize,
-    context.settings.trendUpReturnColor,
-    context.settings.trendUpReturnMorganRatio,
-    context.settings.trendUpDivergencePointSymbol,
-    context.settings.trendUpDivergencePointSize,
-    context.settings.trendUpDivergencePointColor,
-    context.settings.trendUpDivergenceMorganRatio,
-    context.settings.supportDownBreakSymbol,
-    context.settings.supportDownBreakSize,
-    context.settings.supportDownBreakColor,
-    context.settings.supportUpBreakSymbol,
-    context.settings.supportUpBreakSize,
-    context.settings.supportUpBreakColor,
-    context.settings.resistanceSymbol,
-    context.settings.resistanceSize,
-    context.settings.resistanceColor,
-    context.settings.expectedResistanceSymbol,
-    context.settings.expectedResistanceSize,
-    context.settings.expectedResistanceColor,
-    context.settings.resistanceDownBreakSymbol,
-    context.settings.resistanceDownBreakSize,
-    context.settings.resistanceDownBreakColor,
-    context.settings.resistanceUpBreakSymbol,
-    context.settings.resistanceUpBreakSize,
-    context.settings.resistanceUpBreakColor,
-    context.settings.vdoBreakoutMomentumDownLookback,
-    context.settings.vdoBreakoutMomentumUpLookback,
-    context.settings.vdoCloseMomentumDownLookback,
-    context.settings.vdoCloseMomentumUpLookback,
-    context.settings.vdoMomentumDownLookback,
-    context.settings.vdoMomentumUpLookback,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
     context.vdoSettings.length,
     context.vdoSettings.emaSmoothing,
     context.vdoSettings.zeroLineValue,
     context.vdoSettings.upLineValue,
     context.vdoSettings.upLine2Value,
+    context.vdoSettings.upLine3Value,
     context.vdoSettings.downLineValue,
     context.vdoSettings.downLine2Value,
+    context.vdoSettings.downLine3Value,
+    context.vdoSettings.vdoMaLength,
+    context.vdoSettings.vdoMa2Length,
+    context.vmiSettings.fastLength,
+    context.vmiSettings.slowLength,
+    context.tsiSettings.longLength,
+    context.tsiSettings.shortLength,
+    context.tsiSettings.signalLength,
     context.maSettings.length,
     context.maSettings.type,
     context.maSettings.source,
+    context.morganRangeMode,
+  ].join('|')
+}
+
+function createRemoteMmfV2Signature(realRows: KLineData[], context: ReturnType<typeof normalizeMmfV2Context>, sourceOffset: number, mode: 'full' | 'incremental') {
+  const first = realRows[0]
+  const last = realRows[realRows.length - 1]
+  return [
+    createRemoteMmfV2SettingsSignature(context),
+    mode,
+    sourceOffset,
+    realRows.length,
+    first?.timestamp,
+    last?.timestamp,
+    last?.close,
   ].join('|')
 }
 
@@ -230,9 +208,27 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
   const context = normalizeMmfV2Context(inputContext)
   const realRows = stripFuturePlaceholders(dataList)
   if (!context.symbol || realRows.length === 0) return mergeRealRowsWithPlaceholders(dataList, createEmptyMmfV2Rows(realRows.length))
-  const calculationRows = realRows.length > 1 ? realRows.slice(0, -1) : realRows
+  const allCalculationRows = realRows.length > 1 ? realRows.slice(0, -1) : realRows
+  const settingsSignature = createRemoteMmfV2SettingsSignature(context)
+  const previous = lastRemoteMmfV2Result
+  const canUseIncrementalTail = Boolean(
+    previous &&
+    previous.settingsSignature === settingsSignature &&
+    previous.rowsLength > 0 &&
+    allCalculationRows.length > previous.rowsLength &&
+    allCalculationRows[0]?.timestamp === previous.firstTimestamp &&
+    allCalculationRows[previous.rowsLength - 1]?.timestamp === previous.lastTimestamp,
+  )
+  const incrementalTailStart = canUseIncrementalTail
+    ? Math.max(0, allCalculationRows.length - maxRemoteMmfV2IncrementalRows)
+    : 0
+  const skippedRows = canUseIncrementalTail && previous && previous.resultRows.length >= incrementalTailStart
+    ? incrementalTailStart
+    : Math.max(0, allCalculationRows.length - maxRemoteMmfV2CalculationRows)
+  const calculationMode: 'full' | 'incremental' = skippedRows === incrementalTailStart && canUseIncrementalTail ? 'incremental' : 'full'
+  const calculationRows = allCalculationRows.slice(skippedRows)
 
-  const signature = createRemoteMmfV2Signature(calculationRows, context)
+  const signature = createRemoteMmfV2Signature(calculationRows, context, skippedRows, calculationMode)
   const cached = getCachedRemoteMmfV2Rows(signature)
   if (cached) return mergeRealRowsWithPlaceholders(dataList, await cached)
 
@@ -245,7 +241,7 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
       high: Number(row.high),
       low: Number(row.low),
       open: Number(row.open),
-      sourceIndex,
+      sourceIndex: skippedRows + sourceIndex,
       time,
       volume: Number(row.volume ?? 0),
     }
@@ -258,15 +254,16 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
   ))
 
   const request = calculateMmfV2IndicatorMarkers({
+    includeSignalFrame: false,
     rows,
     settings: {
       ma: {
-        length: mmfV2InternalMaSettings.length,
+        length: normalizePositiveInteger(context.maSettings.length, mmfV2InternalMaSettings.length),
         source: context.maSettings.source,
         type: context.maSettings.type,
       },
       morgan: {
-        anchor: 'h4',
+        anchor: context.morganRangeMode === 'D1_M30' ? 'd1' : 'h4',
         ratios: [-0.236, -0.118, 0.118, 0.236],
       },
       stoch: {
@@ -275,75 +272,98 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
         length: normalizePositiveInteger(context.stochSettings.length, mmfV2InternalStochSettings.length),
       },
       showHigh: context.settings.showHigh,
-      showExpectedResistanceLevel: context.settings.showExpectedResistanceLevel,
+      showExpectedResistanceLevel: false,
       showTrendDownReboundPoint: context.settings.showTrendDownReboundPoint,
-      showTrendDownReturnPoint: context.settings.showTrendDownReturnPoint,
-      trendDownReturnMorganRatio: context.settings.trendDownReturnMorganRatio,
-      showTrendDownDivergencePointV2: context.settings.showTrendDownDivergencePointV2,
-      trendDownDivergenceMorganRatio: context.settings.trendDownDivergenceMorganRatio,
+      showTrendDownReturnPoint: false,
+      trendDownReturnMorganRatio: 0,
+      showTrendDownDivergencePointV2: false,
+      trendDownDivergenceMorganRatio: 0,
       showResistanceLevel: context.settings.showResistanceLevel,
-      showResistanceDownBreakPoint: context.settings.showResistanceDownBreakPoint,
-      showResistanceUpBreakPoint: context.settings.showResistanceUpBreakPoint,
+      showTopDivergencePoint: context.settings.showTopDivergencePoint,
+      showResistanceDownBreakPoint: false,
+      showResistanceUpBreakPoint: false,
+      showTrueCloseDownPoint: false,
+      showBearMarketPoint: context.settings.showBearMarketPoint,
+      trueCloseDownVdoThreshold: 0,
       highAnchorLookbackBars: context.settings.highAnchorLookbackBars,
       highStochKAdvance: context.settings.highStochKAdvance,
       highConfirmLookaheadBars: context.settings.highConfirmLookaheadBars,
       showLow: context.settings.showLow,
-      showExpectedSupportLevel: context.settings.showExpectedSupportLevel,
+      showExpectedSupportLevel: false,
       showTrendUpPullbackPoint: context.settings.showTrendUpPullbackPoint,
-      showTrendUpReturnPoint: context.settings.showTrendUpReturnPoint,
-      trendUpReturnMorganRatio: context.settings.trendUpReturnMorganRatio,
-      showTrendUpDivergencePointV2: context.settings.showTrendUpDivergencePointV2,
-      trendUpDivergenceMorganRatio: context.settings.trendUpDivergenceMorganRatio,
+      showTrendUpReturnPoint: false,
+      trendUpReturnMorganRatio: 0,
+      showTrendUpDivergencePointV2: false,
+      trendUpDivergenceMorganRatio: 0,
       showSupportLevel: context.settings.showSupportLevel,
-      showSupportDownBreakPoint: context.settings.showSupportDownBreakPoint,
-      showSupportUpBreakPoint: context.settings.showSupportUpBreakPoint,
+      showBottomDivergencePoint: context.settings.showBottomDivergencePoint,
+      showSupportDownBreakPoint: false,
+      showSupportUpBreakPoint: false,
+      showTrueCloseUpPoint: false,
+      showBullMarketPoint: context.settings.showBullMarketPoint,
+      showOverboughtPoint: context.settings.showOverboughtPoint,
+      showOverboughtClosePoint: context.settings.showOverboughtClosePoint,
+      showOversoldPoint: context.settings.showOversoldPoint,
+      showOversoldClosePoint: context.settings.showOversoldClosePoint,
+      showTsiDeadCrossPoint: context.settings.showTsiDeadCrossPoint,
+      showTsiDeadCrossConfirmPoint: context.settings.showTsiDeadCrossConfirmPoint,
+      tsiDeadCrossConfirmDistance: Number(context.settings.tsiDeadCrossConfirmDistance ?? defaultMmfIndicatorSettings.tsiDeadCrossConfirmDistance),
+      showTsiGoldenCrossPoint: context.settings.showTsiGoldenCrossPoint,
+      showTsiGoldenCrossConfirmPoint: context.settings.showTsiGoldenCrossConfirmPoint,
+      tsiGoldenCrossConfirmDistance: Number(context.settings.tsiGoldenCrossConfirmDistance ?? defaultMmfIndicatorSettings.tsiGoldenCrossConfirmDistance),
+      trueCloseUpVdoThreshold: 0,
       lowAnchorLookbackBars: context.settings.lowAnchorLookbackBars,
       lowStochKAdvance: context.settings.lowStochKAdvance,
       lowConfirmLookaheadBars: context.settings.lowConfirmLookaheadBars,
       vdo: {
         downLine2Value: Number(context.vdoSettings.downLine2Value ?? defaultVdoIndicatorSettings.downLine2Value),
+        downLine3Value: Number(context.vdoSettings.downLine3Value ?? defaultVdoIndicatorSettings.downLine3Value),
         downLineValue: Number(context.vdoSettings.downLineValue ?? defaultVdoIndicatorSettings.downLineValue),
         emaSmoothing: normalizePositiveInteger(context.vdoSettings.emaSmoothing, defaultVdoIndicatorSettings.emaSmoothing, 0),
         length: normalizePositiveInteger(context.vdoSettings.length, defaultVdoIndicatorSettings.length),
         upLine2Value: Number(context.vdoSettings.upLine2Value ?? defaultVdoIndicatorSettings.upLine2Value),
+        upLine3Value: Number(context.vdoSettings.upLine3Value ?? defaultVdoIndicatorSettings.upLine3Value),
         upLineValue: Number(context.vdoSettings.upLineValue ?? defaultVdoIndicatorSettings.upLineValue),
+        vdoMaLength: normalizePositiveInteger(context.vdoSettings.vdoMaLength, defaultVdoIndicatorSettings.vdoMaLength),
+        vdoMa2Length: normalizePositiveInteger(context.vdoSettings.vdoMa2Length, defaultVdoIndicatorSettings.vdoMa2Length),
         zeroLineValue: Number(context.vdoSettings.zeroLineValue ?? defaultVdoIndicatorSettings.zeroLineValue),
+      },
+      vmi: {
+        fastLength: normalizePositiveInteger(context.vmiSettings.fastLength, defaultVmiIndicatorSettings.fastLength),
+        slowLength: normalizePositiveInteger(context.vmiSettings.slowLength, defaultVmiIndicatorSettings.slowLength),
+      },
+      tsi: {
+        longLength: normalizePositiveInteger(context.tsiSettings.longLength, defaultTsiIndicatorSettings.longLength),
+        shortLength: normalizePositiveInteger(context.tsiSettings.shortLength, defaultTsiIndicatorSettings.shortLength),
+        signalLength: normalizePositiveInteger(context.tsiSettings.signalLength, defaultTsiIndicatorSettings.signalLength),
       },
     },
     symbol: context.symbol,
     timeframe: context.period,
   })
     .then((payload) => {
-      const markers = payload.markers ?? []
-      const vdoRows = calculateTradingViewVdoRows(realRows, {
-        downLine2Value: Number(context.vdoSettings.downLine2Value ?? defaultVdoIndicatorSettings.downLine2Value),
-        downLineValue: Number(context.vdoSettings.downLineValue ?? defaultVdoIndicatorSettings.downLineValue),
-        emaSmoothing: normalizePositiveInteger(context.vdoSettings.emaSmoothing, defaultVdoIndicatorSettings.emaSmoothing, 0),
-        length: normalizePositiveInteger(context.vdoSettings.length, defaultVdoIndicatorSettings.length),
-        upLine2Value: Number(context.vdoSettings.upLine2Value ?? defaultVdoIndicatorSettings.upLine2Value),
-        upLineValue: Number(context.vdoSettings.upLineValue ?? defaultVdoIndicatorSettings.upLineValue),
-        zeroLineValue: Number(context.vdoSettings.zeroLineValue ?? defaultVdoIndicatorSettings.zeroLineValue),
-      })
-      publishMmfV2MomentumStats(calculateMmfV2MomentumStats({
-        breakoutDownLookback: Number(context.settings.vdoBreakoutMomentumDownLookback),
-        breakoutUpLookback: Number(context.settings.vdoBreakoutMomentumUpLookback),
-        closeDownLookback: Number(context.settings.vdoCloseMomentumDownLookback),
-        closeUpLookback: Number(context.settings.vdoCloseMomentumUpLookback),
-        downLookback: Number(context.settings.vdoMomentumDownLookback),
-        markers,
-        periodSeconds: resolvePeriodSeconds(context.period),
-        symbol: context.symbol,
-        timeframe: context.period,
-        upLookback: Number(context.settings.vdoMomentumUpLookback),
-        vdoRows,
-      }))
-      return createRowsFromMarkers(realRows, markers)
+      const calculatedRows = createRowsFromMarkers(calculationRows, payload.markers ?? [])
+      const prefixRows = calculationMode === 'incremental' && previous
+        ? previous.resultRows.slice(0, skippedRows)
+        : createEmptyMmfV2Rows(skippedRows)
+      return [
+        ...prefixRows,
+        ...calculatedRows,
+        ...createEmptyMmfV2Rows(realRows.length - skippedRows - calculatedRows.length),
+      ]
     })
     .catch(() => createEmptyMmfV2Rows(realRows.length))
 
   setCachedRemoteMmfV2Rows(signature, request)
   const calculated = await request
   setCachedRemoteMmfV2Rows(signature, calculated)
+  lastRemoteMmfV2Result = {
+    firstTimestamp: allCalculationRows[0]?.timestamp,
+    lastTimestamp: allCalculationRows[allCalculationRows.length - 1]?.timestamp,
+    resultRows: calculated,
+    rowsLength: allCalculationRows.length,
+    settingsSignature,
+  }
   return mergeRealRowsWithPlaceholders(dataList, calculated)
 }
 
@@ -392,20 +412,17 @@ function drawMmfV2Markers({
   for (let index = start; index <= end; index += 1) {
     const row = indicator.result[index]
     if (!row) continue
-    const directionCounts: Record<-1 | 1, number> = { [-1]: 0, 1: 0 }
-    const directionBaseOffsets: Record<-1 | 1, number> = { [-1]: 0, 1: 0 }
+    const stackByDirection: Record<-1 | 1, number> = { [-1]: 0, 1: 0 }
     visibleSpecs.forEach((spec) => {
       const marker = row[spec.markerKey]
       if (!Number.isFinite(marker)) return
       const size = spec.size(settings)
       const symbol = spec.symbol(settings)
-      const stackIndex = directionCounts[spec.yDirection]
-      directionCounts[spec.yDirection] += 1
-      if (directionBaseOffsets[spec.yDirection] === 0) {
-        directionBaseOffsets[spec.yDirection] = resolveMmfV2BaseMarkerOffset(size, spec.offsetMultiplier, symbol)
-      }
-      const offset = resolveMmfV2MarkerOffset(size, spec.yDirection, stackIndex, directionBaseOffsets[spec.yDirection])
       const x = xAxis.convertToPixel(index)
+      const stackIndex = stackByDirection[spec.yDirection]
+      stackByDirection[spec.yDirection] += 1
+      const baseOffset = resolveMmfV2BaseMarkerOffset(size, spec.offsetMultiplier, symbol)
+      const offset = resolveMmfV2MarkerOffset(size, spec.yDirection, stackIndex, baseOffset)
       const y = yAxis.convertToPixel(marker as number) + offset
 
       ctx.save()

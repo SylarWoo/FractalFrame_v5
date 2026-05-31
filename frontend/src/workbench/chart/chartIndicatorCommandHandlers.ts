@@ -5,7 +5,7 @@ import { mainVolumeIndicatorName } from './mainVolumeIndicator'
 import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
 import type { VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 
-export type IndicatorPaneCommandName = 'DPO' | 'MACD' | 'RSI' | 'SQZMOM' | 'Stoch' | 'TSI' | 'VDO' | 'VI'
+export type IndicatorPaneCommandName = 'DPO' | 'MACD' | 'RSI' | 'SQZMOM' | 'Stoch' | 'TSI' | 'VDO' | 'VI' | 'AO' | 'VMI'
 export type CandleIndicatorCommandName = 'MA' | 'VWAP'
 
 export type IndicatorPaneConfig = {
@@ -15,6 +15,7 @@ export type IndicatorPaneConfig = {
   observeHeight: () => void
   observerRef: MutableRefObject<ResizeObserver | null>
   paneId: string
+  resolveCalcParams?: (command: ChartIndicatorCommand) => unknown
   resetPaneIds?: string[]
   storageKey: string
 }
@@ -83,14 +84,15 @@ export function applyPaneIndicatorCommand({
     return
   }
 
+  const calcParams = [config.resolveCalcParams ? config.resolveCalcParams(command) : command.settings]
   if (chart.getIndicatorByPaneId(config.paneId, config.name)) {
-    chart.overrideIndicator({ name: config.name, calcParams: [command.settings] }, config.paneId, config.observeHeight)
+    chart.overrideIndicator({ name: config.name, calcParams }, config.paneId, config.observeHeight)
     resetIndicatorAxis(chart, config)
     return
   }
 
   chart.createIndicator(
-    { name: config.name, calcParams: [command.settings] },
+    { name: config.name, calcParams },
     false,
     { id: config.paneId, height: readStoredPaneHeight(config.storageKey), minHeight: config.minHeight },
     () => {

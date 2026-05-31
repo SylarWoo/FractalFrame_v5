@@ -1,4 +1,5 @@
 import { defaultMmfIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { activeMmfV2SignalIds } from './mmfV2IsolatedSignals'
 import { mmfV2SignalCatalog } from './mmfV2SignalCatalog'
 import type { MmfV2MarkerSpec } from './mmfV2Types'
 
@@ -7,7 +8,7 @@ export function clampMmfV2MarkerSize(value: unknown, fallback = defaultMmfIndica
   return Number.isFinite(size) ? Math.max(8, Math.min(size, 96)) : fallback
 }
 
-export const mmfV2MarkerSpecs: MmfV2MarkerSpec[] = mmfV2SignalCatalog.map((entry) => ({
+export const mmfV2MarkerSpecs: MmfV2MarkerSpec[] = mmfV2SignalCatalog.filter((entry) => activeMmfV2SignalIds.has(entry.id)).map((entry) => ({
   color: (settings) => String(settings[entry.colorKey] || entry.defaultStyle.color),
   distanceKey: entry.distanceKey,
   markerKey: entry.markerKey,

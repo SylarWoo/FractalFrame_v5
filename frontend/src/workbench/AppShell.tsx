@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { bottomPanels } from './bottomDrawer/bottomPanels'
 import { BottomWorkspace } from './bottomDrawer/BottomWorkspace'
@@ -72,12 +72,15 @@ const indicatorShortcutLabels: Record<string, string> = {
   MACD: '平滑异同移动平均线',
   DPO: '非趋势价格摆动指标',
   VDO: '漩涡差值指标',
+  AO: '动量震荡指标',
+  VMI: '漩涡动量指标',
   TSI: '真实强弱指数',
   VI: '漩涡指标',
   MA: '移动均线',
   MMF: 'MMF v1 - 摩根动量分形指标',
   MMF_V2: 'MMF v2 - 摩根动量分形指标',
-  MR: '摩根区间',
+  'MR-M5': '\u6469\u6839\u533a\u95f4_5\u5206\u949f',
+  'MR-M30': '\u6469\u6839\u533a\u95f4_30\u5206\u949f',
   VWAP: '成交量加权平均价',
   Vol: '成交量',
 }
@@ -118,7 +121,7 @@ function getInitialBottomDrawerHeight() {
 
 function getInitialRightDrawerActive(): RightDrawerId | null {
   const value = readString(storageKeys.rightWidgetActiveDrawer)
-  return value === 'drawings' || value === 'objectTree' || value === 'indicators' || value === 'mt5' || value === 'settings' ? value : null
+  return value === 'drawings' || value === 'objectTree' || value === 'indicators' || value === 'strategy' || value === 'mt5' || value === 'settings' ? value : null
 }
 
 function readSharedSelection() {
@@ -351,7 +354,7 @@ export function AppShell() {
   }
 
   function handleToggleIndicatorShortcutLoad(name: string) {
-    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF' && name !== 'MMF_V2' && name !== 'MR' && name !== 'RSI' && name !== 'SQZMOM' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'VWAP' && name !== 'Vol') return
+    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF' && name !== 'MMF_V2' && name !== 'MR-M5' && name !== 'MR-M30' && name !== 'RSI' && name !== 'SQZMOM' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'AO' && name !== 'VMI' && name !== 'VWAP' && name !== 'Vol') return
     if (loadedIndicatorKeys.includes(name)) {
       indicatorsController.unloadIndicator(name)
       return
@@ -415,10 +418,14 @@ export function AppShell() {
             displayName={chartDisplayName}
             indicatorCommand={indicatorsController.command}
             jump={chartJump}
+            maSettings={indicatorsController.settings.ma}
             mmfLoaded={loadedIndicatorKeys.includes('MMF')}
             mmfSettings={indicatorsController.settings.mmf}
+            morganRangeMode={loadedIndicatorKeys.includes('MR-M30') && chartTarget.period === 'M30' ? 'D1_M30' : 'H4_M5'}
             stochSettings={indicatorsController.settings.stoch}
+            tsiSettings={indicatorsController.settings.tsi}
             vdoSettings={indicatorsController.settings.vdo}
+            vmiSettings={indicatorsController.settings.vmi}
             onLoadStateChange={setChartLoadState}
             onMorganRangeSegmentChange={setMorganRangeSegment}
             page={chartTarget.page}

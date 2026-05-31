@@ -26,24 +26,33 @@ def send_cors_headers(handler: BaseHTTPRequestHandler) -> None:
 
 def send_json(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    handler.send_response(status)
-    send_cors_headers(handler)
-    handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
+    try:
+        handler.send_response(status)
+        send_cors_headers(handler)
+        handler.send_header("Content-Type", "application/json; charset=utf-8")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
+    except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+        return
 
 
 def start_sse(handler: BaseHTTPRequestHandler) -> None:
-    handler.send_response(200)
-    send_cors_headers(handler)
-    handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
-    handler.send_header("Connection", "keep-alive")
-    handler.end_headers()
+    try:
+        handler.send_response(200)
+        send_cors_headers(handler)
+        handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        handler.send_header("Connection", "keep-alive")
+        handler.end_headers()
+    except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+        return
 
 
 def write_sse_event(handler: BaseHTTPRequestHandler, event_id: int, event_name: str, data: dict[str, Any]) -> None:
-    handler.wfile.write(f"id: {event_id}\n".encode("utf-8"))
-    handler.wfile.write(f"event: {event_name}\n".encode("utf-8"))
-    handler.wfile.write(f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8"))
-    handler.wfile.flush()
+    try:
+        handler.wfile.write(f"id: {event_id}\n".encode("utf-8"))
+        handler.wfile.write(f"event: {event_name}\n".encode("utf-8"))
+        handler.wfile.write(f"data: {json.dumps(data, ensure_ascii=False)}\n\n".encode("utf-8"))
+        handler.wfile.flush()
+    except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+        return

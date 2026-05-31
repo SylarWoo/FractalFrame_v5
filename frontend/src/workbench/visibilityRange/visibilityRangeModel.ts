@@ -36,8 +36,8 @@ const mrVisibilityRangeRows: VisibilityRangeRow[] = [
 ]
 
 const mmfV2VisibilityRangeRows: VisibilityRangeRow[] = [
-  { enabled: true, from: 5, key: 'minutes', label: '\u5206\u949f', max: 59, min: 1, to: 5 },
-  { enabled: false, from: 1, key: 'hours', label: '\u5c0f\u65f6', max: 24, min: 1, to: 24 },
+  { enabled: true, from: 5, key: 'minutes', label: '\u5206\u949f', max: 59, min: 1, to: 30 },
+  { enabled: true, from: 1, key: 'hours', label: '\u5c0f\u65f6', max: 24, min: 1, to: 24 },
   { enabled: false, from: 1, key: 'days', label: '\u65e5', max: 366, min: 1, to: 366 },
   { enabled: false, from: 1, key: 'weeks', label: '\u5468', max: 52, min: 1, to: 52 },
   { enabled: false, from: 1, key: 'months', label: '\u4e2a\u6708', max: 12, min: 1, to: 12 },
@@ -75,15 +75,15 @@ export function visibilityRangeStorageKey(key?: string) {
 
 export function readVisibilityRangeRows(key?: string) {
   const resolvedKey = visibilityRangeStorageKey(key)
-  if (key === 'indicator:MMF_V2') return mmfV2VisibilityRangeRows
-  const fallbackRows = key === 'indicator:MR'
+  const fallbackRows = key === 'indicator:MR-M5' || key === 'indicator:MR-M30'
     ? mrVisibilityRangeRows
     : key === 'indicator:MMF_V2'
       ? mmfV2VisibilityRangeRows
       : defaultVisibilityRangeRows
-  return resolvedKey
+  const rows = resolvedKey
     ? normalizeVisibilityRangeRowsWithFallback(readJson(resolvedKey, null), fallbackRows)
     : normalizeVisibilityRangeRowsWithFallback(null, fallbackRows)
+  return key === 'indicator:MMF_V2' ? migrateMmfV2VisibilityRangeRows(rows) : rows
 }
 
 export function writeVisibilityRangeRows(key: string | undefined, rows: VisibilityRangeRow[]) {
@@ -154,6 +154,13 @@ export function restoreVisibilityRangeCurrentPeriod(key: string | undefined, per
     }
   })
   return writeVisibilityRangeRows(key, nextRows)
+}
+
+function migrateMmfV2VisibilityRangeRows(rows: VisibilityRangeRow[]) {
+  return rows.map((row) => {
+    if (row.key !== 'minutes' || !row.enabled || row.from > 5 || row.to !== 5) return row
+    return { ...row, to: 30 }
+  })
 }
 
 function positivePeriod(unit: VisibilityRangeUnitKey, value: number): VisibilityRangePeriod | null {

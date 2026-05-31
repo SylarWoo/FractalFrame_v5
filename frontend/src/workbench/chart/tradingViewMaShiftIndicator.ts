@@ -25,7 +25,7 @@ let registered = false
 
 function clampPeriod(value: unknown, fallback: number) {
   const next = Math.round(Number(value))
-  return Number.isFinite(next) ? Math.max(1, Math.min(500, next)) : fallback
+  return Number.isFinite(next) ? Math.max(1, Math.min(5000, next)) : fallback
 }
 
 function normalizeMaSettings(input?: Partial<MaIndicatorSettings> | number): MaIndicatorSettings {

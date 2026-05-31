@@ -1,5 +1,7 @@
 export type MmfMorganRatio = number
 
+const mmfTrueCloseSymbolOptions = new Set(['\u25b0', '\u25b1', '\u25ce', '\u25c9', '\u25ac'])
+
 export type MmfIndicatorSettings = {
   dpoValue: number
   highColor: string
@@ -124,6 +126,8 @@ export type MmfIndicatorSettings = {
   showExpectedResistanceLevel: boolean
   showResistanceDownBreakPoint: boolean
   showResistanceUpBreakPoint: boolean
+  showTrueCloseDownPoint: boolean
+  showTrueCloseUpPoint: boolean
   showBottomDivergencePoint: boolean
   showDownBreakConfirmPoint: boolean
   showHigh: boolean
@@ -185,6 +189,56 @@ export type MmfIndicatorSettings = {
   upBreakSymbol: string
   upBreakVdoLower: number
   upBreakVdoUpper: number
+  trueCloseDownColor: string
+  trueCloseDownSize: number
+  trueCloseDownSymbol: string
+  trueCloseDownVdoThreshold: number
+  trueCloseUpColor: string
+  trueCloseUpSize: number
+  trueCloseUpSymbol: string
+  trueCloseUpVdoThreshold: number
+  bullMarketColor: string
+  bullMarketSize: number
+  bullMarketSymbol: string
+  bearMarketColor: string
+  bearMarketSize: number
+  bearMarketSymbol: string
+  overboughtColor: string
+  overboughtSize: number
+  overboughtSymbol: string
+  overboughtCloseColor: string
+  overboughtCloseSize: number
+  overboughtCloseSymbol: string
+  oversoldColor: string
+  oversoldSize: number
+  oversoldSymbol: string
+  oversoldCloseColor: string
+  oversoldCloseSize: number
+  oversoldCloseSymbol: string
+  tsiDeadCrossColor: string
+  tsiDeadCrossSize: number
+  tsiDeadCrossSymbol: string
+  tsiDeadCrossConfirmColor: string
+  tsiDeadCrossConfirmSize: number
+  tsiDeadCrossConfirmSymbol: string
+  tsiGoldenCrossColor: string
+  tsiGoldenCrossSize: number
+  tsiGoldenCrossSymbol: string
+  tsiGoldenCrossConfirmColor: string
+  tsiGoldenCrossConfirmSize: number
+  tsiGoldenCrossConfirmSymbol: string
+  showBullMarketPoint: boolean
+  showBearMarketPoint: boolean
+  showOverboughtPoint: boolean
+  showOverboughtClosePoint: boolean
+  showOversoldPoint: boolean
+  showOversoldClosePoint: boolean
+  showTsiDeadCrossPoint: boolean
+  showTsiDeadCrossConfirmPoint: boolean
+  showTsiGoldenCrossPoint: boolean
+  showTsiGoldenCrossConfirmPoint: boolean
+  tsiDeadCrossConfirmDistance: number
+  tsiGoldenCrossConfirmDistance: number
   showVdoMomentumFloatingPanel: boolean
   vdoBreakoutMomentumDownLookback: number
   vdoBreakoutMomentumUpLookback: number
@@ -321,6 +375,8 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   showExpectedResistanceLevel: false,
   showResistanceDownBreakPoint: false,
   showResistanceUpBreakPoint: false,
+  showTrueCloseDownPoint: false,
+  showTrueCloseUpPoint: false,
   showBottomDivergencePoint: false,
   showDownBreakConfirmPoint: false,
   showHigh: true,
@@ -382,6 +438,56 @@ export const defaultMmfIndicatorSettings: MmfIndicatorSettings = {
   upBreakSymbol: '\u25c6',
   upBreakVdoLower: -0.05,
   upBreakVdoUpper: 0.05,
+  trueCloseDownColor: '#ef5350',
+  trueCloseDownSize: 24,
+  trueCloseDownSymbol: '\u25b1',
+  trueCloseDownVdoThreshold: -0.05,
+  trueCloseUpColor: '#26a69a',
+  trueCloseUpSize: 24,
+  trueCloseUpSymbol: '\u25b0',
+  trueCloseUpVdoThreshold: 0.05,
+  bullMarketColor: '#26a69a',
+  bullMarketSize: 24,
+  bullMarketSymbol: '\u25c6',
+  bearMarketColor: '#ef5350',
+  bearMarketSize: 24,
+  bearMarketSymbol: '\u25c6',
+  overboughtColor: '#ef5350',
+  overboughtSize: 24,
+  overboughtSymbol: '\u25c6',
+  overboughtCloseColor: '#ef5350',
+  overboughtCloseSize: 24,
+  overboughtCloseSymbol: '\u25c7',
+  oversoldColor: '#26a69a',
+  oversoldSize: 24,
+  oversoldSymbol: '\u25c6',
+  oversoldCloseColor: '#26a69a',
+  oversoldCloseSize: 24,
+  oversoldCloseSymbol: '\u25c7',
+  tsiDeadCrossColor: '#ef5350',
+  tsiDeadCrossSize: 16,
+  tsiDeadCrossSymbol: '\u2715',
+  tsiDeadCrossConfirmColor: '#ef5350',
+  tsiDeadCrossConfirmSize: 16,
+  tsiDeadCrossConfirmSymbol: '\u2193',
+  tsiGoldenCrossColor: '#26a69a',
+  tsiGoldenCrossSize: 16,
+  tsiGoldenCrossSymbol: '\u2715',
+  tsiGoldenCrossConfirmColor: '#26a69a',
+  tsiGoldenCrossConfirmSize: 16,
+  tsiGoldenCrossConfirmSymbol: '\u2191',
+  showBullMarketPoint: false,
+  showBearMarketPoint: false,
+  showOverboughtPoint: false,
+  showOverboughtClosePoint: false,
+  showOversoldPoint: false,
+  showOversoldClosePoint: false,
+  showTsiDeadCrossPoint: false,
+  showTsiDeadCrossConfirmPoint: false,
+  showTsiGoldenCrossPoint: false,
+  showTsiGoldenCrossConfirmPoint: false,
+  tsiDeadCrossConfirmDistance: 5,
+  tsiGoldenCrossConfirmDistance: 5,
   showVdoMomentumFloatingPanel: true,
   vdoBreakoutMomentumDownLookback: 0,
   vdoBreakoutMomentumUpLookback: 0,
@@ -496,7 +602,7 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const expectedResistanceColor = typeof merged.expectedResistanceColor === 'string' && merged.expectedResistanceColor.trim() ? merged.expectedResistanceColor : defaultMmfIndicatorSettings.expectedResistanceColor
   const expectedResistanceSymbol = typeof merged.expectedResistanceSymbol === 'string' && merged.expectedResistanceSymbol.trim() ? merged.expectedResistanceSymbol : defaultMmfIndicatorSettings.expectedResistanceSymbol
   const resistanceDownBreakColor = typeof merged.resistanceDownBreakColor === 'string' && merged.resistanceDownBreakColor.trim() ? merged.resistanceDownBreakColor : defaultMmfIndicatorSettings.resistanceDownBreakColor
-  const resistanceDownBreakSymbol = typeof merged.resistanceDownBreakSymbol === 'string' && merged.resistanceDownBreakSymbol.trim() ? merged.resistanceDownBreakSymbol : defaultMmfIndicatorSettings.resistanceDownBreakSymbol
+  const resistanceDownBreakSymbol = typeof merged.resistanceDownBreakSymbol === 'string' && merged.resistanceDownBreakSymbol.trim() && !mmfTrueCloseSymbolOptions.has(merged.resistanceDownBreakSymbol.trim()) ? merged.resistanceDownBreakSymbol : defaultMmfIndicatorSettings.resistanceDownBreakSymbol
   const resistanceUpBreakColor = typeof merged.resistanceUpBreakColor === 'string' && merged.resistanceUpBreakColor.trim() ? merged.resistanceUpBreakColor : defaultMmfIndicatorSettings.resistanceUpBreakColor
   const resistanceUpBreakSymbol = typeof merged.resistanceUpBreakSymbol === 'string' && merged.resistanceUpBreakSymbol.trim() ? merged.resistanceUpBreakSymbol : defaultMmfIndicatorSettings.resistanceUpBreakSymbol
   const supportColor = typeof merged.supportColor === 'string' && merged.supportColor.trim() ? merged.supportColor : defaultMmfIndicatorSettings.supportColor
@@ -506,11 +612,35 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const supportDownBreakColor = typeof merged.supportDownBreakColor === 'string' && merged.supportDownBreakColor.trim() ? merged.supportDownBreakColor : defaultMmfIndicatorSettings.supportDownBreakColor
   const supportDownBreakSymbol = typeof merged.supportDownBreakSymbol === 'string' && merged.supportDownBreakSymbol.trim() ? merged.supportDownBreakSymbol : defaultMmfIndicatorSettings.supportDownBreakSymbol
   const supportUpBreakColor = typeof merged.supportUpBreakColor === 'string' && merged.supportUpBreakColor.trim() ? merged.supportUpBreakColor : defaultMmfIndicatorSettings.supportUpBreakColor
-  const supportUpBreakSymbol = typeof merged.supportUpBreakSymbol === 'string' && merged.supportUpBreakSymbol.trim() ? merged.supportUpBreakSymbol : defaultMmfIndicatorSettings.supportUpBreakSymbol
+  const supportUpBreakSymbol = typeof merged.supportUpBreakSymbol === 'string' && merged.supportUpBreakSymbol.trim() && !mmfTrueCloseSymbolOptions.has(merged.supportUpBreakSymbol.trim()) ? merged.supportUpBreakSymbol : defaultMmfIndicatorSettings.supportUpBreakSymbol
   const trendDownColor = typeof merged.trendDownColor === 'string' && merged.trendDownColor.trim() ? merged.trendDownColor : defaultMmfIndicatorSettings.trendDownColor
   const trendDownSymbol = typeof merged.trendDownSymbol === 'string' && merged.trendDownSymbol.trim() ? merged.trendDownSymbol : defaultMmfIndicatorSettings.trendDownSymbol
   const trendUpColor = typeof merged.trendUpColor === 'string' && merged.trendUpColor.trim() ? merged.trendUpColor : defaultMmfIndicatorSettings.trendUpColor
   const trendUpSymbol = typeof merged.trendUpSymbol === 'string' && merged.trendUpSymbol.trim() ? merged.trendUpSymbol : defaultMmfIndicatorSettings.trendUpSymbol
+  const trueCloseDownColor = typeof merged.trueCloseDownColor === 'string' && merged.trueCloseDownColor.trim() ? merged.trueCloseDownColor : defaultMmfIndicatorSettings.trueCloseDownColor
+  const trueCloseDownSymbol = typeof merged.trueCloseDownSymbol === 'string' && mmfTrueCloseSymbolOptions.has(merged.trueCloseDownSymbol.trim()) ? merged.trueCloseDownSymbol.trim() : defaultMmfIndicatorSettings.trueCloseDownSymbol
+  const trueCloseUpColor = typeof merged.trueCloseUpColor === 'string' && merged.trueCloseUpColor.trim() ? merged.trueCloseUpColor : defaultMmfIndicatorSettings.trueCloseUpColor
+  const trueCloseUpSymbol = typeof merged.trueCloseUpSymbol === 'string' && mmfTrueCloseSymbolOptions.has(merged.trueCloseUpSymbol.trim()) ? merged.trueCloseUpSymbol.trim() : defaultMmfIndicatorSettings.trueCloseUpSymbol
+  const bullMarketColor = typeof merged.bullMarketColor === 'string' && merged.bullMarketColor.trim() ? merged.bullMarketColor : defaultMmfIndicatorSettings.bullMarketColor
+  const bullMarketSymbol = typeof merged.bullMarketSymbol === 'string' && merged.bullMarketSymbol.trim() ? merged.bullMarketSymbol : defaultMmfIndicatorSettings.bullMarketSymbol
+  const bearMarketColor = typeof merged.bearMarketColor === 'string' && merged.bearMarketColor.trim() ? merged.bearMarketColor : defaultMmfIndicatorSettings.bearMarketColor
+  const bearMarketSymbol = typeof merged.bearMarketSymbol === 'string' && merged.bearMarketSymbol.trim() ? merged.bearMarketSymbol : defaultMmfIndicatorSettings.bearMarketSymbol
+  const overboughtColor = typeof merged.overboughtColor === 'string' && merged.overboughtColor.trim() ? merged.overboughtColor : defaultMmfIndicatorSettings.overboughtColor
+  const overboughtSymbol = typeof merged.overboughtSymbol === 'string' && merged.overboughtSymbol.trim() ? merged.overboughtSymbol : defaultMmfIndicatorSettings.overboughtSymbol
+  const overboughtCloseColor = typeof merged.overboughtCloseColor === 'string' && merged.overboughtCloseColor.trim() ? merged.overboughtCloseColor : defaultMmfIndicatorSettings.overboughtCloseColor
+  const overboughtCloseSymbol = typeof merged.overboughtCloseSymbol === 'string' && merged.overboughtCloseSymbol.trim() ? merged.overboughtCloseSymbol : defaultMmfIndicatorSettings.overboughtCloseSymbol
+  const oversoldColor = typeof merged.oversoldColor === 'string' && merged.oversoldColor.trim() ? merged.oversoldColor : defaultMmfIndicatorSettings.oversoldColor
+  const oversoldSymbol = typeof merged.oversoldSymbol === 'string' && merged.oversoldSymbol.trim() ? merged.oversoldSymbol : defaultMmfIndicatorSettings.oversoldSymbol
+  const oversoldCloseColor = typeof merged.oversoldCloseColor === 'string' && merged.oversoldCloseColor.trim() ? merged.oversoldCloseColor : defaultMmfIndicatorSettings.oversoldCloseColor
+  const oversoldCloseSymbol = typeof merged.oversoldCloseSymbol === 'string' && merged.oversoldCloseSymbol.trim() ? merged.oversoldCloseSymbol : defaultMmfIndicatorSettings.oversoldCloseSymbol
+  const tsiDeadCrossColor = typeof merged.tsiDeadCrossColor === 'string' && merged.tsiDeadCrossColor.trim() ? merged.tsiDeadCrossColor : defaultMmfIndicatorSettings.tsiDeadCrossColor
+  const tsiDeadCrossSymbol = typeof merged.tsiDeadCrossSymbol === 'string' && merged.tsiDeadCrossSymbol.trim() ? merged.tsiDeadCrossSymbol : defaultMmfIndicatorSettings.tsiDeadCrossSymbol
+  const tsiDeadCrossConfirmColor = typeof merged.tsiDeadCrossConfirmColor === 'string' && merged.tsiDeadCrossConfirmColor.trim() ? merged.tsiDeadCrossConfirmColor : defaultMmfIndicatorSettings.tsiDeadCrossConfirmColor
+  const tsiDeadCrossConfirmSymbol = typeof merged.tsiDeadCrossConfirmSymbol === 'string' && merged.tsiDeadCrossConfirmSymbol.trim() ? merged.tsiDeadCrossConfirmSymbol : defaultMmfIndicatorSettings.tsiDeadCrossConfirmSymbol
+  const tsiGoldenCrossColor = typeof merged.tsiGoldenCrossColor === 'string' && merged.tsiGoldenCrossColor.trim() ? merged.tsiGoldenCrossColor : defaultMmfIndicatorSettings.tsiGoldenCrossColor
+  const tsiGoldenCrossSymbol = typeof merged.tsiGoldenCrossSymbol === 'string' && merged.tsiGoldenCrossSymbol.trim() ? merged.tsiGoldenCrossSymbol : defaultMmfIndicatorSettings.tsiGoldenCrossSymbol
+  const tsiGoldenCrossConfirmColor = typeof merged.tsiGoldenCrossConfirmColor === 'string' && merged.tsiGoldenCrossConfirmColor.trim() ? merged.tsiGoldenCrossConfirmColor : defaultMmfIndicatorSettings.tsiGoldenCrossConfirmColor
+  const tsiGoldenCrossConfirmSymbol = typeof merged.tsiGoldenCrossConfirmSymbol === 'string' && merged.tsiGoldenCrossConfirmSymbol.trim() ? merged.tsiGoldenCrossConfirmSymbol : defaultMmfIndicatorSettings.tsiGoldenCrossConfirmSymbol
   const highMorganRatio = Number(merged.highMorganRatio)
   const lowMorganRatio = Number(merged.lowMorganRatio)
   const lowPositionHighSize = Math.round(Number(merged.lowPositionHighSize))
@@ -547,6 +677,18 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const supportUpBreakSize = Math.round(Number(merged.supportUpBreakSize))
   const trendDownSize = Math.round(Number(merged.trendDownSize))
   const trendUpSize = Math.round(Number(merged.trendUpSize))
+  const trueCloseDownSize = Math.round(Number(merged.trueCloseDownSize))
+  const trueCloseUpSize = Math.round(Number(merged.trueCloseUpSize))
+  const bullMarketSize = Math.round(Number(merged.bullMarketSize))
+  const bearMarketSize = Math.round(Number(merged.bearMarketSize))
+  const overboughtSize = Math.round(Number(merged.overboughtSize))
+  const overboughtCloseSize = Math.round(Number(merged.overboughtCloseSize))
+  const oversoldSize = Math.round(Number(merged.oversoldSize))
+  const oversoldCloseSize = Math.round(Number(merged.oversoldCloseSize))
+  const tsiDeadCrossSize = Math.round(Number(merged.tsiDeadCrossSize))
+  const tsiDeadCrossConfirmSize = Math.round(Number(merged.tsiDeadCrossConfirmSize))
+  const tsiGoldenCrossSize = Math.round(Number(merged.tsiGoldenCrossSize))
+  const tsiGoldenCrossConfirmSize = Math.round(Number(merged.tsiGoldenCrossConfirmSize))
   const upBreakVdoLower = Number(merged.upBreakVdoLower)
   const upBreakVdoUpper = Number(merged.upBreakVdoUpper)
   const downBreakVdoLower = Number(merged.downBreakVdoLower)
@@ -571,6 +713,10 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
   const trendDownVdoUpper = Number(merged.trendDownVdoUpper)
   const trendUpVdoLower = Number(merged.trendUpVdoLower)
   const trendUpVdoUpper = Number(merged.trendUpVdoUpper)
+  const trueCloseDownVdoThreshold = Number(merged.trueCloseDownVdoThreshold)
+  const trueCloseUpVdoThreshold = Number(merged.trueCloseUpVdoThreshold)
+  const tsiDeadCrossConfirmDistance = Number(merged.tsiDeadCrossConfirmDistance)
+  const tsiGoldenCrossConfirmDistance = Number(merged.tsiGoldenCrossConfirmDistance)
   const vdoMomentumDownAverage = Number(merged.vdoMomentumDownAverage)
   const vdoBreakoutMomentumDownLookback = Math.round(Number(merged.vdoBreakoutMomentumDownLookback))
   const vdoBreakoutMomentumUpLookback = Math.round(Number(merged.vdoBreakoutMomentumUpLookback))
@@ -704,6 +850,8 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     showExpectedResistanceLevel: merged.showExpectedResistanceLevel === true,
     showResistanceDownBreakPoint: merged.showResistanceDownBreakPoint === true,
     showResistanceUpBreakPoint: merged.showResistanceUpBreakPoint === true,
+    showTrueCloseDownPoint: merged.showTrueCloseDownPoint === true,
+    showTrueCloseUpPoint: merged.showTrueCloseUpPoint === true,
     showBottomDivergencePoint: merged.showBottomDivergencePoint === true,
     showDownBreakConfirmPoint: merged.showDownBreakConfirmPoint === true,
     showHigh: merged.showHigh === true,
@@ -766,6 +914,56 @@ export function normalizeMmfSettings(input?: Partial<MmfIndicatorSettings>): Mmf
     upBreakSymbol,
     upBreakVdoLower: Number.isFinite(upBreakVdoLower) ? upBreakVdoLower : defaultMmfIndicatorSettings.upBreakVdoLower,
     upBreakVdoUpper: Number.isFinite(upBreakVdoUpper) ? upBreakVdoUpper : defaultMmfIndicatorSettings.upBreakVdoUpper,
+    trueCloseDownColor,
+    trueCloseDownSize: Number.isFinite(trueCloseDownSize) ? Math.max(8, Math.min(trueCloseDownSize, 96)) : defaultMmfIndicatorSettings.trueCloseDownSize,
+    trueCloseDownSymbol,
+    trueCloseDownVdoThreshold: Number.isFinite(trueCloseDownVdoThreshold) ? trueCloseDownVdoThreshold : defaultMmfIndicatorSettings.trueCloseDownVdoThreshold,
+    trueCloseUpColor,
+    trueCloseUpSize: Number.isFinite(trueCloseUpSize) ? Math.max(8, Math.min(trueCloseUpSize, 96)) : defaultMmfIndicatorSettings.trueCloseUpSize,
+    trueCloseUpSymbol,
+    trueCloseUpVdoThreshold: Number.isFinite(trueCloseUpVdoThreshold) ? trueCloseUpVdoThreshold : defaultMmfIndicatorSettings.trueCloseUpVdoThreshold,
+    bullMarketColor,
+    bullMarketSize: Number.isFinite(bullMarketSize) ? Math.max(8, Math.min(bullMarketSize, 96)) : defaultMmfIndicatorSettings.bullMarketSize,
+    bullMarketSymbol,
+    bearMarketColor,
+    bearMarketSize: Number.isFinite(bearMarketSize) ? Math.max(8, Math.min(bearMarketSize, 96)) : defaultMmfIndicatorSettings.bearMarketSize,
+    bearMarketSymbol,
+    overboughtColor,
+    overboughtSize: Number.isFinite(overboughtSize) ? Math.max(8, Math.min(overboughtSize, 96)) : defaultMmfIndicatorSettings.overboughtSize,
+    overboughtSymbol,
+    overboughtCloseColor,
+    overboughtCloseSize: Number.isFinite(overboughtCloseSize) ? Math.max(8, Math.min(overboughtCloseSize, 96)) : defaultMmfIndicatorSettings.overboughtCloseSize,
+    overboughtCloseSymbol,
+    oversoldColor,
+    oversoldSize: Number.isFinite(oversoldSize) ? Math.max(8, Math.min(oversoldSize, 96)) : defaultMmfIndicatorSettings.oversoldSize,
+    oversoldSymbol,
+    oversoldCloseColor,
+    oversoldCloseSize: Number.isFinite(oversoldCloseSize) ? Math.max(8, Math.min(oversoldCloseSize, 96)) : defaultMmfIndicatorSettings.oversoldCloseSize,
+    oversoldCloseSymbol,
+    tsiDeadCrossColor,
+    tsiDeadCrossSize: Number.isFinite(tsiDeadCrossSize) ? Math.max(8, Math.min(tsiDeadCrossSize, 96)) : defaultMmfIndicatorSettings.tsiDeadCrossSize,
+    tsiDeadCrossSymbol,
+    tsiDeadCrossConfirmColor,
+    tsiDeadCrossConfirmSize: Number.isFinite(tsiDeadCrossConfirmSize) ? Math.max(8, Math.min(tsiDeadCrossConfirmSize, 96)) : defaultMmfIndicatorSettings.tsiDeadCrossConfirmSize,
+    tsiDeadCrossConfirmSymbol,
+    tsiGoldenCrossColor,
+    tsiGoldenCrossSize: Number.isFinite(tsiGoldenCrossSize) ? Math.max(8, Math.min(tsiGoldenCrossSize, 96)) : defaultMmfIndicatorSettings.tsiGoldenCrossSize,
+    tsiGoldenCrossSymbol,
+    tsiGoldenCrossConfirmColor,
+    tsiGoldenCrossConfirmSize: Number.isFinite(tsiGoldenCrossConfirmSize) ? Math.max(8, Math.min(tsiGoldenCrossConfirmSize, 96)) : defaultMmfIndicatorSettings.tsiGoldenCrossConfirmSize,
+    tsiGoldenCrossConfirmSymbol,
+    showBullMarketPoint: merged.showBullMarketPoint === true,
+    showBearMarketPoint: merged.showBearMarketPoint === true,
+    showOverboughtPoint: merged.showOverboughtPoint === true,
+    showOverboughtClosePoint: merged.showOverboughtClosePoint === true,
+    showOversoldPoint: merged.showOversoldPoint === true,
+    showOversoldClosePoint: merged.showOversoldClosePoint === true,
+    showTsiDeadCrossPoint: merged.showTsiDeadCrossPoint === true,
+    showTsiDeadCrossConfirmPoint: merged.showTsiDeadCrossConfirmPoint === true,
+    showTsiGoldenCrossPoint: merged.showTsiGoldenCrossPoint === true,
+    showTsiGoldenCrossConfirmPoint: merged.showTsiGoldenCrossConfirmPoint === true,
+    tsiDeadCrossConfirmDistance: Number.isFinite(tsiDeadCrossConfirmDistance) ? Math.max(0, tsiDeadCrossConfirmDistance) : defaultMmfIndicatorSettings.tsiDeadCrossConfirmDistance,
+    tsiGoldenCrossConfirmDistance: Number.isFinite(tsiGoldenCrossConfirmDistance) ? Math.max(0, tsiGoldenCrossConfirmDistance) : defaultMmfIndicatorSettings.tsiGoldenCrossConfirmDistance,
     vdoBreakoutMomentumDownLookback: Number.isFinite(vdoBreakoutMomentumDownLookback) ? Math.max(0, Math.min(vdoBreakoutMomentumDownLookback, 100000)) : defaultMmfIndicatorSettings.vdoBreakoutMomentumDownLookback,
     vdoBreakoutMomentumUpLookback: Number.isFinite(vdoBreakoutMomentumUpLookback) ? Math.max(0, Math.min(vdoBreakoutMomentumUpLookback, 100000)) : defaultMmfIndicatorSettings.vdoBreakoutMomentumUpLookback,
     vdoCloseMomentumDownLookback: Number.isFinite(vdoCloseMomentumDownLookback) ? Math.max(0, Math.min(vdoCloseMomentumDownLookback, 100000)) : defaultMmfIndicatorSettings.vdoCloseMomentumDownLookback,

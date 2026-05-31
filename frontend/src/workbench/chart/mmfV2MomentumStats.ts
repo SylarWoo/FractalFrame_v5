@@ -1,4 +1,4 @@
-import type { MmfV2IndicatorMarker } from '../../services/mt5/mmfV2IndicatorApi'
+import type { MmfV2BackendMomentumSample, MmfV2IndicatorMarker } from '../../services/mt5/mmfV2IndicatorApi'
 import type { VdoIndicatorRow } from './tradingViewVdoIndicator'
 
 export const mmfV2MomentumStatsEvent = 'fractalframe:mmf-v2-momentum-stats'
@@ -6,9 +6,17 @@ export const mmfV2MomentumCrosshairEvent = 'fractalframe:mmf-v2-momentum-crossha
 
 export type MmfV2MomentumSample = {
   bars: number
+  direction?: string
+  endIndex?: number
   entryIndex: number
+  kind?: string
   markerIndex: number
   momentum: number
+  previousSignalId?: string | null
+  previousType?: string | null
+  signalId?: string
+  startIndex?: number
+  type?: string
 }
 
 export type MmfV2MomentumStatsSide = {
@@ -82,6 +90,42 @@ export function calculateMmfV2MomentumStats({
   }
 }
 
+export function calculateMmfV2MomentumStatsFromBackendSamples({
+  breakoutDownLookback,
+  breakoutUpLookback,
+  closeDownLookback,
+  closeUpLookback,
+  downLookback,
+  periodSeconds,
+  samples,
+  symbol,
+  timeframe,
+  upLookback,
+}: {
+  breakoutDownLookback: number
+  breakoutUpLookback: number
+  closeDownLookback: number
+  closeUpLookback: number
+  downLookback: number
+  periodSeconds: number
+  samples: MmfV2BackendMomentumSample[]
+  symbol: string
+  timeframe: string
+  upLookback: number
+}): MmfV2MomentumStats {
+  return {
+    breakoutDown: summarizeMomentumSamples(createBackendMomentumSamples(samples, 'breakout', 'down', breakoutDownLookback)),
+    breakoutUp: summarizeMomentumSamples(createBackendMomentumSamples(samples, 'breakout', 'up', breakoutUpLookback)),
+    closeDown: summarizeMomentumSamples(createBackendMomentumSamples(samples, 'close', 'down', closeDownLookback)),
+    closeUp: summarizeMomentumSamples(createBackendMomentumSamples(samples, 'close', 'up', closeUpLookback)),
+    down: summarizeMomentumSamples(createBackendMomentumSamples(samples, 'high_low', 'down', downLookback)),
+    periodSeconds,
+    symbol,
+    timeframe,
+    up: summarizeMomentumSamples(createBackendMomentumSamples(samples, 'high_low', 'up', upLookback)),
+  }
+}
+
 function normalizeSortedMarkers(markers: MmfV2IndicatorMarker[]) {
   return [...markers]
     .map((marker) => ({ marker, markerIndex: Math.round(Number(marker.markerIndex ?? marker.index)) }))
@@ -148,6 +192,53 @@ function createMomentumSamples(
       const momentum = Math.abs(direction * (endVdo - startVdo)) * 1_000_000 / seconds
       if (!Number.isFinite(momentum)) return null
       return { bars, entryIndex, markerIndex, momentum }
+    })
+    .filter((sample): sample is MmfV2MomentumSample => sample != null)
+    .sort((left, right) => right.entryIndex - left.entryIndex)
+    .slice(0, safeLookback)
+}
+
+function createBackendMomentumSamples(
+  samples: MmfV2BackendMomentumSample[],
+  kind: 'breakout' | 'close' | 'high_low',
+  direction: 'down' | 'up',
+  lookback: number,
+) {
+  const safeLookback = Math.max(0, Math.round(Number(lookback)))
+  if (safeLookback <= 0) return []
+
+  return samples
+    .filter((sample) => sample.kind === kind && sample.direction === direction && Number.isFinite(Number(sample.momentum)))
+    .map((sample): MmfV2MomentumSample | null => {
+      const startIndex = Math.round(Number(sample.startIndex))
+      const endIndex = Math.round(Number(sample.endIndex))
+      const entryIndex = Math.round(Number(sample.entryIndex ?? sample.endIndex))
+      const markerIndex = Math.round(Number(sample.markerIndex))
+      const momentum = Number(sample.momentum)
+      const bars = Number.isFinite(Number(sample.bars))
+        ? Math.round(Number(sample.bars))
+        : Math.max(0, endIndex - startIndex)
+      if (
+        !Number.isFinite(startIndex) ||
+        !Number.isFinite(endIndex) ||
+        !Number.isFinite(entryIndex) ||
+        !Number.isFinite(markerIndex) ||
+        !Number.isFinite(momentum)
+      ) return null
+      return {
+        bars,
+        direction: sample.direction,
+        endIndex,
+        entryIndex,
+        kind: sample.kind,
+        markerIndex,
+        momentum,
+        previousSignalId: sample.previousSignalId,
+        previousType: sample.previousType,
+        signalId: sample.signalId,
+        startIndex,
+        type: sample.type,
+      }
     })
     .filter((sample): sample is MmfV2MomentumSample => sample != null)
     .sort((left, right) => right.entryIndex - left.entryIndex)

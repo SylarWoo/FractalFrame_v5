@@ -90,6 +90,37 @@ describe('tradingViewMmfV2Indicator row mapping', () => {
     expect(mappedRows[7]?.lowConfirmPointDistance).toBe(6)
   })
 
+  it('maps TSI cross markers as independent MMF_V2 rows', () => {
+    const rows = [100, 101, 102, 103].map((close, index) => createRow(index, close))
+    const createTsiMarker = (type: MmfV2IndicatorMarker['type'], markerIndex: number, price: number): MmfV2IndicatorMarker => ({
+      confirmIndex: markerIndex,
+      entryIndex: markerIndex,
+      eventIndex: markerIndex,
+      index: markerIndex,
+      markerIndex,
+      pointDistance: 0,
+      price,
+      reason: [],
+      time: Number.NaN,
+      type,
+      windowEndIndex: markerIndex,
+      windowStartIndex: markerIndex,
+    })
+    const markers: MmfV2IndicatorMarker[] = [
+      createTsiMarker('MMF_V2_TSI_DEAD_CROSS', 1, 102),
+      createTsiMarker('MMF_V2_TSI_DEAD_CROSS_CONFIRM', 2, 103),
+      createTsiMarker('MMF_V2_TSI_GOLDEN_CROSS', 1, 99),
+      createTsiMarker('MMF_V2_TSI_GOLDEN_CROSS_CONFIRM', 3, 98),
+    ]
+
+    const mappedRows = createMmfV2RowsFromMarkers(rows, markers)
+
+    expect(mappedRows[1].tsiDeadCrossMarker).toBe(102)
+    expect(mappedRows[2].tsiDeadCrossConfirmMarker).toBe(103)
+    expect(mappedRows[1].tsiGoldenCrossMarker).toBe(99)
+    expect(mappedRows[3].tsiGoldenCrossConfirmMarker).toBe(98)
+  })
+
   it('falls back to backend indexes when bar keys and times are unavailable', () => {
     const rows = [100, 101, 105, 103, 99, 98].map((close, index) => createRow(index, close))
     const markers: MmfV2IndicatorMarker[] = [{
@@ -237,7 +268,7 @@ describe('tradingViewMmfV2Indicator row mapping', () => {
     expect(mappedRows[1]?.lowMarker).toBeUndefined()
   })
 
-  it('keeps stochastic high and low markers when support and resistance classifications are present', () => {
+  it('uses support and resistance classifications instead of duplicating stochastic high and low markers', () => {
     const rows = [100, 101].map((close, index) => createRow(index, close))
     const markers: MmfV2IndicatorMarker[] = [
       {
@@ -268,9 +299,9 @@ describe('tradingViewMmfV2Indicator row mapping', () => {
 
     const mappedRows = createMmfV2RowsFromMarkers(rows, markers)
 
-    expect(mappedRows[0]?.highMarker).toBe(rows[0].high)
+    expect(mappedRows[0]?.highMarker).toBeUndefined()
     expect(mappedRows[0]?.resistanceMarker).toBe(rows[0].high)
-    expect(mappedRows[1]?.lowMarker).toBe(rows[1].low)
+    expect(mappedRows[1]?.lowMarker).toBeUndefined()
     expect(mappedRows[1]?.supportMarker).toBe(rows[1].low)
   })
 
@@ -552,8 +583,12 @@ describe('tradingViewMmfV2Indicator row mapping', () => {
       expect.objectContaining({ triggerKeys: ['trendUpReturnMarker'], removeKeys: ['trendUpPullbackMarker', 'trendUpPullbackMarkerPrice', 'lowMarker', 'lowMarkerPrice'] }),
       expect.objectContaining({ triggerKeys: ['trendDownDivergenceMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice'] }),
       expect.objectContaining({ triggerKeys: ['trendUpDivergenceMarker'], removeKeys: ['highMarker', 'highMarkerPrice'] }),
-      expect.objectContaining({ triggerKeys: ['trendDownReboundMarker'], removeKeys: ['highMarker', 'highMarkerPrice'] }),
-      expect.objectContaining({ triggerKeys: ['trendUpPullbackMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['topDivergenceMarker'], removeKeys: ['highMarker', 'highMarkerPrice', 'resistanceMarker', 'resistanceMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['bottomDivergenceMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice', 'supportMarker', 'supportMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['trendDownReboundMarker'], removeKeys: ['highMarker', 'highMarkerPrice', 'resistanceMarker', 'resistanceMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['trendUpPullbackMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice', 'supportMarker', 'supportMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['resistanceMarker'], removeKeys: ['highMarker', 'highMarkerPrice'] }),
+      expect.objectContaining({ triggerKeys: ['supportMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice'] }),
       expect.objectContaining({ triggerKeys: ['expectedResistanceMarker'], removeKeys: ['highMarker', 'highMarkerPrice'] }),
       expect.objectContaining({ triggerKeys: ['expectedSupportMarker'], removeKeys: ['lowMarker', 'lowMarkerPrice'] }),
       expect.objectContaining({ triggerKeys: ['supportDownBreakMarker'], removeKeys: ['highMarker', 'highMarkerPrice', 'resistanceMarker', 'resistanceMarkerPrice'] }),

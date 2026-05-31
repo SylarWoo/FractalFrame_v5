@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import OrderedDict
-from threading import RLock
+from threading import RLock, Thread
+from time import time
 from typing import Any
+from uuid import uuid4
 
 _MMF_V2_RESULT_CACHE_MAX = 64
-_MMF_V2_SERVICE_CACHE_VERSION = "mmf_v2_service_cache_v8_trend_divergence"
+_MMF_V2_FEATURE_CACHE_MAX = 32
+_MMF_V2_JOB_MAX = 64
+_MMF_V2_SERVICE_CACHE_VERSION = "mmf_v2_service_cache_v46_tsi_confirmed_cross_only"
 _mmf_v2_result_cache: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
+_mmf_v2_feature_cache: OrderedDict[tuple[Any, ...], tuple[Any, dict[str, Any]]] = OrderedDict()
+_mmf_v2_jobs: OrderedDict[str, dict[str, Any]] = OrderedDict()
 _cache_lock = RLock()
 
 
@@ -35,6 +43,13 @@ def _safe_int(value: Any, default: int, minimum: int = 1, maximum: int = 500) ->
     except (TypeError, ValueError):
         return default
     return max(minimum, min(out, maximum))
+
+
+def _first_present(payload: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in payload:
+            return payload.get(key)
+    return None
 
 
 def _rows_cache_signature(rows: Any) -> tuple[Any, ...] | None:
@@ -86,6 +101,40 @@ def _set_mmf_v2_cached_result(key: tuple[Any, ...], value: dict[str, Any]) -> No
             _mmf_v2_result_cache.popitem(last=False)
 
 
+def _get_mmf_v2_cached_feature(key: tuple[Any, ...]) -> tuple[Any, dict[str, Any]] | None:
+    with _cache_lock:
+        cached = _mmf_v2_feature_cache.get(key)
+        if cached is None:
+            return None
+        _mmf_v2_feature_cache.move_to_end(key)
+        return cached
+
+
+def _set_mmf_v2_cached_feature(key: tuple[Any, ...], value: tuple[Any, dict[str, Any]]) -> None:
+    with _cache_lock:
+        _mmf_v2_feature_cache[key] = value
+        _mmf_v2_feature_cache.move_to_end(key)
+        while len(_mmf_v2_feature_cache) > _MMF_V2_FEATURE_CACHE_MAX:
+            _mmf_v2_feature_cache.popitem(last=False)
+
+
+def _set_mmf_v2_job(job_id: str, payload: dict[str, Any]) -> None:
+    with _cache_lock:
+        _mmf_v2_jobs[job_id] = payload
+        _mmf_v2_jobs.move_to_end(job_id)
+        while len(_mmf_v2_jobs) > _MMF_V2_JOB_MAX:
+            _mmf_v2_jobs.popitem(last=False)
+
+
+def get_mmf_v2_indicator_job(job_id: str) -> dict[str, Any]:
+    with _cache_lock:
+        job = _mmf_v2_jobs.get(job_id)
+        if job is None:
+            return {"ok": False, "status": "job_not_found", "error": "job_not_found", "jobId": job_id}
+        _mmf_v2_jobs.move_to_end(job_id)
+        return dict(job)
+
+
 def _mmf_v2_settings_cache_signature(settings: Any) -> tuple[Any, ...]:
     return (
         _MMF_V2_SERVICE_CACHE_VERSION,
@@ -93,22 +142,40 @@ def _mmf_v2_settings_cache_signature(settings: Any) -> tuple[Any, ...]:
         bool(getattr(settings, "show_low", True)),
         bool(getattr(settings, "show_support_level", False)),
         bool(getattr(settings, "show_resistance_level", False)),
-        bool(getattr(settings, "show_expected_support_level", False)),
-        bool(getattr(settings, "show_expected_resistance_level", False)),
+        bool(getattr(settings, "show_top_divergence_point", False)),
+        bool(getattr(settings, "show_bottom_divergence_point", False)),
         bool(getattr(settings, "show_trend_down_rebound_point", False)),
         bool(getattr(settings, "show_trend_up_pullback_point", False)),
-        bool(getattr(settings, "show_trend_down_return_point", False)),
-        bool(getattr(settings, "show_trend_up_return_point", False)),
-        float(getattr(settings, "trend_down_return_morgan_ratio", 0.25)),
-        float(getattr(settings, "trend_up_return_morgan_ratio", 0.25)),
-        bool(getattr(settings, "show_trend_down_divergence_point", False)),
-        bool(getattr(settings, "show_trend_up_divergence_point", False)),
-        float(getattr(settings, "trend_down_divergence_morgan_ratio", 0.375)),
-        float(getattr(settings, "trend_up_divergence_morgan_ratio", 0.375)),
-        bool(getattr(settings, "show_support_down_break_point", False)),
-        bool(getattr(settings, "show_support_up_break_point", False)),
-        bool(getattr(settings, "show_resistance_down_break_point", False)),
-        bool(getattr(settings, "show_resistance_up_break_point", False)),
+        False,
+        False,
+        False,
+        False,
+        0.0,
+        0.0,
+        False,
+        False,
+        0.0,
+        0.0,
+        False,
+        False,
+        False,
+        False,
+        False,
+        False,
+        bool(getattr(settings, "show_bull_market_point", False)),
+        bool(getattr(settings, "show_bear_market_point", False)),
+        bool(getattr(settings, "show_overbought_point", False)),
+        bool(getattr(settings, "show_overbought_close_point", False)),
+        bool(getattr(settings, "show_oversold_point", False)),
+        bool(getattr(settings, "show_oversold_close_point", False)),
+        bool(getattr(settings, "show_tsi_dead_cross_point", False)),
+        bool(getattr(settings, "show_tsi_dead_cross_confirm_point", False)),
+        float(getattr(settings, "tsi_dead_cross_confirm_distance", 5.0)),
+        bool(getattr(settings, "show_tsi_golden_cross_point", False)),
+        bool(getattr(settings, "show_tsi_golden_cross_confirm_point", False)),
+        float(getattr(settings, "tsi_golden_cross_confirm_distance", 5.0)),
+        0.0,
+        0.0,
         int(getattr(settings, "high_anchor_lookback_bars", 14)),
         int(getattr(settings, "low_anchor_lookback_bars", 14)),
         float(getattr(settings, "high_stoch_k_advance", 10)),
@@ -123,8 +190,17 @@ def _mmf_v2_settings_cache_signature(settings: Any) -> tuple[Any, ...]:
         float(getattr(settings.vdo, "zero_line_value", 0.0)),
         float(getattr(settings.vdo, "up_line_value", 0.1)),
         float(getattr(settings.vdo, "up_line2_value", 0.05)),
+        float(getattr(settings.vdo, "up_line3_value", 0.16)),
         float(getattr(settings.vdo, "down_line_value", -0.1)),
         float(getattr(settings.vdo, "down_line2_value", -0.05)),
+        float(getattr(settings.vdo, "down_line3_value", -0.16)),
+        int(getattr(settings.vdo, "vdo_base_ma_length", 14)),
+        int(getattr(settings.vdo, "vdo_base2_ma_length", 34)),
+        int(getattr(settings.vmi, "fast_length", 5)),
+        int(getattr(settings.vmi, "slow_length", 34)),
+        int(getattr(settings.tsi, "long_length", 25)),
+        int(getattr(settings.tsi, "short_length", 13)),
+        int(getattr(settings.tsi, "signal_length", 13)),
         int(getattr(settings.ma, "length", 120)),
         str(getattr(settings.ma, "ma_type", "sma")).lower(),
         str(getattr(settings.ma, "source", "hlc3")).lower(),
@@ -133,13 +209,63 @@ def _mmf_v2_settings_cache_signature(settings: Any) -> tuple[Any, ...]:
     )
 
 
+def _mmf_v2_feature_settings_payload(settings: Any) -> dict[str, Any]:
+    return {
+        "stoch": {
+            "length": int(getattr(settings.stoch, "length", 28)),
+            "kSmoothing": int(getattr(settings.stoch, "k_smoothing", 6)),
+            "dSmoothing": int(getattr(settings.stoch, "d_smoothing", 6)),
+        },
+        "vdo": {
+            "length": int(getattr(settings.vdo, "length", 14)),
+            "emaSmoothing": int(getattr(settings.vdo, "ema_smoothing", 0)),
+            "zeroLineValue": float(getattr(settings.vdo, "zero_line_value", 0.0)),
+            "upLineValue": float(getattr(settings.vdo, "up_line_value", 0.1)),
+            "upLine2Value": float(getattr(settings.vdo, "up_line2_value", 0.05)),
+            "upLine3Value": float(getattr(settings.vdo, "up_line3_value", 0.16)),
+            "downLineValue": float(getattr(settings.vdo, "down_line_value", -0.1)),
+            "downLine2Value": float(getattr(settings.vdo, "down_line2_value", -0.05)),
+            "downLine3Value": float(getattr(settings.vdo, "down_line3_value", -0.16)),
+            "vdoMaLength": int(getattr(settings.vdo, "vdo_base_ma_length", 14)),
+            "vdoMa2Length": int(getattr(settings.vdo, "vdo_base2_ma_length", 34)),
+        },
+        "vmi": {
+            "fastLength": int(getattr(settings.vmi, "fast_length", 5)),
+            "slowLength": int(getattr(settings.vmi, "slow_length", 34)),
+        },
+        "tsi": {
+            "longLength": int(getattr(settings.tsi, "long_length", 25)),
+            "shortLength": int(getattr(settings.tsi, "short_length", 13)),
+            "signalLength": int(getattr(settings.tsi, "signal_length", 13)),
+        },
+        "ma": {
+            "length": int(getattr(settings.ma, "length", 120)),
+            "type": str(getattr(settings.ma, "ma_type", "sma")).lower(),
+            "source": str(getattr(settings.ma, "source", "hlc3")).lower(),
+        },
+        "morgan": {
+            "anchor": str(getattr(settings.morgan, "anchor", "h4")).lower(),
+            "ratios": [float(value) for value in getattr(settings.morgan, "ratios", ())],
+        },
+    }
+
+
+def _feature_settings_hash(settings: Any) -> str:
+    payload = _mmf_v2_feature_settings_payload(settings)
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()[:16]
+
+
 def _normalize_mmf_v2_settings(payload: dict[str, Any]) -> "MmfV2Settings":
     from python.indicators.mmf_v2 import MmfV2Settings
-    from python.indicators.mmf_v2.models import MmfV2MaSettings, MmfV2MorganSettings, MmfV2StochSettings, MmfV2VdoSettings
+    from python.indicators.mmf_v2.models import MmfV2MaSettings, MmfV2MorganSettings, MmfV2StochSettings, MmfV2TsiSettings, MmfV2VdoSettings, MmfV2VmiSettings
 
     settings_payload = payload.get("settings") if isinstance(payload.get("settings"), dict) else {}
     stoch_payload = settings_payload.get("stoch") if isinstance(settings_payload.get("stoch"), dict) else {}
     vdo_payload = settings_payload.get("vdo") if isinstance(settings_payload.get("vdo"), dict) else {}
+    vmi_payload = settings_payload.get("vmi") if isinstance(settings_payload.get("vmi"), dict) else {}
+    tsi_payload = settings_payload.get("tsi") if isinstance(settings_payload.get("tsi"), dict) else {}
+    ma_payload = settings_payload.get("ma") if isinstance(settings_payload.get("ma"), dict) else {}
     morgan_payload = settings_payload.get("morgan") if isinstance(settings_payload.get("morgan"), dict) else {}
     ratios_payload = morgan_payload.get("ratios")
     ratios = tuple(_safe_float(value, 0) for value in ratios_payload) if isinstance(ratios_payload, list) else (-0.236, -0.118, 0.118, 0.236)
@@ -150,26 +276,44 @@ def _normalize_mmf_v2_settings(payload: dict[str, Any]) -> "MmfV2Settings":
         show_low=_safe_bool(settings_payload.get("showLow"), True),
         show_support_level=_safe_bool(settings_payload.get("showSupportLevel"), False),
         show_resistance_level=_safe_bool(settings_payload.get("showResistanceLevel"), False),
-        show_expected_support_level=_safe_bool(settings_payload.get("showExpectedSupportLevel"), False),
-        show_expected_resistance_level=_safe_bool(settings_payload.get("showExpectedResistanceLevel"), False),
+        show_top_divergence_point=_safe_bool(_first_present(settings_payload, "showTopDivergencePointV2", "showTopDivergencePoint"), False),
+        show_bottom_divergence_point=_safe_bool(_first_present(settings_payload, "showBottomDivergencePointV2", "showBottomDivergencePoint"), False),
+        show_expected_support_level=False,
+        show_expected_resistance_level=False,
         show_trend_down_rebound_point=_safe_bool(settings_payload.get("showTrendDownReboundPoint"), False),
         show_trend_up_pullback_point=_safe_bool(settings_payload.get("showTrendUpPullbackPoint"), False),
-        show_trend_down_return_point=_safe_bool(settings_payload.get("showTrendDownReturnPoint"), False),
-        show_trend_up_return_point=_safe_bool(settings_payload.get("showTrendUpReturnPoint"), False),
-        show_trend_down_divergence_point=_safe_bool(settings_payload.get("showTrendDownDivergencePointV2"), False),
-        show_trend_up_divergence_point=_safe_bool(settings_payload.get("showTrendUpDivergencePointV2"), False),
-        show_support_down_break_point=_safe_bool(settings_payload.get("showSupportDownBreakPoint"), False),
-        show_support_up_break_point=_safe_bool(settings_payload.get("showSupportUpBreakPoint"), False),
-        show_resistance_down_break_point=_safe_bool(settings_payload.get("showResistanceDownBreakPoint"), False),
-        show_resistance_up_break_point=_safe_bool(settings_payload.get("showResistanceUpBreakPoint"), False),
+        show_trend_down_return_point=False,
+        show_trend_up_return_point=False,
+        show_trend_down_divergence_point=False,
+        show_trend_up_divergence_point=False,
+        show_support_down_break_point=False,
+        show_support_up_break_point=False,
+        show_resistance_down_break_point=False,
+        show_resistance_up_break_point=False,
+        show_true_close_down_point=False,
+        show_true_close_up_point=False,
+        show_bull_market_point=_safe_bool(settings_payload.get("showBullMarketPoint"), False),
+        show_bear_market_point=_safe_bool(settings_payload.get("showBearMarketPoint"), False),
+        show_overbought_point=_safe_bool(settings_payload.get("showOverboughtPoint"), False),
+        show_overbought_close_point=_safe_bool(settings_payload.get("showOverboughtClosePoint"), False),
+        show_oversold_point=_safe_bool(settings_payload.get("showOversoldPoint"), False),
+        show_oversold_close_point=_safe_bool(settings_payload.get("showOversoldClosePoint"), False),
+        show_tsi_dead_cross_point=_safe_bool(settings_payload.get("showTsiDeadCrossPoint"), False),
+        show_tsi_dead_cross_confirm_point=_safe_bool(settings_payload.get("showTsiDeadCrossConfirmPoint"), False),
+        show_tsi_golden_cross_point=_safe_bool(settings_payload.get("showTsiGoldenCrossPoint"), False),
+        show_tsi_golden_cross_confirm_point=_safe_bool(settings_payload.get("showTsiGoldenCrossConfirmPoint"), False),
+        tsi_dead_cross_confirm_distance=max(0, _safe_float(settings_payload.get("tsiDeadCrossConfirmDistance"), 5.0)),
+        tsi_golden_cross_confirm_distance=max(0, _safe_float(settings_payload.get("tsiGoldenCrossConfirmDistance"), 5.0)),
+        true_close_down_vdo_threshold=0.0,
+        true_close_up_vdo_threshold=0.0,
         high_anchor_lookback_bars=_safe_int(settings_payload.get("highAnchorLookbackBars"), 14, minimum=1, maximum=200),
         low_anchor_lookback_bars=_safe_int(settings_payload.get("lowAnchorLookbackBars"), 14, minimum=1, maximum=200),
         high_stoch_k_advance=max(0, min(_safe_float(settings_payload.get("highStochKAdvance"), 10), 100)),
         low_stoch_k_advance=max(0, min(_safe_float(settings_payload.get("lowStochKAdvance"), 10), 100)),
-        trend_down_return_morgan_ratio=max(0, min(_safe_float(settings_payload.get("trendDownReturnMorganRatio"), 0.25), 1)),
-        trend_up_return_morgan_ratio=max(0, min(_safe_float(settings_payload.get("trendUpReturnMorganRatio"), 0.25), 1)),
-        trend_down_divergence_morgan_ratio=max(0, min(_safe_float(settings_payload.get("trendDownDivergenceMorganRatio"), 0.375), 1)),
-        trend_up_divergence_morgan_ratio=max(0, min(_safe_float(settings_payload.get("trendUpDivergenceMorganRatio"), 0.375), 1)),
+        trend_down_return_morgan_ratio=0.0,
+        trend_up_return_morgan_ratio=0.0,
+        trend_down_divergence_morgan_ratio=0.0,
+        trend_up_divergence_morgan_ratio=0.0,
         high_confirm_lookahead_bars=_safe_int(settings_payload.get("highConfirmLookaheadBars"), 7, minimum=1, maximum=200),
         low_confirm_lookahead_bars=_safe_int(settings_payload.get("lowConfirmLookaheadBars"), 7, minimum=1, maximum=200),
         stoch=MmfV2StochSettings(
@@ -183,10 +327,27 @@ def _normalize_mmf_v2_settings(payload: dict[str, Any]) -> "MmfV2Settings":
             zero_line_value=_safe_float(vdo_payload.get("zeroLineValue") or vdo_payload.get("zero_line_value"), 0),
             up_line_value=_safe_float(vdo_payload.get("upLineValue") or vdo_payload.get("up_line_value"), 0.1),
             up_line2_value=_safe_float(vdo_payload.get("upLine2Value") or vdo_payload.get("up_line2_value"), 0.05),
+            up_line3_value=_safe_float(vdo_payload.get("upLine3Value") or vdo_payload.get("up_line3_value"), 0.16),
             down_line_value=_safe_float(vdo_payload.get("downLineValue") or vdo_payload.get("down_line_value"), -0.1),
             down_line2_value=_safe_float(vdo_payload.get("downLine2Value") or vdo_payload.get("down_line2_value"), -0.05),
+            down_line3_value=_safe_float(vdo_payload.get("downLine3Value") or vdo_payload.get("down_line3_value"), -0.16),
+            vdo_base_ma_length=_safe_int(vdo_payload.get("vdoMaLength") or vdo_payload.get("vdo_base_ma_length"), 14, minimum=1, maximum=500),
+            vdo_base2_ma_length=_safe_int(vdo_payload.get("vdoMa2Length") or vdo_payload.get("vdo_base2_ma_length"), 34, minimum=1, maximum=500),
         ),
-        ma=MmfV2MaSettings(),
+        vmi=MmfV2VmiSettings(
+            fast_length=_safe_int(vmi_payload.get("fastLength") or vmi_payload.get("fast_length"), 5, minimum=1, maximum=500),
+            slow_length=_safe_int(vmi_payload.get("slowLength") or vmi_payload.get("slow_length"), 34, minimum=1, maximum=500),
+        ),
+        tsi=MmfV2TsiSettings(
+            long_length=_safe_int(tsi_payload.get("longLength") or tsi_payload.get("long_length"), 25, minimum=1, maximum=500),
+            short_length=_safe_int(tsi_payload.get("shortLength") or tsi_payload.get("short_length"), 13, minimum=1, maximum=500),
+            signal_length=_safe_int(tsi_payload.get("signalLength") or tsi_payload.get("signal_length"), 13, minimum=1, maximum=500),
+        ),
+        ma=MmfV2MaSettings(
+            length=_safe_int(ma_payload.get("length"), 120, minimum=1, maximum=5000),
+            ma_type=str(ma_payload.get("type") or ma_payload.get("maType") or ma_payload.get("ma_type") or "sma"),
+            source=str(ma_payload.get("source") or "hlc3"),
+        ),
         morgan=MmfV2MorganSettings(
             anchor=str(morgan_payload.get("anchor") or "h4"),
             ratios=ratios,
@@ -195,13 +356,15 @@ def _normalize_mmf_v2_settings(payload: dict[str, Any]) -> "MmfV2Settings":
 
 
 def calculate_mmf_v2_indicator_from_rows(payload: dict[str, Any]) -> dict[str, Any]:
-    from python.indicators.mmf_v2 import calculate_mmf_v2_markers
-
     rows = payload.get("rows")
     if not isinstance(rows, list):
         return {"ok": False, "status": "bad_request", "error": "rows_required", "markers": [], "markersCount": 0}
 
     settings = _normalize_mmf_v2_settings(payload)
+    return _calculate_mmf_v2_indicator_from_rows_with_settings(payload, rows, settings)
+
+
+def _calculate_mmf_v2_indicator_from_rows_with_settings(payload: dict[str, Any], rows: list[Any], settings: Any) -> dict[str, Any]:
     cache_key = (
         "provided_rows_v2",
         payload.get("symbol"),
@@ -209,14 +372,11 @@ def calculate_mmf_v2_indicator_from_rows(payload: dict[str, Any]) -> dict[str, A
         _rows_cache_signature(rows),
         _mmf_v2_settings_cache_signature(settings),
         bool(_safe_bool(payload.get("includeDebug"), False)),
+        bool(_safe_bool(payload.get("includeSignalFrame"), True)),
     )
     cached_result = _get_mmf_v2_cached_result(cache_key)
     cache_hit = cached_result is not None
-    result = cached_result if cached_result is not None else calculate_mmf_v2_markers(
-        rows,
-        settings,
-        include_debug=_safe_bool(payload.get("includeDebug"), False),
-    )
+    result = cached_result if cached_result is not None else _build_mmf_v2_compute_result(payload, rows, settings)
     if cached_result is None:
         _set_mmf_v2_cached_result(cache_key, result)
 
@@ -231,5 +391,104 @@ def calculate_mmf_v2_indicator_from_rows(payload: dict[str, Any]) -> dict[str, A
             "engine": result.get("engine"),
             "cacheHit": cache_hit,
             "source": "provided_rows",
+            "featureSettings": _mmf_v2_feature_settings_payload(settings),
+            "featureSettingsHash": _feature_settings_hash(settings),
+            "computeMode": "feature_signal_cache",
         },
     }
+
+
+def _build_mmf_v2_compute_result(payload: dict[str, Any], rows: list[Any], settings: Any) -> dict[str, Any]:
+    from python.indicators.mmf_v2 import calculate_mmf_v2_markers_from_features
+    from python.indicators.mmf_v2.feature_frame import build_mmf_v2_feature_frame
+    from python.indicators.mmf_v2.features import normalize_ohlcv_frame
+    from python.market_data import create_bar_alignment_debug
+
+    row_signature = _rows_cache_signature(rows)
+    feature_key = (
+        "feature_frame_v1",
+        payload.get("symbol"),
+        payload.get("timeframe"),
+        row_signature,
+        _feature_settings_hash(settings),
+    )
+    cached_feature = _get_mmf_v2_cached_feature(feature_key)
+    feature_cache_hit = cached_feature is not None
+    if cached_feature is None:
+        frame = normalize_ohlcv_frame(rows)
+        alignment_debug = create_bar_alignment_debug(rows, frame)
+        feature_frame = build_mmf_v2_feature_frame(frame, settings).frame
+        cached_feature = (feature_frame, alignment_debug)
+        _set_mmf_v2_cached_feature(feature_key, cached_feature)
+
+    features, alignment_debug = cached_feature
+    result = calculate_mmf_v2_markers_from_features(
+        features,
+        settings,
+        alignment_debug=alignment_debug,
+        include_debug=_safe_bool(payload.get("includeDebug"), False),
+        include_signal_frame=_safe_bool(payload.get("includeSignalFrame"), True),
+    )
+    metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+    return {
+        **result,
+        "metadata": {
+            **metadata,
+            "featureCacheHit": feature_cache_hit,
+            "featureCacheKey": hashlib.sha256(json.dumps(feature_key, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:16],
+        },
+    }
+
+
+def start_mmf_v2_indicator_job(payload: dict[str, Any]) -> dict[str, Any]:
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        return {"ok": False, "status": "bad_request", "error": "rows_required"}
+
+    settings = _normalize_mmf_v2_settings(payload)
+    cache_key = (
+        "provided_rows_v2",
+        payload.get("symbol"),
+        payload.get("timeframe"),
+        _rows_cache_signature(rows),
+        _mmf_v2_settings_cache_signature(settings),
+        bool(_safe_bool(payload.get("includeDebug"), False)),
+        bool(_safe_bool(payload.get("includeSignalFrame"), True)),
+    )
+    cached_result = _get_mmf_v2_cached_result(cache_key)
+    if cached_result is not None:
+        return {
+            "ok": True,
+            "status": "ready",
+            "jobId": None,
+            "result": {
+                **cached_result,
+                "status": "ok",
+                "symbol": payload.get("symbol"),
+                "timeframe": payload.get("timeframe"),
+                "mode": "provided_rows",
+                "metadata": {
+                    **(cached_result.get("metadata") if isinstance(cached_result.get("metadata"), dict) else {}),
+                    "indicator": "MMF_V2",
+                    "cacheHit": True,
+                    "source": "async_cache",
+                    "featureSettings": _mmf_v2_feature_settings_payload(settings),
+                    "featureSettingsHash": _feature_settings_hash(settings),
+                    "computeMode": "async_feature_signal_cache",
+                },
+            },
+        }
+
+    job_id = uuid4().hex
+    _set_mmf_v2_job(job_id, {"ok": True, "status": "pending", "jobId": job_id, "createdAt": time()})
+
+    def run_job() -> None:
+        _set_mmf_v2_job(job_id, {"ok": True, "status": "running", "jobId": job_id, "createdAt": time()})
+        try:
+            result = _calculate_mmf_v2_indicator_from_rows_with_settings(payload, rows, settings)
+            _set_mmf_v2_job(job_id, {"ok": True, "status": "ready", "jobId": job_id, "result": result, "updatedAt": time()})
+        except Exception as exc:
+            _set_mmf_v2_job(job_id, {"ok": False, "status": "failed", "jobId": job_id, "error": str(exc), "updatedAt": time()})
+
+    Thread(target=run_job, daemon=True).start()
+    return {"ok": True, "status": "pending", "jobId": job_id}

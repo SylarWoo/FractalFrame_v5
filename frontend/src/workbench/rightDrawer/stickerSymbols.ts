@@ -33,3 +33,11 @@ export const mmfTradeArrowSymbolOptions = [
   '\u2190',
   '\u2192',
 ] as const
+
+export const mmfTrueCloseSymbolOptions = [
+  '\u25b0',
+  '\u25b1',
+  '\u25ce',
+  '\u25c9',
+  '\u25ac',
+] as const

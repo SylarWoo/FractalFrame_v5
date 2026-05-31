@@ -190,7 +190,7 @@ function drawSqueezeMarks(
   const start = Math.max(0, Math.floor(visibleRange.from) - 1)
   const end = Math.min(rows.length - 1, Math.ceil(visibleRange.to) + 1)
   const y = yAxis.convertToPixel(0)
-  const radius = 6
+  const radius = 4
   ctx.save()
   for (let index = start; index <= end; index += 1) {
     const color = squeezeColor(rows[index] ?? {}, settings)

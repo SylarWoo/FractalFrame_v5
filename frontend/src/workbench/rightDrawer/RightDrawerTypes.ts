@@ -3,7 +3,7 @@ import type { MorganRangeSegment } from '../chart/morganRangeModel'
 import type { IndicatorsController } from '../indicators/useIndicatorsController'
 import type { SupportedChartIndicator } from './indicatorDefinitions'
 
-export type RightDrawerId = 'drawings' | 'objectTree' | 'indicators' | 'mt5' | 'settings'
+export type RightDrawerId = 'drawings' | 'objectTree' | 'indicators' | 'strategy' | 'mt5' | 'settings'
 
 export type SupportedChartIndicatorName = SupportedChartIndicator
 

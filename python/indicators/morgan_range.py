@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 
 H4_MORGAN_SECONDS = 4 * 60 * 60
+D1_MORGAN_SECONDS = 24 * 60 * 60
 XAU_SESSION_ANCHOR_SECONDS = 22 * 60 * 60
 MORGAN_LEVEL_RATIOS = (-1, -0.786, -0.618, -0.5, -0.382, -0.236, -0.177, -0.118, -0.059, 0, 0.059, 0.118, 0.177, 0.236, 0.382, 0.5, 0.618, 0.786, 1)
 MORGAN_TRUE_RANGE_RATIO = 0.236 - (-0.236)
@@ -15,7 +16,15 @@ def h4_morgan_bucket_key(timestamp_seconds: int) -> int:
     return floor((timestamp_seconds - XAU_SESSION_ANCHOR_SECONDS) / H4_MORGAN_SECONDS)
 
 
-def calculate_morgan_level_model(frame: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+def d1_morgan_bucket_key(timestamp_seconds: int) -> int:
+    return floor((timestamp_seconds - XAU_SESSION_ANCHOR_SECONDS) / D1_MORGAN_SECONDS)
+
+
+def resolve_morgan_bucket_key(timestamp_seconds: int, anchor: str = "h4") -> int:
+    return d1_morgan_bucket_key(timestamp_seconds) if _normalize_anchor(anchor) == "d1" else h4_morgan_bucket_key(timestamp_seconds)
+
+
+def calculate_morgan_level_model(frame: pd.DataFrame, anchor: str = "h4") -> tuple[pd.Series, pd.Series]:
     if frame.empty:
         return pd.Series(dtype="object"), pd.Series(dtype="float64")
     buckets: list[dict[str, Any]] = []
@@ -26,8 +35,9 @@ def calculate_morgan_level_model(frame: pd.DataFrame) -> tuple[pd.Series, pd.Ser
     highs = frame["high"].to_numpy()
     lows = frame["low"].to_numpy()
     closes = frame["close"].to_numpy()
+    active_anchor = _normalize_anchor(anchor)
     for index in range(len(frame)):
-        key = h4_morgan_bucket_key(int(times[index]))
+        key = resolve_morgan_bucket_key(int(times[index]), active_anchor)
         if active_key != key or active is None:
             active = {
                 "key": key,
@@ -101,3 +111,10 @@ def resolve_morgan_center_from_model(level_model: pd.Series) -> pd.Series:
 def calculate_morgan_levels(frame: pd.DataFrame, ratio: float) -> tuple[pd.Series, pd.Series]:
     level_model, segment_indexes = calculate_morgan_level_model(frame)
     return resolve_morgan_levels_from_model(level_model, ratio), segment_indexes
+
+
+def _normalize_anchor(anchor: str) -> str:
+    value = str(anchor or "h4").strip().lower().replace("-", "_")
+    if value in {"d1", "d1_m30", "mr_m30", "daily", "day"}:
+        return "d1"
+    return "h4"

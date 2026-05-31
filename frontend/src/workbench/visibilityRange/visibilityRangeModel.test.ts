@@ -79,6 +79,32 @@ describe('visibilityRangeModel', () => {
     expect(isStoredVisibilityRangePeriodVisible(key, 'M5')).toBe(false)
   })
 
+  it('persists MMF_V2 custom visibility ranges instead of forcing the default M5-only range', () => {
+    const key = 'indicator:MMF_V2'
+    const rows = readVisibilityRangeRows(key).map((row) => (
+      row.key === 'minutes'
+        ? { ...row, enabled: true, from: 5, to: 15 }
+        : row
+    ))
+
+    expect(isStoredVisibilityRangePeriodVisible(key, 'M30')).toBe(true)
+    expect(writeVisibilityRangeRows(key, rows)).toBe(true)
+    expect(readVisibilityRangeRows(key).find((row) => row.key === 'minutes')).toMatchObject({ enabled: true, from: 5, to: 15 })
+    expect(isStoredVisibilityRangePeriodVisible(key, 'M30')).toBe(false)
+  })
+
+  it('migrates old MMF_V2 minute visibility from M5-only to M5-M30', () => {
+    const key = 'indicator:MMF_V2'
+    const oldRows = normalizeVisibilityRangeRows([
+      { enabled: true, from: 5, key: 'minutes', to: 5 },
+      { enabled: true, from: 1, key: 'hours', to: 24 },
+    ])
+
+    expect(writeVisibilityRangeRows(key, oldRows)).toBe(true)
+    expect(readVisibilityRangeRows(key).find((row) => row.key === 'minutes')).toMatchObject({ enabled: true, from: 5, to: 30 })
+    expect(isStoredVisibilityRangePeriodVisible(key, 'M30')).toBe(true)
+  })
+
   it('restores only the current period unit row when a hidden drawing is shown', () => {
     const key = 'drawing:trendLine:TL0001'
     const rows = normalizeVisibilityRangeRows([

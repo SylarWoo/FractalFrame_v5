@@ -44,7 +44,12 @@ def calculate_stoch_state_signals(features: pd.DataFrame, settings: object) -> l
         current_dead_cross = create_cross_event("dead", index, bar_keys, times, previous_k, previous_d, k, d)
         current_golden_cross = create_cross_event("golden", index, bar_keys, times, previous_k, previous_d, k, d)
 
-        if bool(getattr(settings, "show_high", True)) or bool(getattr(settings, "show_resistance_level", False)):
+        if (
+            bool(getattr(settings, "show_high", True))
+            or bool(getattr(settings, "show_resistance_level", False))
+            or bool(getattr(settings, "show_top_divergence_point", False))
+            or bool(getattr(settings, "show_trend_down_rebound_point", False))
+        ):
             if active_high_cross is not None and current_golden_cross is not None:
                 active_high_cross = None
             if active_high_cross is not None and finite_number(k):
@@ -59,7 +64,12 @@ def calculate_stoch_state_signals(features: pd.DataFrame, settings: object) -> l
             if current_dead_cross is not None:
                 active_high_cross = current_dead_cross
 
-        if bool(getattr(settings, "show_low", True)) or bool(getattr(settings, "show_support_level", False)):
+        if (
+            bool(getattr(settings, "show_low", True))
+            or bool(getattr(settings, "show_support_level", False))
+            or bool(getattr(settings, "show_bottom_divergence_point", False))
+            or bool(getattr(settings, "show_trend_up_pullback_point", False))
+        ):
             if active_low_cross is not None and current_dead_cross is not None:
                 active_low_cross = None
             if active_low_cross is not None and finite_number(k):
@@ -74,4 +84,26 @@ def calculate_stoch_state_signals(features: pd.DataFrame, settings: object) -> l
             if current_golden_cross is not None:
                 active_low_cross = current_golden_cross
 
-    return sorted(signals, key=lambda signal: (signal.anchor.index, signal.type))
+    return sorted(_merge_same_direction_segments(signals), key=lambda signal: (signal.anchor.index, signal.type))
+
+
+def _merge_same_direction_segments(signals: list[StochStateSignal]) -> list[StochStateSignal]:
+    if not signals:
+        return signals
+
+    merged: list[StochStateSignal] = []
+    current = signals[0]
+    for signal in signals[1:]:
+        if signal.type != current.type:
+            merged.append(current)
+            current = signal
+            continue
+        current = _better_same_direction_signal(current, signal)
+    merged.append(current)
+    return merged
+
+
+def _better_same_direction_signal(left: StochStateSignal, right: StochStateSignal) -> StochStateSignal:
+    if left.type == "high":
+        return right if right.anchor.price > left.anchor.price else left
+    return right if right.anchor.price < left.anchor.price else left

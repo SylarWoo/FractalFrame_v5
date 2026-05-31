@@ -18,7 +18,7 @@ type IndicatorSettingsShellProps = {
   children?: ReactNode
   loaded: boolean
   persistenceEnabled: boolean
-  tabs?: IndicatorSettingsShellTab[]
+  tabs?: readonly IndicatorSettingsShellTab[]
   title: string
   onLoad: () => void
   onPersistenceChange: (enabled: boolean) => void

@@ -242,3 +242,43 @@ def calculate_mmf_indicator_from_rows(payload: dict[str, Any]) -> dict[str, Any]
             },
         },
     }
+
+
+def calculate_vmi_indicator_from_rows(payload: dict[str, Any]) -> dict[str, Any]:
+    from python.indicators.mmf_v2.features import normalize_ohlcv_frame
+    from python.indicators.vmi import calculate_vmi_frame, vmi_frame_to_payload
+
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        return {"ok": False, "status": "bad_request", "error": "rows_required", "rows": [], "rowsCount": 0}
+
+    settings_payload = payload.get("settings") if isinstance(payload.get("settings"), dict) else {}
+    vdo_payload = settings_payload.get("vdo") if isinstance(settings_payload.get("vdo"), dict) else {}
+    frame = normalize_ohlcv_frame(rows)
+    if frame.empty:
+        return {
+            "ok": True,
+            "status": "ok",
+            "version": "VMI",
+            "symbol": payload.get("symbol"),
+            "timeframe": payload.get("timeframe"),
+            "rows": [],
+            "rowsCount": 0,
+            "metadata": {"indicator": "VMI", "source": "provided_rows"},
+        }
+
+    vmi = calculate_vmi_frame(frame, {
+        "fastLength": settings_payload.get("fastLength"),
+        "slowLength": settings_payload.get("slowLength"),
+        "vdo": vdo_payload,
+    })
+    return {
+        "ok": True,
+        "status": "ok",
+        "version": "VMI",
+        "symbol": payload.get("symbol"),
+        "timeframe": payload.get("timeframe"),
+        "rows": vmi_frame_to_payload(vmi),
+        "rowsCount": int(len(vmi)),
+        "metadata": {"indicator": "VMI", "source": "provided_rows"},
+    }

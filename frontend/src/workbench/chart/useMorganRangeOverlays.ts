@@ -1,7 +1,12 @@
 import type { Chart } from 'klinecharts'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { createStaticMorganRangeOverlay } from './morganRangeOverlay'
-import { calculateMorganRangeSegments, h4MorganSeconds, type MorganRangeSegment } from './morganRangeModel'
+import {
+  calculateMorganRangeSegmentsForMode,
+  resolveMorganRangeBucketSeconds,
+  type MorganRangeMode,
+  type MorganRangeSegment,
+} from './morganRangeModel'
 
 const maxMorganRangeBuckets = 36
 
@@ -10,13 +15,18 @@ export function clearMorganRangeOverlays(chart: Chart, overlayIds: Set<string>) 
   overlayIds.clear()
 }
 
-export function applyMorganRangeOverlays(chart: Chart, period: string, overlayIds: Set<string>) {
+function isMorganRangeModeVisible(mode: MorganRangeMode, period: string) {
+  return mode === 'D1_M30' ? period === 'M30' : period === 'M5'
+}
+
+export function applyMorganRangeOverlays(chart: Chart, period: string, overlayIds: Set<string>, mode: MorganRangeMode = 'H4_M5') {
   clearMorganRangeOverlays(chart, overlayIds)
+  if (!isMorganRangeModeVisible(mode, period)) return
   const periodSeconds = resolvePeriodSeconds(period)
   if (!Number.isFinite(periodSeconds) || periodSeconds <= 0 || periodSeconds > 2 * 60 * 60) return
 
-  const futureBars = Math.round(h4MorganSeconds / periodSeconds)
-  const segments = calculateMorganRangeSegments(chart.getDataList(), futureBars)
+  const futureBars = Math.round(resolveMorganRangeBucketSeconds(mode) / periodSeconds)
+  const segments = calculateMorganRangeSegmentsForMode(chart.getDataList(), mode, futureBars)
   if (segments.length === 0) return
   const barSpace = Number(chart.getBarSpace())
   const futureWidthPx = futureBars * barSpace

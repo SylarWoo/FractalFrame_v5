@@ -107,10 +107,40 @@ export type VdoIndicatorSettings = DpoIndicatorSettings & {
   backgroundLowerColor: string
   backgroundLowerOpacity: number
   backgroundLowerVisible: boolean
+  backgroundLower2Color: string
+  backgroundLower2Opacity: number
+  backgroundLower2Visible: boolean
   backgroundUpperColor: string
   backgroundUpperOpacity: number
   backgroundUpperVisible: boolean
+  backgroundUpper2Color: string
+  backgroundUpper2Opacity: number
+  backgroundUpper2Visible: boolean
+  downLine3Color: string
+  downLine3Style: RsiLineStyle
+  downLine3Width: number
+  downLine3Opacity: number
+  downLine3Value: number
+  downLine3Visible: boolean
   emaSmoothing: number
+  upLine3Color: string
+  upLine3Style: RsiLineStyle
+  upLine3Width: number
+  upLine3Opacity: number
+  upLine3Value: number
+  upLine3Visible: boolean
+  vdoMaColor: string
+  vdoMa2Color: string
+  vdoMa2Length: number
+  vdoMa2LineStyle: RsiLineStyle
+  vdoMa2LineWidth: number
+  vdoMa2Opacity: number
+  vdoMa2Visible: boolean
+  vdoMaLength: number
+  vdoMaLineStyle: RsiLineStyle
+  vdoMaLineWidth: number
+  vdoMaOpacity: number
+  vdoMaVisible: boolean
 }
 
 export type MacdIndicatorSettings = {
@@ -173,6 +203,21 @@ export type TsiIndicatorSettings = {
   zeroLineStyle: RsiLineStyle
   zeroLineWidth: number
   zeroLineOpacity: number
+  upperBandVisible: boolean
+  upperBandColor: string
+  upperBandLineStyle: RsiLineStyle
+  upperBandLineWidth: number
+  upperBandOpacity: number
+  upperBandValue: number
+  lowerBandVisible: boolean
+  lowerBandColor: string
+  lowerBandLineStyle: RsiLineStyle
+  lowerBandLineWidth: number
+  lowerBandOpacity: number
+  lowerBandValue: number
+  backgroundFillVisible: boolean
+  backgroundFillColor: string
+  backgroundFillOpacity: number
   precision: RsiPrecision
   priceScaleLabelsVisible: boolean
   statusLineValuesVisible: boolean
@@ -198,6 +243,41 @@ export type ViIndicatorSettings = {
   statusLineValuesVisible: boolean
   inputStatusLineVisible: boolean
 }
+
+export type AoIndicatorSettings = {
+  fastLength: number
+  slowLength: number
+  timeframe: VwapTimeframe
+  waitForTimeframeClose: boolean
+  histogramVisible: boolean
+  histogramPositiveColor: string
+  histogramPositiveOpacity: number
+  histogramNegativeColor: string
+  histogramNegativeOpacity: number
+  zeroLineVisible: boolean
+  zeroLineColor: string
+  zeroLineStyle: RsiLineStyle
+  zeroLineWidth: number
+  zeroLineOpacity: number
+  upperBandVisible: boolean
+  upperBandColor: string
+  upperBandLineStyle: RsiLineStyle
+  upperBandLineWidth: number
+  upperBandOpacity: number
+  upperBandValue: number
+  lowerBandVisible: boolean
+  lowerBandColor: string
+  lowerBandLineStyle: RsiLineStyle
+  lowerBandLineWidth: number
+  lowerBandOpacity: number
+  lowerBandValue: number
+  precision: RsiPrecision
+  priceScaleLabelsVisible: boolean
+  statusLineValuesVisible: boolean
+  inputStatusLineVisible: boolean
+}
+
+export type VmiIndicatorSettings = AoIndicatorSettings
 
 export type StochIndicatorSettings = {
   backgroundFillColor: string
@@ -429,12 +509,16 @@ export type PersistedIndicatorsState = {
     MMF?: boolean
     MMF_V2?: boolean
     MR?: boolean
+    'MR-M5'?: boolean
+    'MR-M30'?: boolean
     RSI?: boolean
     SQZMOM?: boolean
     Stoch?: boolean
     TSI?: boolean
     VDO?: boolean
     VI?: boolean
+    AO?: boolean
+    VMI?: boolean
     VWAP?: boolean
     Vol?: boolean
   }
@@ -449,6 +533,8 @@ export type PersistedIndicatorsState = {
   tsi: TsiIndicatorSettings
   vdo: VdoIndicatorSettings
   vi: ViIndicatorSettings
+  ao: AoIndicatorSettings
+  vmi: VmiIndicatorSettings
   vwap: VwapIndicatorSettings
   vol: VolIndicatorSettings
   ui: {
@@ -670,6 +756,21 @@ export const defaultTsiIndicatorSettings: TsiIndicatorSettings = {
   zeroLineStyle: 'dashed',
   zeroLineWidth: 1,
   zeroLineOpacity: 1,
+  upperBandVisible: true,
+  upperBandColor: '#787b86',
+  upperBandLineStyle: 'dashed',
+  upperBandLineWidth: 1,
+  upperBandOpacity: 1,
+  upperBandValue: 25,
+  lowerBandVisible: true,
+  lowerBandColor: '#787b86',
+  lowerBandLineStyle: 'dashed',
+  lowerBandLineWidth: 1,
+  lowerBandOpacity: 1,
+  lowerBandValue: -25,
+  backgroundFillVisible: true,
+  backgroundFillColor: '#787b86',
+  backgroundFillOpacity: 0.08,
   precision: 'system',
   priceScaleLabelsVisible: true,
   statusLineValuesVisible: true,
@@ -694,6 +795,43 @@ export const defaultViIndicatorSettings: ViIndicatorSettings = {
   priceScaleLabelsVisible: true,
   statusLineValuesVisible: true,
   inputStatusLineVisible: true,
+}
+
+export const defaultAoIndicatorSettings: AoIndicatorSettings = {
+  fastLength: 5,
+  slowLength: 34,
+  timeframe: 'chart',
+  waitForTimeframeClose: true,
+  histogramVisible: true,
+  histogramPositiveColor: '#26a69a',
+  histogramPositiveOpacity: 1,
+  histogramNegativeColor: '#ef5350',
+  histogramNegativeOpacity: 1,
+  zeroLineVisible: true,
+  zeroLineColor: '#787b86',
+  zeroLineStyle: 'dashed',
+  zeroLineWidth: 1,
+  zeroLineOpacity: 1,
+  upperBandVisible: true,
+  upperBandColor: '#787b86',
+  upperBandLineStyle: 'dashed',
+  upperBandLineWidth: 1,
+  upperBandOpacity: 1,
+  upperBandValue: 0.001,
+  lowerBandVisible: true,
+  lowerBandColor: '#787b86',
+  lowerBandLineStyle: 'dashed',
+  lowerBandLineWidth: 1,
+  lowerBandOpacity: 1,
+  lowerBandValue: -0.001,
+  precision: 'system',
+  priceScaleLabelsVisible: true,
+  statusLineValuesVisible: true,
+  inputStatusLineVisible: true,
+}
+
+export const defaultVmiIndicatorSettings: VmiIndicatorSettings = {
+  ...defaultAoIndicatorSettings,
 }
 
 export const defaultMaIndicatorSettings: MaIndicatorSettings = {
@@ -820,11 +958,23 @@ export const defaultVdoIndicatorSettings: VdoIndicatorSettings = {
   backgroundLowerColor: '#ef5350',
   backgroundLowerOpacity: 0.08,
   backgroundLowerVisible: true,
+  backgroundLower2Color: '#ef5350',
+  backgroundLower2Opacity: 0.08,
+  backgroundLower2Visible: true,
   backgroundOpacity: 0.08,
   backgroundUpperColor: '#26a69a',
   backgroundUpperOpacity: 0.08,
   backgroundUpperVisible: true,
+  backgroundUpper2Color: '#26a69a',
+  backgroundUpper2Opacity: 0.08,
+  backgroundUpper2Visible: true,
   backgroundVisible: true,
+  downLine3Color: '#787b86',
+  downLine3Style: 'dashed',
+  downLine3Width: 1,
+  downLine3Opacity: 1,
+  downLine3Value: -0.16,
+  downLine3Visible: true,
   downLine2Value: -0.05,
   downLine2Visible: true,
   downLineValue: -0.1,
@@ -832,10 +982,28 @@ export const defaultVdoIndicatorSettings: VdoIndicatorSettings = {
   dpoColor: '#2962ff',
   emaSmoothing: 0,
   length: 120,
+  upLine3Color: '#787b86',
+  upLine3Style: 'dashed',
+  upLine3Width: 1,
+  upLine3Opacity: 1,
+  upLine3Value: 0.16,
+  upLine3Visible: true,
   upLine2Value: 0.05,
   upLine2Visible: true,
   upLineValue: 0.1,
   upLineVisible: true,
+  vdoMaColor: '#fbc02d',
+  vdoMa2Color: '#ff7043',
+  vdoMa2Length: 34,
+  vdoMa2LineStyle: 'solid',
+  vdoMa2LineWidth: 1,
+  vdoMa2Opacity: 1,
+  vdoMa2Visible: true,
+  vdoMaLength: 14,
+  vdoMaLineStyle: 'solid',
+  vdoMaLineWidth: 1,
+  vdoMaOpacity: 1,
+  vdoMaVisible: true,
 }
 
 export const defaultVwapIndicatorSettings: VwapIndicatorSettings = {
@@ -1101,11 +1269,25 @@ export function normalizeTsiSettings(input?: Partial<TsiIndicatorSettings>): Tsi
   const tsiLineWidth = Math.round(Number(merged.tsiLineWidth))
   const signalLineWidth = Math.round(Number(merged.signalLineWidth))
   const zeroLineWidth = Math.round(Number(merged.zeroLineWidth))
+  const upperBandLineWidth = Math.round(Number(merged.upperBandLineWidth))
+  const lowerBandLineWidth = Math.round(Number(merged.lowerBandLineWidth))
+  const upperBandValue = Number(merged.upperBandValue)
+  const lowerBandValue = Number(merged.lowerBandValue)
   const tsiOpacity = Number(merged.tsiOpacity)
   const signalOpacity = Number(merged.signalOpacity)
   const zeroLineOpacity = Number(merged.zeroLineOpacity)
+  const upperBandOpacity = Number(merged.upperBandOpacity)
+  const lowerBandOpacity = Number(merged.lowerBandOpacity)
+  const backgroundFillOpacity = Number(merged.backgroundFillOpacity)
   return {
     ...merged,
+    backgroundFillOpacity: Number.isFinite(backgroundFillOpacity) ? Math.max(0, Math.min(backgroundFillOpacity, 1)) : defaultTsiIndicatorSettings.backgroundFillOpacity,
+    backgroundFillVisible: merged.backgroundFillVisible !== false,
+    lowerBandLineStyle: merged.lowerBandLineStyle === 'solid' || merged.lowerBandLineStyle === 'dotted' ? merged.lowerBandLineStyle : 'dashed',
+    lowerBandLineWidth: Number.isFinite(lowerBandLineWidth) ? Math.max(1, Math.min(lowerBandLineWidth, 4)) : defaultTsiIndicatorSettings.lowerBandLineWidth,
+    lowerBandOpacity: Number.isFinite(lowerBandOpacity) ? Math.max(0, Math.min(lowerBandOpacity, 1)) : defaultTsiIndicatorSettings.lowerBandOpacity,
+    lowerBandValue: Number.isFinite(lowerBandValue) ? Math.max(-500, Math.min(lowerBandValue, 500)) : defaultTsiIndicatorSettings.lowerBandValue,
+    lowerBandVisible: merged.lowerBandVisible !== false,
     inputStatusLineVisible: merged.inputStatusLineVisible !== false,
     longLength: Number.isFinite(longLength) ? Math.max(1, Math.min(longLength, 500)) : defaultTsiIndicatorSettings.longLength,
     precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
@@ -1122,6 +1304,11 @@ export function normalizeTsiSettings(input?: Partial<TsiIndicatorSettings>): Tsi
     tsiLineWidth: Number.isFinite(tsiLineWidth) ? Math.max(1, Math.min(tsiLineWidth, 4)) : defaultTsiIndicatorSettings.tsiLineWidth,
     tsiOpacity: Number.isFinite(tsiOpacity) ? Math.max(0, Math.min(tsiOpacity, 1)) : defaultTsiIndicatorSettings.tsiOpacity,
     tsiVisible: merged.tsiVisible !== false,
+    upperBandLineStyle: merged.upperBandLineStyle === 'solid' || merged.upperBandLineStyle === 'dotted' ? merged.upperBandLineStyle : 'dashed',
+    upperBandLineWidth: Number.isFinite(upperBandLineWidth) ? Math.max(1, Math.min(upperBandLineWidth, 4)) : defaultTsiIndicatorSettings.upperBandLineWidth,
+    upperBandOpacity: Number.isFinite(upperBandOpacity) ? Math.max(0, Math.min(upperBandOpacity, 1)) : defaultTsiIndicatorSettings.upperBandOpacity,
+    upperBandValue: Number.isFinite(upperBandValue) ? Math.max(-500, Math.min(upperBandValue, 500)) : defaultTsiIndicatorSettings.upperBandValue,
+    upperBandVisible: merged.upperBandVisible !== false,
     waitForTimeframeClose: merged.waitForTimeframeClose !== false,
     zeroLineOpacity: Number.isFinite(zeroLineOpacity) ? Math.max(0, Math.min(zeroLineOpacity, 1)) : defaultTsiIndicatorSettings.zeroLineOpacity,
     zeroLineStyle: merged.zeroLineStyle === 'solid' || merged.zeroLineStyle === 'dotted' ? merged.zeroLineStyle : 'dashed',
@@ -1155,6 +1342,56 @@ export function normalizeViSettings(input?: Partial<ViIndicatorSettings>): ViInd
     timeframe: ['chart', '1m', '5m', '15m', '30m', '1h', '4h', '1d'].includes(merged.timeframe) ? merged.timeframe : 'chart',
     waitForTimeframeClose: merged.waitForTimeframeClose !== false,
   }
+}
+
+export function normalizeAoSettings(input?: Partial<AoIndicatorSettings>): AoIndicatorSettings {
+  const merged = { ...defaultAoIndicatorSettings, ...(input ?? {}) }
+  const fastLength = Math.round(Number(merged.fastLength))
+  const slowLength = Math.round(Number(merged.slowLength))
+  const histogramPositiveOpacity = Number(merged.histogramPositiveOpacity)
+  const histogramNegativeOpacity = Number(merged.histogramNegativeOpacity)
+  const zeroLineWidth = Math.round(Number(merged.zeroLineWidth))
+  const zeroLineOpacity = Number(merged.zeroLineOpacity)
+  const upperBandLineWidth = Math.round(Number(merged.upperBandLineWidth))
+  const upperBandOpacity = Number(merged.upperBandOpacity)
+  const upperBandValue = Number(merged.upperBandValue)
+  const lowerBandLineWidth = Math.round(Number(merged.lowerBandLineWidth))
+  const lowerBandOpacity = Number(merged.lowerBandOpacity)
+  const lowerBandValue = Number(merged.lowerBandValue)
+  return {
+    ...merged,
+    fastLength: Number.isFinite(fastLength) ? Math.max(1, Math.min(fastLength, 500)) : defaultAoIndicatorSettings.fastLength,
+    histogramNegativeOpacity: Number.isFinite(histogramNegativeOpacity) ? Math.max(0, Math.min(histogramNegativeOpacity, 1)) : defaultAoIndicatorSettings.histogramNegativeOpacity,
+    histogramPositiveOpacity: Number.isFinite(histogramPositiveOpacity) ? Math.max(0, Math.min(histogramPositiveOpacity, 1)) : defaultAoIndicatorSettings.histogramPositiveOpacity,
+    histogramVisible: merged.histogramVisible !== false,
+    inputStatusLineVisible: merged.inputStatusLineVisible !== false,
+    lowerBandColor: merged.lowerBandColor ?? defaultAoIndicatorSettings.lowerBandColor,
+    lowerBandLineStyle: merged.lowerBandLineStyle === 'solid' || merged.lowerBandLineStyle === 'dotted' ? merged.lowerBandLineStyle : 'dashed',
+    lowerBandLineWidth: Number.isFinite(lowerBandLineWidth) ? Math.max(1, Math.min(lowerBandLineWidth, 4)) : defaultAoIndicatorSettings.lowerBandLineWidth,
+    lowerBandOpacity: Number.isFinite(lowerBandOpacity) ? Math.max(0, Math.min(lowerBandOpacity, 1)) : defaultAoIndicatorSettings.lowerBandOpacity,
+    lowerBandValue: Number.isFinite(lowerBandValue) ? lowerBandValue : defaultAoIndicatorSettings.lowerBandValue,
+    lowerBandVisible: merged.lowerBandVisible !== false,
+    precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
+    priceScaleLabelsVisible: merged.priceScaleLabelsVisible !== false,
+    slowLength: Number.isFinite(slowLength) ? Math.max(1, Math.min(slowLength, 500)) : defaultAoIndicatorSettings.slowLength,
+    statusLineValuesVisible: merged.statusLineValuesVisible !== false,
+    timeframe: ['chart', '1m', '5m', '15m', '30m', '1h', '4h', '1d'].includes(merged.timeframe) ? merged.timeframe : 'chart',
+    upperBandColor: merged.upperBandColor ?? defaultAoIndicatorSettings.upperBandColor,
+    upperBandLineStyle: merged.upperBandLineStyle === 'solid' || merged.upperBandLineStyle === 'dotted' ? merged.upperBandLineStyle : 'dashed',
+    upperBandLineWidth: Number.isFinite(upperBandLineWidth) ? Math.max(1, Math.min(upperBandLineWidth, 4)) : defaultAoIndicatorSettings.upperBandLineWidth,
+    upperBandOpacity: Number.isFinite(upperBandOpacity) ? Math.max(0, Math.min(upperBandOpacity, 1)) : defaultAoIndicatorSettings.upperBandOpacity,
+    upperBandValue: Number.isFinite(upperBandValue) ? upperBandValue : defaultAoIndicatorSettings.upperBandValue,
+    upperBandVisible: merged.upperBandVisible !== false,
+    waitForTimeframeClose: merged.waitForTimeframeClose !== false,
+    zeroLineOpacity: Number.isFinite(zeroLineOpacity) ? Math.max(0, Math.min(zeroLineOpacity, 1)) : defaultAoIndicatorSettings.zeroLineOpacity,
+    zeroLineStyle: merged.zeroLineStyle === 'solid' || merged.zeroLineStyle === 'dotted' ? merged.zeroLineStyle : 'dashed',
+    zeroLineVisible: merged.zeroLineVisible !== false,
+    zeroLineWidth: Number.isFinite(zeroLineWidth) ? Math.max(1, Math.min(zeroLineWidth, 4)) : defaultAoIndicatorSettings.zeroLineWidth,
+  }
+}
+
+export function normalizeVmiSettings(input?: Partial<VmiIndicatorSettings>): VmiIndicatorSettings {
+  return normalizeAoSettings(input)
 }
 
 export function normalizeVolSettings(input?: Partial<VolIndicatorSettings>): VolIndicatorSettings {
@@ -1212,16 +1449,60 @@ export function normalizeVdoSettings(input?: Partial<VdoIndicatorSettings>): Vdo
   const merged = { ...defaultVdoIndicatorSettings, ...(input ?? {}) }
   const emaSmoothing = Math.round(Number(merged.emaSmoothing))
   const backgroundLowerOpacity = Number(merged.backgroundLowerOpacity)
+  const backgroundLower2Opacity = Number(merged.backgroundLower2Opacity)
   const backgroundUpperOpacity = Number(merged.backgroundUpperOpacity)
+  const backgroundUpper2Opacity = Number(merged.backgroundUpper2Opacity)
+  const downLine3Width = Math.round(Number(merged.downLine3Width))
+  const downLine3Opacity = Number(merged.downLine3Opacity)
+  const downLine3Value = Number(merged.downLine3Value)
+  const upLine3Width = Math.round(Number(merged.upLine3Width))
+  const upLine3Opacity = Number(merged.upLine3Opacity)
+  const upLine3Value = Number(merged.upLine3Value)
+  const vdoMaLength = Math.round(Number(merged.vdoMaLength))
+  const vdoMa2Length = Math.round(Number(merged.vdoMa2Length))
+  const vdoMaLineWidth = Math.round(Number(merged.vdoMaLineWidth))
+  const vdoMa2LineWidth = Math.round(Number(merged.vdoMa2LineWidth))
+  const vdoMaOpacity = Number(merged.vdoMaOpacity)
+  const vdoMa2Opacity = Number(merged.vdoMa2Opacity)
   return {
     ...normalizeDpoSettings(merged),
     backgroundLowerColor: merged.backgroundLowerColor ?? defaultVdoIndicatorSettings.backgroundLowerColor,
     backgroundLowerOpacity: Number.isFinite(backgroundLowerOpacity) ? Math.max(0, Math.min(backgroundLowerOpacity, 1)) : defaultVdoIndicatorSettings.backgroundLowerOpacity,
     backgroundLowerVisible: merged.backgroundLowerVisible !== false,
+    backgroundLower2Color: merged.backgroundLower2Color ?? defaultVdoIndicatorSettings.backgroundLower2Color,
+    backgroundLower2Opacity: Number.isFinite(backgroundLower2Opacity) ? Math.max(0, Math.min(backgroundLower2Opacity, 1)) : defaultVdoIndicatorSettings.backgroundLower2Opacity,
+    backgroundLower2Visible: merged.backgroundLower2Visible !== false,
     backgroundUpperColor: merged.backgroundUpperColor ?? defaultVdoIndicatorSettings.backgroundUpperColor,
     backgroundUpperOpacity: Number.isFinite(backgroundUpperOpacity) ? Math.max(0, Math.min(backgroundUpperOpacity, 1)) : defaultVdoIndicatorSettings.backgroundUpperOpacity,
     backgroundUpperVisible: merged.backgroundUpperVisible !== false,
+    backgroundUpper2Color: merged.backgroundUpper2Color ?? defaultVdoIndicatorSettings.backgroundUpper2Color,
+    backgroundUpper2Opacity: Number.isFinite(backgroundUpper2Opacity) ? Math.max(0, Math.min(backgroundUpper2Opacity, 1)) : defaultVdoIndicatorSettings.backgroundUpper2Opacity,
+    backgroundUpper2Visible: merged.backgroundUpper2Visible !== false,
+    downLine3Color: merged.downLine3Color ?? defaultVdoIndicatorSettings.downLine3Color,
+    downLine3Style: merged.downLine3Style === 'solid' || merged.downLine3Style === 'dotted' ? merged.downLine3Style : 'dashed',
+    downLine3Width: Number.isFinite(downLine3Width) ? Math.max(1, Math.min(downLine3Width, 4)) : defaultVdoIndicatorSettings.downLine3Width,
+    downLine3Opacity: Number.isFinite(downLine3Opacity) ? Math.max(0, Math.min(downLine3Opacity, 1)) : defaultVdoIndicatorSettings.downLine3Opacity,
+    downLine3Value: Number.isFinite(downLine3Value) ? downLine3Value : defaultVdoIndicatorSettings.downLine3Value,
+    downLine3Visible: merged.downLine3Visible !== false,
     emaSmoothing: Number.isFinite(emaSmoothing) ? Math.max(0, Math.min(emaSmoothing, 500)) : defaultVdoIndicatorSettings.emaSmoothing,
+    upLine3Color: merged.upLine3Color ?? defaultVdoIndicatorSettings.upLine3Color,
+    upLine3Style: merged.upLine3Style === 'solid' || merged.upLine3Style === 'dotted' ? merged.upLine3Style : 'dashed',
+    upLine3Width: Number.isFinite(upLine3Width) ? Math.max(1, Math.min(upLine3Width, 4)) : defaultVdoIndicatorSettings.upLine3Width,
+    upLine3Opacity: Number.isFinite(upLine3Opacity) ? Math.max(0, Math.min(upLine3Opacity, 1)) : defaultVdoIndicatorSettings.upLine3Opacity,
+    upLine3Value: Number.isFinite(upLine3Value) ? upLine3Value : defaultVdoIndicatorSettings.upLine3Value,
+    upLine3Visible: merged.upLine3Visible !== false,
+    vdoMaColor: merged.vdoMaColor ?? defaultVdoIndicatorSettings.vdoMaColor,
+    vdoMa2Color: merged.vdoMa2Color ?? defaultVdoIndicatorSettings.vdoMa2Color,
+    vdoMa2Length: Number.isFinite(vdoMa2Length) ? Math.max(1, Math.min(vdoMa2Length, 500)) : defaultVdoIndicatorSettings.vdoMa2Length,
+    vdoMa2LineStyle: merged.vdoMa2LineStyle === 'dashed' || merged.vdoMa2LineStyle === 'dotted' ? merged.vdoMa2LineStyle : 'solid',
+    vdoMa2LineWidth: Number.isFinite(vdoMa2LineWidth) ? Math.max(1, Math.min(vdoMa2LineWidth, 4)) : defaultVdoIndicatorSettings.vdoMa2LineWidth,
+    vdoMa2Opacity: Number.isFinite(vdoMa2Opacity) ? Math.max(0, Math.min(vdoMa2Opacity, 1)) : defaultVdoIndicatorSettings.vdoMa2Opacity,
+    vdoMa2Visible: merged.vdoMa2Visible !== false,
+    vdoMaLength: Number.isFinite(vdoMaLength) ? Math.max(1, Math.min(vdoMaLength, 500)) : defaultVdoIndicatorSettings.vdoMaLength,
+    vdoMaLineStyle: merged.vdoMaLineStyle === 'dashed' || merged.vdoMaLineStyle === 'dotted' ? merged.vdoMaLineStyle : 'solid',
+    vdoMaLineWidth: Number.isFinite(vdoMaLineWidth) ? Math.max(1, Math.min(vdoMaLineWidth, 4)) : defaultVdoIndicatorSettings.vdoMaLineWidth,
+    vdoMaOpacity: Number.isFinite(vdoMaOpacity) ? Math.max(0, Math.min(vdoMaOpacity, 1)) : defaultVdoIndicatorSettings.vdoMaOpacity,
+    vdoMaVisible: merged.vdoMaVisible !== false,
   }
 }
 

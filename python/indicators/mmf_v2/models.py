@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from python.indicators.vmi import VmiSettings
+from python.indicators.vdo import VdoSettings
+from python.indicators.tsi import TsiSettings
 from python.signals import BarCoordinate, SignalRecord, SignalWindow
 
 MmfV2SignalType = Literal[
@@ -10,6 +13,8 @@ MmfV2SignalType = Literal[
     "MMF_V2_LOW",
     "MMF_V2_SUPPORT",
     "MMF_V2_RESISTANCE",
+    "MMF_V2_TOP_DIVERGENCE",
+    "MMF_V2_BOTTOM_DIVERGENCE",
     "MMF_V2_EXPECTED_SUPPORT",
     "MMF_V2_EXPECTED_RESISTANCE",
     "MMF_V2_TREND_DOWN_REBOUND",
@@ -22,6 +27,18 @@ MmfV2SignalType = Literal[
     "MMF_V2_SUPPORT_UP_BREAK",
     "MMF_V2_RESISTANCE_DOWN_BREAK",
     "MMF_V2_RESISTANCE_UP_BREAK",
+    "MMF_V2_TRUE_CLOSE_DOWN",
+    "MMF_V2_TRUE_CLOSE_UP",
+    "MMF_V2_BULL_MARKET",
+    "MMF_V2_BEAR_MARKET",
+    "MMF_V2_OVERBOUGHT",
+    "MMF_V2_OVERBOUGHT_CLOSE",
+    "MMF_V2_OVERSOLD",
+    "MMF_V2_OVERSOLD_CLOSE",
+    "MMF_V2_TSI_DEAD_CROSS",
+    "MMF_V2_TSI_DEAD_CROSS_CONFIRM",
+    "MMF_V2_TSI_GOLDEN_CROSS",
+    "MMF_V2_TSI_GOLDEN_CROSS_CONFIRM",
     "MMF_V2_LOW_POSITION_HIGH",
     "MMF_V2_HIGH_POSITION_LOW",
 ]
@@ -35,14 +52,8 @@ class MmfV2StochSettings:
 
 
 @dataclass(frozen=True)
-class MmfV2VdoSettings:
-    length: int = 14
-    ema_smoothing: int = 0
-    zero_line_value: float = 0.0
-    up_line_value: float = 0.1
-    up_line2_value: float = 0.05
-    down_line_value: float = -0.1
-    down_line2_value: float = -0.05
+class MmfV2VdoSettings(VdoSettings):
+    pass
 
 
 @dataclass(frozen=True)
@@ -50,6 +61,16 @@ class MmfV2MaSettings:
     length: int = 120
     ma_type: str = "sma"
     source: str = "hlc3"
+
+
+@dataclass(frozen=True)
+class MmfV2VmiSettings(VmiSettings):
+    pass
+
+
+@dataclass(frozen=True)
+class MmfV2TsiSettings(TsiSettings):
+    pass
 
 
 @dataclass(frozen=True)
@@ -69,6 +90,8 @@ class MmfV2Settings:
     show_low: bool = True
     show_support_level: bool = False
     show_resistance_level: bool = False
+    show_top_divergence_point: bool = False
+    show_bottom_divergence_point: bool = False
     show_expected_support_level: bool = False
     show_expected_resistance_level: bool = False
     show_trend_down_rebound_point: bool = False
@@ -81,6 +104,22 @@ class MmfV2Settings:
     show_support_up_break_point: bool = False
     show_resistance_down_break_point: bool = False
     show_resistance_up_break_point: bool = False
+    show_true_close_down_point: bool = False
+    show_true_close_up_point: bool = False
+    show_bull_market_point: bool = False
+    show_bear_market_point: bool = False
+    show_overbought_point: bool = False
+    show_overbought_close_point: bool = False
+    show_oversold_point: bool = False
+    show_oversold_close_point: bool = False
+    show_tsi_dead_cross_point: bool = False
+    show_tsi_dead_cross_confirm_point: bool = False
+    show_tsi_golden_cross_point: bool = False
+    show_tsi_golden_cross_confirm_point: bool = False
+    tsi_dead_cross_confirm_distance: float = 5.0
+    tsi_golden_cross_confirm_distance: float = 5.0
+    true_close_down_vdo_threshold: float = -0.05
+    true_close_up_vdo_threshold: float = 0.05
     high_anchor_lookback_bars: int = 14
     low_anchor_lookback_bars: int = 14
     high_stoch_k_advance: float = 10
@@ -93,6 +132,8 @@ class MmfV2Settings:
     low_confirm_lookahead_bars: int = 7
     stoch: MmfV2StochSettings = field(default_factory=MmfV2StochSettings)
     vdo: MmfV2VdoSettings = field(default_factory=MmfV2VdoSettings)
+    vmi: MmfV2VmiSettings = field(default_factory=MmfV2VmiSettings)
+    tsi: MmfV2TsiSettings = field(default_factory=MmfV2TsiSettings)
     ma: MmfV2MaSettings = field(default_factory=MmfV2MaSettings)
     morgan: MmfV2MorganSettings = field(default_factory=MmfV2MorganSettings)
     signals: dict[str, MmfV2SignalSettings] = field(default_factory=dict)

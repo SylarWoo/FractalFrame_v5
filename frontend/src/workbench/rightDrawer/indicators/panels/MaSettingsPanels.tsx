@@ -30,7 +30,7 @@ export function MaInputPanel({
           <span className="ff-indicators-input-panel-v1__label">长度</span>
           <span className="ff-indicators-ma-panel-v1__inline-controls">
             <span className="ff-indicators-input-panel-v1__control">
-              <NumberBox min={1} onChange={(length) => patch({ length })} value={settings.length} />
+              <NumberBox max={5000} min={1} onChange={(length) => patch({ length })} value={settings.length} />
             </span>
             <span className="ff-indicators-input-panel-v1__control ff-indicators-input-panel-v1__control--wide">
               <OpenableSelect

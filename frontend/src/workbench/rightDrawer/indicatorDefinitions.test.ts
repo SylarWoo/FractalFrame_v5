@@ -8,7 +8,8 @@ describe('indicatorDefinitions', () => {
   })
 
   it('guards supported indicator keys from the row definitions', () => {
-    expect(isSupportedChartIndicator('MR')).toBe(true)
+    expect(isSupportedChartIndicator('MR-M5')).toBe(true)
+    expect(isSupportedChartIndicator('MR-M30')).toBe(true)
     expect(isSupportedChartIndicator('Unknown')).toBe(false)
     expect(resolveInitialSelectedKey('Stoch')).toBe('Stoch')
     expect(resolveInitialSelectedKey('Unknown')).toBe('RSI')

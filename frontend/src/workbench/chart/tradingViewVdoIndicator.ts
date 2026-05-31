@@ -9,6 +9,8 @@ import { formatIndicatorValue } from './indicatorValueFormat'
 
 export type VdoIndicatorRow = {
   vdo?: number
+  vdoMa?: number
+  vdoMa2?: number
 }
 
 let registered = false
@@ -71,6 +73,14 @@ function createVdoLineFigures() {
     { key: 'vdo', title: 'VDO: ', type: 'line', styles: (_data: unknown, indicator: { calcParams: unknown[] }) => {
       const settings = normalizeVdoSettings(indicator.calcParams[0] as Partial<VdoIndicatorSettings>)
       return createLineFigureStyle(settings.dpoColor, settings.dpoVisible, settings.dpoLineStyle, settings.dpoLineWidth, settings.dpoOpacity)
+    } },
+    { key: 'vdoMa', title: 'VDO MA: ', type: 'line', styles: (_data: unknown, indicator: { calcParams: unknown[] }) => {
+      const settings = normalizeVdoSettings(indicator.calcParams[0] as Partial<VdoIndicatorSettings>)
+      return createLineFigureStyle(settings.vdoMaColor, settings.vdoMaVisible, settings.vdoMaLineStyle, settings.vdoMaLineWidth, settings.vdoMaOpacity)
+    } },
+    { key: 'vdoMa2', title: 'VDO MA2: ', type: 'line', styles: (_data: unknown, indicator: { calcParams: unknown[] }) => {
+      const settings = normalizeVdoSettings(indicator.calcParams[0] as Partial<VdoIndicatorSettings>)
+      return createLineFigureStyle(settings.vdoMa2Color, settings.vdoMa2Visible, settings.vdoMa2LineStyle, settings.vdoMa2LineWidth, settings.vdoMa2Opacity)
     } },
   ]
 }
@@ -153,9 +163,11 @@ function drawHorizontalBands(
   yAxis: { convertToPixel: (value: number) => number },
   settings: VdoIndicatorSettings,
 ) {
+  drawBandBetweenValues(ctx, bounding, yAxis, settings.backgroundVisible, settings.upLineValue, settings.downLineValue, settings.backgroundColor, settings.backgroundOpacity)
   drawBandBetweenValues(ctx, bounding, yAxis, settings.backgroundUpperVisible, settings.upLineValue, settings.upLine2Value, settings.backgroundUpperColor, settings.backgroundUpperOpacity)
-  drawBandBetweenValues(ctx, bounding, yAxis, settings.backgroundVisible, settings.upLine2Value, settings.downLine2Value, settings.backgroundColor, settings.backgroundOpacity)
+  drawBandBetweenValues(ctx, bounding, yAxis, settings.backgroundUpper2Visible, settings.upLine3Value, settings.upLine2Value, settings.backgroundUpper2Color, settings.backgroundUpper2Opacity)
   drawBandBetweenValues(ctx, bounding, yAxis, settings.backgroundLowerVisible, settings.downLine2Value, settings.downLineValue, settings.backgroundLowerColor, settings.backgroundLowerOpacity)
+  drawBandBetweenValues(ctx, bounding, yAxis, settings.backgroundLower2Visible, settings.downLine2Value, settings.downLine3Value, settings.backgroundLower2Color, settings.backgroundLower2Opacity)
 }
 
 function drawLineSeries(
@@ -165,6 +177,7 @@ function drawLineSeries(
   xAxis: { convertToPixel: (value: number) => number },
   yAxis: { convertToPixel: (value: number) => number },
   settings: VdoIndicatorSettings,
+  valueKey: keyof VdoIndicatorRow = 'vdo',
 ) {
   if (!settings.dpoVisible) return
   const width = clampLineWidth(settings.dpoLineWidth)
@@ -181,7 +194,7 @@ function drawLineSeries(
   ctx.setLineDash(lineDashForStyle(settings.dpoLineStyle))
 
   for (let index = start; index <= end; index += 1) {
-    const value = rows[index]?.vdo
+    const value = rows[index]?.[valueKey]
     if (!Number.isFinite(value)) {
       started = false
       continue
@@ -216,7 +229,50 @@ function calculateEmaSeries(values: Array<number | undefined>, period: number) {
   return output
 }
 
-export function calculateTradingViewVdoRows(dataList: KLineData[], inputSettings: Partial<VdoIndicatorSettings> = defaultVdoIndicatorSettings): VdoIndicatorRow[] {
+function calculateSmaSeries(values: Array<number | undefined>, period: number) {
+  const output: Array<number | undefined> = values.map(() => undefined)
+  let sum = 0
+  let finiteCount = 0
+
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index]
+    if (Number.isFinite(value)) {
+      sum += value as number
+      finiteCount += 1
+    }
+
+    if (index >= period) {
+      const removed = values[index - period]
+      if (Number.isFinite(removed)) {
+        sum -= removed as number
+        finiteCount -= 1
+      }
+    }
+
+    if (index >= period - 1 && finiteCount === period) output[index] = sum / period
+  }
+
+  return output
+}
+
+function calculateRollingSum(values: number[], period: number) {
+  const output: Array<number | undefined> = values.map(() => undefined)
+  let sum = 0
+
+  for (let index = 0; index < values.length; index += 1) {
+    sum += values[index] ?? 0
+    if (index >= period) sum -= values[index - period] ?? 0
+    if (index >= period) output[index] = sum
+  }
+
+  return output
+}
+
+export function calculateTradingViewVdoRows(
+  dataList: KLineData[],
+  inputSettings: Partial<VdoIndicatorSettings> = defaultVdoIndicatorSettings,
+  options: { includeMovingAverages?: boolean } = {},
+): VdoIndicatorRow[] {
   const settings = normalizeVdoSettings(inputSettings)
   const length = clampPeriod(settings.length, defaultVdoIndicatorSettings.length)
   const emaSmoothing = clampSmoothingPeriod(settings.emaSmoothing, defaultVdoIndicatorSettings.emaSmoothing)
@@ -237,24 +293,38 @@ export function calculateTradingViewVdoRows(dataList: KLineData[], inputSettings
     trueRange[index] = Math.max(high - low, Math.abs(high - previousClose), Math.abs(low - previousClose))
   }
 
+  const plusSums = calculateRollingSum(plusMovement, length)
+  const minusSums = calculateRollingSum(minusMovement, length)
+  const trueRangeSums = calculateRollingSum(trueRange, length)
+
   const rawValues = dataList.map((_, index) => {
-    if (index < length) return {}
-    let plusSum = 0
-    let minusSum = 0
-    let trueRangeSum = 0
-    for (let cursor = index - length + 1; cursor <= index; cursor += 1) {
-      plusSum += plusMovement[cursor]
-      minusSum += minusMovement[cursor]
-      trueRangeSum += trueRange[cursor]
-    }
+    const plusSum = plusSums[index]
+    const minusSum = minusSums[index]
+    const trueRangeSum = trueRangeSums[index]
+    if (!Number.isFinite(plusSum) || !Number.isFinite(minusSum) || !Number.isFinite(trueRangeSum)) return {}
     if (trueRangeSum === 0) return {}
-    return { vdo: plusSum / trueRangeSum - minusSum / trueRangeSum }
+    return { vdo: (plusSum as number) / (trueRangeSum as number) - (minusSum as number) / (trueRangeSum as number) }
   })
 
-  if (emaSmoothing <= 1) return rawValues
+  const smoothedValues = emaSmoothing > 1 ? calculateEmaSeries(rawValues.map((row) => row.vdo), emaSmoothing) : []
+  const rows = emaSmoothing <= 1
+    ? rawValues
+    : rawValues.map((row, index) => {
+      const value = smoothedValues[index]
+      return Number.isFinite(value) ? { vdo: value } : row
+    })
 
-  const smoothedValues = calculateEmaSeries(rawValues.map((row) => row.vdo), emaSmoothing)
-  return rawValues.map((row, index) => Number.isFinite(smoothedValues[index]) ? { vdo: smoothedValues[index] } : row)
+  if (options.includeMovingAverages === false) return rows
+
+  const maLength = clampPeriod(settings.vdoMaLength, defaultVdoIndicatorSettings.vdoMaLength)
+  const ma2Length = clampPeriod(settings.vdoMa2Length, defaultVdoIndicatorSettings.vdoMa2Length)
+  const vdoMaValues = calculateSmaSeries(rows.map((row) => row.vdo), maLength)
+  const vdoMa2Values = calculateSmaSeries(rows.map((row) => row.vdo), ma2Length)
+  return rows.map((row, index) => ({
+    ...row,
+    ...(Number.isFinite(vdoMaValues[index]) ? { vdoMa: vdoMaValues[index] } : {}),
+    ...(Number.isFinite(vdoMa2Values[index]) ? { vdoMa2: vdoMa2Values[index] } : {}),
+  }))
 }
 
 export function ensureTradingViewVdoIndicator() {
@@ -280,6 +350,18 @@ export function ensureTradingViewVdoIndicator() {
           value: { text: formatVdoValue(row?.vdo, settings.precision), color: colorWithAlpha(settings.dpoColor, settings.dpoOpacity) },
         })
       }
+      if (settings.valuesInStatusLine && readIndicatorValuesVisible() && settings.vdoMaVisible) {
+        values.push({
+          title: { text: 'MA ', color: params.defaultStyles.tooltip.text.color },
+          value: { text: formatVdoValue(row?.vdoMa, settings.precision), color: colorWithAlpha(settings.vdoMaColor, settings.vdoMaOpacity) },
+        })
+      }
+      if (settings.valuesInStatusLine && readIndicatorValuesVisible() && settings.vdoMa2Visible) {
+        values.push({
+          title: { text: 'MA2 ', color: params.defaultStyles.tooltip.text.color },
+          value: { text: formatVdoValue(row?.vdoMa2, settings.precision), color: colorWithAlpha(settings.vdoMa2Color, settings.vdoMa2Opacity) },
+        })
+      }
       return { name: 'VDO', calcParamsText: inputsText, icons: [], values }
     },
     draw: ({ bounding, ctx, indicator, visibleRange, xAxis, yAxis }) => {
@@ -288,9 +370,27 @@ export function ensureTradingViewVdoIndicator() {
       drawHorizontalLine(ctx, bounding, yAxis, settings.zeroLineVisible, 0, settings.zeroLineColor, settings.zeroLineStyle, settings.zeroLineWidth, settings.zeroLineOpacity)
       drawHorizontalLine(ctx, bounding, yAxis, settings.upLineVisible, settings.upLineValue, settings.upLineColor, settings.upLineStyle, settings.upLineWidth, settings.upLineOpacity)
       drawHorizontalLine(ctx, bounding, yAxis, settings.upLine2Visible, settings.upLine2Value, settings.upLine2Color, settings.upLine2Style, settings.upLine2Width, settings.upLine2Opacity)
+      drawHorizontalLine(ctx, bounding, yAxis, settings.upLine3Visible, settings.upLine3Value, settings.upLine3Color, settings.upLine3Style, settings.upLine3Width, settings.upLine3Opacity)
       drawHorizontalLine(ctx, bounding, yAxis, settings.downLineVisible, settings.downLineValue, settings.downLineColor, settings.downLineStyle, settings.downLineWidth, settings.downLineOpacity)
       drawHorizontalLine(ctx, bounding, yAxis, settings.downLine2Visible, settings.downLine2Value, settings.downLine2Color, settings.downLine2Style, settings.downLine2Width, settings.downLine2Opacity)
+      drawHorizontalLine(ctx, bounding, yAxis, settings.downLine3Visible, settings.downLine3Value, settings.downLine3Color, settings.downLine3Style, settings.downLine3Width, settings.downLine3Opacity)
       drawLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, settings)
+      drawLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, {
+        ...settings,
+        dpoColor: settings.vdoMaColor,
+        dpoLineStyle: settings.vdoMaLineStyle,
+        dpoLineWidth: settings.vdoMaLineWidth,
+        dpoOpacity: settings.vdoMaOpacity,
+        dpoVisible: settings.vdoMaVisible,
+      }, 'vdoMa')
+      drawLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, {
+        ...settings,
+        dpoColor: settings.vdoMa2Color,
+        dpoLineStyle: settings.vdoMa2LineStyle,
+        dpoLineWidth: settings.vdoMa2LineWidth,
+        dpoOpacity: settings.vdoMa2Opacity,
+        dpoVisible: settings.vdoMa2Visible,
+      }, 'vdoMa2')
       return true
     },
     calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(

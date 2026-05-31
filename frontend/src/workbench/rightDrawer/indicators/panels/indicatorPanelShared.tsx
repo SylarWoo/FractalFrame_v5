@@ -20,6 +20,8 @@ import type {
   TsiIndicatorSettings,
   VdoIndicatorSettings,
   ViIndicatorSettings,
+  AoIndicatorSettings,
+  VmiIndicatorSettings,
   VwapAnchorPeriod,
   VwapBandCalculationMode,
   VwapIndicatorSettings,
@@ -243,6 +245,20 @@ export function updateViSettings(
   current: ViIndicatorSettings,
   patch: Partial<ViIndicatorSettings>,
 ): ViIndicatorSettings {
+  return { ...current, ...patch }
+}
+
+export function updateAoSettings(
+  current: AoIndicatorSettings,
+  patch: Partial<AoIndicatorSettings>,
+): AoIndicatorSettings {
+  return { ...current, ...patch }
+}
+
+export function updateVmiSettings(
+  current: VmiIndicatorSettings,
+  patch: Partial<VmiIndicatorSettings>,
+): VmiIndicatorSettings {
   return { ...current, ...patch }
 }
 

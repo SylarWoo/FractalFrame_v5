@@ -1,4 +1,4 @@
-﻿import type { Chart, KLineData } from 'klinecharts'
+import type { Chart, KLineData } from 'klinecharts'
 import {
   defaultDpoIndicatorSettings,
   defaultMacdIndicatorSettings,
@@ -9,6 +9,8 @@ import {
   defaultTsiIndicatorSettings,
   defaultVdoIndicatorSettings,
   defaultViIndicatorSettings,
+  defaultAoIndicatorSettings,
+  defaultVmiIndicatorSettings,
   defaultVolIndicatorSettings,
   defaultVwapIndicatorSettings,
 } from '../rightDrawer/indicatorPersistence'
@@ -63,6 +65,8 @@ export const titlePaneSpecs = [
   { paneId: 'sqzmom_pane', name: 'SQZMOM' },
   { paneId: 'tsi_pane', name: 'TSI' },
   { paneId: 'vdo_pane', name: 'VDO' },
+  { paneId: 'ao_pane', name: 'AO' },
+  { paneId: 'vmi_pane', name: 'VMI' },
   { paneId: 'vi_pane', name: 'VI' },
 ] as const
 
@@ -145,6 +149,11 @@ function readIndicatorRow(chart: Chart, indicator: IndicatorLike, crosshairIndex
 
 function mergeSettings<T extends Record<string, unknown>>(fallback: T, input: unknown): T {
   return { ...fallback, ...(isRecord(input) ? input : {}) }
+}
+
+function unwrapIndicatorSettings(input: unknown) {
+  if (isRecord(input) && isRecord(input.settings)) return input.settings
+  return input
 }
 
 function readStatusInputsVisible() {
@@ -338,6 +347,42 @@ function createViParts(chart: Chart, indicator: IndicatorLike, crosshairIndex: n
   return parts
 }
 
+function createAoParts(chart: Chart, indicator: IndicatorLike, crosshairIndex: number | null): PaneTitlePart[] {
+  const settings = mergeSettings(defaultAoIndicatorSettings, indicator.calcParams?.[0])
+  const index = readTooltipIndex(chart, crosshairIndex, indicator.result?.length ?? 0)
+  const row = indicator.result?.[index] ?? {}
+  const previousRow = indicator.result?.[index - 1] ?? {}
+  const parts: PaneTitlePart[] = [titlePart(`AO${booleanValue(settings.inputStatusLineVisible, true) && readStatusInputsVisible() ? ` ${settings.fastLength} ${settings.slowLength}` : ''}`)]
+  if (booleanValue(settings.statusLineValuesVisible, true) && readStatusValuesVisible()) {
+    const value = numberValue(row.histogram)
+    const previousValue = numberValue(previousRow.histogram)
+    const rising = value != null && previousValue != null ? value >= previousValue : (value ?? 0) >= 0
+    const color = rising
+      ? colorWithAlpha(stringValue(settings.histogramPositiveColor, '#26a69a'), opacityValue(settings.histogramPositiveOpacity, 1))
+      : colorWithAlpha(stringValue(settings.histogramNegativeColor, '#ef5350'), opacityValue(settings.histogramNegativeOpacity, 1))
+    if (booleanValue(settings.histogramVisible, true)) parts.push(titlePart(`AO ${formatNumber(row.histogram, settings.precision, 4)}`, color))
+  }
+  return parts
+}
+
+function createVmiParts(chart: Chart, indicator: IndicatorLike, crosshairIndex: number | null): PaneTitlePart[] {
+  const settings = mergeSettings(defaultVmiIndicatorSettings, unwrapIndicatorSettings(indicator.calcParams?.[0]))
+  const index = readTooltipIndex(chart, crosshairIndex, indicator.result?.length ?? 0)
+  const row = indicator.result?.[index] ?? {}
+  const previousRow = indicator.result?.[index - 1] ?? {}
+  const parts: PaneTitlePart[] = [titlePart(`VMI${booleanValue(settings.inputStatusLineVisible, true) && readStatusInputsVisible() ? ` ${settings.fastLength} ${settings.slowLength}` : ''}`)]
+  if (booleanValue(settings.statusLineValuesVisible, true) && readStatusValuesVisible()) {
+    const value = numberValue(row.histogram)
+    const previousValue = numberValue(previousRow.histogram)
+    const rising = value != null && previousValue != null ? value >= previousValue : (value ?? 0) >= 0
+    const color = rising
+      ? colorWithAlpha(stringValue(settings.histogramPositiveColor, '#26a69a'), opacityValue(settings.histogramPositiveOpacity, 1))
+      : colorWithAlpha(stringValue(settings.histogramNegativeColor, '#ef5350'), opacityValue(settings.histogramNegativeOpacity, 1))
+    if (booleanValue(settings.histogramVisible, true)) parts.push(titlePart(`VMI ${formatNumber(row.histogram, settings.precision, 4)}`, color))
+  }
+  return parts
+}
+
 function createCandleMaParts(chart: Chart, crosshairIndex: number | null) {
   const indicator = indicatorFromChart(chart, 'candle_pane', 'MA')
   if (!indicator) return []
@@ -365,8 +410,10 @@ function createCandleVwapParts(chart: Chart, crosshairIndex: number | null) {
 }
 
 function createCandleMrParts(chart: Chart) {
-  const indicator = indicatorFromChart(chart, 'candle_pane', 'MR')
-  return indicator ? [titlePart('MR')] : []
+  const mrM5 = indicatorFromChart(chart, 'candle_pane', 'MR_M5')
+  if (mrM5) return [titlePart('MR-M5')]
+  const mrM30 = indicatorFromChart(chart, 'candle_pane', 'MR_M30')
+  return mrM30 ? [titlePart('MR-M30')] : []
 }
 
 function createCandleVolParts(chart: Chart, crosshairIndex: number | null) {
@@ -410,6 +457,8 @@ function createIndicatorParts(chart: Chart, paneId: string, name: string, crossh
   if (name === 'TSI') return createTsiParts(chart, indicator, crosshairIndex)
   if (name === 'VDO') return createVdoParts(chart, indicator, crosshairIndex)
   if (name === 'VI') return createViParts(chart, indicator, crosshairIndex)
+  if (name === 'AO') return createAoParts(chart, indicator, crosshairIndex)
+  if (name === 'VMI') return createVmiParts(chart, indicator, crosshairIndex)
   return []
 }
 

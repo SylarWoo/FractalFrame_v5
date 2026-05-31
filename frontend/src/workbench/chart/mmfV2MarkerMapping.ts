@@ -16,8 +16,12 @@ const mmfV2PriorityOrder = [
   'MMF_V2_TREND_UP_RETURN',
   'MMF_V2_TREND_DOWN_DIVERGENCE',
   'MMF_V2_TREND_UP_DIVERGENCE',
+  'MMF_V2_TOP_DIVERGENCE',
+  'MMF_V2_BOTTOM_DIVERGENCE',
   'MMF_V2_TREND_DOWN_REBOUND',
   'MMF_V2_TREND_UP_PULLBACK',
+  'MMF_V2_RESISTANCE',
+  'MMF_V2_SUPPORT',
   'MMF_V2_EXPECTED_RESISTANCE',
   'MMF_V2_EXPECTED_SUPPORT',
   'MMF_V2_SUPPORT_DOWN_BREAK',
@@ -67,6 +71,54 @@ export function createMmfV2RowsFromMarkers(realRows: KLineData[], markers: MmfV2
       rows[index] = { ...rows[index], resistanceDownBreakMarker: price, resistanceDownBreakMarkerPrice: price }
       return
     }
+    if (marker.type === 'MMF_V2_TRUE_CLOSE_UP') {
+      rows[index] = { ...rows[index], trueCloseUpMarker: price, trueCloseUpMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_TRUE_CLOSE_DOWN') {
+      rows[index] = { ...rows[index], trueCloseDownMarker: price, trueCloseDownMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_BULL_MARKET') {
+      rows[index] = { ...rows[index], bullMarketMarker: price, bullMarketMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_BEAR_MARKET') {
+      rows[index] = { ...rows[index], bearMarketMarker: price, bearMarketMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_OVERBOUGHT') {
+      rows[index] = { ...rows[index], overboughtMarker: price, overboughtMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_OVERBOUGHT_CLOSE') {
+      rows[index] = { ...rows[index], overboughtCloseMarker: price, overboughtCloseMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_OVERSOLD') {
+      rows[index] = { ...rows[index], oversoldMarker: price, oversoldMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_OVERSOLD_CLOSE') {
+      rows[index] = { ...rows[index], oversoldCloseMarker: price, oversoldCloseMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_TSI_DEAD_CROSS') {
+      rows[index] = { ...rows[index], tsiDeadCrossMarker: price, tsiDeadCrossMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_TSI_DEAD_CROSS_CONFIRM') {
+      rows[index] = { ...rows[index], tsiDeadCrossConfirmMarker: price, tsiDeadCrossConfirmMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_TSI_GOLDEN_CROSS') {
+      rows[index] = { ...rows[index], tsiGoldenCrossMarker: price, tsiGoldenCrossMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_TSI_GOLDEN_CROSS_CONFIRM') {
+      rows[index] = { ...rows[index], tsiGoldenCrossConfirmMarker: price, tsiGoldenCrossConfirmMarkerPrice: price }
+      return
+    }
     if (marker.type === 'MMF_V2_EXPECTED_RESISTANCE') {
       rows[index] = { ...rows[index], expectedResistanceMarker: price, expectedResistanceMarkerPrice: price }
       return
@@ -99,10 +151,18 @@ export function createMmfV2RowsFromMarkers(realRows: KLineData[], markers: MmfV2
       rows[index] = { ...rows[index], trendUpDivergenceMarker: price, trendUpDivergenceMarkerPrice: price }
       return
     }
+    if (marker.type === 'MMF_V2_TOP_DIVERGENCE') {
+      rows[index] = { ...rows[index], topDivergenceMarker: price, topDivergenceMarkerPrice: price }
+      return
+    }
+    if (marker.type === 'MMF_V2_BOTTOM_DIVERGENCE') {
+      rows[index] = { ...rows[index], bottomDivergenceMarker: price, bottomDivergenceMarkerPrice: price }
+      return
+    }
 
     if (marker.type === 'MMF_V2_HIGH' || marker.type === 'MMF_V2_RESISTANCE') {
       const markerPatch = marker.type === 'MMF_V2_RESISTANCE'
-        ? { highMarker: price, highMarkerPrice: price, resistanceMarker: price, resistanceMarkerPrice: price }
+        ? { resistanceMarker: price, resistanceMarkerPrice: price }
         : { highMarker: price, highMarkerPrice: price }
       rows[index] = { ...rows[index], ...markerPatch }
       if (Number.isFinite(eventIndex) && eventIndex >= 0 && eventIndex < rows.length) {
@@ -126,7 +186,7 @@ export function createMmfV2RowsFromMarkers(realRows: KLineData[], markers: MmfV2
 
     if (marker.type === 'MMF_V2_LOW' || marker.type === 'MMF_V2_SUPPORT') {
       const markerPatch = marker.type === 'MMF_V2_SUPPORT'
-        ? { lowMarker: price, lowMarkerPrice: price, supportMarker: price, supportMarkerPrice: price }
+        ? { supportMarker: price, supportMarkerPrice: price }
         : { lowMarker: price, lowMarkerPrice: price }
       rows[index] = { ...rows[index], ...markerPatch }
       if (Number.isFinite(eventIndex) && eventIndex >= 0 && eventIndex < rows.length) {

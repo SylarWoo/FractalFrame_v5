@@ -12,18 +12,18 @@ import { readPersistedIndicatorsState } from '../rightDrawer/indicatorPersistenc
 
 describe('indicatorControllerModel', () => {
   it('keeps restore order stable and derives loaded records from keys', () => {
-    const loaded = loadedRecordFromKeys(['Vol', 'RSI', 'MR'])
+    const loaded = loadedRecordFromKeys(['Vol', 'RSI', 'MR-M5'])
 
-    expect(loaded).toMatchObject({ MR: true, RSI: true, Vol: true, MACD: false })
-    expect(loadedKeysFromState({ ...readPersistedIndicatorsState(), loaded })).toEqual(['RSI', 'MR', 'Vol'])
-    expect(indicatorRestoreOrder).toEqual(['RSI', 'Stoch', 'SQZMOM', 'MACD', 'DPO', 'VDO', 'TSI', 'VI', 'MA', 'MR', 'MMF', 'MMF_V2', 'VWAP', 'Vol'])
+    expect(loaded).toMatchObject({ 'MR-M5': true, RSI: true, Vol: true, MACD: false })
+    expect(loadedKeysFromState({ ...readPersistedIndicatorsState(), loaded })).toEqual(['RSI', 'MR-M5', 'Vol'])
+    expect(indicatorRestoreOrder).toEqual(['RSI', 'Stoch', 'SQZMOM', 'MACD', 'DPO', 'VDO', 'AO', 'VMI', 'TSI', 'VI', 'MA', 'MR-M5', 'MR-M30', 'MMF', 'MMF_V2', 'VWAP', 'Vol'])
   })
 
   it('reads and writes settings through the indicator registry', () => {
     const state = readPersistedIndicatorsState()
-    const next = withIndicatorSettings(state, 'MR', { ...state.mr, labelsOnPriceScale: false })
+    const next = withIndicatorSettings(state, 'MR-M5', { ...state.mr, labelsOnPriceScale: false })
 
-    expect(getIndicatorSettings(next, 'MR')).toMatchObject({ labelsOnPriceScale: false })
+    expect(getIndicatorSettings(next, 'MR-M30')).toMatchObject({ labelsOnPriceScale: false })
     expect(next.rsi).toBe(state.rsi)
   })
 
@@ -37,11 +37,11 @@ describe('indicatorControllerModel', () => {
   it('creates restore commands only for loaded indicators in stable order', () => {
     const state = {
       ...readPersistedIndicatorsState(),
-      loaded: loadedRecordFromKeys(['Vol', 'MR', 'RSI']),
+      loaded: loadedRecordFromKeys(['Vol', 'MR-M30', 'RSI']),
     }
 
-    expect(createLoadedIndicatorCommands(state).map((command) => command.name)).toEqual(['RSI', 'MR', 'Vol'])
-    expect(createLoadedIndicatorCommands(state, 'MR').map((command) => command.name)).toEqual(['MR'])
+    expect(createLoadedIndicatorCommands(state).map((command) => command.name)).toEqual(['RSI', 'MR-M30', 'Vol'])
+    expect(createLoadedIndicatorCommands(state, 'MR-M30').map((command) => command.name)).toEqual(['MR-M30'])
     expect(createLoadedIndicatorCommands(state, 'MACD')).toEqual([])
   })
 })

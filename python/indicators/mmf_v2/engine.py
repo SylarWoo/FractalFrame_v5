@@ -5,10 +5,13 @@ from typing import Any
 import pandas as pd
 
 from .debug import create_debug_rows
-from .features import build_mmf_v2_features, normalize_ohlcv_frame
+from .feature_frame import build_mmf_v2_feature_frame
+from .features import normalize_ohlcv_frame
 from .models import MmfV2Settings
+from .signal_decision import calculate_mmf_v2_signal_decisions
 from .signal_catalog import get_mmf_v2_signal_catalog
-from .state_machine import calculate_mmf_v2_state_machine_markers
+from .signal_frame import build_mmf_v2_signal_frame
+from .support_resistance import create_vdo_level_debug
 from python.market_data import create_bar_alignment_debug
 from python.signals import signals_to_records
 
@@ -19,6 +22,7 @@ def calculate_mmf_v2_markers(
     rows: list[dict[str, Any]] | pd.DataFrame,
     settings: MmfV2Settings | None = None,
     include_debug: bool = False,
+    include_signal_frame: bool = True,
 ) -> dict[str, Any]:
     active_settings = settings or MmfV2Settings()
     frame = normalize_ohlcv_frame(rows)
@@ -31,33 +35,67 @@ def calculate_mmf_v2_markers(
             "rowsCount": 0,
             "markersCount": 0,
             "markers": [],
+            "momentumSamples": [],
+            "momentumSamplesCount": 0,
+            "momentumSummary": {},
             "signals": [],
+            "signalFrame": [],
             "signalCatalog": get_mmf_v2_signal_catalog(),
             "debug": {"alignment": alignment_debug, "rows": []} if include_debug else None,
         }
 
-    features = build_mmf_v2_features(frame, active_settings)
-    markers = calculate_mmf_v2_state_machine_markers(features, active_settings)
+    feature_frame = build_mmf_v2_feature_frame(frame, active_settings)
+    return calculate_mmf_v2_markers_from_features(
+        feature_frame.frame,
+        active_settings,
+        alignment_debug=alignment_debug,
+        include_debug=include_debug,
+        include_signal_frame=include_signal_frame,
+    )
+
+
+def calculate_mmf_v2_markers_from_features(
+    features: pd.DataFrame,
+    settings: MmfV2Settings | None = None,
+    *,
+    alignment_debug: dict[str, Any] | None = None,
+    include_debug: bool = False,
+    include_signal_frame: bool = True,
+) -> dict[str, Any]:
+    active_settings = settings or MmfV2Settings()
+    decision_result = calculate_mmf_v2_signal_decisions(features, active_settings, include_decision_frame=include_debug)
+    markers = decision_result.markers
+    debug_signals = decision_result.stoch_signals if include_debug else []
     signal_ids = [marker.signal_id for marker in markers]
     signal_records = signals_to_records(markers)
+    if include_signal_frame:
+        signal_frame = build_mmf_v2_signal_frame(features, markers)
+    else:
+        signal_frame = []
+    momentum_payload = {"momentumSamples": [], "momentumSamplesCount": 0, "momentumSummary": {}}
 
     return {
         "ok": True,
         "version": "MMF_V2",
         "engine": MMF_V2_ENGINE_VERSION,
-        "rowsCount": int(len(frame)),
+        "rowsCount": int(len(features)),
         "markersCount": len(markers),
         "markers": [marker.to_payload() for marker in markers],
+        **momentum_payload,
         "signals": signal_records,
         "signalsCount": len(signal_records),
+        "signalFrame": signal_frame,
+        "signalFrameCount": int(len(features)),
         "signalCatalog": get_mmf_v2_signal_catalog(),
         "debug": {
-            "alignment": alignment_debug,
+            "alignment": alignment_debug or {},
             "signals": {
                 "records": len(markers),
                 "signalIds": signal_ids[:100],
                 "signalIdsUnique": len(signal_ids) == len(set(signal_ids)),
             },
             "rows": create_debug_rows(features),
+            "decisionFrame": decision_result.decision_frame,
+            "vdoLevels": create_vdo_level_debug(features, debug_signals),
         } if include_debug else None,
     }

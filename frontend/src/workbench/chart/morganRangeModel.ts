@@ -2,15 +2,20 @@ import type { KLineData } from 'klinecharts'
 import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 
 export const h4MorganSeconds = 4 * 60 * 60
+export const d1MorganSeconds = 24 * 60 * 60
 const xauSessionAnchorSeconds = 22 * 60 * 60
 
-export type H4MorganCandle = {
+export type MorganRangeMode = 'H4_M5' | 'D1_M30'
+
+export type MorganRangeCandle = {
   close: number
   high: number
   low: number
   startIndex: number
   startTimestamp: number
 }
+
+export type H4MorganCandle = MorganRangeCandle
 
 export type MorganRangeLevel = {
   price: number
@@ -73,11 +78,23 @@ export function resolveH4MorganBucketKey(timestampMs: number) {
   return Math.floor((Math.floor(timestampMs / 1000) - xauSessionAnchorSeconds) / h4MorganSeconds)
 }
 
-export function collectH4MorganCandles(dataList: KLineData[]) {
+export function resolveD1MorganBucketKey(timestampMs: number) {
+  return Math.floor((Math.floor(timestampMs / 1000) - xauSessionAnchorSeconds) / d1MorganSeconds)
+}
+
+export function resolveMorganRangeBucketSeconds(mode: MorganRangeMode) {
+  return mode === 'D1_M30' ? d1MorganSeconds : h4MorganSeconds
+}
+
+export function resolveMorganRangeBucketKey(timestampMs: number, mode: MorganRangeMode) {
+  return mode === 'D1_M30' ? resolveD1MorganBucketKey(timestampMs) : resolveH4MorganBucketKey(timestampMs)
+}
+
+export function collectMorganRangeCandles(dataList: KLineData[], mode: MorganRangeMode = 'H4_M5') {
   const realRows = stripFuturePlaceholders(dataList)
-  const candles: H4MorganCandle[] = []
+  const candles: MorganRangeCandle[] = []
   let activeKey: number | null = null
-  let active: H4MorganCandle | null = null
+  let active: MorganRangeCandle | null = null
 
   realRows.forEach((row, index) => {
     const timestamp = resolveKLineTimestampMs(row)
@@ -86,7 +103,7 @@ export function collectH4MorganCandles(dataList: KLineData[]) {
     const close = Number(row.close)
     if (!Number.isFinite(timestamp) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) return
 
-    const key = resolveH4MorganBucketKey(timestamp)
+    const key = resolveMorganRangeBucketKey(timestamp, mode)
     if (activeKey !== key || !active) {
       active = { close, high, low, startIndex: index, startTimestamp: Number(row.timestamp) }
       candles.push(active)
@@ -101,7 +118,15 @@ export function collectH4MorganCandles(dataList: KLineData[]) {
   return candles
 }
 
-export function calculateH4MorganAtr7(candles: H4MorganCandle[]) {
+export function collectH4MorganCandles(dataList: KLineData[]) {
+  return collectMorganRangeCandles(dataList, 'H4_M5')
+}
+
+export function collectD1MorganCandles(dataList: KLineData[]) {
+  return collectMorganRangeCandles(dataList, 'D1_M30')
+}
+
+export function calculateMorganAtr7(candles: MorganRangeCandle[]) {
   const trueRanges = candles.map((candle, index) => {
     if (index === 0) return candle.high - candle.low
     const previousClose = candles[index - 1].close
@@ -122,6 +147,10 @@ export function calculateH4MorganAtr7(candles: H4MorganCandle[]) {
   })
 }
 
+export function calculateH4MorganAtr7(candles: H4MorganCandle[]) {
+  return calculateMorganAtr7(candles)
+}
+
 export function calculateMorganRangeLevels(center: number, range: number): MorganRangeLevel[] {
   if (!Number.isFinite(center) || !Number.isFinite(range)) return []
   return morganRangeLevelRatios.map((ratio) => ({
@@ -130,10 +159,10 @@ export function calculateMorganRangeLevels(center: number, range: number): Morga
   }))
 }
 
-export function calculateMorganRangeSegments(dataList: KLineData[], futureBars = 0): MorganRangeSegment[] {
-  const candles = collectH4MorganCandles(dataList)
+export function calculateMorganRangeSegmentsForMode(dataList: KLineData[], mode: MorganRangeMode = 'H4_M5', futureBars = 0): MorganRangeSegment[] {
+  const candles = collectMorganRangeCandles(dataList, mode)
   if (candles.length < 8) return []
-  const atr = calculateH4MorganAtr7(candles)
+  const atr = calculateMorganAtr7(candles)
   const safeFutureBars = Number.isFinite(futureBars) ? Math.max(0, Math.round(futureBars)) : 0
   const segments: MorganRangeSegment[] = []
 
@@ -165,6 +194,10 @@ export function calculateMorganRangeSegments(dataList: KLineData[], futureBars =
   }
 
   return segments
+}
+
+export function calculateMorganRangeSegments(dataList: KLineData[], futureBars = 0): MorganRangeSegment[] {
+  return calculateMorganRangeSegmentsForMode(dataList, 'H4_M5', futureBars)
 }
 
 export function findMorganRangeSegmentByDataIndex(segments: MorganRangeSegment[], dataIndex: number) {

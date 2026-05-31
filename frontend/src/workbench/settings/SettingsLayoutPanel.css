@@ -94,3 +94,35 @@
   gap: 6px;
   justify-self: start;
 }
+
+.ff-settings-layout-template-group {
+  padding-top: 6px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ff-settings-layout-template-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ff-settings-layout-template-actions button {
+  height: 28px;
+  min-width: 78px;
+  border: 1px solid #d1d4dc;
+  border-radius: 3px;
+  background: #ffffff;
+  color: #131722;
+  cursor: pointer;
+  font: 12px/1 Arial, Tahoma, 'Segoe UI', sans-serif;
+}
+
+.ff-settings-layout-template-actions button:hover {
+  background: #f8fafc;
+}
+
+.ff-settings-layout-template-status {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 18px;
+}

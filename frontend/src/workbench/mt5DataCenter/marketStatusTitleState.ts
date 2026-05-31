@@ -7,6 +7,7 @@ export const marketStatusTitleChangedEvent = workbenchEvents.marketStatusTitleCh
 
 export type MarketStatusTitleSnapshot = {
   savedAt: string
+  sessions?: Mt5SymbolRow['sessions']
   status: {
     label: string
     nextCheckAt?: string | null
@@ -26,6 +27,25 @@ const minutesPerWeek = 7 * minutesPerDay
 
 function normalizeSymbol(symbol: string) {
   return symbol.trim().toUpperCase()
+}
+
+function isExpiredStatus(status: MarketStatusTitleSnapshot['status'], now = new Date()) {
+  if (!status.nextCheckAt) return false
+  const nextCheckAt = Date.parse(status.nextCheckAt)
+  return Number.isFinite(nextCheckAt) && nextCheckAt <= now.getTime()
+}
+
+function expiredOpenStatusAsClosed(snapshot: MarketStatusTitleSnapshot): MarketStatusTitleSnapshot | null {
+  if (snapshot.status.status !== 'open') return null
+  return {
+    ...snapshot,
+    status: {
+      ...snapshot.status,
+      label: '休市',
+      nextCheckAt: null,
+      status: 'closed',
+    },
+  }
 }
 
 function parseSessionMinute(value: string) {
@@ -123,7 +143,13 @@ export function readMarketStatusTitleSnapshot(symbol: string): MarketStatusTitle
   if (!key) return null
   const snapshots = readJson<Record<string, MarketStatusTitleSnapshot>>(storageKeys.marketStatusTitleSnapshots, {})
   const snapshot = snapshots[key]
-  return snapshot?.status ? snapshot : null
+  if (!snapshot?.status) return null
+  if (snapshot.sessions) {
+    const status = resolveMarketStatusFromSymbolSession({ symbol: snapshot.symbol || symbol, sessions: snapshot.sessions })
+    return status ? { ...snapshot, status } : null
+  }
+  if (!isExpiredStatus(snapshot.status)) return snapshot
+  return expiredOpenStatusAsClosed(snapshot)
 }
 
 export function saveMarketStatusTitleSnapshotFromSymbolSession(row: Mt5SymbolRow) {
@@ -134,6 +160,7 @@ export function saveMarketStatusTitleSnapshotFromSymbolSession(row: Mt5SymbolRow
   const snapshots = readJson<Record<string, MarketStatusTitleSnapshot>>(storageKeys.marketStatusTitleSnapshots, {})
   const snapshot: MarketStatusTitleSnapshot = {
     savedAt: new Date().toISOString(),
+    sessions: row.sessions,
     status,
     symbol: row.symbol,
   }

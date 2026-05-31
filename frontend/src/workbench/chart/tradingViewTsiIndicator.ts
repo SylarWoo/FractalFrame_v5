@@ -112,6 +112,51 @@ function alignStrokePixel(value: number, lineWidth: number) {
   return lineWidth % 2 === 1 ? Math.round(value) + 0.5 : Math.round(value)
 }
 
+function drawHorizontalLine(
+  ctx: CanvasRenderingContext2D,
+  bounding: { left: number; width: number },
+  yAxis: { convertToPixel: (value: number) => number },
+  visible: boolean,
+  value: number,
+  color: string,
+  lineStyle: TsiIndicatorSettings['tsiLineStyle'],
+  lineWidth: number,
+  opacity: number,
+) {
+  if (!visible || !Number.isFinite(value)) return
+  const width = clampLineWidth(lineWidth)
+  const y = alignStrokePixel(yAxis.convertToPixel(value), width)
+  ctx.save()
+  ctx.beginPath()
+  ctx.setLineDash(lineDashForStyle(lineStyle))
+  ctx.strokeStyle = colorWithAlpha(color, opacity)
+  ctx.lineWidth = width
+  ctx.moveTo(bounding.left, y)
+  ctx.lineTo(bounding.left + bounding.width, y)
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawHorizontalBand(
+  ctx: CanvasRenderingContext2D,
+  bounding: { left: number; width: number },
+  yAxis: { convertToPixel: (value: number) => number },
+  settings: TsiIndicatorSettings,
+) {
+  if (!settings.backgroundFillVisible || !settings.upperBandVisible || !settings.lowerBandVisible) return
+  if (!Number.isFinite(settings.upperBandValue) || !Number.isFinite(settings.lowerBandValue)) return
+  const upperY = yAxis.convertToPixel(settings.upperBandValue)
+  const lowerY = yAxis.convertToPixel(settings.lowerBandValue)
+  const top = Math.min(upperY, lowerY)
+  const height = Math.abs(lowerY - upperY)
+  if (height <= 0) return
+
+  ctx.save()
+  ctx.fillStyle = colorWithAlpha(settings.backgroundFillColor, settings.backgroundFillOpacity)
+  ctx.fillRect(bounding.left, top, bounding.width, height)
+  ctx.restore()
+}
+
 function drawLineSeries(
   ctx: CanvasRenderingContext2D,
   rows: TsiIndicatorRow[],
@@ -211,19 +256,10 @@ export function ensureTradingViewTsiIndicator() {
     },
     draw: ({ bounding, ctx, indicator, visibleRange, xAxis, yAxis }) => {
       const settings = normalizeTsiSettings(indicator.calcParams[0])
-      if (settings.zeroLineVisible) {
-        const width = clampLineWidth(settings.zeroLineWidth)
-        const y = alignStrokePixel(yAxis.convertToPixel(0), width)
-        ctx.save()
-        ctx.beginPath()
-        ctx.setLineDash(lineDashForStyle(settings.zeroLineStyle))
-        ctx.strokeStyle = colorWithAlpha(settings.zeroLineColor, settings.zeroLineOpacity)
-        ctx.lineWidth = width
-        ctx.moveTo(bounding.left, y)
-        ctx.lineTo(bounding.left + bounding.width, y)
-        ctx.stroke()
-        ctx.restore()
-      }
+      drawHorizontalBand(ctx, bounding, yAxis, settings)
+      drawHorizontalLine(ctx, bounding, yAxis, settings.upperBandVisible, settings.upperBandValue, settings.upperBandColor, settings.upperBandLineStyle, settings.upperBandLineWidth, settings.upperBandOpacity)
+      drawHorizontalLine(ctx, bounding, yAxis, settings.zeroLineVisible, 0, settings.zeroLineColor, settings.zeroLineStyle, settings.zeroLineWidth, settings.zeroLineOpacity)
+      drawHorizontalLine(ctx, bounding, yAxis, settings.lowerBandVisible, settings.lowerBandValue, settings.lowerBandColor, settings.lowerBandLineStyle, settings.lowerBandLineWidth, settings.lowerBandOpacity)
       drawLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'tsi', settings.tsiColor, settings.tsiVisible, settings.tsiLineStyle, settings.tsiLineWidth, settings.tsiOpacity)
       drawLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'signal', settings.signalColor, settings.signalVisible, settings.signalLineStyle, settings.signalLineWidth, settings.signalOpacity)
       return true

@@ -1,7 +1,5 @@
-import { useState } from 'react'
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import type { MorganRangeSegment } from '../../../chart/morganRangeModel'
-import type { MmfV2MomentumStats } from '../../../chart/mmfV2MomentumStats'
 import { VisibilityRangePanel } from '../../../visibilityRange/VisibilityRangePanel'
 import type { SupportedChartIndicator } from '../../indicatorDefinitions'
 import type {
@@ -17,6 +15,8 @@ import type {
   TsiIndicatorSettings,
   VdoIndicatorSettings,
   ViIndicatorSettings,
+  AoIndicatorSettings,
+  VmiIndicatorSettings,
   VolIndicatorSettings,
   VwapIndicatorSettings,
 } from '../../indicatorPersistence'
@@ -32,7 +32,6 @@ import {
   MmfInputPanel,
   MmfStylePanel,
   MmfV2InputPanel,
-  MmfV2StrategyPanel,
   MmfV2StylePanel,
   RsiInputPanel,
   RsiStylePanel,
@@ -46,6 +45,10 @@ import {
   VdoStylePanel,
   ViInputPanel,
   ViStylePanel,
+  AoInputPanel,
+  AoStylePanel,
+  VmiInputPanel,
+  VmiStylePanel,
   VolInputPanel,
   VolStylePanel,
   VwapInputPanel,
@@ -56,9 +59,7 @@ export function LoadedIndicatorSettingsPanel({
   dpoSettings,
   macdSettings,
   maSettings,
-  mmfV2MomentumCrosshairIndex,
   mmfSettings,
-  mmfV2MomentumStats,
   mrSettings,
   morganRangeSegment,
   onDpoSettingsChange,
@@ -73,6 +74,8 @@ export function LoadedIndicatorSettingsPanel({
   onTsiSettingsChange,
   onVdoSettingsChange,
   onViSettingsChange,
+  onAoSettingsChange,
+  onVmiSettingsChange,
   onVolSettingsChange,
   onVwapSettingsChange,
   settingsTab,
@@ -83,15 +86,15 @@ export function LoadedIndicatorSettingsPanel({
   tsiSettings,
   vdoSettings,
   viSettings,
+  aoSettings,
+  vmiSettings,
   volSettings,
   vwapSettings,
 }: {
   dpoSettings: DpoIndicatorSettings
   macdSettings: MacdIndicatorSettings
   maSettings: MaIndicatorSettings
-  mmfV2MomentumCrosshairIndex?: number | null
   mmfSettings: MmfIndicatorSettings
-  mmfV2MomentumStats?: MmfV2MomentumStats | null
   mrSettings: MrIndicatorSettings
   morganRangeSegment?: MorganRangeSegment | null
   onDpoSettingsChange: (settings: DpoIndicatorSettings) => void
@@ -106,6 +109,8 @@ export function LoadedIndicatorSettingsPanel({
   onTsiSettingsChange: (settings: TsiIndicatorSettings) => void
   onVdoSettingsChange: (settings: VdoIndicatorSettings) => void
   onViSettingsChange: (settings: ViIndicatorSettings) => void
+  onAoSettingsChange: (settings: AoIndicatorSettings) => void
+  onVmiSettingsChange: (settings: VmiIndicatorSettings) => void
   onVolSettingsChange: (settings: VolIndicatorSettings) => void
   onVwapSettingsChange: (settings: VwapIndicatorSettings) => void
   settingsTab: IndicatorSettingsTab
@@ -116,6 +121,8 @@ export function LoadedIndicatorSettingsPanel({
   tsiSettings: TsiIndicatorSettings
   vdoSettings: VdoIndicatorSettings
   viSettings: ViIndicatorSettings
+  aoSettings: AoIndicatorSettings
+  vmiSettings: VmiIndicatorSettings
   volSettings: VolIndicatorSettings
   vwapSettings: VwapIndicatorSettings
 }) {
@@ -132,7 +139,11 @@ export function LoadedIndicatorSettingsPanel({
       input: <MacdInputPanel onSettingsChange={onMacdSettingsChange} settings={macdSettings} />,
       style: <MacdStylePanel onSettingsChange={onMacdSettingsChange} settings={macdSettings} />,
     },
-    MR: {
+    'MR-M5': {
+      input: <MrInputPanelV3 segment={morganRangeSegment} onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
+      style: <MrStylePanelV3 onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
+    },
+    'MR-M30': {
       input: <MrInputPanelV3 segment={morganRangeSegment} onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
       style: <MrStylePanelV3 onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
     },
@@ -168,6 +179,14 @@ export function LoadedIndicatorSettingsPanel({
       input: <ViInputPanel onSettingsChange={onViSettingsChange} settings={viSettings} />,
       style: <ViStylePanel onSettingsChange={onViSettingsChange} settings={viSettings} />,
     },
+    AO: {
+      input: <AoInputPanel onSettingsChange={onAoSettingsChange} settings={aoSettings} />,
+      style: <AoStylePanel onSettingsChange={onAoSettingsChange} settings={aoSettings} />,
+    },
+    VMI: {
+      input: <VmiInputPanel onSettingsChange={onVmiSettingsChange} settings={vmiSettings} />,
+      style: <VmiStylePanel onSettingsChange={onVmiSettingsChange} settings={vmiSettings} />,
+    },
     VWAP: {
       input: <VwapInputPanel onSettingsChange={onVwapSettingsChange} settings={vwapSettings} />,
       style: <VwapStylePanel onSettingsChange={onVwapSettingsChange} settings={vwapSettings} />,
@@ -188,88 +207,10 @@ export function LoadedIndicatorSettingsPanel({
         <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel" />
       ) : null}
       {settingsTab === 'visibility' ? (
-        selectedKey === 'MMF_V2' ? (
-          <MmfV2VisibilityMomentumPanel
-            momentumCrosshairIndex={mmfV2MomentumCrosshairIndex}
-            momentumStats={mmfV2MomentumStats}
-            onSettingsChange={onMmfV2SettingsChange}
-            settings={mmfSettings}
-            storageKey={`indicator:${selectedKey || 'default'}`}
-          />
-        ) : (
-          <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">
-            <VisibilityRangePanel storageKey={`indicator:${selectedKey || 'default'}`} />
-          </div>
-        )
+        <div className="ff-indicators-input-panel-v1__tab-panel" role="tabpanel">
+          <VisibilityRangePanel storageKey={`indicator:${selectedKey || 'default'}`} />
+        </div>
       ) : null}
     </>
-  )
-}
-
-function MmfV2VisibilityMomentumPanel({
-  momentumCrosshairIndex,
-  momentumStats,
-  onSettingsChange,
-  settings,
-  storageKey,
-}: {
-  momentumCrosshairIndex?: number | null
-  momentumStats?: MmfV2MomentumStats | null
-  onSettingsChange: (settings: MmfIndicatorSettings) => void
-  settings: MmfIndicatorSettings
-  storageKey: string
-}) {
-  const [topHeight, setTopHeight] = useState(42)
-
-  const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    const startY = event.clientY
-    const startHeight = topHeight
-    const pointerId = event.pointerId
-    const target = event.currentTarget
-    target.setPointerCapture(pointerId)
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const nextHeight = startHeight + (moveEvent.clientY - startY)
-      setTopHeight(Math.max(0, Math.min(190, Math.round(nextHeight))))
-    }
-
-    const handlePointerUp = () => {
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-      try {
-        target.releasePointerCapture(pointerId)
-      } catch {
-        // Pointer capture may already be released.
-      }
-    }
-
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp, { once: true })
-  }
-
-  return (
-    <div
-      className="ff-indicators-input-panel-v1__tab-panel ff-indicators-mmf-v2-visibility-momentum-panel"
-      role="tabpanel"
-      style={{ ['--ff-mmf-v2-visibility-height' as string]: `${topHeight}px` }}
-    >
-      <div className="ff-indicators-mmf-v2-visibility-momentum-panel__visibility">
-        <VisibilityRangePanel storageKey={storageKey} />
-      </div>
-      <button
-        aria-label="Resize MMF V2 momentum panel"
-        className="ff-indicators-mmf-v2-visibility-momentum-panel__handle"
-        onPointerDown={handlePointerDown}
-        title="\u4e0a\u4e0b\u62d6\u52a8\u8c03\u6574\u53ef\u89c1\u8303\u56f4"
-        type="button"
-      />
-      <MmfV2StrategyPanel
-        momentumCrosshairIndex={momentumCrosshairIndex}
-        momentumStats={momentumStats}
-        settings={settings}
-        onSettingsChange={onSettingsChange}
-      />
-    </div>
   )
 }

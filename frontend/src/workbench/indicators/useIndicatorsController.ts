@@ -42,6 +42,7 @@ export function useIndicatorsController({
   const [command, setCommand] = useState<ChartIndicatorCommand | null>(null)
   const commandQueueRef = useRef<ChartIndicatorCommand[]>([])
   const commandTimerRef = useRef<number | null>(null)
+  const settingsCommandTimersRef = useRef<Partial<Record<SupportedChartIndicator, number>>>({})
   const commandIdRef = useRef(0)
   const dispatchQueuedCommandRef = useRef<() => void>(() => undefined)
   const restoredContextRef = useRef('')
@@ -94,6 +95,11 @@ export function useIndicatorsController({
   }, [enqueueCommands])
 
   const unloadIndicator = useCallback((name: SupportedChartIndicator) => {
+    const existingTimer = settingsCommandTimersRef.current[name]
+    if (existingTimer != null) {
+      window.clearTimeout(existingTimer)
+      delete settingsCommandTimersRef.current[name]
+    }
     updateState((current) => ({
       ...current,
       loaded: { ...current.loaded, [name]: false },
@@ -105,7 +111,13 @@ export function useIndicatorsController({
     const nextState = withIndicatorSettings(stateRef.current, name, settings)
     stateRef.current = nextState
     setState(nextState)
-    if (nextState.loaded[name]) enqueueCommands(createLoadCommand(nextState, name))
+    if (!nextState.loaded[name]) return
+    const existingTimer = settingsCommandTimersRef.current[name]
+    if (existingTimer != null) window.clearTimeout(existingTimer)
+    settingsCommandTimersRef.current[name] = window.setTimeout(() => {
+      delete settingsCommandTimersRef.current[name]
+      enqueueCommands(createLoadCommand(stateRef.current, name))
+    }, 220)
   }, [enqueueCommands])
 
   const setLoadedIndicatorKeys = useCallback((keys: string[]) => {
@@ -144,7 +156,11 @@ export function useIndicatorsController({
 
   useEffect(() => () => {
     if (commandTimerRef.current != null) window.clearTimeout(commandTimerRef.current)
+    Object.values(settingsCommandTimersRef.current).forEach((timer) => {
+      if (timer != null) window.clearTimeout(timer)
+    })
     commandTimerRef.current = null
+    settingsCommandTimersRef.current = {}
     commandQueueRef.current = []
   }, [])
 

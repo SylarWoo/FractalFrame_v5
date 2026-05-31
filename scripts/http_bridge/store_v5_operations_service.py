@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 from .query_params import safe_query_int
+
+_STORE_V5_QUERY_CACHE_MAX = 48
+_store_v5_query_cache: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
+_store_v5_query_cache_lock = RLock()
 
 
 def safe_int(value: Any) -> int | None:
@@ -65,6 +71,24 @@ def query_store_v5_ohlcv(params: dict[str, list[str]], store_root: Path | None =
     limit = safe_query_int((params.get("limit") or ["5000"])[0], 5000)
     if not symbol:
         return {"ok": False, "status": "bad_request", "error": "symbol_required"}
+    cache_key = (
+        "store_v5_ohlcv_v1",
+        str(store_root or ""),
+        symbol,
+        timeframe,
+        mode,
+        base_timeframe if mode == "aggregated" else None,
+        anchor if mode == "aggregated" else None,
+        time_from,
+        time_to,
+        limit,
+    )
+    with _store_v5_query_cache_lock:
+        cached = _store_v5_query_cache.get(cache_key)
+        if cached is not None:
+            _store_v5_query_cache.move_to_end(cache_key)
+            metadata = cached.get("metadata") if isinstance(cached.get("metadata"), dict) else {}
+            return {**cached, "metadata": {**metadata, "cacheHit": True}}
     payload = query_ohlcv_store_v5(
         symbol=symbol,
         timeframe=timeframe,
@@ -101,4 +125,12 @@ def query_store_v5_ohlcv(params: dict[str, list[str]], store_root: Path | None =
                     "removed": len(rows) - len(deduped_rows),
                 },
             ]
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    payload = {**payload, "metadata": {**metadata, "cacheHit": False}}
+    if payload.get("ok") is True:
+        with _store_v5_query_cache_lock:
+            _store_v5_query_cache[cache_key] = payload
+            _store_v5_query_cache.move_to_end(cache_key)
+            while len(_store_v5_query_cache) > _STORE_V5_QUERY_CACHE_MAX:
+                _store_v5_query_cache.popitem(last=False)
     return payload

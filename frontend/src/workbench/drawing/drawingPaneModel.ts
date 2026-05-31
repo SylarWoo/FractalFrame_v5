@@ -1,6 +1,6 @@
 export const drawingMainPaneId = 'candle_pane'
 
-export const drawingSubPaneIds = ['rsi_pane', 'stoch_pane', 'sqzmom_pane', 'macd_pane', 'dpo_pane', 'vdo_pane', 'tsi_pane', 'vi_pane'] as const
+export const drawingSubPaneIds = ['rsi_pane', 'stoch_pane', 'sqzmom_pane', 'macd_pane', 'dpo_pane', 'vdo_pane', 'ao_pane', 'vmi_pane', 'tsi_pane', 'vi_pane'] as const
 
 export const knownDrawingPaneIds = [drawingMainPaneId, ...drawingSubPaneIds] as const
 
@@ -9,6 +9,8 @@ const drawingSubPaneNames: Record<string, string> = {
   sqzmom_pane: 'SQZMOM',
   dpo_pane: 'DPO',
   vdo_pane: 'VDO',
+  ao_pane: 'AO',
+  vmi_pane: 'VMI',
   rsi_pane: 'RSI',
   stoch_pane: 'Stoch',
   tsi_pane: 'TSI',

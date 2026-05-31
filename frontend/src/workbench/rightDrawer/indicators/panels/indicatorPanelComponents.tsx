@@ -2,7 +2,7 @@ export { VolInputPanel, VolStylePanel } from './VolSettingsPanels'
 export { RsiInputPanel, RsiStylePanel } from './RsiSettingsPanels'
 export { MaInputPanel, MaStylePanel } from './MaSettingsPanels'
 export { MmfInputPanel, MmfStylePanel } from './MmfSettingsPanels'
-export { MmfV2InputPanel, MmfV2StrategyPanel, MmfV2StylePanel } from './MmfV2SettingsPanels'
+export { MmfV2InputPanel, MmfV2StylePanel } from './MmfV2SettingsPanels'
 export { SqzmomInputPanel, SqzmomStylePanel } from './SqzmomSettingsPanels'
 import type { MorganRangeSegment } from '../../../chart/morganRangeModel'
 import { OpenableSelect } from '../../../controls/OpenableSelect'
@@ -17,6 +17,8 @@ import type {
   TsiIndicatorSettings,
   VdoIndicatorSettings,
   ViIndicatorSettings,
+  AoIndicatorSettings,
+  VmiIndicatorSettings,
   VwapAnchorPeriod,
   VwapBandCalculationMode,
   VwapIndicatorSettings,
@@ -36,6 +38,8 @@ import {
   updateTsiSettings,
   updateVdoSettings,
   updateViSettings,
+  updateAoSettings,
+  updateVmiSettings,
   updateVwapSettings,
   vwapAnchorPeriodOptions,
   vwapBandCalculationModeOptions,
@@ -379,6 +383,41 @@ export function TsiStylePanel({
           />
           <NumberBox max={0} min={0} onChange={() => undefined} value={0} />
         </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.upperBandVisible} label="Upper band" onChange={(upperBandVisible) => patch({ upperBandVisible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.upperBandColor}
+            lineStyle={settings.upperBandLineStyle}
+            onChange={(value) => patch({ upperBandColor: value.hex, upperBandLineStyle: value.lineStyle, upperBandLineWidth: value.thickness, upperBandOpacity: value.opacity })}
+            thickness={settings.upperBandLineWidth}
+            value={{ hex: settings.upperBandColor, lineStyle: settings.upperBandLineStyle, opacity: settings.upperBandOpacity, thickness: settings.upperBandLineWidth }}
+          />
+          <NumberBox max={500} min={-500} onChange={(upperBandValue) => patch({ upperBandValue })} step={0.1} value={settings.upperBandValue} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.lowerBandVisible} label="Lower band" onChange={(lowerBandVisible) => patch({ lowerBandVisible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.lowerBandColor}
+            lineStyle={settings.lowerBandLineStyle}
+            onChange={(value) => patch({ lowerBandColor: value.hex, lowerBandLineStyle: value.lineStyle, lowerBandLineWidth: value.thickness, lowerBandOpacity: value.opacity })}
+            thickness={settings.lowerBandLineWidth}
+            value={{ hex: settings.lowerBandColor, lineStyle: settings.lowerBandLineStyle, opacity: settings.lowerBandOpacity, thickness: settings.lowerBandLineWidth }}
+          />
+          <NumberBox max={500} min={-500} onChange={(lowerBandValue) => patch({ lowerBandValue })} step={0.1} value={settings.lowerBandValue} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.backgroundFillVisible} label="背景" onChange={(backgroundFillVisible) => patch({ backgroundFillVisible })} />
+        <SettingsColorSwatch
+          checkerboard
+          color={settings.backgroundFillColor}
+          onChange={(value) => patch({ backgroundFillColor: value.hex, backgroundFillOpacity: value.opacity })}
+          value={{ hex: settings.backgroundFillColor, opacity: settings.backgroundFillOpacity }}
+        />
       </div>
     </div>
   )
@@ -1054,8 +1093,186 @@ export function VdoInputPanel({
             <NumberBox min={0} onChange={(emaSmoothing) => patch({ emaSmoothing })} value={settings.emaSmoothing} />
           </span>
         </label>
+        <label className="ff-indicators-input-panel-v1__row">
+          <span className="ff-indicators-input-panel-v1__label">VDO-base MA</span>
+          <span className="ff-indicators-input-panel-v1__control">
+            <NumberBox min={1} onChange={(vdoMaLength) => patch({ vdoMaLength })} value={settings.vdoMaLength} />
+          </span>
+        </label>
+        <label className="ff-indicators-input-panel-v1__row">
+          <span className="ff-indicators-input-panel-v1__label">VDO-base2 MA</span>
+          <span className="ff-indicators-input-panel-v1__control">
+            <NumberBox min={1} onChange={(vdoMa2Length) => patch({ vdoMa2Length })} value={settings.vdoMa2Length} />
+          </span>
+        </label>
       </section>
     </div>
+  )
+}
+
+export function AoInputPanel({
+  onSettingsChange,
+  settings,
+}: {
+  onSettingsChange: (settings: AoIndicatorSettings) => void
+  settings: AoIndicatorSettings
+}) {
+  const patch = (next: Partial<AoIndicatorSettings>) => onSettingsChange(updateAoSettings(settings, next))
+
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-ao-panel-v1" role="tabpanel">
+      <section className="ff-indicators-input-panel-v1__section">
+        <label className="ff-indicators-input-panel-v1__row">
+          <span className="ff-indicators-input-panel-v1__label">Fast SMA</span>
+          <span className="ff-indicators-input-panel-v1__control">
+            <NumberBox min={1} onChange={(fastLength) => patch({ fastLength })} value={settings.fastLength} />
+          </span>
+        </label>
+        <label className="ff-indicators-input-panel-v1__row">
+          <span className="ff-indicators-input-panel-v1__label">Slow SMA</span>
+          <span className="ff-indicators-input-panel-v1__control">
+            <NumberBox min={1} onChange={(slowLength) => patch({ slowLength })} value={settings.slowLength} />
+          </span>
+        </label>
+      </section>
+    </div>
+  )
+}
+
+export function AoStylePanel({
+  onSettingsChange,
+  settings,
+}: {
+  onSettingsChange: (settings: AoIndicatorSettings) => void
+  settings: AoIndicatorSettings
+}) {
+  const patch = (next: Partial<AoIndicatorSettings>) => onSettingsChange(updateAoSettings(settings, next))
+
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-style-panel-v1 ff-indicators-ao-style-panel-v1" role="tabpanel">
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.histogramVisible} label="柱子" onChange={(histogramVisible) => patch({ histogramVisible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsColorSwatch
+            color={settings.histogramPositiveColor}
+            onChange={(value) => patch({ histogramPositiveColor: value.hex, histogramPositiveOpacity: value.opacity })}
+            value={{ hex: settings.histogramPositiveColor, opacity: settings.histogramPositiveOpacity }}
+          />
+          <SettingsColorSwatch
+            color={settings.histogramNegativeColor}
+            onChange={(value) => patch({ histogramNegativeColor: value.hex, histogramNegativeOpacity: value.opacity })}
+            value={{ hex: settings.histogramNegativeColor, opacity: settings.histogramNegativeOpacity }}
+          />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.zeroLineVisible} label="0轴线" onChange={(zeroLineVisible) => patch({ zeroLineVisible })} />
+        <SettingsLineSwatch
+          color={settings.zeroLineColor}
+          lineStyle={settings.zeroLineStyle}
+          onChange={(value) => patch({
+            zeroLineColor: value.hex,
+            zeroLineStyle: value.lineStyle,
+            zeroLineWidth: value.thickness,
+            zeroLineOpacity: value.opacity,
+          })}
+          thickness={settings.zeroLineWidth}
+          value={{
+            hex: settings.zeroLineColor,
+            lineStyle: settings.zeroLineStyle,
+            opacity: settings.zeroLineOpacity,
+            thickness: settings.zeroLineWidth,
+          }}
+        />
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.upperBandVisible} label="Upper Band" onChange={(upperBandVisible) => patch({ upperBandVisible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.upperBandColor}
+            lineStyle={settings.upperBandLineStyle}
+            onChange={(value) => patch({
+              upperBandColor: value.hex,
+              upperBandLineStyle: value.lineStyle,
+              upperBandLineWidth: value.thickness,
+              upperBandOpacity: value.opacity,
+            })}
+            thickness={settings.upperBandLineWidth}
+            value={{
+              hex: settings.upperBandColor,
+              lineStyle: settings.upperBandLineStyle,
+              opacity: settings.upperBandOpacity,
+              thickness: settings.upperBandLineWidth,
+            }}
+          />
+          <NumberBox min={-500} onChange={(upperBandValue) => patch({ upperBandValue })} step={0.001} value={settings.upperBandValue} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.lowerBandVisible} label="Lower Band" onChange={(lowerBandVisible) => patch({ lowerBandVisible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.lowerBandColor}
+            lineStyle={settings.lowerBandLineStyle}
+            onChange={(value) => patch({
+              lowerBandColor: value.hex,
+              lowerBandLineStyle: value.lineStyle,
+              lowerBandLineWidth: value.thickness,
+              lowerBandOpacity: value.opacity,
+            })}
+            thickness={settings.lowerBandLineWidth}
+            value={{
+              hex: settings.lowerBandColor,
+              lineStyle: settings.lowerBandLineStyle,
+              opacity: settings.lowerBandOpacity,
+              thickness: settings.lowerBandLineWidth,
+            }}
+          />
+          <NumberBox min={-500} onChange={(lowerBandValue) => patch({ lowerBandValue })} step={0.001} value={settings.lowerBandValue} />
+        </span>
+      </div>
+    </div>
+  )
+}
+
+export function VmiInputPanel({
+  onSettingsChange,
+  settings,
+}: {
+  onSettingsChange: (settings: VmiIndicatorSettings) => void
+  settings: VmiIndicatorSettings
+}) {
+  const patch = (next: Partial<VmiIndicatorSettings>) => onSettingsChange(updateVmiSettings(settings, next))
+
+  return (
+    <div className="ff-indicators-input-panel-v1__tab-panel ff-indicators-compact-input-panel-v1 ff-indicators-vmi-panel-v1" role="tabpanel">
+      <section className="ff-indicators-input-panel-v1__section">
+        <label className="ff-indicators-input-panel-v1__row">
+          <span className="ff-indicators-input-panel-v1__label">Fast SMA</span>
+          <span className="ff-indicators-input-panel-v1__control">
+            <NumberBox min={1} onChange={(fastLength) => patch({ fastLength })} value={settings.fastLength} />
+          </span>
+        </label>
+        <label className="ff-indicators-input-panel-v1__row">
+          <span className="ff-indicators-input-panel-v1__label">Slow SMA</span>
+          <span className="ff-indicators-input-panel-v1__control">
+            <NumberBox min={1} onChange={(slowLength) => patch({ slowLength })} value={settings.slowLength} />
+          </span>
+        </label>
+      </section>
+    </div>
+  )
+}
+
+export function VmiStylePanel({
+  onSettingsChange,
+  settings,
+}: {
+  onSettingsChange: (settings: VmiIndicatorSettings) => void
+  settings: VmiIndicatorSettings
+}) {
+  return (
+    <AoStylePanel onSettingsChange={(next) => onSettingsChange(next as VmiIndicatorSettings)} settings={settings} />
   )
 }
 
@@ -1087,6 +1304,46 @@ export function VdoStylePanel({
             lineStyle: settings.dpoLineStyle,
             opacity: settings.dpoOpacity,
             thickness: settings.dpoLineWidth,
+          }}
+        />
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.vdoMaVisible} label="VDO-base MA" onChange={(vdoMaVisible) => patch({ vdoMaVisible })} />
+        <SettingsLineSwatch
+          color={settings.vdoMaColor}
+          lineStyle={settings.vdoMaLineStyle}
+          onChange={(value) => patch({
+            vdoMaColor: value.hex,
+            vdoMaLineStyle: value.lineStyle,
+            vdoMaLineWidth: value.thickness,
+            vdoMaOpacity: value.opacity,
+          })}
+          thickness={settings.vdoMaLineWidth}
+          value={{
+            hex: settings.vdoMaColor,
+            lineStyle: settings.vdoMaLineStyle,
+            opacity: settings.vdoMaOpacity,
+            thickness: settings.vdoMaLineWidth,
+          }}
+        />
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.vdoMa2Visible} label="VDO-base2 MA" onChange={(vdoMa2Visible) => patch({ vdoMa2Visible })} />
+        <SettingsLineSwatch
+          color={settings.vdoMa2Color}
+          lineStyle={settings.vdoMa2LineStyle}
+          onChange={(value) => patch({
+            vdoMa2Color: value.hex,
+            vdoMa2LineStyle: value.lineStyle,
+            vdoMa2LineWidth: value.thickness,
+            vdoMa2Opacity: value.opacity,
+          })}
+          thickness={settings.vdoMa2LineWidth}
+          value={{
+            hex: settings.vdoMa2Color,
+            lineStyle: settings.vdoMa2LineStyle,
+            opacity: settings.vdoMa2Opacity,
+            thickness: settings.vdoMa2LineWidth,
           }}
         />
       </div>
@@ -1160,6 +1417,29 @@ export function VdoStylePanel({
         </span>
       </div>
       <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.upLine3Visible} label="Upper Band 3 level" onChange={(upLine3Visible) => patch({ upLine3Visible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.upLine3Color}
+            lineStyle={settings.upLine3Style}
+            onChange={(value) => patch({
+              upLine3Color: value.hex,
+              upLine3Style: value.lineStyle,
+              upLine3Width: value.thickness,
+              upLine3Opacity: value.opacity,
+            })}
+            thickness={settings.upLine3Width}
+            value={{
+              hex: settings.upLine3Color,
+              lineStyle: settings.upLine3Style,
+              opacity: settings.upLine3Opacity,
+              thickness: settings.upLine3Width,
+            }}
+          />
+          <NumberBox min={-500} onChange={(upLine3Value) => patch({ upLine3Value })} step={0.001} value={settings.upLine3Value} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
         <CheckControl checked={settings.downLineVisible} label="Lower Band" onChange={(downLineVisible) => patch({ downLineVisible })} />
         <span className="ff-indicators-style-row-v1__controls">
           <SettingsLineSwatch
@@ -1206,6 +1486,29 @@ export function VdoStylePanel({
         </span>
       </div>
       <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.downLine3Visible} label="Lower Band 3 level" onChange={(downLine3Visible) => patch({ downLine3Visible })} />
+        <span className="ff-indicators-style-row-v1__controls">
+          <SettingsLineSwatch
+            color={settings.downLine3Color}
+            lineStyle={settings.downLine3Style}
+            onChange={(value) => patch({
+              downLine3Color: value.hex,
+              downLine3Style: value.lineStyle,
+              downLine3Width: value.thickness,
+              downLine3Opacity: value.opacity,
+            })}
+            thickness={settings.downLine3Width}
+            value={{
+              hex: settings.downLine3Color,
+              lineStyle: settings.downLine3Style,
+              opacity: settings.downLine3Opacity,
+              thickness: settings.downLine3Width,
+            }}
+          />
+          <NumberBox min={-500} onChange={(downLine3Value) => patch({ downLine3Value })} step={0.001} value={settings.downLine3Value} />
+        </span>
+      </div>
+      <div className="ff-indicators-style-row-v1">
         <CheckControl checked={settings.backgroundVisible} label="背景" onChange={(backgroundVisible) => patch({ backgroundVisible })} />
         <SettingsColorSwatch
           checkerboard
@@ -1224,12 +1527,30 @@ export function VdoStylePanel({
         />
       </div>
       <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.backgroundUpper2Visible} label="背景 Upper 2" onChange={(backgroundUpper2Visible) => patch({ backgroundUpper2Visible })} />
+        <SettingsColorSwatch
+          checkerboard
+          color={settings.backgroundUpper2Color}
+          onChange={(value) => patch({ backgroundUpper2Color: value.hex, backgroundUpper2Opacity: value.opacity })}
+          value={{ hex: settings.backgroundUpper2Color, opacity: settings.backgroundUpper2Opacity }}
+        />
+      </div>
+      <div className="ff-indicators-style-row-v1">
         <CheckControl checked={settings.backgroundLowerVisible} label="背景 Lower" onChange={(backgroundLowerVisible) => patch({ backgroundLowerVisible })} />
         <SettingsColorSwatch
           checkerboard
           color={settings.backgroundLowerColor}
           onChange={(value) => patch({ backgroundLowerColor: value.hex, backgroundLowerOpacity: value.opacity })}
           value={{ hex: settings.backgroundLowerColor, opacity: settings.backgroundLowerOpacity }}
+        />
+      </div>
+      <div className="ff-indicators-style-row-v1">
+        <CheckControl checked={settings.backgroundLower2Visible} label="背景 Lower 2" onChange={(backgroundLower2Visible) => patch({ backgroundLower2Visible })} />
+        <SettingsColorSwatch
+          checkerboard
+          color={settings.backgroundLower2Color}
+          onChange={(value) => patch({ backgroundLower2Color: value.hex, backgroundLower2Opacity: value.opacity })}
+          value={{ hex: settings.backgroundLower2Color, opacity: settings.backgroundLower2Opacity }}
         />
       </div>
     </div>

@@ -17,6 +17,7 @@ function resolveRightDrawerTitle(activeDrawer: RightDrawerId | null) {
   if (activeDrawer === 'drawings') return 'Drawings'
   if (activeDrawer === 'objectTree') return 'Object Tree'
   if (activeDrawer === 'indicators') return 'Indicators'
+  if (activeDrawer === 'strategy') return '策略'
   if (activeDrawer === 'settings') return 'Settings'
   return 'MT5 Import Center'
 }
@@ -36,9 +37,9 @@ export function RightDrawerFrame({
       <div className="ff-right-rail" aria-label="Right toolbar">
         <button className="ff-right-rail__button" data-active={activeDrawer === 'drawings'} onClick={() => onToggleDrawer('drawings')} title="画图" type="button">
           <svg className="ff-right-rail__drawing-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-            <path d="M22.7966,26.3062l3.5555-3.5555" />
-            <path d="M42.55,39.0406,24.9023,21.2927l3.9106-.8022-5.0136-5.0136L25.905,8.7588l-6.9187,1.9051L14.2736,5.55,12.6692,12.168,5.55,13.6721l5.2141,5.0135L8.4579,25.504l7.0189-2.0054,4.813,5.2141,1.103-3.81L38.94,42.45C40.344,42.65,42.35,40.2439,42.55,39.0406Z" />
-            <path d="M21.3928,24.9024l-5.3144-5.0135a4.5925,4.5925,0,0,1,3.71-3.71l5.1138,5.1138" />
+            <path d="M40.5,5.5H7.5c-1.1046,0-2,.8954-2,2V40.5c0,1.1046,.8954,2,2,2H40.5c1.1046,0,2-.8954,2-2V7.5c0-1.1046-.8954-2-2-2Z" />
+            <path d="M26.9703,13.5l4.7051,4.6263-12.0651,12.1439-6.0982,1.3406,1.6823-6.072,11.7759-12.0388Z" />
+            <path d="M14.0641,34.1867c8.2785,1.0696,13.1772-.6453,15.2719-4.4423,.6936-1.2573-.7598-3.0337-2.4708-.9989-2.2764,2.7071-.6526,9.3247,5.2045,2.5234-1.1558,3.4735-.1384,3.5847,2.4183,1.3143" />
           </svg>
         </button>
         <button className="ff-right-rail__button" data-active={activeDrawer === 'objectTree'} onClick={() => onToggleDrawer('objectTree')} title="Object Tree" type="button">
@@ -51,6 +52,13 @@ export function RightDrawerFrame({
             <line x1="32.17" y1="23.03" x2="37.85" y2="23.03" />
             <line x1="32.17" y1="28.72" x2="35.86" y2="28.72" />
             <line x1="32.17" y1="23.03" x2="32.17" y2="34.4" />
+          </svg>
+        </button>
+        <button className="ff-right-rail__button" data-active={activeDrawer === 'strategy'} onClick={() => onToggleDrawer('strategy')} title="策略" type="button">
+          <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+            <path d="m40.5,5.5H7.5c-1.1,0-2,.9-2,2v33c0,1.1.9,2,2,2h33c1.1,0,2-.9,2-2V7.5c0-1.1-.9-2-2-2Z" />
+            <line x1="32.9" y1="13.9" x2="32.9" y2="34.1" />
+            <polyline points="14 14.9 23.2 24 14 33.1" />
           </svg>
         </button>
         <button className="ff-right-rail__button" data-active={activeDrawer === 'mt5'} onClick={() => onToggleDrawer('mt5')} title="MT5 Import Center" type="button">
