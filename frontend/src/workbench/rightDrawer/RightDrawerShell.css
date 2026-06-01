@@ -182,7 +182,7 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
 .ff-right-rail__button,
 .ff-right-rail__button *,
 .ff-right-drawer :is(
-  button:not(.ff-indicators-split-v1__handle),
+  button:not(.ff-indicators-split-v1__handle):not(.ff-strategy-split-v1__handle),
   label,
   tbody tr,
   input[type='checkbox'],
@@ -197,8 +197,10 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
 }
 
 .ff-indicators-split-v1__handle,
+.ff-strategy-split-v1__handle,
 .ff-right-drawer .ff-mt5-pane-splitter,
 .ff-right-drawer .ff-indicators-split-v1__handle,
+.ff-right-drawer .ff-strategy-split-v1__handle,
 .ff-right-drawer .ff-watchlist-table-splitter {
   cursor: ns-resize !important;
 }

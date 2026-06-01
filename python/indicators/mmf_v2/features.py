@@ -10,6 +10,7 @@ from python.indicators.stoch import calculate_stoch_frame
 from python.indicators.tsi import calculate_tsi_frame
 from python.indicators.vdo import calculate_vdo_frame, calculate_vdo_values
 from python.indicators.vmi import calculate_vmi_frame
+from python.indicators.vwap import calculate_vwap_frame
 from python.indicators.morgan_range import (
     MORGAN_LEVEL_RATIOS,
     calculate_morgan_level_model,
@@ -83,7 +84,8 @@ def build_mmf_v2_features(frame: pd.DataFrame, settings: Any) -> pd.DataFrame:
         "vdo_values": vdo_features["vdo"],
     })
     tsi_features = calculate_tsi_frame(frame, getattr(settings, "tsi", None))
-    return pd.concat([features, stoch_features, vdo_features, vmi_features, tsi_features, ma_features, calculate_morgan_feature(frame, settings.morgan)], axis=1)
+    vwap_features = calculate_vwap_frame(frame, getattr(settings, "vwap", None))
+    return pd.concat([features, stoch_features, vdo_features, vmi_features, tsi_features, ma_features, vwap_features, calculate_morgan_feature(frame, settings.morgan)], axis=1)
 
 
 class _LegacyVdoSettings:

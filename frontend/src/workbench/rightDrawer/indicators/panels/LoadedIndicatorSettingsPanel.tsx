@@ -29,8 +29,6 @@ import {
   DpoStylePanel,
   MrInputPanelV3,
   MrStylePanelV3,
-  MmfInputPanel,
-  MmfStylePanel,
   MmfV2InputPanel,
   MmfV2StylePanel,
   RsiInputPanel,
@@ -59,14 +57,13 @@ export function LoadedIndicatorSettingsPanel({
   dpoSettings,
   macdSettings,
   maSettings,
-  mmfSettings,
+  mmfV3Settings,
   mrSettings,
   morganRangeSegment,
   onDpoSettingsChange,
   onMacdSettingsChange,
   onMaSettingsChange,
-  onMmfSettingsChange,
-  onMmfV2SettingsChange,
+  onMmfV3SettingsChange,
   onMrSettingsChange,
   onSettingsChange,
   onSqzmomSettingsChange,
@@ -94,14 +91,13 @@ export function LoadedIndicatorSettingsPanel({
   dpoSettings: DpoIndicatorSettings
   macdSettings: MacdIndicatorSettings
   maSettings: MaIndicatorSettings
-  mmfSettings: MmfIndicatorSettings
+  mmfV3Settings: MmfIndicatorSettings
   mrSettings: MrIndicatorSettings
   morganRangeSegment?: MorganRangeSegment | null
   onDpoSettingsChange: (settings: DpoIndicatorSettings) => void
   onMacdSettingsChange: (settings: MacdIndicatorSettings) => void
   onMaSettingsChange: (settings: MaIndicatorSettings) => void
-  onMmfSettingsChange: (settings: MmfIndicatorSettings) => void
-  onMmfV2SettingsChange: (settings: MmfIndicatorSettings) => void
+  onMmfV3SettingsChange: (settings: MmfIndicatorSettings) => void
   onMrSettingsChange: (settings: MrIndicatorSettings) => void
   onSettingsChange: (settings: RsiIndicatorSettings) => void
   onSqzmomSettingsChange: (settings: SqzmomIndicatorSettings) => void
@@ -147,13 +143,9 @@ export function LoadedIndicatorSettingsPanel({
       input: <MrInputPanelV3 segment={morganRangeSegment} onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
       style: <MrStylePanelV3 onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
     },
-    MMF: {
-      input: <MmfInputPanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
-      style: <MmfStylePanel settings={mmfSettings} onSettingsChange={onMmfSettingsChange} />,
-    },
-    MMF_V2: {
-      input: <MmfV2InputPanel settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
-      style: <MmfV2StylePanel settings={mmfSettings} onSettingsChange={onMmfV2SettingsChange} />,
+    MMF_V3: {
+      input: <MmfV2InputPanel settings={mmfV3Settings} onSettingsChange={onMmfV3SettingsChange} />,
+      style: <MmfV2StylePanel settings={mmfV3Settings} onSettingsChange={onMmfV3SettingsChange} />,
     },
     RSI: {
       input: <RsiInputPanel onSettingsChange={onSettingsChange} settings={settings} />,

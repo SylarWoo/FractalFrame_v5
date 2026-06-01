@@ -66,6 +66,7 @@ export function installPaneTitleOverlay(chart: Chart, container: HTMLElement, co
   let currentContext = context
   let crosshairIndex: number | null = null
   let frameId = 0
+  let lastRenderSignature = ''
 
   const root = document.createElement('div')
   root.className = 'ff-pane-title-overlay-root'
@@ -89,31 +90,44 @@ export function installPaneTitleOverlay(chart: Chart, container: HTMLElement, co
   })
   mutationObserver.observe(container, { childList: true, subtree: true })
 
-  function renderPane(paneId: string, lines: PaneTitleLine[]) {
-    const paneDom = chart.getDom(paneId, DomPosition.Main)
-    if (!paneDom || lines.length === 0) return
-    const paneRect = paneDom.getBoundingClientRect()
-    const containerRect = container.getBoundingClientRect()
-    if (paneRect.width <= 0 || paneRect.height <= 0) return
-
+  function renderPane(left: number, top: number, width: number, lines: PaneTitleLine[]) {
     const title = document.createElement('div')
     title.className = 'ff-pane-title-overlay'
-    title.style.left = `${Math.round(paneRect.left - containerRect.left + 10)}px`
-    title.style.top = `${Math.round(paneRect.top - containerRect.top + 4)}px`
-    title.style.width = `${Math.max(0, Math.round(paneRect.width - 20))}px`
+    title.style.left = `${left}px`
+    title.style.top = `${top}px`
+    title.style.width = `${width}px`
     lines.forEach((line) => title.appendChild(renderLine(line)))
     root.appendChild(title)
   }
 
   function render() {
-    root.replaceChildren()
-    titlePaneSpecs.forEach((spec) => {
-      renderPane(spec.paneId, createPaneTitleLines(chart, spec, currentContext, crosshairIndex))
+    const containerRect = container.getBoundingClientRect()
+    const entries = titlePaneSpecs.flatMap((spec) => {
+      const lines = createPaneTitleLines(chart, spec, currentContext, crosshairIndex)
+      if (lines.length === 0) return []
+      const paneDom = chart.getDom(spec.paneId, DomPosition.Main)
+      if (!paneDom) return []
+      const paneRect = paneDom.getBoundingClientRect()
+      if (paneRect.width <= 0 || paneRect.height <= 0) return []
+      return [{
+        left: Math.round(paneRect.left - containerRect.left + 10),
+        lines,
+        paneId: spec.paneId,
+        top: Math.round(paneRect.top - containerRect.top + 4),
+        width: Math.max(0, Math.round(paneRect.width - 20)),
+      }]
     })
+    const renderSignature = JSON.stringify(entries)
+    if (renderSignature === lastRenderSignature) return
+    lastRenderSignature = renderSignature
+    root.replaceChildren()
+    entries.forEach((entry) => renderPane(entry.left, entry.top, entry.width, entry.lines))
   }
 
   const handleCrosshairChange = (payload: unknown) => {
-    crosshairIndex = readCrosshairDataIndex(payload)
+    const nextIndex = readCrosshairDataIndex(payload)
+    if (nextIndex === crosshairIndex) return
+    crosshairIndex = nextIndex
     scheduleRender()
   }
   const handleChartChange = () => scheduleRender()

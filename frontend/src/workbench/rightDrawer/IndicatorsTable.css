@@ -8,7 +8,19 @@
 }
 
 .ff-indicators-table-v1 th {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.ff-indicators-table-v1 th::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 1px;
+  background: #e5e7eb;
+  content: '';
 }
 
 .ff-indicators-table-v1__column-resizer {

@@ -660,6 +660,10 @@
   white-space: nowrap;
 }
 
+.ff-indicators-vwap-style-panel-v1 .ff-indicators-style-row-v1 {
+  grid-template-columns: 212px max-content;
+}
+
 .ff-indicators-style-row-v1__controls input[type='number'],
 .ff-indicators-style-row-v1__controls .ff-indicators-number-box-v1 {
   width: 80px;

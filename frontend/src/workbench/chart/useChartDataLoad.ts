@@ -26,6 +26,9 @@ import {
 } from './chartViewportPersistence'
 import type { ChartPageTarget } from './ChartCoreHost'
 
+const m5SlidingWindowMaxRows = 5_000
+const m5SlidingWindowAnchorMarginRows = 1_000
+
 export type ChartLoadStateCore = {
   error: boolean
   loadedPeriod?: string
@@ -116,11 +119,66 @@ export function useChartDataLoad({
     })
 
     chart.setLoadDataCallback(({ type, data, callback }) => {
-      if (shouldIgnore() || page || type !== LoadDataType.Forward || !data) {
+      if (shouldIgnore() || page || !data) {
+        callback([], false)
+        return
+      }
+      if (type === LoadDataType.Backward) {
+        const periodSeconds = resolvePeriodSeconds(period)
+        if (!isSlidingWindowPeriod(period) || !Number.isFinite(periodSeconds) || periodSeconds <= 0) {
+          callback([], false)
+          return
+        }
+        setLoadState((current) => ({ ...current, error: false, loadingMore: true }))
+        const anchorTimestamp = Number(data.timestamp)
+        const timeFrom = Math.floor(anchorTimestamp / 1000) + periodSeconds
+        chartInfo('[StoreV5Datafeed] request newer start', { symbol, period, limit: historyPageSize, timeFrom })
+        loadStoreV5KLineData({ symbol, period, limit: historyPageSize, timeFrom })
+          .then((newerData) => {
+            if (shouldIgnore()) {
+              callback([], false)
+              return
+            }
+            const hasMoreNewer = newerData.length >= historyPageSize
+            callback(newerData, hasMoreNewer)
+            window.setTimeout(() => {
+              if (shouldIgnore()) return
+              trimM5SlidingWindow(chart, period, anchorTimestamp, 'newer')
+              applySessionBreakIndicator(chart, symbol, period)
+              setLoadState({
+                error: false,
+                loadedPeriod: period,
+                loadedSymbol: symbol,
+                loading: false,
+                loadingMore: false,
+                requestedRows,
+                rows: stripFuturePlaceholders(chart.getDataList()).length,
+              })
+            }, 0)
+          })
+          .catch((error: unknown) => {
+            if (shouldIgnore()) {
+              callback([], false)
+              return
+            }
+            chartError('[StoreV5Datafeed] request newer failed', error)
+            callback([], false)
+            setLoadState((current) => ({
+              ...current,
+              error: true,
+              loading: false,
+              loadingMore: false,
+              rows: stripFuturePlaceholders(chart.getDataList()).length,
+            }))
+          })
+        return
+      }
+      if (type !== LoadDataType.Forward) {
         callback([], false)
         return
       }
       setLoadState((current) => ({ ...current, error: false, loadingMore: true }))
+      const anchorTimestamp = Number(data.timestamp)
       const timeTo = Math.floor(data.timestamp / 1000) - 1
       chartInfo('[StoreV5Datafeed] request older start', { symbol, period, limit: historyPageSize, timeTo })
 
@@ -141,6 +199,7 @@ export function useChartDataLoad({
           callback(olderData, hasMoreOlder)
           window.setTimeout(() => {
             if (shouldIgnore()) return
+            trimM5SlidingWindow(chart, period, anchorTimestamp, 'older')
             applySessionBreakIndicator(chart, symbol, period)
             setLoadState({
               error: false,
@@ -388,4 +447,44 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
       applyNewDataWithFuturePlaceholders(chart, [], options.period, false)
       options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: options.requestedRows, rows: 0 })
     })
+}
+
+function isSlidingWindowPeriod(period: string) {
+  return period.trim().toUpperCase() === 'M5'
+}
+
+function findNearestTimestampIndex(rows: Array<{ timestamp?: number }>, timestamp: number) {
+  if (!Number.isFinite(timestamp) || rows.length === 0) return -1
+  let nearestIndex = 0
+  let nearestDistance = Math.abs(Number(rows[0]?.timestamp ?? 0) - timestamp)
+  for (let index = 1; index < rows.length; index += 1) {
+    const distance = Math.abs(Number(rows[index]?.timestamp ?? 0) - timestamp)
+    if (distance < nearestDistance) {
+      nearestDistance = distance
+      nearestIndex = index
+    }
+  }
+  return nearestIndex
+}
+
+function clampSlidingWindowStart(start: number, rowsLength: number) {
+  return Math.max(0, Math.min(Math.round(start), Math.max(0, rowsLength - m5SlidingWindowMaxRows)))
+}
+
+function trimM5SlidingWindow(chart: Chart, period: string, anchorTimestamp: number, direction: 'newer' | 'older') {
+  if (!isSlidingWindowPeriod(period)) return false
+  const rows = stripFuturePlaceholders(chart.getDataList())
+  if (rows.length <= m5SlidingWindowMaxRows) return false
+
+  const anchorIndex = findNearestTimestampIndex(rows, anchorTimestamp)
+  if (anchorIndex < 0) return false
+  const start = direction === 'older'
+    ? clampSlidingWindowStart(anchorIndex - m5SlidingWindowAnchorMarginRows, rows.length)
+    : clampSlidingWindowStart(anchorIndex - (m5SlidingWindowMaxRows - m5SlidingWindowAnchorMarginRows), rows.length)
+  const trimmed = rows.slice(start, start + m5SlidingWindowMaxRows)
+  const hasMoreOlder = start > 0
+  applyNewDataWithFuturePlaceholders(chart, trimmed, period, hasMoreOlder, () => {
+    chart.scrollToTimestamp(anchorTimestamp, 0)
+  })
+  return true
 }

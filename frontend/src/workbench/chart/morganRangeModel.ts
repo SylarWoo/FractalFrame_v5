@@ -36,6 +36,8 @@ export type MorganRangeSegment = {
   upper: number
 }
 
+const morganRangeSegmentsCache = new Map<string, MorganRangeSegment[]>()
+
 export const morganRangeLevelRatios = [
   -1,
   -0.786,
@@ -193,6 +195,45 @@ export function calculateMorganRangeSegmentsForMode(dataList: KLineData[], mode:
     })
   }
 
+  return segments
+}
+
+function createMorganRangeSegmentsCacheKey(dataList: KLineData[], mode: MorganRangeMode, futureBars: number) {
+  const realRows = stripFuturePlaceholders(dataList)
+  const first = realRows[0]
+  const last = realRows[realRows.length - 1]
+  return [
+    mode,
+    Number.isFinite(futureBars) ? Math.max(0, Math.round(futureBars)) : 0,
+    realRows.length,
+    first?.timestamp,
+    first?.open,
+    first?.high,
+    first?.low,
+    first?.close,
+    last?.timestamp,
+    last?.open,
+    last?.high,
+    last?.low,
+    last?.close,
+  ].join('|')
+}
+
+export function calculateMorganRangeSegmentsForModeCached(dataList: KLineData[], mode: MorganRangeMode = 'H4_M5', futureBars = 0): MorganRangeSegment[] {
+  const key = createMorganRangeSegmentsCacheKey(dataList, mode, futureBars)
+  const cached = morganRangeSegmentsCache.get(key)
+  if (cached) {
+    morganRangeSegmentsCache.delete(key)
+    morganRangeSegmentsCache.set(key, cached)
+    return cached
+  }
+  const segments = calculateMorganRangeSegmentsForMode(dataList, mode, futureBars)
+  morganRangeSegmentsCache.set(key, segments)
+  while (morganRangeSegmentsCache.size > 48) {
+    const oldest = morganRangeSegmentsCache.keys().next().value
+    if (oldest == null) break
+    morganRangeSegmentsCache.delete(oldest)
+  }
   return segments
 }
 

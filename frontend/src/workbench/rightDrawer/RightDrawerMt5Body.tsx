@@ -375,8 +375,8 @@ function parseRowsCount(value: string | number | null | undefined) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
-const historicalPageSize = 30000
-const realtimePageSize = 25000
+const historicalPageSize = 5000
+const realtimePageSize = 5000
 const defaultPageTableHeight = 220
 const minPageTableHeight = 120
 const maxPageTableHeight = 520
@@ -457,29 +457,31 @@ function SelectedSymbolRealtimePages({
         setPages([])
         return
       }
-      setPages(readPageIndexCache()[cacheKey]?.pages ?? [])
+      const cached = readPageIndexCache()[cacheKey]
+      setPages(cached?.pageSize === historicalPageSize ? cached.pages : [])
     })
     return () => window.cancelAnimationFrame(frame)
   }, [cacheKey])
 
   const buildPages = async () => {
-    const period = visibleSnapshot?.period || selectedPeriod
+    const realtimeSnapshot = visibleSnapshot?.pageSize === realtimePageSize ? visibleSnapshot : null
+    const period = realtimeSnapshot?.period || selectedPeriod
     if (!selectedSymbol || !period || !cacheKey || building) return
     setBuilding(true)
     try {
       const nextPages: RealtimePageRow[] = []
       let anchorTimeTo: number | null = null
 
-      if (visibleSnapshot && typeof visibleSnapshot.timeFrom === 'number') {
+      if (realtimeSnapshot && typeof realtimeSnapshot.timeFrom === 'number') {
         nextPages.push({
           index: 1,
-          limit: visibleSnapshot.pageSize ?? realtimePageSize,
+          limit: realtimePageSize,
           realtime: true,
-          rows: visibleSnapshot.rows ?? Math.min(totalRows ?? realtimePageSize, realtimePageSize),
-          timeFrom: visibleSnapshot.timeFrom,
-          timeTo: visibleSnapshot.timeTo,
+          rows: Math.min(realtimeSnapshot.rows ?? totalRows ?? realtimePageSize, realtimePageSize),
+          timeFrom: realtimeSnapshot.timeFrom,
+          timeTo: realtimeSnapshot.timeTo,
         })
-        anchorTimeTo = visibleSnapshot.timeFrom - 1
+        anchorTimeTo = realtimeSnapshot.timeFrom - 1
       } else {
         const page1Limit = Math.min(totalRows ?? realtimePageSize, realtimePageSize)
         const rows = await loadStoreV5KLineData({ symbol: selectedSymbol, period, limit: page1Limit })

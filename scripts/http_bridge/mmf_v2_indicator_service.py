@@ -11,7 +11,7 @@ from uuid import uuid4
 _MMF_V2_RESULT_CACHE_MAX = 64
 _MMF_V2_FEATURE_CACHE_MAX = 32
 _MMF_V2_JOB_MAX = 64
-_MMF_V2_SERVICE_CACHE_VERSION = "mmf_v2_service_cache_v46_tsi_confirmed_cross_only"
+_MMF_V2_SERVICE_CACHE_VERSION = "mmf_v2_service_cache_v47_vwap_features"
 _mmf_v2_result_cache: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
 _mmf_v2_feature_cache: OrderedDict[tuple[Any, ...], tuple[Any, dict[str, Any]]] = OrderedDict()
 _mmf_v2_jobs: OrderedDict[str, dict[str, Any]] = OrderedDict()
@@ -204,6 +204,12 @@ def _mmf_v2_settings_cache_signature(settings: Any) -> tuple[Any, ...]:
         int(getattr(settings.ma, "length", 120)),
         str(getattr(settings.ma, "ma_type", "sma")).lower(),
         str(getattr(settings.ma, "source", "hlc3")).lower(),
+        str(getattr(settings.vwap, "anchor_period", "session")).lower(),
+        str(getattr(settings.vwap, "source", "hlc3")).lower(),
+        str(getattr(settings.vwap, "band_calculation_mode", "standard_deviation")).lower(),
+        float(getattr(settings.vwap, "band1_multiplier", 1.0)),
+        int(getattr(settings.vwap, "offset", 0)),
+        str(getattr(settings.vwap, "symbol", "")).upper(),
         str(getattr(settings.morgan, "anchor", "h4")).lower(),
         tuple(float(value) for value in getattr(settings.morgan, "ratios", ())),
     )
@@ -243,6 +249,14 @@ def _mmf_v2_feature_settings_payload(settings: Any) -> dict[str, Any]:
             "type": str(getattr(settings.ma, "ma_type", "sma")).lower(),
             "source": str(getattr(settings.ma, "source", "hlc3")).lower(),
         },
+        "vwap": {
+            "anchorPeriod": str(getattr(settings.vwap, "anchor_period", "session")).lower(),
+            "source": str(getattr(settings.vwap, "source", "hlc3")).lower(),
+            "bandCalculationMode": str(getattr(settings.vwap, "band_calculation_mode", "standard_deviation")).lower(),
+            "band1Multiplier": float(getattr(settings.vwap, "band1_multiplier", 1.0)),
+            "offset": int(getattr(settings.vwap, "offset", 0)),
+            "symbol": str(getattr(settings.vwap, "symbol", "")),
+        },
         "morgan": {
             "anchor": str(getattr(settings.morgan, "anchor", "h4")).lower(),
             "ratios": [float(value) for value in getattr(settings.morgan, "ratios", ())],
@@ -258,7 +272,7 @@ def _feature_settings_hash(settings: Any) -> str:
 
 def _normalize_mmf_v2_settings(payload: dict[str, Any]) -> "MmfV2Settings":
     from python.indicators.mmf_v2 import MmfV2Settings
-    from python.indicators.mmf_v2.models import MmfV2MaSettings, MmfV2MorganSettings, MmfV2StochSettings, MmfV2TsiSettings, MmfV2VdoSettings, MmfV2VmiSettings
+    from python.indicators.mmf_v2.models import MmfV2MaSettings, MmfV2MorganSettings, MmfV2StochSettings, MmfV2TsiSettings, MmfV2VdoSettings, MmfV2VmiSettings, MmfV2VwapSettings
 
     settings_payload = payload.get("settings") if isinstance(payload.get("settings"), dict) else {}
     stoch_payload = settings_payload.get("stoch") if isinstance(settings_payload.get("stoch"), dict) else {}
@@ -266,6 +280,7 @@ def _normalize_mmf_v2_settings(payload: dict[str, Any]) -> "MmfV2Settings":
     vmi_payload = settings_payload.get("vmi") if isinstance(settings_payload.get("vmi"), dict) else {}
     tsi_payload = settings_payload.get("tsi") if isinstance(settings_payload.get("tsi"), dict) else {}
     ma_payload = settings_payload.get("ma") if isinstance(settings_payload.get("ma"), dict) else {}
+    vwap_payload = settings_payload.get("vwap") if isinstance(settings_payload.get("vwap"), dict) else {}
     morgan_payload = settings_payload.get("morgan") if isinstance(settings_payload.get("morgan"), dict) else {}
     ratios_payload = morgan_payload.get("ratios")
     ratios = tuple(_safe_float(value, 0) for value in ratios_payload) if isinstance(ratios_payload, list) else (-0.236, -0.118, 0.118, 0.236)
@@ -351,6 +366,14 @@ def _normalize_mmf_v2_settings(payload: dict[str, Any]) -> "MmfV2Settings":
         morgan=MmfV2MorganSettings(
             anchor=str(morgan_payload.get("anchor") or "h4"),
             ratios=ratios,
+        ),
+        vwap=MmfV2VwapSettings(
+            anchor_period=str(vwap_payload.get("anchorPeriod") or vwap_payload.get("anchor_period") or "session"),
+            source=str(vwap_payload.get("source") or "hlc3"),
+            band_calculation_mode=str(vwap_payload.get("bandCalculationMode") or vwap_payload.get("band_calculation_mode") or "standard_deviation"),
+            band1_multiplier=_safe_float(vwap_payload.get("band1Multiplier") or vwap_payload.get("band1_multiplier"), 1.0),
+            offset=_safe_int(vwap_payload.get("offset"), 0, minimum=-5000, maximum=5000),
+            symbol=str(vwap_payload.get("symbol") or payload.get("symbol") or ""),
         ),
     )
 

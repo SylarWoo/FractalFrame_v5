@@ -316,6 +316,44 @@ function drawMainVolumeOverlay(chart: Chart, canvas: HTMLCanvasElement, settings
   return nextCache
 }
 
+function createRenderSignature(chart: Chart, settings: VolIndicatorSettings) {
+  const mainSize = chart.getSize(candlePaneId, DomPosition.Main)
+  const dataList = chart.getDataList()
+  const range = chart.getVisibleRange()
+  const from = Math.max(0, Math.floor(range.realFrom) - 1)
+  const to = Math.min(dataList.length - 1, Math.ceil(range.realTo) + 1)
+  const firstVisible = dataList[from]
+  const lastVisible = dataList[to]
+  const last = dataList[dataList.length - 1]
+  return JSON.stringify({
+    barSpace: Math.round(chart.getBarSpace() * 1000) / 1000,
+    dataLength: dataList.length,
+    devicePixelRatio: window.devicePixelRatio || 1,
+    firstVisible: firstVisible ? [firstVisible.timestamp, firstVisible.open, firstVisible.close, readVolume(firstVisible)] : null,
+    last: last ? [last.timestamp, last.open, last.high, last.low, last.close, readVolume(last)] : null,
+    lastVisible: lastVisible ? [lastVisible.timestamp, lastVisible.open, lastVisible.close, readVolume(lastVisible)] : null,
+    rangeFrom: Math.round(range.realFrom * 1000) / 1000,
+    rangeTo: Math.round(range.realTo * 1000) / 1000,
+    settings: {
+      colorBasedOnPreviousClose: settings.colorBasedOnPreviousClose,
+      maChecked: settings.maChecked,
+      maColor: settings.maColor,
+      maLength: settings.maLength,
+      maLineStyle: settings.maLineStyle,
+      maLineWidth: settings.maLineWidth,
+      maOpacity: settings.maOpacity,
+      volumeChecked: settings.volumeChecked,
+      volumeDownColor: settings.volumeDownColor,
+      volumeDownOpacity: settings.volumeDownOpacity,
+      volumeUpColor: settings.volumeUpColor,
+      volumeUpOpacity: settings.volumeUpOpacity,
+    },
+    size: mainSize ? [Math.round(mainSize.width), Math.round(mainSize.height)] : null,
+    visibleFrom: from,
+    visibleTo: to,
+  })
+}
+
 export function installMainVolumeOverlay(chart: Chart, inputSettings?: Partial<VolIndicatorSettings>): MainVolumeOverlay | null {
   const mainDom = chart.getDom(candlePaneId, DomPosition.Main)
   if (!mainDom) return null
@@ -335,8 +373,12 @@ export function installMainVolumeOverlay(chart: Chart, inputSettings?: Partial<V
   let settings = normalizeSettings(inputSettings)
   let frameId = 0
   let renderCache: MainVolumeCache | null = null
+  let renderSignature = ''
   const render = () => {
     frameId = 0
+    const nextSignature = createRenderSignature(chart, settings)
+    if (nextSignature === renderSignature) return
+    renderSignature = nextSignature
     renderCache = drawMainVolumeOverlay(chart, canvas, settings, renderCache)
   }
   const scheduleRender = () => {
@@ -367,6 +409,7 @@ export function installMainVolumeOverlay(chart: Chart, inputSettings?: Partial<V
     updateSettings: (nextSettings) => {
       settings = normalizeSettings(nextSettings)
       renderCache = null
+      renderSignature = ''
       scheduleRender()
     },
   }

@@ -32,8 +32,9 @@ from http_bridge.response import write_sse_event
 from http_bridge.mt5_m1_check_routes import handle_mt5_m1_check_get
 from http_bridge.mt5_symbol_routes import handle_mt5_symbols_get
 from http_bridge.indicator_routes import handle_indicator_get, handle_indicator_post
-from http_bridge.indicator_service import calculate_mmf_indicator_from_rows, calculate_mmf_v2_indicator_from_rows, calculate_vmi_indicator_from_rows, query_mmf_indicator
+from http_bridge.indicator_service import calculate_mmf_indicator_from_rows, calculate_mmf_v2_indicator_from_rows, calculate_mmf_v3_indicator_from_rows, calculate_vmi_indicator_from_rows, query_mmf_indicator
 from http_bridge.mmf_v2_indicator_service import get_mmf_v2_indicator_job, start_mmf_v2_indicator_job
+from http_bridge.mmf_v3_indicator_service import get_mmf_v3_indicator_job, start_mmf_v3_indicator_job
 from http_bridge.sse import send_aggregate_job_events as send_aggregate_job_events_sse
 from http_bridge.sse import send_mt5_tick_events as send_mt5_tick_events_sse
 from http_bridge.sse import send_pull_job_events as send_pull_job_events_sse
@@ -72,6 +73,7 @@ LOGGER = get_logger("mt5_symbols_server")
 QUIET_ACCESS_LOG_PATHS = {
     "/api/indicators/v1/mmf/calculate",
     "/api/indicators/v2/mmf/calculate",
+    "/api/indicators/v3/mmf/calculate",
     "/api/indicators/v1/vmi/calculate",
     "/api/market-data/v1/mt5/tick",
     "/api/market-data/v1/mt5/ticks/events",
@@ -200,17 +202,24 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/debug/source-version":
             from http_bridge import indicator_service
             from http_bridge import mmf_v2_indicator_service
+            from http_bridge import mmf_v3_indicator_service
             from python.indicators.mmf_v2 import signal_catalog
+            from python.indicators.mmf_v3 import signal_catalog as mmf_v3_signal_catalog
 
             self.send_json(200, {
                 "ok": True,
                 "serverSourceVersion": SERVER_SOURCE_VERSION,
                 "indicatorServiceFile": str(Path(indicator_service.__file__).resolve()),
                 "mmfV2IndicatorServiceFile": str(Path(mmf_v2_indicator_service.__file__).resolve()),
+                "mmfV3IndicatorServiceFile": str(Path(mmf_v3_indicator_service.__file__).resolve()),
                 "mmfV2ServiceCacheVersion": getattr(mmf_v2_indicator_service, "_MMF_V2_SERVICE_CACHE_VERSION", None),
+                "mmfV3ServiceCacheVersion": getattr(mmf_v3_indicator_service, "_MMF_V3_SERVICE_CACHE_VERSION", None),
                 "mmfV2SignalCatalogFile": str(Path(signal_catalog.__file__).resolve()),
+                "mmfV3SignalCatalogFile": str(Path(mmf_v3_signal_catalog.__file__).resolve()),
                 "mmfV2SignalCatalogCount": len(signal_catalog.get_mmf_v2_signal_catalog()),
+                "mmfV3SignalCatalogCount": len(mmf_v3_signal_catalog.get_mmf_v3_signal_catalog()),
                 "mmfV2HasTsiSignals": any(str(entry.get("catalogId", "")).startswith("MMF_V2_TSI_") for entry in signal_catalog.get_mmf_v2_signal_catalog()),
+                "mmfV3HasTsiSignals": any(str(entry.get("catalogId", "")).startswith("MMF_V3_TSI_") for entry in mmf_v3_signal_catalog.get_mmf_v3_signal_catalog()),
                 "indicatorEngineVersion": getattr(indicator_service, "_MMF_ENGINE_VERSION", None),
             })
             return

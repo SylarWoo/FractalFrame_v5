@@ -39,12 +39,19 @@ export function RightDrawer({
   indicatorShortcutKeys,
   indicatorsController,
   loadedIndicatorKeys,
+  loadedStrategyKeys,
   morganRangeSegment,
   onClose,
   onIndicatorShortcutKeysChange,
+  onStrategyLoad,
+  onStrategyPersistenceEnabledChange,
+  onStrategyShortcutKeysChange,
+  onStrategyUnload,
   onResize,
   onToggleDrawer,
   onOpenChart,
+  strategyPersistenceEnabled,
+  strategyShortcutKeys,
 }: RightDrawerProps) {
   const initialSnapshot = useMemo(() => getInitialSymbolSnapshot(), [])
   const initialSharedSelection = useMemo(() => readSharedSelection(), [])
@@ -437,7 +444,15 @@ export function RightDrawer({
             onIndicatorShortcutKeysChange={onIndicatorShortcutKeysChange}
           />
         ) : renderedActiveDrawer === 'strategy' ? (
-          <StrategyDrawer />
+          <StrategyDrawer
+            loadedStrategyKeys={loadedStrategyKeys}
+            persistenceEnabled={strategyPersistenceEnabled}
+            strategyShortcutKeys={strategyShortcutKeys}
+            onLoadStrategy={onStrategyLoad}
+            onPersistenceEnabledChange={onStrategyPersistenceEnabledChange}
+            onStrategyShortcutKeysChange={onStrategyShortcutKeysChange}
+            onUnloadStrategy={onStrategyUnload}
+          />
         ) : renderedActiveDrawer === 'mt5' ? (
           <RightDrawerMt5Body
             canAggregateStoreV5={canAggregateStoreV5}

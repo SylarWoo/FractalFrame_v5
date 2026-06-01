@@ -6,6 +6,7 @@ from typing import Literal
 from python.indicators.vmi import VmiSettings
 from python.indicators.vdo import VdoSettings
 from python.indicators.tsi import TsiSettings
+from python.indicators.vwap import VwapSettings
 from python.signals import BarCoordinate, SignalRecord, SignalWindow
 
 MmfV2SignalType = Literal[
@@ -80,6 +81,11 @@ class MmfV2MorganSettings:
 
 
 @dataclass(frozen=True)
+class MmfV2VwapSettings(VwapSettings):
+    pass
+
+
+@dataclass(frozen=True)
 class MmfV2SignalSettings:
     enabled: bool = False
 
@@ -136,6 +142,7 @@ class MmfV2Settings:
     tsi: MmfV2TsiSettings = field(default_factory=MmfV2TsiSettings)
     ma: MmfV2MaSettings = field(default_factory=MmfV2MaSettings)
     morgan: MmfV2MorganSettings = field(default_factory=MmfV2MorganSettings)
+    vwap: MmfV2VwapSettings = field(default_factory=MmfV2VwapSettings)
     signals: dict[str, MmfV2SignalSettings] = field(default_factory=dict)
 
 

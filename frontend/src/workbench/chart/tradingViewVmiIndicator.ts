@@ -4,8 +4,10 @@ import { defaultVdoIndicatorSettings, defaultVmiIndicatorSettings } from '../rig
 import type { VdoIndicatorSettings, VmiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
-import { isFuturePlaceholder, stripFuturePlaceholders } from './chartFuturePlaceholders'
+import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
+import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
+import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
 import { calculateTradingViewVdoRows } from './tradingViewVdoIndicator'
 
 export type VmiIndicatorRow = {
@@ -15,8 +17,10 @@ export type VmiIndicatorRow = {
 let registered = false
 
 type VmiCalcContext = {
+  pageKey?: string
   period?: string
   settings?: Partial<VmiIndicatorSettings>
+  settingsHash?: string
   symbol?: string
   vdoSettings?: Partial<VdoIndicatorSettings>
 }
@@ -28,8 +32,10 @@ function normalizeVmiSettings(input?: Partial<VmiIndicatorSettings>): VmiIndicat
 function normalizeVmiContext(input: unknown) {
   const context = input && typeof input === 'object' ? input as VmiCalcContext : {}
   return {
+    pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
     period: String(context.period || 'M5').trim().toUpperCase(),
     settings: normalizeVmiSettings(context.settings),
+    settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
     symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
     vdoSettings: { ...defaultVdoIndicatorSettings, ...(context.vdoSettings ?? {}) },
   }
@@ -217,25 +223,33 @@ export function calculateTradingViewVmiRows(
   })
 }
 
-function mergeRealRowsWithPlaceholders(dataList: KLineData[], realRows: VmiIndicatorRow[]) {
-  const rows: VmiIndicatorRow[] = []
-  let realIndex = 0
-  for (const row of dataList) {
-    if (isFuturePlaceholder(row)) {
-      rows.push({})
-      continue
-    }
-    rows.push(realRows[realIndex] ?? {})
-    realIndex += 1
-  }
-  return rows
-}
-
 function calculateVmiRows(dataList: KLineData[], inputContext?: unknown): VmiIndicatorRow[] {
   const context = normalizeVmiContext(inputContext)
-  const realRows = stripFuturePlaceholders(dataList)
-  const calculated = calculateTradingViewVmiRows(realRows, context.settings, context.vdoSettings)
-  return mergeRealRowsWithPlaceholders(dataList, calculated)
+  if (context.pageKey && context.symbol && context.period) {
+    const snapshot = readIndicatorPageSnapshot(context.pageKey)
+    if (
+      snapshot &&
+      snapshot.symbol === context.symbol &&
+      snapshot.period === context.period &&
+      snapshot.settingsHashes?.VMI === context.settingsHash
+    ) {
+      return calculateWithoutFuturePlaceholders(
+        dataList,
+        (realRows) => realRows.map((row) => {
+          const barKey = assignBarKey(row, context.symbol, context.period)
+          return snapshot.byBarKey[barKey]?.vmi ?? {}
+        }),
+      )
+    }
+    return calculateWithoutFuturePlaceholders(
+      dataList,
+      (realRows) => calculateTradingViewVmiRows(realRows, context.settings, context.vdoSettings),
+    )
+  }
+  return calculateWithoutFuturePlaceholders(
+    dataList,
+    (realRows) => calculateTradingViewVmiRows(realRows, context.settings, context.vdoSettings),
+  )
 }
 
 export function ensureTradingViewVmiIndicator() {

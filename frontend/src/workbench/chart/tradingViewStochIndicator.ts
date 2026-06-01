@@ -5,7 +5,9 @@ import type { StochIndicatorSettings } from '../rightDrawer/indicatorPersistence
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
+import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
+import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
 
 export type StochIndicatorRow = {
   d?: number
@@ -17,6 +19,16 @@ let registered = false
 function normalizeStochSettings(input?: Partial<StochIndicatorSettings> | number): StochIndicatorSettings {
   if (typeof input === 'number') return { ...defaultStochIndicatorSettings, length: input }
   return { ...defaultStochIndicatorSettings, ...(input ?? {}) }
+}
+
+function readStochSnapshotContext(input: unknown) {
+  const context = input && typeof input === 'object' ? input as Partial<StochIndicatorSettings> & { pageKey?: string; period?: string; settingsHash?: string; symbol?: string } : {}
+  return {
+    pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
+    period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
+    symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
+  }
 }
 
 function clampPeriod(value: unknown, fallback: number) {
@@ -306,9 +318,33 @@ export function ensureTradingViewStochIndicator() {
       drawStochLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'd', settings.dColor, settings.dVisible, settings.dLineStyle, settings.dLineWidth, settings.dOpacity)
       return true
     },
-    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
-      dataList,
-      (realRows) => calculateTradingViewStochRows(realRows, indicator.calcParams[0]),
-    ),
+    calc: (dataList, indicator) => {
+      const context = readStochSnapshotContext(indicator.calcParams[0])
+      if (context.pageKey && context.symbol && context.period) {
+        const snapshot = readIndicatorPageSnapshot(context.pageKey)
+        if (
+          snapshot &&
+          snapshot.symbol === context.symbol &&
+          snapshot.period === context.period &&
+          snapshot.settingsHashes?.Stoch === context.settingsHash
+        ) {
+          return calculateWithoutFuturePlaceholders(
+            dataList,
+            (realRows) => realRows.map((row) => {
+              const barKey = assignBarKey(row, context.symbol, context.period)
+              return snapshot.byBarKey[barKey]?.stoch ?? {}
+            }),
+          )
+        }
+        return calculateWithoutFuturePlaceholders(
+          dataList,
+          (realRows) => calculateTradingViewStochRows(realRows, indicator.calcParams[0]),
+        )
+      }
+      return calculateWithoutFuturePlaceholders(
+        dataList,
+        (realRows) => calculateTradingViewStochRows(realRows, indicator.calcParams[0]),
+      )
+    },
   })
 }

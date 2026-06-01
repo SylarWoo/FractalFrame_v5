@@ -31,10 +31,12 @@ export function useIndicatorsController({
   chartLoadState,
   chartPeriod,
   chartSymbol,
+  restoreContextExtra = '',
 }: {
   chartLoadState: ChartLoadState | null
   chartPeriod: string
   chartSymbol: string
+  restoreContextExtra?: string
 }) {
   const [state, setState] = useState(readPersistedIndicatorsState)
   const stateRef = useRef(state)
@@ -165,7 +167,8 @@ export function useIndicatorsController({
   }, [])
 
   useEffect(() => {
-    const contextKey = resolveIndicatorRestoreContextKey(chartLoadState, chartPeriod, chartSymbol)
+    const baseContextKey = resolveIndicatorRestoreContextKey(chartLoadState, chartPeriod, chartSymbol)
+    const contextKey = baseContextKey ? `${baseContextKey}:${restoreContextExtra}` : null
     if (!contextKey) {
       restoredContextRef.current = ''
       return
@@ -173,7 +176,7 @@ export function useIndicatorsController({
     if (restoredContextRef.current === contextKey) return
     restoredContextRef.current = contextKey
     refreshLoadedIndicatorsVisibility()
-  }, [chartLoadState, chartPeriod, chartSymbol, refreshLoadedIndicatorsVisibility])
+  }, [chartLoadState, chartPeriod, chartSymbol, refreshLoadedIndicatorsVisibility, restoreContextExtra])
 
   return {
     command,

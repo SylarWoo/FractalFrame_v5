@@ -11,6 +11,7 @@ from python.indicators.stoch import calculate_stoch_frame
 from python.indicators.tsi import calculate_tsi_frame
 from python.indicators.vdo import calculate_vdo_frame
 from python.indicators.vmi import calculate_vmi_frame
+from python.indicators.vwap import calculate_vwap_frame
 
 
 @dataclass(frozen=True)
@@ -32,9 +33,10 @@ def build_mmf_v2_feature_frame(frame: pd.DataFrame, settings: Any) -> MmfV2Featu
         "vdo_values": vdo_features["vdo"],
     })
     tsi_features = calculate_tsi_frame(frame, getattr(settings, "tsi", None))
+    vwap_features = calculate_vwap_frame(frame, getattr(settings, "vwap", None))
     morgan_features = calculate_morgan_feature(frame, settings.morgan)
     return MmfV2FeatureFrame(
-        frame=pd.concat([features, stoch_features, vdo_features, vmi_features, tsi_features, ma_features, morgan_features], axis=1),
+        frame=pd.concat([features, stoch_features, vdo_features, vmi_features, tsi_features, ma_features, vwap_features, morgan_features], axis=1),
         settings=settings,
     )
 

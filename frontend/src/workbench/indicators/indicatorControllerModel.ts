@@ -57,8 +57,7 @@ export const indicatorControllerDefinitions = [
   { key: 'MA', stateField: 'ma' },
   { key: 'MR-M5', stateField: 'mr' },
   { key: 'MR-M30', stateField: 'mr' },
-  { key: 'MMF', stateField: 'mmf' },
-  { key: 'MMF_V2', stateField: 'mmf' },
+  { key: 'MMF_V3', stateField: 'mmfV3' },
   { key: 'VWAP', stateField: 'vwap' },
   { key: 'Vol', stateField: 'vol' },
 ] as const satisfies readonly IndicatorControllerDefinition[]

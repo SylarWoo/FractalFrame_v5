@@ -89,13 +89,17 @@ export function writeIndicatorPersistenceEnabled(enabled: boolean) {
 
 export function readPersistedIndicatorsState(): PersistedIndicatorsState {
   const parsed = readJson<Partial<PersistedIndicatorsState> | null>(persistedStateKey, null)
+  const legacyMmfLoaded = parsed?.loaded?.MMF === true || parsed?.loaded?.MMF_V2 === true
+  const legacyMmfSettings = parsed?.mmfV3 ?? parsed?.mmf
+  const selectedKey = typeof parsed?.ui?.selectedKey === 'string' && parsed.ui.selectedKey ? parsed.ui.selectedKey : 'RSI'
   return {
     loaded: {
       DPO: parsed?.loaded?.DPO === true,
       MA: parsed?.loaded?.MA === true,
       MACD: parsed?.loaded?.MACD === true,
-      MMF: parsed?.loaded?.MMF === true,
-      MMF_V2: parsed?.loaded?.MMF_V2 === true,
+      MMF: false,
+      MMF_V2: false,
+      MMF_V3: parsed?.loaded?.MMF_V3 === true || legacyMmfLoaded,
       'MR-M5': parsed?.loaded?.['MR-M5'] === true || parsed?.loaded?.MR === true,
       'MR-M30': parsed?.loaded?.['MR-M30'] === true,
       RSI: parsed?.loaded?.RSI === true,
@@ -119,6 +123,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
     },
     macd: normalizeMacdSettings(parsed?.macd),
     mmf: normalizeMmfSettings(parsed?.mmf),
+    mmfV3: normalizeMmfSettings(legacyMmfSettings),
     mr: normalizeMrSettings(parsed?.mr),
     rsi: {
       ...defaultRsiIndicatorSettings,
@@ -135,7 +140,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
     vol: normalizeVolSettings(parsed?.vol),
     ui: {
       activeTab: normalizeIndicatorSettingsTab(parsed?.ui?.activeTab),
-      selectedKey: typeof parsed?.ui?.selectedKey === 'string' && parsed.ui.selectedKey ? parsed.ui.selectedKey : 'RSI',
+      selectedKey: selectedKey === 'MMF' || selectedKey === 'MMF_V2' ? 'MMF_V3' : selectedKey,
     },
   }
 }

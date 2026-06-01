@@ -3,6 +3,7 @@ import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
+import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
@@ -10,9 +11,16 @@ import { chartRealtimeDataChangedEvent, useChartRealtimeTicks } from './useChart
 import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
 import { useChartStepLoad } from './useChartStepLoad'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay } from './mainVolumeIndicator'
-import { applyMorganRangeOverlays, clearMorganRangeOverlays } from './useMorganRangeOverlays'
 import {
-  calculateMorganRangeSegmentsForMode,
+  createIndicatorPageKey,
+  createIndicatorSettingsHash,
+  createIndicatorSnapshotRows,
+  readIndicatorPageSnapshot,
+  writeIndicatorPageSnapshot,
+} from './indicatorPageSnapshotStore'
+import { applyMorganRangeOverlaySegments, applyMorganRangeOverlays, clearMorganRangeOverlays } from './useMorganRangeOverlays'
+import {
+  calculateMorganRangeSegmentsForModeCached,
   findMorganRangeSegmentByDataIndex,
   resolveMorganRangeBucketSeconds,
   type MorganRangeMode,
@@ -21,24 +29,28 @@ import {
 import { mmfV2MomentumStatsEvent, publishMmfV2MomentumCrosshairIndex } from './mmfV2MomentumStats'
 import type { MmfV2MomentumSample, MmfV2MomentumStats, MmfV2MomentumStatsSide } from './mmfV2MomentumStats'
 import { readCrosshairDataIndex } from './paneTitleOverlayContent'
-import { ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
+import { calculateTradingViewMaShiftRows, ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMmfIndicator } from './tradingViewMmfIndicator'
 import { ensureTradingViewMmfV2Indicator } from './tradingViewMmfV2Indicator'
-import { ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
-import { ensureTradingViewDpoIndicator } from './tradingViewDpoIndicator'
-import { ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
-import { ensureTradingViewSqzmomIndicator } from './tradingViewSqzmomIndicator'
-import { ensureTradingViewStochIndicator } from './tradingViewStochIndicator'
-import { ensureTradingViewTsiIndicator } from './tradingViewTsiIndicator'
-import { ensureTradingViewVdoIndicator } from './tradingViewVdoIndicator'
-import { ensureTradingViewViIndicator } from './tradingViewViIndicator'
-import { ensureTradingViewAoIndicator } from './tradingViewAoIndicator'
-import { ensureTradingViewVmiIndicator } from './tradingViewVmiIndicator'
-import { ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
+import { calculateMmfV3RowsForPage, ensureTradingViewMmfV3Indicator } from './tradingViewMmfV3Indicator'
+import { bprM5StrategyIndicatorName, ensureTradingViewBprM5StrategyIndicator } from './tradingViewBprM5StrategyIndicator'
+import { calculateTradingViewMacdRows, ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
+import { calculateTradingViewDpoRows, ensureTradingViewDpoIndicator } from './tradingViewDpoIndicator'
+import { calculateTradingViewRsiRows, ensureTradingViewRsiIndicator } from './tradingViewRsiIndicator'
+import { calculateTradingViewSqzmomRows, ensureTradingViewSqzmomIndicator } from './tradingViewSqzmomIndicator'
+import { calculateTradingViewStochRows, ensureTradingViewStochIndicator } from './tradingViewStochIndicator'
+import { calculateTradingViewTsiRows, ensureTradingViewTsiIndicator } from './tradingViewTsiIndicator'
+import { calculateTradingViewVdoRows, ensureTradingViewVdoIndicator } from './tradingViewVdoIndicator'
+import { calculateTradingViewViRows, ensureTradingViewViIndicator } from './tradingViewViIndicator'
+import { calculateTradingViewAoRows, ensureTradingViewAoIndicator } from './tradingViewAoIndicator'
+import { calculateTradingViewVmiRows, ensureTradingViewVmiIndicator } from './tradingViewVmiIndicator'
+import { calculateTradingViewVwapRows, ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
 import { ensureTradingViewMrIndicator, resolveTradingViewMrIndicatorName } from './tradingViewMrIndicator'
 import {
   applyCandleIndicatorCommand,
   applyPaneIndicatorCommand,
+  applySnapshotCandleIndicatorCommand,
+  applySnapshotPaneIndicatorCommand,
   applyVolumeCommand,
 } from './chartIndicatorCommandHandlers'
 import type {
@@ -84,9 +96,13 @@ function resolveMorganRangeMode(name: MorganRangeIndicatorName): MorganRangeMode
   return name === 'MR-M30' ? 'D1_M30' : 'H4_M5'
 }
 
+let chartDrawingRefreshFrame = 0
+
 function refreshChartDrawings() {
+  if (chartDrawingRefreshFrame !== 0) return
   window.dispatchEvent(new Event(chartDrawingVisibilityRefreshEvent))
-  window.requestAnimationFrame(() => {
+  chartDrawingRefreshFrame = window.requestAnimationFrame(() => {
+    chartDrawingRefreshFrame = 0
     window.dispatchEvent(new Event(chartDrawingVisibilityRefreshEvent))
   })
 }
@@ -96,6 +112,7 @@ type ChartCoreHostProps = {
   indicatorCommand?: ChartIndicatorCommand | null
   jump?: { id: number; timestamp?: number } | null
   limit?: number
+  loadedStrategyKeys?: string[]
   mmfLoaded?: boolean
   maSettings?: MaIndicatorSettings
   mmfSettings?: MmfIndicatorSettings
@@ -112,6 +129,7 @@ type ChartCoreHostProps = {
   totalRows?: number | null
   vdoSettings?: VdoIndicatorSettings
   vmiSettings?: VmiIndicatorSettings
+  vwapSettings?: VwapIndicatorSettings
 }
 
 export type ChartPageTarget = {
@@ -129,6 +147,7 @@ export type ChartIndicatorCommand = {
   | { name: 'MACD'; settings?: MacdIndicatorSettings }
   | { name: 'MMF'; settings?: MmfIndicatorSettings }
   | { name: 'MMF_V2'; settings?: MmfIndicatorSettings }
+  | { name: 'MMF_V3'; settings?: MmfIndicatorSettings }
   | { name: 'DPO'; settings?: DpoIndicatorSettings }
   | { name: 'MR-M5'; settings?: MrIndicatorSettings }
   | { name: 'MR-M30'; settings?: MrIndicatorSettings }
@@ -188,7 +207,36 @@ function refreshPane(chart: unknown, paneId: string) {
   })
 }
 
-export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings }: ChartCoreHostProps) {
+function createChartDataSignature(chart: Chart) {
+  const rows = stripFuturePlaceholders(chart.getDataList())
+  const first = rows[0]
+  const last = rows[rows.length - 1]
+  return [
+    rows.length,
+    first?.timestamp,
+    first?.open,
+    first?.high,
+    first?.low,
+    first?.close,
+    last?.timestamp,
+    last?.open,
+    last?.high,
+    last?.low,
+    last?.close,
+  ].join('|')
+}
+
+function createCurrentIndicatorPageKey(chart: Chart, options: { pageIndex: number; period: string; realtime: boolean; symbol: string }) {
+  return createIndicatorPageKey({
+    pageIndex: options.pageIndex,
+    period: options.period,
+    realtime: options.realtime,
+    rows: chart.getDataList(),
+    symbol: options.symbol,
+  })
+}
+
+export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, loadedStrategyKeys = [], maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings, vwapSettings }: ChartCoreHostProps) {
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
   const [mmfV2MomentumStats, setMmfV2MomentumStats] = useState<MmfV2MomentumStats | null>(null)
   const [mmfV2MomentumCrosshairIndex, setMmfV2MomentumCrosshairIndex] = useState<number | null>(null)
@@ -220,6 +268,8 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
   const morganRangeOverlayIdsRef = useRef<Set<string>>(new Set())
   const morganRangeSettingsRef = useRef<MrIndicatorSettings | null>(null)
   const morganRangeCrosshairIndexRef = useRef<number | null>(null)
+  const morganRangePublishedSegmentRef = useRef('')
+  const mmfV3StaticRequestIdRef = useRef(0)
 
   useEffect(() => {
     onLoadStateChange?.({ ...loadState, period, symbol, totalRows })
@@ -345,7 +395,36 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
     vdoSettings,
     vmiSettings,
     tsiSettings,
-  }], [maSettings, morganRangeMode, period, stochSettings, symbol, tsiSettings, vdoSettings, vmiSettings])
+    vwapSettings,
+  }], [maSettings, morganRangeMode, period, stochSettings, symbol, tsiSettings, vdoSettings, vmiSettings, vwapSettings])
+
+  const buildMmfV3CalcParams = useCallback((settings?: MmfIndicatorSettings, snapshot?: { pageKey: string; settingsHash: string }) => [{
+    maSettings,
+    morganRangeMode,
+    pageKey: snapshot?.pageKey,
+    period,
+    settings,
+    settingsHash: snapshot?.settingsHash,
+    symbol,
+    stochSettings,
+    vdoSettings,
+    vmiSettings,
+    tsiSettings,
+    vwapSettings,
+  }], [maSettings, morganRangeMode, period, stochSettings, symbol, tsiSettings, vdoSettings, vmiSettings, vwapSettings])
+
+  const buildBprM5StrategyCalcParams = useCallback(() => [{
+    maSettings,
+    mmfSettings,
+    morganRangeMode,
+    period,
+    stochSettings,
+    symbol,
+    tsiSettings,
+    vdoSettings,
+    vmiSettings,
+    vwapSettings,
+  }], [maSettings, mmfSettings, morganRangeMode, period, stochSettings, symbol, tsiSettings, vdoSettings, vmiSettings, vwapSettings])
 
   const publishMorganRangeSegment = useCallback((dataIndex: number | null = morganRangeCrosshairIndexRef.current) => {
     const chart = chartInstanceRef.current
@@ -364,10 +443,23 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
       return
     }
     const futureBars = Math.round(resolveMorganRangeBucketSeconds(mode) / periodSeconds)
-    const segments = calculateMorganRangeSegmentsForMode(chart.getDataList(), mode, futureBars)
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const segments = readIndicatorPageSnapshot(pageKey)?.morganRange?.segments
+      ?? calculateMorganRangeSegmentsForModeCached(chart.getDataList(), mode, futureBars)
     const fallbackIndex = chart.getDataList().length - 1
-    onMorganRangeSegmentChange?.(findMorganRangeSegmentByDataIndex(segments, dataIndex ?? fallbackIndex) ?? segments[segments.length - 1] ?? null)
-  }, [chartInstanceRef, onMorganRangeSegmentChange, period])
+    const segment = findMorganRangeSegmentByDataIndex(segments, dataIndex ?? fallbackIndex) ?? segments[segments.length - 1] ?? null
+    const signature = segment
+      ? `${dataIndex ?? fallbackIndex}|${segment.startIndex}|${segment.endIndex}|${segment.center}|${segment.upper}|${segment.lower}`
+      : 'null'
+    if (signature === morganRangePublishedSegmentRef.current) return
+    morganRangePublishedSegmentRef.current = signature
+    onMorganRangeSegmentChange?.(segment)
+  }, [chartInstanceRef, onMorganRangeSegmentChange, page?.index, page?.realtime, period, symbol])
 
   const applyMorganRangeCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
     if (command.name !== 'MR-M5' && command.name !== 'MR-M30') return
@@ -378,6 +470,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
       morganRangeModeRef.current = null
       morganRangeIndicatorNameRef.current = null
       morganRangeSettingsRef.current = null
+      morganRangePublishedSegmentRef.current = ''
       clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
       onMorganRangeSegmentChange?.(null)
       return
@@ -393,13 +486,41 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
     morganRangeSettingsRef.current = command.settings ?? null
     if (!isIndicatorVisibleInCurrentPeriod(command.name)) {
       clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+      morganRangePublishedSegmentRef.current = ''
       onMorganRangeSegmentChange?.(null)
       return
     }
+    const periodSeconds = resolvePeriodSeconds(period)
+    const futureBars = Number.isFinite(periodSeconds) && periodSeconds > 0
+      ? Math.round(resolveMorganRangeBucketSeconds(mode) / periodSeconds)
+      : 0
+    const segments = futureBars > 0 ? calculateMorganRangeSegmentsForModeCached(chart.getDataList(), mode, futureBars) : []
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: command.name,
+      mode,
+      period,
+      settings: command.settings,
+      symbol,
+    })
+    writeIndicatorPageSnapshot({
+      morganRange: { mode, segments },
+      pageKey,
+      period: period.trim().toUpperCase(),
+      rows: createIndicatorSnapshotRows({ period, rows: chart.getDataList(), symbol }),
+      settingsHash,
+      settingsHashKey: 'MR',
+      symbol,
+    })
     chart.createIndicator({ name: chartIndicatorName, calcParams: [command.settings] }, true, { id: 'candle_pane' })
-    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, mode)
+    applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments)
     publishMorganRangeSegment()
-  }, [isIndicatorVisibleInCurrentPeriod, onMorganRangeSegmentChange, period, publishMorganRangeSegment])
+  }, [isIndicatorVisibleInCurrentPeriod, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, symbol])
 
   const applyMmfCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
     ensureTradingViewMmfIndicator()
@@ -435,6 +556,582 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
     }
   }, [buildMmfV2CalcParams, isIndicatorVisibleInCurrentPeriod])
 
+  const applyMmfV3Command = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    ensureTradingViewMmfV3Indicator()
+
+    if (command.action === 'unload' || !isIndicatorVisibleInCurrentPeriod('MMF_V3')) {
+      mmfV3StaticRequestIdRef.current += 1
+      chart.removeIndicator('candle_pane', 'MMF_V3')
+      return
+    }
+
+    const settings = command.name === 'MMF_V3' ? command.settings : undefined
+    const dataList = chart.getDataList()
+    const dataSignature = createChartDataSignature(chart)
+    const pageKey = createIndicatorPageKey({
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      rows: dataList,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'MMF_V3',
+      maSettings,
+      mmfSettings: settings,
+      morganRangeMode,
+      period,
+      stochSettings,
+      symbol,
+      tsiSettings,
+      vdoSettings,
+      vmiSettings,
+      vwapSettings,
+    })
+    const requestId = mmfV3StaticRequestIdRef.current + 1
+    mmfV3StaticRequestIdRef.current = requestId
+    const existingSnapshot = readIndicatorPageSnapshot(pageKey)
+    const snapshotReady = Boolean(
+      existingSnapshot &&
+      existingSnapshot.symbol === symbol &&
+      existingSnapshot.period === period.trim().toUpperCase() &&
+      (existingSnapshot.settingsHashes?.MMF_V3 ?? existingSnapshot.settingsHash) === settingsHash,
+    )
+    const fallbackCalcParams = snapshotReady
+      ? buildMmfV3CalcParams(settings, { pageKey, settingsHash })
+      : buildMmfV3CalcParams(settings)
+    if (chart.getIndicatorByPaneId('candle_pane', 'MMF_V3')) {
+      chart.overrideIndicator({ name: 'MMF_V3', calcParams: fallbackCalcParams, zLevel: mmfIndicatorZLevel }, 'candle_pane')
+    } else {
+      chart.createIndicator({ name: 'MMF_V3', calcParams: fallbackCalcParams, zLevel: mmfIndicatorZLevel }, true, { id: 'candle_pane' })
+    }
+    if (snapshotReady) return
+    calculateMmfV3RowsForPage(dataList, fallbackCalcParams[0])
+      .then((staticRows) => {
+        if (mmfV3StaticRequestIdRef.current !== requestId) return
+        if (!isIndicatorVisibleInCurrentPeriod('MMF_V3')) return
+        const currentChart = chartInstanceRef.current
+        if (!currentChart || currentChart !== chart) return
+        if (createChartDataSignature(currentChart) !== dataSignature) return
+        writeIndicatorPageSnapshot({
+          pageKey,
+          period: period.trim().toUpperCase(),
+          rows: createIndicatorSnapshotRows({ mmfV3Rows: staticRows, period, rows: dataList, symbol }),
+          settingsHash,
+          settingsHashKey: 'MMF_V3',
+          symbol,
+        })
+        const calcParams = buildMmfV3CalcParams(settings, { pageKey, settingsHash })
+        if (currentChart.getIndicatorByPaneId('candle_pane', 'MMF_V3')) {
+          currentChart.overrideIndicator({ name: 'MMF_V3', calcParams, zLevel: mmfIndicatorZLevel }, 'candle_pane')
+        } else {
+          currentChart.createIndicator({ name: 'MMF_V3', calcParams, zLevel: mmfIndicatorZLevel }, true, { id: 'candle_pane' })
+        }
+      })
+      .catch(() => {
+        if (mmfV3StaticRequestIdRef.current !== requestId) return
+        const currentChart = chartInstanceRef.current
+        if (!currentChart || currentChart !== chart) return
+        if (createChartDataSignature(currentChart) !== dataSignature) return
+        if (currentChart.getIndicatorByPaneId('candle_pane', 'MMF_V3')) {
+          currentChart.overrideIndicator({ name: 'MMF_V3', calcParams: fallbackCalcParams, zLevel: mmfIndicatorZLevel }, 'candle_pane')
+        } else {
+          currentChart.createIndicator({ name: 'MMF_V3', calcParams: fallbackCalcParams, zLevel: mmfIndicatorZLevel }, true, { id: 'candle_pane' })
+        }
+      })
+  }, [buildMmfV3CalcParams, chartInstanceRef, isIndicatorVisibleInCurrentPeriod, maSettings, morganRangeMode, page?.index, page?.realtime, period, stochSettings, symbol, tsiSettings, vdoSettings, vmiSettings, vwapSettings])
+
+  const applyMaCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'MA') return
+    const config: CandleIndicatorConfig = {
+      ensureRegistered: ensureTradingViewMaShiftIndicator,
+      name: 'MA',
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'MA',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotCandleIndicatorCommand({
+      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ maRows: calculateTradingViewMaShiftRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      settingsHash,
+      settingsHashKey: 'MA',
+      symbol,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, page?.index, page?.realtime, period, symbol])
+
+  const applyVwapCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'VWAP') return
+    const config: CandleIndicatorConfig = {
+      ensureRegistered: ensureTradingViewVwapIndicator,
+      name: 'VWAP',
+    }
+    const settings = { ...command.settings, symbol }
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'VWAP',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotCandleIndicatorCommand({
+      calcParams: [{ ...settings, pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ vwapRows: calculateTradingViewVwapRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      settingsHash,
+      settingsHashKey: 'VWAP',
+      symbol,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, page?.index, page?.realtime, period, symbol])
+
+  const applyStochCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'Stoch') return
+    const config: IndicatorPaneConfig = {
+      ensureRegistered: ensureTradingViewStochIndicator,
+      minHeight: minRsiPaneHeight,
+      name: 'Stoch',
+      observeHeight: observeStochPaneHeight,
+      observerRef: stochPaneHeightObserverRef,
+      paneId: stochPaneId,
+      storageKey: stochPaneHeightStorageKey,
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'Stoch',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotPaneIndicatorCommand({
+      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ stochRows: calculateTradingViewStochRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      readStoredPaneHeight,
+      refreshChartDrawings,
+      settingsHash,
+      settingsHashKey: 'Stoch',
+      symbol,
+      writeStoredPaneHeight,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, observeStochPaneHeight, page?.index, page?.realtime, period, symbol])
+
+  const applyVdoCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'VDO') return
+    const config: IndicatorPaneConfig = {
+      ensureRegistered: ensureTradingViewVdoIndicator,
+      minHeight: minRsiPaneHeight,
+      name: 'VDO',
+      observeHeight: observeVdoPaneHeight,
+      observerRef: vdoPaneHeightObserverRef,
+      paneId: vdoPaneId,
+      storageKey: vdoPaneHeightStorageKey,
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'VDO',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotPaneIndicatorCommand({
+      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ vdoRows: calculateTradingViewVdoRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      readStoredPaneHeight,
+      refreshChartDrawings,
+      settingsHash,
+      settingsHashKey: 'VDO',
+      symbol,
+      writeStoredPaneHeight,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, observeVdoPaneHeight, page?.index, page?.realtime, period, symbol])
+
+  const applyVmiCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'VMI') return
+    const config: IndicatorPaneConfig = {
+      ensureRegistered: ensureTradingViewVmiIndicator,
+      minHeight: minRsiPaneHeight,
+      name: 'VMI',
+      observeHeight: observeVmiPaneHeight,
+      observerRef: vmiPaneHeightObserverRef,
+      paneId: vmiPaneId,
+      storageKey: vmiPaneHeightStorageKey,
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'VMI',
+      period,
+      settings,
+      symbol,
+      vdoSettings,
+    })
+    applySnapshotPaneIndicatorCommand({
+      calcParams: [{ pageKey, period, settings, settingsHash, symbol, vdoSettings }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ vmiRows: calculateTradingViewVmiRows(realRows, settings, vdoSettings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      readStoredPaneHeight,
+      refreshChartDrawings,
+      settingsHash,
+      settingsHashKey: 'VMI',
+      symbol,
+      writeStoredPaneHeight,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, observeVmiPaneHeight, page?.index, page?.realtime, period, symbol, vdoSettings])
+
+  const applyTsiCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'TSI') return
+    const config: IndicatorPaneConfig = {
+      ensureRegistered: ensureTradingViewTsiIndicator,
+      minHeight: minRsiPaneHeight,
+      name: 'TSI',
+      observeHeight: observeTsiPaneHeight,
+      observerRef: tsiPaneHeightObserverRef,
+      paneId: tsiPaneId,
+      storageKey: tsiPaneHeightStorageKey,
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'TSI',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotPaneIndicatorCommand({
+      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ tsiRows: calculateTradingViewTsiRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      readStoredPaneHeight,
+      refreshChartDrawings,
+      settingsHash,
+      settingsHashKey: 'TSI',
+      symbol,
+      writeStoredPaneHeight,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, observeTsiPaneHeight, page?.index, page?.realtime, period, symbol])
+
+  const applyAoCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'AO') return
+    const config: IndicatorPaneConfig = {
+      ensureRegistered: ensureTradingViewAoIndicator,
+      minHeight: minRsiPaneHeight,
+      name: 'AO',
+      observeHeight: observeAoPaneHeight,
+      observerRef: aoPaneHeightObserverRef,
+      paneId: aoPaneId,
+      storageKey: aoPaneHeightStorageKey,
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'AO',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotPaneIndicatorCommand({
+      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ aoRows: calculateTradingViewAoRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      readStoredPaneHeight,
+      refreshChartDrawings,
+      settingsHash,
+      settingsHashKey: 'AO',
+      symbol,
+      writeStoredPaneHeight,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, observeAoPaneHeight, page?.index, page?.realtime, period, symbol])
+
+  const applyViCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'VI') return
+    const config: IndicatorPaneConfig = {
+      ensureRegistered: ensureTradingViewViIndicator,
+      minHeight: minRsiPaneHeight,
+      name: 'VI',
+      observeHeight: observeViPaneHeight,
+      observerRef: viPaneHeightObserverRef,
+      paneId: viPaneId,
+      storageKey: viPaneHeightStorageKey,
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'VI',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotPaneIndicatorCommand({
+      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ viRows: calculateTradingViewViRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      readStoredPaneHeight,
+      refreshChartDrawings,
+      settingsHash,
+      settingsHashKey: 'VI',
+      symbol,
+      writeStoredPaneHeight,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, observeViPaneHeight, page?.index, page?.realtime, period, symbol])
+
+  const applyRsiCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'RSI') return
+    const config: IndicatorPaneConfig = {
+      ensureRegistered: ensureTradingViewRsiIndicator,
+      minHeight: minRsiPaneHeight,
+      name: 'RSI',
+      observeHeight: observeRsiPaneHeight,
+      observerRef: rsiPaneHeightObserverRef,
+      paneId: rsiPaneId,
+      storageKey: rsiPaneHeightStorageKey,
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'RSI',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotPaneIndicatorCommand({
+      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ rsiRows: calculateTradingViewRsiRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      readStoredPaneHeight,
+      refreshChartDrawings,
+      settingsHash,
+      settingsHashKey: 'RSI',
+      symbol,
+      writeStoredPaneHeight,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, observeRsiPaneHeight, page?.index, page?.realtime, period, symbol])
+
+  const applyMacdCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'MACD') return
+    const config: IndicatorPaneConfig = {
+      ensureRegistered: ensureTradingViewMacdIndicator,
+      minHeight: minRsiPaneHeight,
+      name: 'MACD',
+      observeHeight: observeMacdPaneHeight,
+      observerRef: macdPaneHeightObserverRef,
+      paneId: macdPaneId,
+      resetPaneIds: [macdPaneId],
+      storageKey: macdPaneHeightStorageKey,
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'MACD',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotPaneIndicatorCommand({
+      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ macdRows: calculateTradingViewMacdRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      readStoredPaneHeight,
+      refreshChartDrawings,
+      settingsHash,
+      settingsHashKey: 'MACD',
+      symbol,
+      writeStoredPaneHeight,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, observeMacdPaneHeight, page?.index, page?.realtime, period, symbol])
+
+  const applyDpoCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'DPO') return
+    const config: IndicatorPaneConfig = {
+      ensureRegistered: ensureTradingViewDpoIndicator,
+      minHeight: minRsiPaneHeight,
+      name: 'DPO',
+      observeHeight: observeDpoPaneHeight,
+      observerRef: dpoPaneHeightObserverRef,
+      paneId: dpoPaneId,
+      storageKey: dpoPaneHeightStorageKey,
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'DPO',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotPaneIndicatorCommand({
+      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ dpoRows: calculateTradingViewDpoRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      readStoredPaneHeight,
+      refreshChartDrawings,
+      settingsHash,
+      settingsHashKey: 'DPO',
+      symbol,
+      writeStoredPaneHeight,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, observeDpoPaneHeight, page?.index, page?.realtime, period, symbol])
+
+  const applySqzmomCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (command.name !== 'SQZMOM') return
+    const config: IndicatorPaneConfig = {
+      ensureRegistered: ensureTradingViewSqzmomIndicator,
+      minHeight: minRsiPaneHeight,
+      name: 'SQZMOM',
+      observeHeight: observeSqzmomPaneHeight,
+      observerRef: sqzmomPaneHeightObserverRef,
+      paneId: sqzmomPaneId,
+      resetPaneIds: [sqzmomPaneId],
+      storageKey: sqzmomPaneHeightStorageKey,
+    }
+    const settings = command.settings
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const settingsHash = createIndicatorSettingsHash({
+      indicator: 'SQZMOM',
+      period,
+      settings,
+      symbol,
+    })
+    applySnapshotPaneIndicatorCommand({
+      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      chart,
+      command,
+      config,
+      createSnapshotRows: (realRows) => ({ sqzmomRows: calculateTradingViewSqzmomRows(realRows, settings) }),
+      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
+      pageKey,
+      period,
+      readStoredPaneHeight,
+      refreshChartDrawings,
+      settingsHash,
+      settingsHashKey: 'SQZMOM',
+      symbol,
+      writeStoredPaneHeight,
+    })
+  }, [isIndicatorVisibleInCurrentPeriod, observeSqzmomPaneHeight, page?.index, page?.realtime, period, symbol])
+
   useEffect(() => {
     const chart = chartInstanceRef.current
     if (!chart) return
@@ -452,6 +1149,25 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
       chart.createIndicator({ name: 'MMF', calcParams, zLevel: mmfIndicatorZLevel }, true, { id: 'candle_pane' })
     }
   }, [buildMmfCalcParams, chartInstanceRef, isIndicatorVisibleInCurrentPeriod, mmfLoaded, mmfSettings])
+
+  useEffect(() => {
+    const chart = chartInstanceRef.current
+    if (!chart) return
+    ensureTradingViewBprM5StrategyIndicator()
+
+    const loaded = loadedStrategyKeys.includes('m5-breakout-pullback')
+    if (!loaded) {
+      chart.removeIndicator('candle_pane', bprM5StrategyIndicatorName)
+      return
+    }
+
+    const calcParams = buildBprM5StrategyCalcParams()
+    if (chart.getIndicatorByPaneId('candle_pane', bprM5StrategyIndicatorName)) {
+      chart.overrideIndicator({ name: bprM5StrategyIndicatorName, calcParams, zLevel: mmfIndicatorZLevel + 2 }, 'candle_pane')
+    } else {
+      chart.createIndicator({ name: bprM5StrategyIndicatorName, calcParams, zLevel: mmfIndicatorZLevel + 2 }, true, { id: 'candle_pane' })
+    }
+  }, [buildBprM5StrategyCalcParams, chartInstanceRef, loadedStrategyKeys])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -548,14 +1264,48 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
         observeHeight: observeVmiPaneHeight,
         observerRef: vmiPaneHeightObserverRef,
         paneId: vmiPaneId,
-        resolveCalcParams: (command) => ({
-          period,
-          settings: command.name === 'VMI' ? command.settings : undefined,
-          symbol,
-          vdoSettings,
-        }),
         storageKey: vmiPaneHeightStorageKey,
       },
+    }
+    if (indicatorCommand.name === 'Stoch') {
+      applyStochCommand(chart, indicatorCommand)
+      return
+    }
+    if (indicatorCommand.name === 'VDO') {
+      applyVdoCommand(chart, indicatorCommand)
+      return
+    }
+    if (indicatorCommand.name === 'VMI') {
+      applyVmiCommand(chart, indicatorCommand)
+      return
+    }
+    if (indicatorCommand.name === 'TSI') {
+      applyTsiCommand(chart, indicatorCommand)
+      return
+    }
+    if (indicatorCommand.name === 'AO') {
+      applyAoCommand(chart, indicatorCommand)
+      return
+    }
+    if (indicatorCommand.name === 'VI') {
+      applyViCommand(chart, indicatorCommand)
+      return
+    }
+    if (indicatorCommand.name === 'RSI') {
+      applyRsiCommand(chart, indicatorCommand)
+      return
+    }
+    if (indicatorCommand.name === 'MACD') {
+      applyMacdCommand(chart, indicatorCommand)
+      return
+    }
+    if (indicatorCommand.name === 'DPO') {
+      applyDpoCommand(chart, indicatorCommand)
+      return
+    }
+    if (indicatorCommand.name === 'SQZMOM') {
+      applySqzmomCommand(chart, indicatorCommand)
+      return
     }
     const paneConfig = paneIndicatorConfigs[indicatorCommand.name as IndicatorPaneCommandName]
     if (paneConfig) {
@@ -578,6 +1328,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
       applyMmfV2Command(chart, indicatorCommand)
       return
     }
+    if (indicatorCommand.name === 'MMF_V3') {
+      applyMmfV3Command(chart, indicatorCommand)
+      return
+    }
     const candleIndicatorConfigs: Record<CandleIndicatorCommandName, CandleIndicatorConfig> = {
       MA: {
         ensureRegistered: ensureTradingViewMaShiftIndicator,
@@ -588,6 +1342,14 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
         name: 'VWAP',
         resolveCalcParams: (command) => ({ ...command.settings, symbol }),
       },
+    }
+    if (indicatorCommand.name === 'MA') {
+      applyMaCommand(chart, indicatorCommand)
+      return
+    }
+    if (indicatorCommand.name === 'VWAP') {
+      applyVwapCommand(chart, indicatorCommand)
+      return
     }
     const candleConfig = candleIndicatorConfigs[indicatorCommand.name as CandleIndicatorCommandName]
     if (candleConfig) {
@@ -620,6 +1382,19 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
   }, [
     applyMmfCommand,
     applyMmfV2Command,
+    applyMmfV3Command,
+    applyMaCommand,
+    applyVwapCommand,
+    applyStochCommand,
+    applyVdoCommand,
+    applyVmiCommand,
+    applyTsiCommand,
+    applyAoCommand,
+    applyViCommand,
+    applyRsiCommand,
+    applyMacdCommand,
+    applyDpoCommand,
+    applySqzmomCommand,
     applyMorganRangeCommand,
     chartInstanceRef,
     indicatorCommand,
@@ -647,9 +1422,20 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
       onMorganRangeSegmentChange?.(null)
       return
     }
-    applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, mode)
+    const pageKey = createCurrentIndicatorPageKey(chart, {
+      pageIndex: page?.index ?? 1,
+      period,
+      realtime: page?.realtime !== false,
+      symbol,
+    })
+    const segments = readIndicatorPageSnapshot(pageKey)?.morganRange?.segments
+    if (segments) {
+      applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments)
+    } else {
+      applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, mode)
+    }
     publishMorganRangeSegment()
-  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, loadState.rows, onMorganRangeSegmentChange, period, publishMorganRangeSegment])
+  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, loadState.rows, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, symbol])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -664,15 +1450,27 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
       frame = window.requestAnimationFrame(() => {
         if (!isIndicatorVisibleInCurrentPeriod(indicatorName)) {
           clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+          morganRangePublishedSegmentRef.current = ''
           onMorganRangeSegmentChange?.(null)
           return
         }
-        applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, mode)
+        const pageKey = createCurrentIndicatorPageKey(chart, {
+          pageIndex: page?.index ?? 1,
+          period,
+          realtime: page?.realtime !== false,
+          symbol,
+        })
+        const segments = readIndicatorPageSnapshot(pageKey)?.morganRange?.segments
+        if (segments) {
+          applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments)
+        } else {
+          applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, mode)
+        }
         publishMorganRangeSegment()
       })
     }
 
-    const actions = [ActionType.OnDataReady, ActionType.OnZoom, ActionType.OnScroll, ActionType.OnVisibleRangeChange]
+    const actions = [ActionType.OnDataReady, ActionType.OnZoom]
     actions.forEach((action) => chart.subscribeAction(action, scheduleRefresh))
     window.addEventListener(chartRealtimeDataChangedEvent, scheduleRefresh)
     return () => {
@@ -680,7 +1478,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
       actions.forEach((action) => chart.unsubscribeAction(action, scheduleRefresh))
       window.removeEventListener(chartRealtimeDataChangedEvent, scheduleRefresh)
     }
-  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, onMorganRangeSegmentChange, period, publishMorganRangeSegment])
+  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, symbol])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -694,7 +1492,9 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
     }
 
     const handleCrosshairChange = (payload: unknown) => {
-      morganRangeCrosshairIndexRef.current = readCrosshairDataIndex(payload)
+      const nextIndex = readCrosshairDataIndex(payload)
+      if (nextIndex === morganRangeCrosshairIndexRef.current) return
+      morganRangeCrosshairIndexRef.current = nextIndex
       setMmfV2MomentumCrosshairIndex(morganRangeCrosshairIndexRef.current)
       publishMorganRangeSegment(morganRangeCrosshairIndexRef.current)
       publishMmfV2MomentumCrosshairIndex(morganRangeCrosshairIndexRef.current)
@@ -727,6 +1527,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
   }, [])
 
   useEffect(() => {
+    let frame = 0
     const updatePosition = () => {
       const chart = chartInstanceRef.current
       const chartRoot = chartRef.current
@@ -738,10 +1539,17 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
       const right = Math.round(axisWidth + 10)
       setMmfV2MomentumOverlayStyle((current) => current.top === top && current.right === right ? current : { right, top })
     }
+    const scheduleUpdatePosition = () => {
+      if (frame !== 0) return
+      frame = window.requestAnimationFrame(() => {
+        frame = 0
+        updatePosition()
+      })
+    }
 
     updatePosition()
     const chartRoot = chartRef.current
-    const observer = chartRoot ? new ResizeObserver(updatePosition) : null
+    const observer = chartRoot ? new ResizeObserver(scheduleUpdatePosition) : null
     if (chartRoot && observer) observer.observe(chartRoot)
     const actions = [
       ActionType.OnDataReady,
@@ -750,10 +1558,11 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, maSe
       ActionType.OnZoom,
     ]
     const chart = chartInstanceRef.current
-    actions.forEach((action) => chart?.subscribeAction(action, updatePosition))
+    actions.forEach((action) => chart?.subscribeAction(action, scheduleUpdatePosition))
     return () => {
+      if (frame !== 0) window.cancelAnimationFrame(frame)
       observer?.disconnect()
-      actions.forEach((action) => chart?.unsubscribeAction(action, updatePosition))
+      actions.forEach((action) => chart?.unsubscribeAction(action, scheduleUpdatePosition))
     }
   }, [chartInstanceRef, chartRef])
 

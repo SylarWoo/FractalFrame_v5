@@ -1,4 +1,4 @@
-import type { MaIndicatorSettings, MmfIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, VmiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { MaIndicatorSettings, MmfIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, VmiIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MmfV2IndicatorMarker } from '../../services/mt5/mmfV2IndicatorApi'
 
 export type MmfV2IndicatorRow = {
@@ -84,6 +84,7 @@ export type MmfV2CalcContext = {
   tsiSettings?: Partial<TsiIndicatorSettings>
   vdoSettings?: Partial<VdoIndicatorSettings>
   vmiSettings?: Partial<VmiIndicatorSettings>
+  vwapSettings?: Partial<VwapIndicatorSettings>
 }
 
 export type MmfV2MarkerSpec = {

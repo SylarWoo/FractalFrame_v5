@@ -1,6 +1,6 @@
 import { IndicatorSeries, registerIndicator } from 'klinecharts'
 import type { IndicatorCreateTooltipDataSourceParams, KLineData } from 'klinecharts'
-import { defaultMaIndicatorSettings, defaultMmfIndicatorSettings, defaultStochIndicatorSettings, defaultTsiIndicatorSettings, defaultVdoIndicatorSettings, defaultVmiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import { defaultMaIndicatorSettings, defaultMmfIndicatorSettings, defaultStochIndicatorSettings, defaultTsiIndicatorSettings, defaultVdoIndicatorSettings, defaultVmiIndicatorSettings, defaultVwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { MmfIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { calculateMmfV2IndicatorMarkers } from '../../services/mt5/mmfV2IndicatorApi'
 import { assignBarKey, getKLineTimeSeconds } from './barIdentity'
@@ -14,16 +14,17 @@ export { createMmfV2RowsFromMarkers } from './mmfV2MarkerMapping'
 
 let registered = false
 const mmfV2EngineVersion = 'mmf-v2-tsi-confirmed-cross-only-v2'
-const maxRemoteMmfV2CalculationRows = 8000
-const maxRemoteMmfV2IncrementalRows = 1600
+const defaultRemoteMmfV2CalculationRows = 8000
+const defaultRemoteMmfV2IncrementalRows = 1600
 const remoteMmfV2RowsBySignature = new Map<string, Promise<MmfV2IndicatorRow[]> | MmfV2IndicatorRow[]>()
-let lastRemoteMmfV2Result: {
+type LastRemoteMmfV2Result = {
   firstTimestamp?: unknown
   lastTimestamp?: unknown
   resultRows: MmfV2IndicatorRow[]
   rowsLength: number
   settingsSignature: string
-} | null = null
+}
+const lastRemoteMmfV2ResultBySettings = new Map<string, LastRemoteMmfV2Result>()
 const mmfV2InternalMaSettings = {
   length: 120,
   source: 'hlc3',
@@ -64,12 +65,32 @@ function normalizePositiveInteger(value: unknown, fallback: number, minimum = 1)
   return Number.isFinite(number) ? Math.max(minimum, Math.min(number, 500)) : fallback
 }
 
+function resolveRemoteMmfV2CalculationLimits(period: string) {
+  if (period === 'M1' || period === 'M5') {
+    return {
+      calculationRows: 3000,
+      incrementalRows: 600,
+    }
+  }
+  if (period === 'M15' || period === 'M30') {
+    return {
+      calculationRows: 5000,
+      incrementalRows: 1000,
+    }
+  }
+  return {
+    calculationRows: defaultRemoteMmfV2CalculationRows,
+    incrementalRows: defaultRemoteMmfV2IncrementalRows,
+  }
+}
+
 function normalizeMmfV2Context(input: unknown) {
   const context = input && typeof input === 'object' ? input as MmfV2CalcContext : {}
   const stochSettings = { ...defaultStochIndicatorSettings, ...(context.stochSettings ?? {}) }
   const vdoSettings = { ...defaultVdoIndicatorSettings, ...(context.vdoSettings ?? {}) }
   const vmiSettings = { ...defaultVmiIndicatorSettings, ...(context.vmiSettings ?? {}) }
   const tsiSettings = { ...defaultTsiIndicatorSettings, ...(context.tsiSettings ?? {}) }
+  const vwapSettings = { ...defaultVwapIndicatorSettings, ...(context.vwapSettings ?? {}) }
   return {
     maSettings: { ...defaultMaIndicatorSettings, ...mmfV2InternalMaSettings, ...(context.maSettings ?? {}) },
     morganRangeMode: context.morganRangeMode === 'D1_M30' ? 'D1_M30' : 'H4_M5',
@@ -80,6 +101,7 @@ function normalizeMmfV2Context(input: unknown) {
     vdoSettings,
     vmiSettings,
     tsiSettings,
+    vwapSettings,
   }
 }
 
@@ -168,8 +190,31 @@ function createRemoteMmfV2SettingsSignature(context: ReturnType<typeof normalize
     context.maSettings.length,
     context.maSettings.type,
     context.maSettings.source,
+    context.vwapSettings.anchorPeriod,
+    context.vwapSettings.source,
+    context.vwapSettings.bandCalculationMode,
+    context.vwapSettings.band1Multiplier,
+    context.vwapSettings.offset,
     context.morganRangeMode,
   ].join('|')
+}
+
+function getLastRemoteMmfV2Result(settingsSignature: string) {
+  const cached = lastRemoteMmfV2ResultBySettings.get(settingsSignature)
+  if (cached) {
+    lastRemoteMmfV2ResultBySettings.delete(settingsSignature)
+    lastRemoteMmfV2ResultBySettings.set(settingsSignature, cached)
+  }
+  return cached ?? null
+}
+
+function setLastRemoteMmfV2Result(settingsSignature: string, result: LastRemoteMmfV2Result) {
+  lastRemoteMmfV2ResultBySettings.set(settingsSignature, result)
+  while (lastRemoteMmfV2ResultBySettings.size > 12) {
+    const oldest = lastRemoteMmfV2ResultBySettings.keys().next().value
+    if (oldest == null) break
+    lastRemoteMmfV2ResultBySettings.delete(oldest)
+  }
 }
 
 function createRemoteMmfV2Signature(realRows: KLineData[], context: ReturnType<typeof normalizeMmfV2Context>, sourceOffset: number, mode: 'full' | 'incremental') {
@@ -210,7 +255,8 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
   if (!context.symbol || realRows.length === 0) return mergeRealRowsWithPlaceholders(dataList, createEmptyMmfV2Rows(realRows.length))
   const allCalculationRows = realRows.length > 1 ? realRows.slice(0, -1) : realRows
   const settingsSignature = createRemoteMmfV2SettingsSignature(context)
-  const previous = lastRemoteMmfV2Result
+  const previous = getLastRemoteMmfV2Result(settingsSignature)
+  const calculationLimits = resolveRemoteMmfV2CalculationLimits(context.period)
   const canUseIncrementalTail = Boolean(
     previous &&
     previous.settingsSignature === settingsSignature &&
@@ -220,11 +266,11 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
     allCalculationRows[previous.rowsLength - 1]?.timestamp === previous.lastTimestamp,
   )
   const incrementalTailStart = canUseIncrementalTail
-    ? Math.max(0, allCalculationRows.length - maxRemoteMmfV2IncrementalRows)
+    ? Math.max(0, allCalculationRows.length - calculationLimits.incrementalRows)
     : 0
   const skippedRows = canUseIncrementalTail && previous && previous.resultRows.length >= incrementalTailStart
     ? incrementalTailStart
-    : Math.max(0, allCalculationRows.length - maxRemoteMmfV2CalculationRows)
+    : Math.max(0, allCalculationRows.length - calculationLimits.calculationRows)
   const calculationMode: 'full' | 'incremental' = skippedRows === incrementalTailStart && canUseIncrementalTail ? 'incremental' : 'full'
   const calculationRows = allCalculationRows.slice(skippedRows)
 
@@ -265,6 +311,14 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
       morgan: {
         anchor: context.morganRangeMode === 'D1_M30' ? 'd1' : 'h4',
         ratios: [-0.236, -0.118, 0.118, 0.236],
+      },
+      vwap: {
+        anchorPeriod: context.vwapSettings.anchorPeriod,
+        bandCalculationMode: context.vwapSettings.bandCalculationMode,
+        band1Multiplier: Number(context.vwapSettings.band1Multiplier ?? defaultVwapIndicatorSettings.band1Multiplier),
+        offset: Number(context.vwapSettings.offset ?? 0),
+        source: context.vwapSettings.source,
+        symbol: context.symbol,
       },
       stoch: {
         dSmoothing: normalizePositiveInteger(context.stochSettings.dSmoothing, mmfV2InternalStochSettings.dSmoothing),
@@ -357,13 +411,13 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
   setCachedRemoteMmfV2Rows(signature, request)
   const calculated = await request
   setCachedRemoteMmfV2Rows(signature, calculated)
-  lastRemoteMmfV2Result = {
+  setLastRemoteMmfV2Result(settingsSignature, {
     firstTimestamp: allCalculationRows[0]?.timestamp,
     lastTimestamp: allCalculationRows[allCalculationRows.length - 1]?.timestamp,
     resultRows: calculated,
     rowsLength: allCalculationRows.length,
     settingsSignature,
-  }
+  })
   return mergeRealRowsWithPlaceholders(dataList, calculated)
 }
 

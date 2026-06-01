@@ -172,6 +172,17 @@ export type MmfV2SignalFrameRow = {
     type: string
     value?: number | null
   }
+  vwap?: {
+    anchorPeriod: string
+    band1Multiplier?: number | null
+    bandCalculationMode: string
+    bandWidth?: number | null
+    lowerBand?: number | null
+    positionRatio?: number | null
+    source: string
+    upperBand?: number | null
+    value?: number | null
+  }
   morgan: {
     center?: number | null
     levels: Record<string, number | null>

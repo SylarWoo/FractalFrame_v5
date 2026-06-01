@@ -6,6 +6,7 @@ from threading import RLock
 from typing import Any
 
 from .mmf_v2_indicator_service import calculate_mmf_v2_indicator_from_rows
+from .mmf_v3_indicator_service import calculate_mmf_v3_indicator_from_rows
 
 _MMF_RESULT_CACHE_MAX = 32
 _MMF_ENGINE_VERSION = "mmf_python_state_machine_v26_dedupe_extreme_windows"

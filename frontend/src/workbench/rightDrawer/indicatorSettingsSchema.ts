@@ -508,6 +508,7 @@ export type PersistedIndicatorsState = {
     MACD?: boolean
     MMF?: boolean
     MMF_V2?: boolean
+    MMF_V3?: boolean
     MR?: boolean
     'MR-M5'?: boolean
     'MR-M30'?: boolean
@@ -526,6 +527,7 @@ export type PersistedIndicatorsState = {
   ma: MaIndicatorSettings
   macd: MacdIndicatorSettings
   mmf: MmfIndicatorSettings
+  mmfV3: MmfIndicatorSettings
   mr: MrIndicatorSettings
   rsi: RsiIndicatorSettings
   sqzmom: SqzmomIndicatorSettings

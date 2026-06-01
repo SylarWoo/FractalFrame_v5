@@ -211,10 +211,114 @@ body[data-fractalframe-topbar-resizing='true'] {
   stroke-width: 1.8;
 }
 
+.ff-topbar-icon-btn .ff-topbar-calendar-icon {
+  width: 30px;
+  height: 30px;
+  fill: initial;
+  stroke: none;
+}
+
 .ff-topbar-wallet {
   position: relative;
   flex: 0 0 auto;
   margin-left: -5px;
+  padding-right: 4px;
+}
+
+.ff-topbar-wallet::after {
+  position: absolute;
+  top: 7px;
+  right: 0;
+  width: 1px;
+  height: 22px;
+  background: #d1d5db;
+  content: '';
+}
+
+.ff-topbar-icon-btn .ff-topbar-wallet-icon {
+  width: 30px;
+  height: 30px;
+  fill: initial;
+  stroke: none;
+}
+
+.ff-topbar-backtest-btn {
+  margin-left: -6px;
+}
+
+.ff-topbar-strategy {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.ff-topbar-icon-btn .ff-topbar-backtest-icon {
+  width: 30px;
+  height: 30px;
+  fill: initial;
+  stroke: none;
+}
+
+.ff-topbar-strategy__menu {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  z-index: 160;
+  display: grid;
+  width: 220px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  color: #111827;
+  padding: 4px;
+}
+
+.ff-topbar-strategy__menu button {
+  display: grid;
+  grid-template-columns: 14px 54px minmax(0, 1fr);
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #111827;
+  cursor: pointer;
+  font-family: Arial, Tahoma, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 7px;
+  text-align: left;
+}
+
+.ff-topbar-strategy__menu button:hover {
+  background: #f3f4f6;
+}
+
+.ff-topbar-strategy__check {
+  width: 14px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
+.ff-topbar-strategy__menu strong,
+.ff-topbar-strategy__menu span:not(.ff-topbar-strategy__check) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ff-topbar-strategy__menu strong {
+  font-weight: 700;
+}
+
+.ff-topbar-strategy__menu span:not(.ff-topbar-strategy__check) {
+  color: #475569;
 }
 
 .ff-topbar-wallet__menu {
@@ -292,7 +396,7 @@ body[data-fractalframe-topbar-resizing='true'] {
 
 .ff-topbar-calendar::after {
   position: absolute;
-  top: 6px;
+  top: 7px;
   right: 0;
   width: 1px;
   height: 22px;

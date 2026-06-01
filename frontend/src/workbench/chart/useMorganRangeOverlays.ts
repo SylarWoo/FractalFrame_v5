@@ -2,17 +2,19 @@ import type { Chart } from 'klinecharts'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { createStaticMorganRangeOverlay } from './morganRangeOverlay'
 import {
-  calculateMorganRangeSegmentsForMode,
+  calculateMorganRangeSegmentsForModeCached,
   resolveMorganRangeBucketSeconds,
   type MorganRangeMode,
   type MorganRangeSegment,
 } from './morganRangeModel'
 
-const maxMorganRangeBuckets = 36
+const maxMorganRangeBuckets = 160
+const morganRangeOverlaySignatures = new WeakMap<Set<string>, string>()
 
 export function clearMorganRangeOverlays(chart: Chart, overlayIds: Set<string>) {
   overlayIds.forEach((id) => chart.removeOverlay({ id }))
   overlayIds.clear()
+  morganRangeOverlaySignatures.delete(overlayIds)
 }
 
 function isMorganRangeModeVisible(mode: MorganRangeMode, period: string) {
@@ -20,32 +22,74 @@ function isMorganRangeModeVisible(mode: MorganRangeMode, period: string) {
 }
 
 export function applyMorganRangeOverlays(chart: Chart, period: string, overlayIds: Set<string>, mode: MorganRangeMode = 'H4_M5') {
-  clearMorganRangeOverlays(chart, overlayIds)
-  if (!isMorganRangeModeVisible(mode, period)) return
+  if (!isMorganRangeModeVisible(mode, period)) {
+    clearMorganRangeOverlays(chart, overlayIds)
+    return
+  }
   const periodSeconds = resolvePeriodSeconds(period)
-  if (!Number.isFinite(periodSeconds) || periodSeconds <= 0 || periodSeconds > 2 * 60 * 60) return
+  if (!Number.isFinite(periodSeconds) || periodSeconds <= 0 || periodSeconds > 2 * 60 * 60) {
+    clearMorganRangeOverlays(chart, overlayIds)
+    return
+  }
 
   const futureBars = Math.round(resolveMorganRangeBucketSeconds(mode) / periodSeconds)
-  const segments = calculateMorganRangeSegmentsForMode(chart.getDataList(), mode, futureBars)
-  if (segments.length === 0) return
+  const segments = calculateMorganRangeSegmentsForModeCached(chart.getDataList(), mode, futureBars)
+  applyMorganRangeOverlaySegments(chart, period, overlayIds, mode, segments)
+}
+
+export function applyMorganRangeOverlaySegments(
+  chart: Chart,
+  period: string,
+  overlayIds: Set<string>,
+  mode: MorganRangeMode,
+  segments: MorganRangeSegment[],
+) {
+  if (!isMorganRangeModeVisible(mode, period)) {
+    clearMorganRangeOverlays(chart, overlayIds)
+    return
+  }
+  const periodSeconds = resolvePeriodSeconds(period)
+  if (!Number.isFinite(periodSeconds) || periodSeconds <= 0 || periodSeconds > 2 * 60 * 60) {
+    clearMorganRangeOverlays(chart, overlayIds)
+    return
+  }
+
+  const futureBars = Math.round(resolveMorganRangeBucketSeconds(mode) / periodSeconds)
+  if (segments.length === 0) {
+    clearMorganRangeOverlays(chart, overlayIds)
+    return
+  }
   const barSpace = Number(chart.getBarSpace())
   const futureWidthPx = futureBars * barSpace
   const startBoundaryOffsetPx = -barSpace / 2
-  if (!Number.isFinite(futureBars) || futureBars <= 0 || !Number.isFinite(futureWidthPx) || futureWidthPx <= 0) return
-  const visibleRange = chart.getVisibleRange()
-  const visibleFrom = Math.floor(Number(visibleRange.realFrom))
-  const visibleTo = Math.ceil(Number(visibleRange.realTo))
-  const lastSegmentIndex = segments.length - 1
-  const visibleSegmentIndexes = segments
-    .map((segment, index) => ({ index, segment }))
-    .filter(({ segment }) => {
-      return segment.endIndex >= visibleFrom - futureBars && segment.startIndex <= visibleTo + futureBars
-    })
-    .map(({ index }) => index)
-  const firstVisibleSegmentIndex = visibleSegmentIndexes.length > 0 ? Math.min(...visibleSegmentIndexes) : lastSegmentIndex
-  const lastVisibleSegmentIndex = visibleSegmentIndexes.length > 0 ? Math.max(...visibleSegmentIndexes) : lastSegmentIndex
-  const firstSegment = Math.max(0, firstVisibleSegmentIndex - 2, lastVisibleSegmentIndex - maxMorganRangeBuckets + 1)
-  const lastSegment = Math.min(lastSegmentIndex, lastVisibleSegmentIndex + 2)
+  if (!Number.isFinite(futureBars) || futureBars <= 0 || !Number.isFinite(futureWidthPx) || futureWidthPx <= 0) {
+    clearMorganRangeOverlays(chart, overlayIds)
+    return
+  }
+  const firstSegment = Math.max(0, segments.length - maxMorganRangeBuckets)
+  const lastSegment = segments.length - 1
+  const visibleSegments = segments.slice(firstSegment)
+  const signature = [
+    mode,
+    period,
+    barSpace.toFixed(4),
+    futureBars,
+    firstSegment,
+    lastSegment,
+    visibleSegments.map((segment) => [
+      segment.startIndex,
+      segment.endIndex,
+      segment.startTimestamp,
+      segment.center.toFixed(6),
+      segment.upper.toFixed(6),
+      segment.lower.toFixed(6),
+    ].join(':')).join(';'),
+  ].join('|')
+
+  if (morganRangeOverlaySignatures.get(overlayIds) === signature) return
+
+  clearMorganRangeOverlays(chart, overlayIds)
+  morganRangeOverlaySignatures.set(overlayIds, signature)
 
   const createRange = (
     segment: MorganRangeSegment,
@@ -78,10 +122,9 @@ export function applyMorganRangeOverlays(chart: Chart, period: string, overlayId
     if (lowerRangeId) overlayIds.add(lowerRangeId)
   }
 
-  for (let index = firstSegment; index <= lastSegment; index += 1) {
-    const segment = segments[index]
-    if (!segment) continue
+  visibleSegments.forEach((segment) => {
+    if (!segment) return
     const widthBars = Math.max(1, Math.min(futureBars, segment.endIndex - segment.startIndex + 1))
     createRange(segment, widthBars)
-  }
+  })
 }

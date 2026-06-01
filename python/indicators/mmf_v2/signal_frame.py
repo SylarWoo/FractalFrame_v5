@@ -74,6 +74,9 @@ def _base_signal_frame_row(features: pd.DataFrame, index: int, signal_types: lis
     close = _json_number(row.get("close"))
     morgan_center = _json_number(row.get("morgan_center"))
     morgan_true_range = _json_number(row.get("morgan_true_range"))
+    vwap = _json_number(row.get("vwap"))
+    vwap_upper = _json_number(row.get("vwapUpperBand"))
+    vwap_lower = _json_number(row.get("vwapLowerBand"))
     return {
         "index": index,
         "barKey": str(row.get("barKey", f"bar:{_json_number(row.get('time')) or index}")),
@@ -123,6 +126,17 @@ def _base_signal_frame_row(features: pd.DataFrame, index: int, signal_types: lis
             "type": str(row.get("maType", "sma")),
             "length": int(row.get("maLength", 120)),
             "source": str(row.get("maSource", "hlc3")),
+        },
+        "vwap": {
+            "value": vwap,
+            "upperBand": vwap_upper,
+            "lowerBand": vwap_lower,
+            "bandWidth": _vwap_band_width(vwap_upper, vwap_lower),
+            "positionRatio": _vwap_position_ratio(close, vwap_upper, vwap_lower),
+            "source": str(row.get("vwapSource", "hlc3")),
+            "anchorPeriod": str(row.get("vwapAnchorPeriod", "session")),
+            "bandCalculationMode": str(row.get("vwapBandCalculationMode", "standard_deviation")),
+            "band1Multiplier": _json_number(row.get("vwapBand1Multiplier")),
         },
         "morgan": {
             "center": morgan_center,
@@ -265,6 +279,19 @@ def _morgan_position_ratio(close: float | None, center: float | None, true_range
     if close is None or center is None or true_range is None or true_range == 0:
         return None
     return (close - center) / true_range
+
+
+def _vwap_band_width(upper: float | None, lower: float | None) -> float | None:
+    if upper is None or lower is None:
+        return None
+    return upper - lower
+
+
+def _vwap_position_ratio(close: float | None, upper: float | None, lower: float | None) -> float | None:
+    width = _vwap_band_width(upper, lower)
+    if close is None or lower is None or width is None or width == 0:
+        return None
+    return (close - lower) / width
 
 
 def _json_number(value: Any) -> float | int | None:

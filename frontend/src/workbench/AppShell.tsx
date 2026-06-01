@@ -30,7 +30,7 @@ import { useIndicatorsController } from './indicators/useIndicatorsController'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
 import { objectTreeDrawingsChangedEvent } from './rightDrawer/objectTree/objectTreeModel'
 import type { ObjectTreeDrawingItem } from './rightDrawer/objectTree/objectTreeTypes'
-import type { IndicatorShortcutItem, RightDrawerId } from './rightDrawer/RightDrawerTypes'
+import type { IndicatorShortcutItem, RightDrawerId, StrategyShortcutItem } from './rightDrawer/RightDrawerTypes'
 import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
 import { formatChartLoadStatus } from './mt5DataCenter/storeV5StatusFormat'
 import { readBooleanFlag, readJson, readString, removeStorageItem, writeBooleanFlag, writeJson, writeString } from './persistence/jsonStorage'
@@ -77,17 +77,52 @@ const indicatorShortcutLabels: Record<string, string> = {
   TSI: '真实强弱指数',
   VI: '漩涡指标',
   MA: '移动均线',
-  MMF: 'MMF v1 - 摩根动量分形指标',
-  MMF_V2: 'MMF v2 - 摩根动量分形指标',
+  MMF_V3: 'MMF v3 - 日内交易系统',
   'MR-M5': '\u6469\u6839\u533a\u95f4_5\u5206\u949f',
   'MR-M30': '\u6469\u6839\u533a\u95f4_30\u5206\u949f',
   VWAP: '成交量加权平均价',
   Vol: '成交量',
 }
 
+const strategyRows = [
+  {
+    key: 'main-trend-volatility',
+    name: '主趋势波动策略',
+    system: 'MMF_v3',
+    type: '顺势',
+  },
+  {
+    key: 'm5-breakout-pullback',
+    name: '5分钟突破回撤策略',
+    system: 'MMF_v3',
+    type: '顺势',
+  },
+] as const
+
+const strategyLabels = Object.fromEntries(strategyRows.map((row) => [row.key, row.name]))
+
 function readInitialIndicatorShortcutKeys() {
   const parsed = readJson<unknown[]>(storageKeys.indicatorShortcutKeys, [])
-  const keys = parsed.filter((key): key is string => typeof key === 'string' && key in indicatorShortcutLabels)
+  const keys = parsed
+    .map((key) => key === 'MMF' || key === 'MMF_V2' ? 'MMF_V3' : key)
+    .filter((key): key is string => typeof key === 'string' && key in indicatorShortcutLabels)
+  return [...new Set(keys)]
+}
+
+function readInitialStrategyShortcutKeys() {
+  const parsed = readJson<unknown[]>(storageKeys.strategyShortcutKeys, [])
+  const keys = parsed.filter((key): key is string => typeof key === 'string' && key in strategyLabels)
+  return [...new Set(keys)]
+}
+
+function readInitialStrategyPersistenceEnabled() {
+  return readBooleanFlag(storageKeys.strategyPersistenceEnabled, true)
+}
+
+function readInitialLoadedStrategyKeys() {
+  if (!readInitialStrategyPersistenceEnabled()) return []
+  const parsed = readJson<unknown[]>(storageKeys.strategyLoadedKeys, [])
+  const keys = parsed.filter((key): key is string => typeof key === 'string' && key in strategyLabels)
   return [...new Set(keys)]
 }
 
@@ -197,6 +232,9 @@ export function AppShell() {
   const [activeBottomPanel, setActiveBottomPanel] = useState<(typeof bottomPanels)[number]['id']>('strategyTester')
   const [activeLeftTool, setActiveLeftTool] = useState('Cursor')
   const [indicatorShortcutKeys, setIndicatorShortcutKeys] = useState<string[]>(readInitialIndicatorShortcutKeys)
+  const [strategyShortcutKeys, setStrategyShortcutKeys] = useState<string[]>(readInitialStrategyShortcutKeys)
+  const [strategyPersistenceEnabled, setStrategyPersistenceEnabled] = useState(readInitialStrategyPersistenceEnabled)
+  const [loadedStrategyKeys, setLoadedStrategyKeys] = useState<string[]>(readInitialLoadedStrategyKeys)
   const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }>(() => {
     const shared = readSharedSelection()
     return {
@@ -212,6 +250,12 @@ export function AppShell() {
     chartLoadState,
     chartPeriod: chartTarget.period,
     chartSymbol: chartTarget.symbol,
+    restoreContextExtra: [
+      chartTarget.page?.index ?? 1,
+      chartTarget.page?.realtime === false ? 'hist' : 'rt',
+      chartTarget.page?.timeTo ?? '',
+      chartTarget.reloadId ?? '',
+    ].join(':'),
   })
   const loadedIndicatorKeys = indicatorsController.loadedIndicatorKeys
   const refreshLoadedIndicatorsVisibility = indicatorsController.refreshLoadedIndicatorsVisibility
@@ -220,6 +264,15 @@ export function AppShell() {
     loaded: loadedIndicatorKeys.some((loadedKey) => loadedKey === key),
     name: indicatorShortcutLabels[key] ?? key,
   }))
+  const strategyShortcuts: StrategyShortcutItem[] = strategyShortcutKeys.map((key) => {
+    const row = strategyRows.find((item) => item.key === key)
+    return {
+      key,
+      loaded: loadedStrategyKeys.includes(key),
+      name: row?.name ?? key,
+      system: row?.system ?? '',
+    }
+  })
   const [symbolDisplayVersion, setSymbolDisplayVersion] = useState(0)
   const [clockNow, setClockNow] = useState(() => Date.now())
   const [clockTimezone, setClockTimezone] = useState(resolveWorkspaceTimezone)
@@ -273,6 +326,17 @@ export function AppShell() {
   useEffect(() => {
     writeJson(storageKeys.indicatorShortcutKeys, indicatorShortcutKeys)
   }, [indicatorShortcutKeys])
+
+  useEffect(() => {
+    writeJson(storageKeys.strategyShortcutKeys, strategyShortcutKeys)
+  }, [strategyShortcutKeys])
+
+  useEffect(() => {
+    writeBooleanFlag(storageKeys.strategyPersistenceEnabled, strategyPersistenceEnabled)
+    if (strategyPersistenceEnabled) {
+      writeJson(storageKeys.strategyLoadedKeys, loadedStrategyKeys)
+    }
+  }, [loadedStrategyKeys, strategyPersistenceEnabled])
 
   useEffect(() => {
     refreshLoadedIndicatorsVisibility()
@@ -354,7 +418,7 @@ export function AppShell() {
   }
 
   function handleToggleIndicatorShortcutLoad(name: string) {
-    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF' && name !== 'MMF_V2' && name !== 'MR-M5' && name !== 'MR-M30' && name !== 'RSI' && name !== 'SQZMOM' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'AO' && name !== 'VMI' && name !== 'VWAP' && name !== 'Vol') return
+    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF_V3' && name !== 'MR-M5' && name !== 'MR-M30' && name !== 'RSI' && name !== 'SQZMOM' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'AO' && name !== 'VMI' && name !== 'VWAP' && name !== 'Vol') return
     if (loadedIndicatorKeys.includes(name)) {
       indicatorsController.unloadIndicator(name)
       return
@@ -362,15 +426,44 @@ export function AppShell() {
     indicatorsController.loadIndicator(name)
   }
 
+  function handleLoadStrategy(key: string) {
+    if (!(key in strategyLabels)) return
+    setLoadedStrategyKeys((current) => current.includes(key) ? current : [...current, key])
+  }
+
+  function handleUnloadStrategy(key: string) {
+    setLoadedStrategyKeys((current) => current.filter((item) => item !== key))
+  }
+
+  function handleToggleStrategyShortcutLoad(key: string) {
+    if (loadedStrategyKeys.includes(key)) {
+      handleUnloadStrategy(key)
+      return
+    }
+    handleLoadStrategy(key)
+  }
+
+  function handleStrategyPersistenceEnabledChange(enabled: boolean) {
+    setStrategyPersistenceEnabled(enabled)
+    writeBooleanFlag(storageKeys.strategyPersistenceEnabled, enabled)
+    if (enabled) {
+      writeJson(storageKeys.strategyLoadedKeys, loadedStrategyKeys)
+      return
+    }
+    removeStorageItem(storageKeys.strategyLoadedKeys)
+  }
+
   return (
     <div className="ff-app-shell">
       <TopBar
         indicatorShortcuts={indicatorShortcuts}
+        strategyShortcuts={strategyShortcuts}
         onIndicatorShortcutToggle={handleToggleIndicatorShortcutLoad}
         onJumpChartToTime={(timestamp) => setChartJump({ id: Date.now(), timestamp })}
         onLoadChartStep={(direction) => setChartStepLoad({ direction, id: Date.now() })}
         onOpenChart={setChartTarget}
         onResetChartToLatest={() => setChartJump({ id: Date.now() })}
+        onStrategyShortcutToggle={handleToggleStrategyShortcutLoad}
       />
 
       <main
@@ -418,14 +511,16 @@ export function AppShell() {
             displayName={chartDisplayName}
             indicatorCommand={indicatorsController.command}
             jump={chartJump}
+            loadedStrategyKeys={loadedStrategyKeys}
             maSettings={indicatorsController.settings.ma}
-            mmfLoaded={loadedIndicatorKeys.includes('MMF')}
-            mmfSettings={indicatorsController.settings.mmf}
+            mmfLoaded={false}
+            mmfSettings={indicatorsController.settings.mmfV3}
             morganRangeMode={loadedIndicatorKeys.includes('MR-M30') && chartTarget.period === 'M30' ? 'D1_M30' : 'H4_M5'}
             stochSettings={indicatorsController.settings.stoch}
             tsiSettings={indicatorsController.settings.tsi}
             vdoSettings={indicatorsController.settings.vdo}
             vmiSettings={indicatorsController.settings.vmi}
+            vwapSettings={indicatorsController.settings.vwap}
             onLoadStateChange={setChartLoadState}
             onMorganRangeSegmentChange={setMorganRangeSegment}
             page={chartTarget.page}
@@ -459,12 +554,19 @@ export function AppShell() {
           indicatorShortcutKeys={indicatorShortcutKeys}
           indicatorsController={indicatorsController}
           loadedIndicatorKeys={loadedIndicatorKeys}
+          loadedStrategyKeys={loadedStrategyKeys}
+          strategyPersistenceEnabled={strategyPersistenceEnabled}
           morganRangeSegment={morganRangeSegment}
           onClose={() => setActiveRightDrawer(null)}
           onIndicatorShortcutKeysChange={setIndicatorShortcutKeys}
+          onStrategyLoad={handleLoadStrategy}
+          onStrategyPersistenceEnabledChange={handleStrategyPersistenceEnabledChange}
+          onStrategyShortcutKeysChange={setStrategyShortcutKeys}
+          onStrategyUnload={handleUnloadStrategy}
           onOpenChart={setChartTarget}
           onResize={setRightDrawerWidth}
           onToggleDrawer={(drawer) => setActiveRightDrawer((current) => (current === drawer ? null : drawer))}
+          strategyShortcutKeys={strategyShortcutKeys}
         />
       </main>
     </div>

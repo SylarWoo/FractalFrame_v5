@@ -5,22 +5,38 @@ import type { VwapAnchorPeriod, VwapIndicatorSettings, VwapSource } from '../rig
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
+import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
+import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
 
-type VwapIndicatorRow = {
+export type VwapIndicatorRow = {
   lowerBand1?: number
   upperBand1?: number
   vwap?: number
 }
 
 type VwapCalcSettings = Partial<VwapIndicatorSettings> & {
+  period?: string
   symbol?: string
 }
 
 let registered = false
+const vwapRowsCacheByDataList = new WeakMap<KLineData[], Map<string, VwapIndicatorRow[]>>()
+const maxVwapRowsCacheEntriesPerDataList = 8
+const vwapFillPathCache = new WeakMap<object, { path: Path2D; signature: string }>()
 
 function normalizeVwapSettings(input?: VwapCalcSettings): VwapIndicatorSettings {
   return { ...defaultVwapIndicatorSettings, ...(input ?? {}) }
+}
+
+function readVwapSnapshotContext(input: unknown) {
+  const context = input && typeof input === 'object' ? input as VwapCalcSettings & { pageKey?: string; settingsHash?: string; period?: string } : {}
+  return {
+    pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
+    period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
+    symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
+  }
 }
 
 function clampOpacity(value: unknown, fallback = 1) {
@@ -190,9 +206,57 @@ function readVolume(row: KLineData) {
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
 
-export function calculateTradingViewVwapRows(dataList: KLineData[], inputSettings?: VwapCalcSettings): VwapIndicatorRow[] {
-  const settings = normalizeVwapSettings(inputSettings)
-  const symbol = typeof inputSettings?.symbol === 'string' ? inputSettings.symbol : undefined
+function createVwapSettingsSignature(settings: VwapIndicatorSettings, symbol?: string) {
+  return [
+    settings.anchorPeriod,
+    settings.source,
+    settings.bandCalculationMode,
+    settings.band1Multiplier,
+    settings.offset,
+    symbol ?? '',
+  ].join('|')
+}
+
+function createVwapDataSignature(dataList: KLineData[]) {
+  const first = dataList[0]
+  const middle = dataList[Math.floor(dataList.length / 2)]
+  const last = dataList[dataList.length - 1]
+  const rowSignature = (row: KLineData | undefined) => row
+    ? [row.timestamp, row.open, row.high, row.low, row.close, readVolume(row)].join(':')
+    : ''
+  return [
+    dataList.length,
+    rowSignature(first),
+    rowSignature(middle),
+    rowSignature(last),
+  ].join('|')
+}
+
+function readCachedVwapRows(dataList: KLineData[], cacheKey: string) {
+  const cache = vwapRowsCacheByDataList.get(dataList)
+  if (!cache) return null
+  const rows = cache.get(cacheKey) ?? null
+  if (!rows) return null
+  cache.delete(cacheKey)
+  cache.set(cacheKey, rows)
+  return rows
+}
+
+function writeCachedVwapRows(dataList: KLineData[], cacheKey: string, rows: VwapIndicatorRow[]) {
+  let cache = vwapRowsCacheByDataList.get(dataList)
+  if (!cache) {
+    cache = new Map()
+    vwapRowsCacheByDataList.set(dataList, cache)
+  }
+  cache.set(cacheKey, rows)
+  while (cache.size > maxVwapRowsCacheEntriesPerDataList) {
+    const oldest = cache.keys().next().value
+    if (oldest == null) break
+    cache.delete(oldest)
+  }
+}
+
+function calculateTradingViewVwapRowsUncached(dataList: KLineData[], settings: VwapIndicatorSettings, symbol?: string): VwapIndicatorRow[] {
   const calculatedRows: VwapIndicatorRow[] = []
   let currentSessionKey: number | null = null
   let cumulativePriceVolume = 0
@@ -238,6 +302,116 @@ export function calculateTradingViewVwapRows(dataList: KLineData[], inputSetting
   return rows
 }
 
+export function calculateTradingViewVwapRows(dataList: KLineData[], inputSettings?: VwapCalcSettings): VwapIndicatorRow[] {
+  const settings = normalizeVwapSettings(inputSettings)
+  const symbol = typeof inputSettings?.symbol === 'string' ? inputSettings.symbol : undefined
+  const cacheKey = [
+    createVwapSettingsSignature(settings, symbol),
+    createVwapDataSignature(dataList),
+  ].join('||')
+  const cachedRows = readCachedVwapRows(dataList, cacheKey)
+  if (cachedRows) return cachedRows
+  const rows = calculateTradingViewVwapRowsUncached(dataList, settings, symbol)
+  writeCachedVwapRows(dataList, cacheKey, rows)
+  return rows
+}
+
+function createVwapFillSignature({
+  end,
+  indicator,
+  settings,
+  start,
+  visibleRange,
+  xAxis,
+  yAxis,
+}: {
+  end: number
+  indicator: { result: VwapIndicatorRow[] }
+  settings: VwapIndicatorSettings
+  start: number
+  visibleRange: { from: number; to: number }
+  xAxis: { convertToPixel: (value: number) => number }
+  yAxis: { convertToPixel: (value: number) => number }
+}) {
+  const middle = Math.floor((start + end) / 2)
+  const sample = (index: number) => {
+    const row = indicator.result[index]
+    return row
+      ? [
+          index,
+          row.upperBand1,
+          row.lowerBand1,
+          xAxis.convertToPixel(index).toFixed(2),
+          Number.isFinite(row.upperBand1) ? yAxis.convertToPixel(row.upperBand1 as number).toFixed(2) : '',
+          Number.isFinite(row.lowerBand1) ? yAxis.convertToPixel(row.lowerBand1 as number).toFixed(2) : '',
+        ].join(':')
+      : `${index}:`
+  }
+  return [
+    indicator.result.length,
+    start,
+    end,
+    visibleRange.from.toFixed(3),
+    visibleRange.to.toFixed(3),
+    settings.band1FillColor,
+    settings.band1FillOpacity,
+    sample(start),
+    sample(middle),
+    sample(end),
+  ].join('|')
+}
+
+function createVwapFillPath({
+  end,
+  indicator,
+  start,
+  xAxis,
+  yAxis,
+}: {
+  end: number
+  indicator: { result: VwapIndicatorRow[] }
+  start: number
+  xAxis: { convertToPixel: (value: number) => number }
+  yAxis: { convertToPixel: (value: number) => number }
+}) {
+  const path = new Path2D()
+  let started = false
+
+  for (let index = start; index <= end; index += 1) {
+    const upper = indicator.result[index]?.upperBand1
+    if (!Number.isFinite(upper)) {
+      started = false
+      continue
+    }
+    const x = xAxis.convertToPixel(index)
+    const y = yAxis.convertToPixel(upper as number)
+    if (!started) {
+      path.moveTo(x, y)
+      started = true
+    } else {
+      path.lineTo(x, y)
+    }
+  }
+
+  for (let index = end; index >= start; index -= 1) {
+    const lower = indicator.result[index]?.lowerBand1
+    if (!Number.isFinite(lower)) continue
+    path.lineTo(xAxis.convertToPixel(index), yAxis.convertToPixel(lower as number))
+  }
+
+  path.closePath()
+  return path
+}
+
+function shouldSkipDenseVwapFill(input: unknown, visibleRange: { from: number; to: number }) {
+  const context = input && typeof input === 'object' ? input as VwapCalcSettings : {}
+  const period = typeof context.period === 'string' ? context.period.trim().toUpperCase() : ''
+  const visibleBars = Math.max(0, Math.ceil(visibleRange.to) - Math.floor(visibleRange.from) + 1)
+  if ((period === 'M1' || period === '1M') && visibleBars > 650) return true
+  if (period === 'M5' && visibleBars > 900) return true
+  return visibleBars > 1600
+}
+
 export function ensureTradingViewVwapIndicator() {
   if (registered) return
   registered = true
@@ -274,45 +448,65 @@ export function ensureTradingViewVwapIndicator() {
     draw: ({ ctx, indicator, visibleRange, xAxis, yAxis }) => {
       const settings = normalizeVwapSettings(indicator.calcParams[0] as VwapCalcSettings)
       if (!settings.band1Visible || !settings.band1FillVisible) return false
+      if (clampOpacity(settings.band1FillOpacity) <= 0) return false
+      if (shouldSkipDenseVwapFill(indicator.calcParams[0], visibleRange)) return false
 
       const start = Math.max(0, Math.floor(visibleRange.from) - 1)
       const end = Math.min(indicator.result.length - 1, Math.ceil(visibleRange.to) + 1)
-      let started = false
+      if (end < start) return false
+
+      const signature = createVwapFillSignature({ end, indicator, settings, start, visibleRange, xAxis, yAxis })
+      let cached = vwapFillPathCache.get(indicator)
+      if (!cached || cached.signature !== signature) {
+        cached = { path: createVwapFillPath({ end, indicator, start, xAxis, yAxis }), signature }
+        vwapFillPathCache.set(indicator, cached)
+      }
 
       ctx.save()
-      ctx.beginPath()
-
-      for (let index = start; index <= end; index += 1) {
-        const upper = indicator.result[index]?.upperBand1
-        if (!Number.isFinite(upper)) {
-          started = false
-          continue
-        }
-        const x = xAxis.convertToPixel(index)
-        const y = yAxis.convertToPixel(upper as number)
-        if (!started) {
-          ctx.moveTo(x, y)
-          started = true
-        } else {
-          ctx.lineTo(x, y)
-        }
-      }
-
-      for (let index = end; index >= start; index -= 1) {
-        const lower = indicator.result[index]?.lowerBand1
-        if (!Number.isFinite(lower)) continue
-        ctx.lineTo(xAxis.convertToPixel(index), yAxis.convertToPixel(lower as number))
-      }
-
-      ctx.closePath()
       ctx.fillStyle = colorWithAlpha(settings.band1FillColor, settings.band1FillOpacity)
-      ctx.fill()
+      ctx.fill(cached.path)
       ctx.restore()
       return false
     },
-    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
-      dataList,
-      (realRows) => calculateTradingViewVwapRows(realRows, indicator.calcParams[0] as VwapCalcSettings | undefined),
-    ),
+    calc: (dataList, indicator) => {
+      const context = readVwapSnapshotContext(indicator.calcParams[0])
+      if (context.pageKey && context.symbol && context.period) {
+        const snapshot = readIndicatorPageSnapshot(context.pageKey)
+        if (
+          snapshot &&
+          snapshot.symbol === context.symbol &&
+          snapshot.period === context.period &&
+          snapshot.settingsHashes?.VWAP === context.settingsHash
+        ) {
+          const snapshotCacheKey = [
+            'snapshot',
+            context.pageKey,
+            context.symbol,
+            context.period,
+            context.settingsHash,
+            createVwapDataSignature(dataList),
+          ].join('||')
+          const cachedSnapshotRows = readCachedVwapRows(dataList, snapshotCacheKey)
+          if (cachedSnapshotRows) return cachedSnapshotRows
+          const snapshotRows = calculateWithoutFuturePlaceholders(
+            dataList,
+            (realRows) => realRows.map((row) => {
+              const barKey = assignBarKey(row, context.symbol, context.period)
+              return snapshot.byBarKey[barKey]?.vwap ?? {}
+            }),
+          )
+          writeCachedVwapRows(dataList, snapshotCacheKey, snapshotRows)
+          return snapshotRows
+        }
+        return calculateWithoutFuturePlaceholders(
+          dataList,
+          (realRows) => calculateTradingViewVwapRows(realRows, indicator.calcParams[0] as VwapCalcSettings | undefined),
+        )
+      }
+      return calculateWithoutFuturePlaceholders(
+        dataList,
+        (realRows) => calculateTradingViewVwapRows(realRows, indicator.calcParams[0] as VwapCalcSettings | undefined),
+      )
+    },
   })
 }

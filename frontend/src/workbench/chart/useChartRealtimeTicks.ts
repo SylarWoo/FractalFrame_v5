@@ -33,9 +33,32 @@ type Mt5RealtimeTickEventDetail = {
 }
 
 export const chartRealtimeDataChangedEvent = 'ff:chart-realtime-data-changed'
-const mt5RealtimeInitialBarsLimit = 5000
-const realtimeLocalBackfillLimit = 20000
-const realtimePageMaxRows = mt5RealtimeInitialBarsLimit + realtimeLocalBackfillLimit
+const defaultMt5RealtimeInitialBarsLimit = 1500
+const defaultRealtimeLocalBackfillLimit = 3500
+const realtimePageWindowRows = 5000
+
+function resolveRealtimeWindowLimits(period: string) {
+  const periodSeconds = resolvePeriodSeconds(period)
+  if (Number.isFinite(periodSeconds) && periodSeconds > 0 && periodSeconds <= 5 * 60) {
+    return {
+      mt5Rows: 1500,
+      localRows: 3500,
+      maxRows: realtimePageWindowRows,
+    }
+  }
+  if (Number.isFinite(periodSeconds) && periodSeconds > 0 && periodSeconds <= 30 * 60) {
+    return {
+      mt5Rows: 1500,
+      localRows: 3500,
+      maxRows: realtimePageWindowRows,
+    }
+  }
+  return {
+    mt5Rows: defaultMt5RealtimeInitialBarsLimit,
+    localRows: defaultRealtimeLocalBackfillLimit,
+    maxRows: realtimePageWindowRows,
+  }
+}
 
 function dispatchChartRealtimeDataChanged() {
   window.dispatchEvent(new Event(chartRealtimeDataChangedEvent))
@@ -43,11 +66,13 @@ function dispatchChartRealtimeDataChanged() {
 
 function saveRealtimePageSnapshot({
   localRows,
+  pageSize,
   period,
   rows,
   symbol,
 }: {
   localRows: number
+  pageSize: number
   period: string
   rows: KLineData[]
   symbol: string
@@ -59,7 +84,7 @@ function saveRealtimePageSnapshot({
     localRows,
     mt5Rows: Math.max(0, rows.length - localRows),
     page: 1,
-    pageSize: realtimePageMaxRows,
+    pageSize,
     period,
     rows: rows.length,
     symbol,
@@ -171,8 +196,27 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
     let disposed = false
     let bindTimer = 0
     let inFlight = false
+    let tickDataReadyFallbackTimer = 0
+    let tickDataReadySubscribedChart: Chart | null = null
     const normalizedSymbol = normalizeSymbol(symbol)
     const periodSeconds = resolvePeriodSeconds(period)
+    const realtimeWindowLimits = resolveRealtimeWindowLimits(period)
+
+    const finishRealtimeTickUpdate = () => {
+      if (tickDataReadySubscribedChart) {
+        tickDataReadySubscribedChart.unsubscribeAction(ActionType.OnDataReady, finishRealtimeTickUpdate)
+        tickDataReadySubscribedChart = null
+      }
+      if (tickDataReadyFallbackTimer !== 0) {
+        window.clearTimeout(tickDataReadyFallbackTimer)
+        tickDataReadyFallbackTimer = 0
+      }
+      if (disposed) return
+      const chart = chartInstanceRef.current
+      if (!chart) return
+      applyPriceVolumePrecision(chart, symbol)
+      dispatchChartRealtimeDataChanged()
+    }
 
     const applyRealtimePageRows = (rows: KLineData[]) => {
       if (disposed) return
@@ -192,7 +236,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       queryMt5Rates({
         symbol,
         timeframe: normalizeTimeframe(period),
-        limit: mt5RealtimeInitialBarsLimit,
+        limit: realtimeWindowLimits.mt5Rows,
       })
         .then((payload) => {
           if (disposed) return
@@ -207,19 +251,20 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
           return loadStoreV5KLineData({
             symbol,
             period,
-            limit: realtimeLocalBackfillLimit,
+            limit: realtimeWindowLimits.localRows,
             timeTo: Math.floor(firstMt5Timestamp / 1000) - 1,
           })
             .then((localRows) => {
               if (disposed) return
-              const realtimePageRows = mergeKLineData(localRows, rows).slice(-realtimePageMaxRows)
-              saveRealtimePageSnapshot({ localRows: localRows.length, period, rows: realtimePageRows, symbol })
+              const realtimePageRows = mergeKLineData(localRows, rows).slice(-realtimeWindowLimits.maxRows)
+              saveRealtimePageSnapshot({ localRows: localRows.length, pageSize: realtimeWindowLimits.maxRows, period, rows: realtimePageRows, symbol })
               applyRealtimePageRows(realtimePageRows)
             })
             .catch(() => {
               if (disposed) return
-              saveRealtimePageSnapshot({ localRows: 0, period, rows, symbol })
-              applyRealtimePageRows(rows)
+              const realtimePageRows = rows.slice(-realtimeWindowLimits.maxRows)
+              saveRealtimePageSnapshot({ localRows: 0, pageSize: realtimeWindowLimits.maxRows, period, rows: realtimePageRows, symbol })
+              applyRealtimePageRows(realtimePageRows)
             })
         })
         .catch(() => {})
@@ -266,12 +311,12 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
             volume,
             turnover: estimateTurnover(high, low, last, volume),
           }
-      const handleDataReady = () => {
-        chart.unsubscribeAction(ActionType.OnDataReady, handleDataReady)
-        applyPriceVolumePrecision(chart, symbol)
-        dispatchChartRealtimeDataChanged()
+      if (!tickDataReadySubscribedChart) {
+        tickDataReadySubscribedChart = chart
+        chart.subscribeAction(ActionType.OnDataReady, finishRealtimeTickUpdate)
       }
-      chart.subscribeAction(ActionType.OnDataReady, handleDataReady)
+      if (tickDataReadyFallbackTimer !== 0) window.clearTimeout(tickDataReadyFallbackTimer)
+      tickDataReadyFallbackTimer = window.setTimeout(finishRealtimeTickUpdate, 120)
       chart.updateData(nextRow)
     }
 
@@ -290,6 +335,11 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
     return () => {
       disposed = true
       if (bindTimer !== 0) window.clearTimeout(bindTimer)
+      if (tickDataReadyFallbackTimer !== 0) window.clearTimeout(tickDataReadyFallbackTimer)
+      if (tickDataReadySubscribedChart) {
+        tickDataReadySubscribedChart.unsubscribeAction(ActionType.OnDataReady, finishRealtimeTickUpdate)
+        tickDataReadySubscribedChart = null
+      }
       window.removeEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
     }
   }, [chartInstanceRef, dataReady, period, realtimeEnabled, symbol])

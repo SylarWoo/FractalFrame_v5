@@ -5,9 +5,11 @@ import type { ViIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
+import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
+import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
 
-type ViIndicatorRow = {
+export type ViIndicatorRow = {
   minus?: number
   plus?: number
 }
@@ -16,6 +18,16 @@ let registered = false
 
 function normalizeViSettings(input?: Partial<ViIndicatorSettings>): ViIndicatorSettings {
   return { ...defaultViIndicatorSettings, ...(input ?? {}) }
+}
+
+function readViSnapshotContext(input: unknown) {
+  const context = input && typeof input === 'object' ? input as Partial<ViIndicatorSettings> & { pageKey?: string; period?: string; settingsHash?: string; symbol?: string } : {}
+  return {
+    pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
+    period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
+    symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
+  }
 }
 
 function clampPeriod(value: unknown, fallback: number) {
@@ -208,9 +220,33 @@ export function ensureTradingViewViIndicator() {
       drawLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, 'minus', settings.minusColor, settings.minusVisible, settings.minusLineStyle, settings.minusLineWidth, settings.minusOpacity)
       return true
     },
-    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
-      dataList,
-      (realRows) => calculateTradingViewViRows(realRows, indicator.calcParams[0]),
-    ),
+    calc: (dataList, indicator) => {
+      const context = readViSnapshotContext(indicator.calcParams[0])
+      if (context.pageKey && context.symbol && context.period) {
+        const snapshot = readIndicatorPageSnapshot(context.pageKey)
+        if (
+          snapshot &&
+          snapshot.symbol === context.symbol &&
+          snapshot.period === context.period &&
+          snapshot.settingsHashes?.VI === context.settingsHash
+        ) {
+          return calculateWithoutFuturePlaceholders(
+            dataList,
+            (realRows) => realRows.map((row) => {
+              const barKey = assignBarKey(row, context.symbol, context.period)
+              return snapshot.byBarKey[barKey]?.vi ?? {}
+            }),
+          )
+        }
+        return calculateWithoutFuturePlaceholders(
+          dataList,
+          (realRows) => calculateTradingViewViRows(realRows, indicator.calcParams[0]),
+        )
+      }
+      return calculateWithoutFuturePlaceholders(
+        dataList,
+        (realRows) => calculateTradingViewViRows(realRows, indicator.calcParams[0]),
+      )
+    },
   })
 }
