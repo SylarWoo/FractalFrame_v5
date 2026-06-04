@@ -5,10 +5,9 @@ import type { VdoIndicatorSettings, VmiIndicatorSettings } from '../rightDrawer/
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
-import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
-import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
-import { calculateTradingViewVdoRows } from './tradingViewVdoIndicator'
+import { mapPageIndicatorSnapshotToDataList } from './pageIndicatorRuntime'
+import { calculateVdoSmaSeries, calculateVdoSourceRows } from './vdoCore'
 
 export type VmiIndicatorRow = {
   histogram?: number
@@ -19,10 +18,11 @@ let registered = false
 type VmiCalcContext = {
   pageKey?: string
   period?: string
+  runtimeOnly?: boolean
   settings?: Partial<VmiIndicatorSettings>
   settingsHash?: string
   symbol?: string
-  vdoSettings?: Partial<VdoIndicatorSettings>
+  vdoSourceSettings?: Partial<VdoIndicatorSettings>
 }
 
 function normalizeVmiSettings(input?: Partial<VmiIndicatorSettings>): VmiIndicatorSettings {
@@ -34,10 +34,11 @@ function normalizeVmiContext(input: unknown) {
   return {
     pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
     period: String(context.period || 'M5').trim().toUpperCase(),
+    runtimeOnly: context.runtimeOnly === true,
     settings: normalizeVmiSettings(context.settings),
     settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
     symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
-    vdoSettings: { ...defaultVdoIndicatorSettings, ...(context.vdoSettings ?? {}) },
+    vdoSourceSettings: { ...defaultVdoIndicatorSettings, ...(context.vdoSourceSettings ?? {}) },
   }
 }
 
@@ -79,35 +80,8 @@ function createVmiFigures() {
   ]
 }
 
-function calculateSmaSeries(values: Array<number | undefined>, period: number) {
-  const output: Array<number | undefined> = values.map(() => undefined)
-  let sum = 0
-  let finiteCount = 0
-
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index]
-    if (Number.isFinite(value)) {
-      sum += value as number
-      finiteCount += 1
-    }
-
-    if (index >= period) {
-      const removed = values[index - period]
-      if (Number.isFinite(removed)) {
-        sum -= removed as number
-        finiteCount -= 1
-      }
-    }
-
-    if (index >= period - 1 && finiteCount === period) output[index] = sum / period
-  }
-
-  return output
-}
-
 function sourceVdoValues(dataList: KLineData[], inputVdoSettings: Partial<VdoIndicatorSettings> = defaultVdoIndicatorSettings) {
-  const vdoSettings = { ...defaultVdoIndicatorSettings, ...(inputVdoSettings ?? {}) }
-  return calculateTradingViewVdoRows(dataList, vdoSettings, { includeMovingAverages: false }).map((row) => row.vdo)
+  return calculateVdoSourceRows(dataList, inputVdoSettings).map((row) => row.vdo)
 }
 
 function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<VmiIndicatorRow>) {
@@ -212,8 +186,8 @@ export function calculateTradingViewVmiRows(
   const fastLength = clampPeriod(settings.fastLength, defaultVmiIndicatorSettings.fastLength)
   const slowLength = clampPeriod(settings.slowLength, defaultVmiIndicatorSettings.slowLength)
   const vdoValues = sourceVdoValues(dataList, inputVdoSettings)
-  const fastSma = calculateSmaSeries(vdoValues, fastLength)
-  const slowSma = calculateSmaSeries(vdoValues, slowLength)
+  const fastSma = calculateVdoSmaSeries(vdoValues, fastLength)
+  const slowSma = calculateVdoSmaSeries(vdoValues, slowLength)
 
   return dataList.map((_, index) => {
     const fast = fastSma[index]
@@ -223,32 +197,32 @@ export function calculateTradingViewVmiRows(
   })
 }
 
-function calculateVmiRows(dataList: KLineData[], inputContext?: unknown): VmiIndicatorRow[] {
+export function calculateVmiRowsForKLineChart(dataList: KLineData[], inputContext?: unknown): VmiIndicatorRow[] {
   const context = normalizeVmiContext(inputContext)
   if (context.pageKey && context.symbol && context.period) {
-    const snapshot = readIndicatorPageSnapshot(context.pageKey)
-    if (
-      snapshot &&
-      snapshot.symbol === context.symbol &&
-      snapshot.period === context.period &&
-      snapshot.settingsHashes?.VMI === context.settingsHash
-    ) {
-      return calculateWithoutFuturePlaceholders(
-        dataList,
-        (realRows) => realRows.map((row) => {
-          const barKey = assignBarKey(row, context.symbol, context.period)
-          return snapshot.byBarKey[barKey]?.vmi ?? {}
-        }),
-      )
+    const rows = mapPageIndicatorSnapshotToDataList<VmiIndicatorRow>({
+      dataList,
+      indicator: 'vmi',
+      pageKey: context.pageKey,
+      period: context.period,
+      settingsHashKey: 'VMI',
+      settingsHash: context.settingsHash,
+      symbol: context.symbol,
+    })
+    if (rows) {
+      return calculateWithoutFuturePlaceholders(dataList, () => rows)
+    }
+    if (context.runtimeOnly) {
+      return calculateWithoutFuturePlaceholders(dataList, (realRows) => realRows.map(() => ({})))
     }
     return calculateWithoutFuturePlaceholders(
       dataList,
-      (realRows) => calculateTradingViewVmiRows(realRows, context.settings, context.vdoSettings),
+      (realRows) => calculateTradingViewVmiRows(realRows, context.settings, context.vdoSourceSettings),
     )
   }
   return calculateWithoutFuturePlaceholders(
     dataList,
-    (realRows) => calculateTradingViewVmiRows(realRows, context.settings, context.vdoSettings),
+    (realRows) => calculateTradingViewVmiRows(realRows, context.settings, context.vdoSourceSettings),
   )
 }
 
@@ -287,6 +261,6 @@ export function ensureTradingViewVmiIndicator() {
 
       return true
     },
-    calc: (dataList, indicator) => calculateVmiRows(dataList, indicator.calcParams[0]),
+    calc: (dataList, indicator) => calculateVmiRowsForKLineChart(dataList, indicator.calcParams[0]),
   })
 }

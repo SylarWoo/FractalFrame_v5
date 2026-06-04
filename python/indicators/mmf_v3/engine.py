@@ -96,6 +96,6 @@ def calculate_mmf_v3_markers_from_features(
             },
             "rows": create_debug_rows(features),
             "decisionFrame": decision_result.decision_frame,
-            "vmiZeroLevels": create_vmi_zero_level_debug(features, debug_signals),
+            "vmiZeroLevels": create_vmi_zero_level_debug(features, debug_signals, active_settings),
         } if include_debug else None,
     }

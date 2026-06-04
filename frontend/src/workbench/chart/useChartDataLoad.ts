@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { ActionType } from 'klinecharts'
-import type { Chart } from 'klinecharts'
+import type { Chart, KLineData } from 'klinecharts'
 import { loadStoreV6KLineData } from '../../datafeed/storeV6KLineDatafeed'
 import { chartError, chartInfo } from './chartLogger'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
@@ -13,7 +13,7 @@ import {
   mergeKLineData,
   resolveHasMoreOlder,
 } from './chartCoreDataUtils'
-import { applyPriceVolumePrecision, resetYAxisAutoScale } from './chartStyleAppliers'
+import { applyPriceVolumePrecision } from './chartStyleAppliers'
 import { scheduleResetYAxisAutoScaleFlags } from './chartAxisInteraction'
 import {
   captureChartViewportSnapshot,
@@ -25,6 +25,7 @@ import {
 import type { ChartPageTarget } from './ChartCoreHost'
 import { preparePageDataPackage } from './pageData/pageDataManager'
 import { writePageDataPackage } from './pageData/pageDataCache'
+import { writePageCalculationContext } from './pageCalculationContext'
 import { resolvePageLoadPlan } from './pageLoader/pageLoadPlanner'
 import { readRealtimePageBuffer, writeRealtimePageBuffer } from './realtimePageBuffer'
 
@@ -42,24 +43,28 @@ type UseChartDataLoadOptions = {
   chartInstanceRef: MutableRefObject<Chart | null>
   jump?: { id: number; timestamp?: number } | null
   limit?: number
+  lookaheadRows?: number
   page?: ChartPageTarget | null
   period: string
   reloadId?: number
   symbol: string
   totalRows?: number | null
   viewportScope?: string
+  warmupRows?: number
 }
 
 export function useChartDataLoad({
   chartInstanceRef,
   jump,
   limit,
+  lookaheadRows,
   page,
   period,
   reloadId,
   symbol,
   totalRows,
   viewportScope = 'default',
+  warmupRows,
 }: UseChartDataLoadOptions) {
   const requestSeqRef = useRef(0)
   const previousContextRef = useRef<{ period: string; symbol: string } | null>(null)
@@ -124,7 +129,7 @@ export function useChartDataLoad({
 
     const setFallbackTimer = (timer: number) => { fallbackTimer = timer }
     if (loadPlan.mode === 'history' && loadPlan.page) {
-      loadPagedWindow(chart, { inheritedViewport, page: loadPlan.page, period, setFallbackTimer, setLoadState, shouldIgnore, symbol, viewportScope })
+      loadPagedWindow(chart, { inheritedViewport, lookaheadRows, page: loadPlan.page, period, setFallbackTimer, setLoadState, shouldIgnore, symbol, viewportScope, warmupRows })
     } else if (loadPlan.mode === 'jump' && jump?.timestamp != null) {
       loadJumpWindow(chart, { inheritedViewport, jumpTimestamp: jump.timestamp, period, setFallbackTimer, setLoadState, shouldIgnore, symbol, viewportScope })
     } else {
@@ -137,7 +142,7 @@ export function useChartDataLoad({
       chart.setLoadDataCallback(({ callback }) => callback([], false))
       if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer)
     }
-  }, [chartInstanceRef, jump?.id, jump?.timestamp, limit, page, page?.index, page?.limit, page?.realtime, page?.rows, page?.timeFrom, page?.timeTo, period, reloadId, symbol, totalRows, viewportScope])
+  }, [chartInstanceRef, jump?.id, jump?.timestamp, limit, lookaheadRows, page, page?.index, page?.limit, page?.realtime, page?.rows, page?.timeFrom, page?.timeTo, period, reloadId, symbol, totalRows, viewportScope, warmupRows])
 
   return { loadState, setLoadState }
 }
@@ -145,6 +150,7 @@ export function useChartDataLoad({
 type LoadOptions = {
   followLatest?: boolean
   inheritedViewport?: ChartViewportSnapshot | null
+  lookaheadRows?: number
   page?: ChartPageTarget | null
   period: string
   setFallbackTimer: (timer: number) => void
@@ -152,6 +158,7 @@ type LoadOptions = {
   shouldIgnore: () => boolean
   symbol: string
   viewportScope: string
+  warmupRows?: number
 }
 
 function findNearestDataIndex(chart: Chart, timestamp: number) {
@@ -231,13 +238,11 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
       applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
-        resetYAxisAutoScale(chart)
         scheduleResetYAxisAutoScaleFlags(chart)
         scrollJumpTargetIntoView(chart, options.jumpTimestamp)
         applySessionBreakIndicator(chart, options.symbol, options.period)
         window.setTimeout(() => {
           if (options.shouldIgnore()) return
-          resetYAxisAutoScale(chart)
           scheduleResetYAxisAutoScaleFlags(chart)
           scrollJumpTargetIntoView(chart, options.jumpTimestamp)
           applySessionBreakIndicator(chart, options.symbol, options.period)
@@ -278,6 +283,7 @@ function loadPagedWindow(chart: Chart, options: LoadOptions & { page: ChartPageT
   })
   preparePageDataPackage({
     fromGlobalIndex: options.page.fromGlobalIndex,
+    lookaheadRows: options.lookaheadRows,
     pageIndex: options.page.index,
     period: options.period,
     realtime: options.page.realtime,
@@ -286,6 +292,7 @@ function loadPagedWindow(chart: Chart, options: LoadOptions & { page: ChartPageT
     timeFrom: options.page.timeFrom,
     timeTo,
     toGlobalIndex: options.page.toGlobalIndex,
+    warmupRows: options.warmupRows,
   })
     .then((pagePackage) => {
       if (options.shouldIgnore()) return
@@ -303,7 +310,6 @@ function loadPagedWindow(chart: Chart, options: LoadOptions & { page: ChartPageT
       applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
-        resetYAxisAutoScale(chart)
         scheduleResetYAxisAutoScaleFlags(chart)
         applySessionBreakIndicator(chart, options.symbol, options.period)
         scheduleResetYAxisAutoScaleFlags(chart)
@@ -347,6 +353,49 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
       if (options.followLatest && (pageBoundedRealtime || !bufferedRows.length) && data.length) {
         writeRealtimePageBuffer(options.symbol, options.period, data)
       }
+      const warmupLimit = Math.max(0, Math.round(options.warmupRows ?? 0))
+      const warmupTimeTo = typeof data[0]?.timestamp === 'number'
+        ? Math.floor(data[0].timestamp / 1000) - 1
+        : null
+      let realtimeWarmupRows: KLineData[] | null = null
+      let realtimeDisplayReady = false
+      let realtimeContextWritten = false
+      const writeRealtimeCalculationContext = (warmupRows: KLineData[]) => {
+        if (!options.followLatest || options.shouldIgnore() || data.length === 0) return
+        writePageCalculationContext({
+          calculationRows: mergeKLineData(warmupRows, data),
+          displayRows: data,
+          newerLookaheadRows: 0,
+          olderWarmupRows: warmupRows.length,
+          pageIndex: options.page?.index ?? 1,
+          period: options.period,
+          realtime: true,
+          symbol: options.symbol,
+        })
+      }
+      const maybeWriteRealtimeCalculationContext = () => {
+        if (realtimeContextWritten || !realtimeDisplayReady || realtimeWarmupRows == null) return
+        realtimeContextWritten = true
+        writeRealtimeCalculationContext(realtimeWarmupRows)
+      }
+      if (options.followLatest && warmupLimit > 0 && warmupTimeTo != null) {
+        loadStoreV6KLineData({
+          symbol: options.symbol,
+          period: options.period,
+          limit: warmupLimit,
+          timeTo: warmupTimeTo,
+        })
+          .then((warmupRows) => {
+            realtimeWarmupRows = warmupRows
+            maybeWriteRealtimeCalculationContext()
+          })
+          .catch(() => {
+            realtimeWarmupRows = []
+            maybeWriteRealtimeCalculationContext()
+          })
+      } else {
+        realtimeContextWritten = true
+      }
       const hasMoreOlder = options.followLatest ? false : resolveHasMoreOlder({
         loadedRows: data.length,
         pageSize: options.requestedRows,
@@ -358,7 +407,8 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
       applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
-        resetYAxisAutoScale(chart)
+        realtimeDisplayReady = true
+        maybeWriteRealtimeCalculationContext()
         scheduleResetYAxisAutoScaleFlags(chart)
         applySessionBreakIndicator(chart, options.symbol, options.period)
         restoreViewportAfterLoad(chart, options)

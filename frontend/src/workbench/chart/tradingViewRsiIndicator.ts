@@ -5,9 +5,8 @@ import type { RsiIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
-import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
-import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
+import { mapPageIndicatorSnapshotToDataList } from './pageIndicatorRuntime'
 
 export type RsiIndicatorRow = {
   rsi?: number
@@ -142,10 +141,11 @@ function normalizeRsiSettings(input?: Partial<RsiIndicatorSettings> | number): R
 }
 
 function readRsiSnapshotContext(input: unknown) {
-  const context = input && typeof input === 'object' ? input as Partial<RsiIndicatorSettings> & { pageKey?: string; period?: string; settingsHash?: string; symbol?: string } : {}
+  const context = input && typeof input === 'object' ? input as Partial<RsiIndicatorSettings> & { pageKey?: string; period?: string; runtimeOnly?: boolean; settingsHash?: string; symbol?: string } : {}
   return {
     pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
     period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    runtimeOnly: context.runtimeOnly === true,
     settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
     symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
   }
@@ -335,6 +335,31 @@ export function calculateTradingViewRsiRows(dataList: KLineData[], inputSettings
   return rows
 }
 
+export function calculateRsiRowsForKLineChart(dataList: KLineData[], inputContext: unknown): RsiIndicatorRow[] {
+  const context = readRsiSnapshotContext(inputContext)
+  if (context.pageKey && context.symbol && context.period) {
+    const rows = mapPageIndicatorSnapshotToDataList<RsiIndicatorRow>({
+      dataList,
+      indicator: 'rsi',
+      pageKey: context.pageKey,
+      period: context.period,
+      settingsHashKey: 'RSI',
+      settingsHash: context.settingsHash,
+      symbol: context.symbol,
+    })
+    if (rows) {
+      return calculateWithoutFuturePlaceholders(dataList, () => rows)
+    }
+    if (context.runtimeOnly) {
+      return calculateWithoutFuturePlaceholders(dataList, (realRows) => realRows.map(() => ({})))
+    }
+  }
+  return calculateWithoutFuturePlaceholders(
+    dataList,
+    (realRows) => calculateTradingViewRsiRows(realRows, inputContext as Partial<RsiIndicatorSettings>),
+  )
+}
+
 export function ensureTradingViewRsiIndicator() {
   if (registered) return
   registered = true
@@ -461,29 +486,6 @@ export function ensureTradingViewRsiIndicator() {
       )
       return true
     },
-    calc: (dataList, indicator) => {
-      const context = readRsiSnapshotContext(indicator.calcParams[0])
-      if (context.pageKey && context.symbol && context.period) {
-        const snapshot = readIndicatorPageSnapshot(context.pageKey)
-        if (
-          snapshot &&
-          snapshot.symbol === context.symbol &&
-          snapshot.period === context.period &&
-          snapshot.settingsHashes?.RSI === context.settingsHash
-        ) {
-          return calculateWithoutFuturePlaceholders(
-            dataList,
-            (realRows) => realRows.map((row) => {
-              const barKey = assignBarKey(row, context.symbol, context.period)
-              return snapshot.byBarKey[barKey]?.rsi ?? {}
-            }),
-          )
-        }
-      }
-      return calculateWithoutFuturePlaceholders(
-        dataList,
-        (realRows) => calculateTradingViewRsiRows(realRows, indicator.calcParams[0]),
-      )
-    },
+    calc: (dataList, indicator) => calculateRsiRowsForKLineChart(dataList, indicator.calcParams[0]),
   })
 }

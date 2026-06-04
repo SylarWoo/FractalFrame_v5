@@ -14,7 +14,7 @@ export type { MmfV3IndicatorRow } from './mmfV3Types'
 export { createMmfV3RowsFromMarkers } from './mmfV3MarkerMapping'
 
 let registered = false
-const mmfV3EngineVersion = 'mmf-v3-vdo-inner-entry-v1'
+const mmfV3EngineVersion = 'mmf-v3-vmi-zero-sr-v1'
 const defaultRemoteMmfV3CalculationRows = 8000
 const defaultRemoteMmfV3IncrementalRows = 1600
 const remoteMmfV3VisibleWarmupRows = 1000

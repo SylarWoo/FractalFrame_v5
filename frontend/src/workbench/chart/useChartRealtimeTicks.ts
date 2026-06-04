@@ -214,6 +214,17 @@ export function resolveRealtimeRateVolume(options: {
   return Number.isFinite(latestVolume) ? Math.max(0, latestVolume) : 0
 }
 
+export function resolveMt5RateVolumeForPeriodStart(
+  rows: StoreV6QueryRow[] | null | undefined,
+  periodStartMs: number,
+) {
+  if (!Array.isArray(rows) || !Number.isFinite(periodStartMs)) return null
+  const periodStartSeconds = Math.floor(periodStartMs / 1000)
+  const matched = rows.find((row) => Number(row.time ?? row.openTime ?? row.timestamp) === periodStartSeconds)
+  const volume = Number(matched?.volume)
+  return Number.isFinite(volume) && volume >= 0 ? volume : null
+}
+
 export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, period, renderActive = true, symbol }: UseChartRealtimeTicksOptions) {
   const [realtimeEnabled, setRealtimeEnabled] = useState(readWatchlistRealtimeEnabled)
 
@@ -238,6 +249,9 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
     let tickDataReadySubscribedChart: Chart | null = null
     let lastRolloverBucket = 0
     let lastRealtimeTickSignature = ''
+    let rateVolumeRequestId = 0
+    let rateVolumeInFlight = false
+    let pendingRateVolumeTick: Mt5RealtimeTickEventDetail | null = null
     const normalizedSymbol = normalizeSymbol(symbol)
     const periodSeconds = resolvePeriodSeconds(period)
     const realtimeWindowLimits = resolveRealtimeWindowLimits(period)
@@ -324,21 +338,10 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
         })
     }
 
-    const handleRealtimeTick = (event: Event) => {
-      const detail = (event as CustomEvent<Mt5RealtimeTickEventDetail>).detail
+    const applyRealtimeTick = (detail: Mt5RealtimeTickEventDetail, mt5RateVolume: number | null) => {
       if (!detail || normalizeSymbol(detail.symbol) !== normalizedSymbol) return
       const last = resolveTickLast(detail)
       if (typeof last !== 'number' || !Number.isFinite(last)) return
-      const tickSignature = [
-        normalizeSymbol(detail.symbol),
-        detail.timeMsc ?? detail.time ?? '',
-        detail.bid ?? '',
-        detail.ask ?? '',
-        detail.last ?? '',
-        detail.volume ?? '',
-      ].join('|')
-      if (tickSignature === lastRealtimeTickSignature) return
-      lastRealtimeTickSignature = tickSignature
       const chart = chartInstanceRef.current
       const rows = renderActive && dataReady && chart
         ? stripFuturePlaceholders(chart.getDataList())
@@ -357,7 +360,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       const volume = resolveRealtimeRateVolume({
         appendNewBar: shouldAppendNewBar,
         latestVolume: Number(latest.volume ?? 0),
-        mt5RateVolume: null,
+        mt5RateVolume,
       })
       const rawNextRow = shouldAppendNewBar
         ? {
@@ -405,6 +408,61 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       if (tickDataReadyFallbackTimer !== 0) window.clearTimeout(tickDataReadyFallbackTimer)
       tickDataReadyFallbackTimer = window.setTimeout(finishRealtimeTickUpdate, 120)
       chart.updateData(realtimeRows[realtimeRows.length - 1] ?? nextRow)
+    }
+
+    const requestRateVolume = (detail: Mt5RealtimeTickEventDetail) => {
+      if (rateVolumeInFlight) {
+        pendingRateVolumeTick = detail
+        return
+      }
+      const requestId = rateVolumeRequestId + 1
+      rateVolumeRequestId = requestId
+      rateVolumeInFlight = true
+      const tickTimestamp = resolveTickTimestampMs(detail)
+      const tickPeriodStart = resolvePeriodStartTimestamp(tickTimestamp, periodSeconds)
+      if (!Number.isFinite(tickPeriodStart)) {
+        rateVolumeInFlight = false
+        applyRealtimeTick(detail, null)
+        return
+      }
+      queryMt5Rates({
+        symbol,
+        timeframe: normalizeTimeframe(period),
+        limit: 3,
+        })
+        .then((payload) => {
+          if (disposed || requestId !== rateVolumeRequestId || pendingRateVolumeTick) return
+          const volume = resolveMt5RateVolumeForPeriodStart(payload.rows, tickPeriodStart)
+          applyRealtimeTick(detail, volume)
+        })
+        .catch(() => {
+          if (!disposed && requestId === rateVolumeRequestId && !pendingRateVolumeTick) applyRealtimeTick(detail, null)
+        })
+        .finally(() => {
+          rateVolumeInFlight = false
+          if (disposed) return
+          const pending = pendingRateVolumeTick
+          pendingRateVolumeTick = null
+          if (pending) requestRateVolume(pending)
+        })
+    }
+
+    const handleRealtimeTick = (event: Event) => {
+      const detail = (event as CustomEvent<Mt5RealtimeTickEventDetail>).detail
+      if (!detail || normalizeSymbol(detail.symbol) !== normalizedSymbol) return
+      const last = resolveTickLast(detail)
+      if (typeof last !== 'number' || !Number.isFinite(last)) return
+      const tickSignature = [
+        normalizeSymbol(detail.symbol),
+        detail.timeMsc ?? detail.time ?? '',
+        detail.bid ?? '',
+        detail.ask ?? '',
+        detail.last ?? '',
+        detail.volume ?? '',
+      ].join('|')
+      if (tickSignature === lastRealtimeTickSignature) return
+      lastRealtimeTickSignature = tickSignature
+      requestRateVolume(detail)
     }
 
     const bindWhenReady = () => {

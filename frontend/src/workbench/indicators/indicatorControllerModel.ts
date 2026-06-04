@@ -90,11 +90,12 @@ export function withIndicatorSettings(state: PersistedIndicatorsState, name: Sup
   }
 }
 
-export function createLoadCommand(state: PersistedIndicatorsState, name: SupportedChartIndicator): ChartIndicatorCommand {
+export function createLoadCommand(state: PersistedIndicatorsState, name: SupportedChartIndicator, options: { resetAxisOnCreate?: boolean } = {}): ChartIndicatorCommand {
   return {
     action: 'load',
     id: 0,
     name,
+    resetAxisOnCreate: options.resetAxisOnCreate,
     settings: getIndicatorSettings(state, name),
   } as ChartIndicatorCommand
 }

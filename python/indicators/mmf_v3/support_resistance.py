@@ -35,7 +35,7 @@ def classify_vmi_zero_levels(features: pd.DataFrame, signals: list[StochStateSig
     return classifications
 
 
-def create_vmi_zero_level_debug(features: pd.DataFrame, signals: list[StochStateSignal]) -> dict[str, list[dict[str, object]]]:
+def create_vmi_zero_level_debug(features: pd.DataFrame, signals: list[StochStateSignal], settings: MmfV3Settings | None = None) -> dict[str, list[dict[str, object]]]:
     return {
         "support": _debug_level_side(features, signals, "support", "low"),
         "resistance": _debug_level_side(features, signals, "resistance", "high"),
@@ -93,7 +93,11 @@ def _vmi_zero_windows(features: pd.DataFrame, side: LevelSide) -> list[VmiZeroWi
     if length <= 1:
         return []
 
-    cross_up, cross_down = _vmi_zero_cross_arrays(features)
+    values = _vmi_values(features, length)
+    if len(values) != length:
+        return []
+
+    cross_up, cross_down = _vmi_zero_cross_arrays(values)
     windows: list[VmiZeroWindow] = []
     active_start: int | None = None
 
@@ -127,32 +131,25 @@ def _vmi_zero_windows(features: pd.DataFrame, side: LevelSide) -> list[VmiZeroWi
     return windows
 
 
-def _vmi_zero_cross_arrays(features: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
-    length = len(features)
-    cross_up = _bool_column(features, "vmiCrossUpZero", length)
-    cross_down = _bool_column(features, "vmiCrossDownZero", length)
-    if cross_up.any() or cross_down.any():
-        return cross_up, cross_down
-
+def _vmi_values(features: pd.DataFrame, length: int) -> np.ndarray:
     values = pd.to_numeric(features["vmiHistogram"] if "vmiHistogram" in features.columns else pd.Series([], dtype=float), errors="coerce").to_numpy(dtype=float)
-    if len(values) != length:
-        return cross_up, cross_down
+    return values if len(values) == length else np.array([], dtype=float)
 
+
+def _vmi_zero_cross_arrays(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    length = len(values)
+    cross_up = np.zeros(length, dtype=bool)
+    cross_down = np.zeros(length, dtype=bool)
     for index in range(1, length):
         previous = values[index - 1]
         current = values[index]
         if not (finite_number(previous) and finite_number(current)):
             continue
-        cross_up[index] = float(previous) <= 0 < float(current)
-        cross_down[index] = float(previous) >= 0 > float(current)
+        previous_value = float(previous)
+        current_value = float(current)
+        cross_up[index] = previous_value <= 0 < current_value
+        cross_down[index] = previous_value >= 0 > current_value
     return cross_up, cross_down
-
-
-def _bool_column(features: pd.DataFrame, column: str, length: int) -> np.ndarray:
-    if column not in features.columns:
-        return np.zeros(length, dtype=bool)
-    values = features[column].to_numpy()
-    return np.array([bool(value) for value in values], dtype=bool)
 
 
 def _lowest_signal_in_window(candidates: list[tuple[int, StochStateSignal]], start: int, end: int) -> tuple[int, StochStateSignal] | None:

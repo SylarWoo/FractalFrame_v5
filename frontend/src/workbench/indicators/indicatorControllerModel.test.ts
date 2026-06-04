@@ -32,6 +32,8 @@ describe('indicatorControllerModel', () => {
 
     expect(createLoadCommand(state, 'RSI')).toMatchObject({ action: 'load', id: 0, name: 'RSI', settings: state.rsi })
     expect(createLoadCommand(state, 'VWAP')).toMatchObject({ action: 'load', id: 0, name: 'VWAP', settings: state.vwap })
+    expect(createLoadCommand(state, 'RSI').resetAxisOnCreate).toBeUndefined()
+    expect(createLoadCommand(state, 'RSI', { resetAxisOnCreate: true })).toMatchObject({ resetAxisOnCreate: true })
   })
 
   it('creates restore commands only for loaded indicators in stable order', () => {
@@ -41,6 +43,7 @@ describe('indicatorControllerModel', () => {
     }
 
     expect(createLoadedIndicatorCommands(state).map((command) => command.name)).toEqual(['RSI', 'MR-M30', 'Vol'])
+    expect(createLoadedIndicatorCommands(state).map((command) => command.resetAxisOnCreate)).toEqual([undefined, undefined, undefined])
     expect(createLoadedIndicatorCommands(state, 'MR-M30').map((command) => command.name)).toEqual(['MR-M30'])
     expect(createLoadedIndicatorCommands(state, 'MACD')).toEqual([])
   })

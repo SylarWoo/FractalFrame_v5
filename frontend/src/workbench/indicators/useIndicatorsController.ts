@@ -93,7 +93,7 @@ export function useIndicatorsController({
     }, name, nextSettings)
     stateRef.current = nextState
     setState(nextState)
-    enqueueCommands(createLoadCommand(nextState, name))
+    enqueueCommands(createLoadCommand(nextState, name, { resetAxisOnCreate: true }))
   }, [enqueueCommands])
 
   const unloadIndicator = useCallback((name: SupportedChartIndicator) => {

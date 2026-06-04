@@ -4,8 +4,10 @@ import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import {
   createIndicatorPageKey,
   createIndicatorSnapshotRows,
+  readIndicatorPageSnapshot,
   writeIndicatorPageSnapshot,
   type IndicatorPageSnapshot,
+  type IndicatorPageSnapshotRow,
 } from './indicatorPageSnapshotStore'
 
 export type PageIndicatorMode = 'history' | 'jump' | 'realtime'
@@ -101,5 +103,81 @@ export function writePageIndicatorRuntimeSnapshot({
     settingsHash,
     settingsHashKey,
     symbol: context.symbol,
+  })
+}
+
+export function createDisplayRowsSnapshotFromCalculationRows({
+  calculationRows,
+  createSnapshotRows,
+  displayRows,
+  period,
+  symbol,
+}: {
+  calculationRows: KLineData[]
+  createSnapshotRows: (realRows: KLineData[], dataList: KLineData[]) => PageIndicatorSnapshotRowsInput
+  displayRows: KLineData[]
+  period: string
+  symbol: string
+}): PageIndicatorSnapshotRowsInput {
+  const normalizedPeriod = period.trim().toUpperCase()
+  const normalizedSymbol = symbol.trim()
+  const realCalculationRows = stripFuturePlaceholders(calculationRows)
+  const realDisplayRows = stripFuturePlaceholders(displayRows)
+  if (!realCalculationRows.length || !realDisplayRows.length) {
+    return createSnapshotRows(realDisplayRows, displayRows)
+  }
+
+  const calculationIndexByBarKey = new Map<string, number>()
+  realCalculationRows.forEach((row, index) => {
+    calculationIndexByBarKey.set(createBarKey(normalizedSymbol, normalizedPeriod, getKLineTimeSeconds(row)), index)
+  })
+
+  const calculationSnapshotRows = createSnapshotRows(realCalculationRows, realCalculationRows) as Record<string, unknown>
+  const displaySnapshotRows: Record<string, unknown> = {}
+  Object.entries(calculationSnapshotRows).forEach(([key, value]) => {
+    if (!Array.isArray(value)) {
+      displaySnapshotRows[key] = value
+      return
+    }
+    displaySnapshotRows[key] = realDisplayRows.map((row) => {
+      const barKey = createBarKey(normalizedSymbol, normalizedPeriod, getKLineTimeSeconds(row))
+      const calculationIndex = calculationIndexByBarKey.get(barKey)
+      return calculationIndex == null ? {} : value[calculationIndex] ?? {}
+    })
+  })
+  return displaySnapshotRows as PageIndicatorSnapshotRowsInput
+}
+
+export function mapPageIndicatorSnapshotToDataList<T>({
+  dataList,
+  indicator,
+  pageKey,
+  period,
+  settingsHashKey,
+  settingsHash,
+  symbol,
+}: {
+  dataList: KLineData[]
+  indicator: keyof Omit<IndicatorPageSnapshotRow, 'barKey' | 'sourceIndex' | 'time'>
+  pageKey: string
+  period: string
+  settingsHashKey?: string
+  settingsHash: string
+  symbol: string
+}): T[] | null {
+  const normalizedPeriod = period.trim().toUpperCase()
+  const normalizedSymbol = symbol.trim()
+  const snapshot = readIndicatorPageSnapshot(pageKey)
+  if (
+    !snapshot ||
+    snapshot.symbol !== normalizedSymbol ||
+    snapshot.period !== normalizedPeriod ||
+    snapshot.settingsHashes?.[settingsHashKey ?? indicator] !== settingsHash
+  ) {
+    return null
+  }
+  return stripFuturePlaceholders(dataList).map((row) => {
+    const barKey = createBarKey(normalizedSymbol, normalizedPeriod, getKLineTimeSeconds(row))
+    return (snapshot.byBarKey[barKey]?.[indicator] ?? {}) as T
   })
 }

@@ -5,9 +5,8 @@ import type { DpoIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
-import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
-import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
+import { mapPageIndicatorSnapshotToDataList } from './pageIndicatorRuntime'
 
 export type DpoIndicatorRow = {
   dpo?: number
@@ -20,10 +19,11 @@ function normalizeDpoSettings(input?: Partial<DpoIndicatorSettings>): DpoIndicat
 }
 
 function readDpoSnapshotContext(input: unknown) {
-  const context = input && typeof input === 'object' ? input as Partial<DpoIndicatorSettings> & { pageKey?: string; period?: string; settingsHash?: string; symbol?: string } : {}
+  const context = input && typeof input === 'object' ? input as Partial<DpoIndicatorSettings> & { pageKey?: string; period?: string; runtimeOnly?: boolean; settingsHash?: string; symbol?: string } : {}
   return {
     pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
     period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    runtimeOnly: context.runtimeOnly === true,
     settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
     symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
   }
@@ -255,6 +255,31 @@ export function calculateTradingViewDpoRows(dataList: KLineData[], inputSettings
   })
 }
 
+export function calculateDpoRowsForKLineChart(dataList: KLineData[], inputContext: unknown): DpoIndicatorRow[] {
+  const context = readDpoSnapshotContext(inputContext)
+  if (context.pageKey && context.symbol && context.period) {
+    const rows = mapPageIndicatorSnapshotToDataList<DpoIndicatorRow>({
+      dataList,
+      indicator: 'dpo',
+      pageKey: context.pageKey,
+      period: context.period,
+      settingsHashKey: 'DPO',
+      settingsHash: context.settingsHash,
+      symbol: context.symbol,
+    })
+    if (rows) {
+      return calculateWithoutFuturePlaceholders(dataList, () => rows)
+    }
+    if (context.runtimeOnly) {
+      return calculateWithoutFuturePlaceholders(dataList, (realRows) => realRows.map(() => ({})))
+    }
+  }
+  return calculateWithoutFuturePlaceholders(
+    dataList,
+    (realRows) => calculateTradingViewDpoRows(realRows, inputContext as Partial<DpoIndicatorSettings>),
+  )
+}
+
 export function ensureTradingViewDpoIndicator() {
   if (registered) return
   registered = true
@@ -293,29 +318,6 @@ export function ensureTradingViewDpoIndicator() {
       drawLineSeries(ctx, indicator.result, visibleRange, xAxis, yAxis, settings)
       return true
     },
-    calc: (dataList, indicator) => {
-      const context = readDpoSnapshotContext(indicator.calcParams[0])
-      if (context.pageKey && context.symbol && context.period) {
-        const snapshot = readIndicatorPageSnapshot(context.pageKey)
-        if (
-          snapshot &&
-          snapshot.symbol === context.symbol &&
-          snapshot.period === context.period &&
-          snapshot.settingsHashes?.DPO === context.settingsHash
-        ) {
-          return calculateWithoutFuturePlaceholders(
-            dataList,
-            (realRows) => realRows.map((row) => {
-              const barKey = assignBarKey(row, context.symbol, context.period)
-              return snapshot.byBarKey[barKey]?.dpo ?? {}
-            }),
-          )
-        }
-      }
-      return calculateWithoutFuturePlaceholders(
-        dataList,
-        (realRows) => calculateTradingViewDpoRows(realRows, indicator.calcParams[0] as Partial<DpoIndicatorSettings>),
-      )
-    },
+    calc: (dataList, indicator) => calculateDpoRowsForKLineChart(dataList, indicator.calcParams[0]),
   })
 }

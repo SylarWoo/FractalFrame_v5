@@ -6,7 +6,7 @@ import { chartError, chartInfo } from './chartLogger'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import { historyPageSize, mergeKLineData, resolveHasMoreOlder } from './chartCoreDataUtils'
 import { applyNewDataWithFuturePlaceholders, stripFuturePlaceholders } from './chartFuturePlaceholders'
-import { applyPriceVolumePrecision, resetYAxisAutoScale } from './chartStyleAppliers'
+import { applyPriceVolumePrecision } from './chartStyleAppliers'
 import { scheduleResetYAxisAutoScaleFlags } from './chartAxisInteraction'
 
 type StepLoad = { direction: 'left' | 'right'; id: number } | null
@@ -90,7 +90,6 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
         applyPriceVolumePrecision(chart, symbol)
         window.setTimeout(() => {
           if (disposed) return
-          resetYAxisAutoScale(chart)
           scheduleResetYAxisAutoScaleFlags(chart)
           applySessionBreakIndicator(chart, symbol, period)
           if (typeof targetTimestamp === 'number') {

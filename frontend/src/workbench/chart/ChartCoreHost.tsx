@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import type { Chart } from 'klinecharts'
@@ -67,13 +67,14 @@ import {
 } from './realtimeIndicatorRuntime'
 import { normalizeRealtimePeriod } from './realtimeBarIdentity'
 import { resolvePageLoadPlan } from './pageLoader/pageLoadPlanner'
+import { planPageIndicatorWarmup } from './indicatorWarmupPlanner'
 import type {
   CandleIndicatorCommandName,
   CandleIndicatorConfig,
   IndicatorPaneCommandName,
   IndicatorPaneConfig,
 } from './chartIndicatorCommandHandlers'
-import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MmfIndicatorSettings, MrIndicatorSettings, RsiIndicatorSettings, SqzmomIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, AoIndicatorSettings, VmiIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MmfIndicatorSettings, MrIndicatorSettings, PersistedIndicatorsState, RsiIndicatorSettings, SqzmomIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, AoIndicatorSettings, VmiIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import { readString, writeString } from '../persistence/jsonStorage'
 import './ChartCoreHost.css'
@@ -125,6 +126,7 @@ type ChartCoreHostProps = {
   bareKLineMode?: boolean
   displayName?: string
   indicatorCommand?: ChartIndicatorCommand | null
+  indicatorsState?: PersistedIndicatorsState
   indicatorsEnabled?: boolean
   jump?: { id: number; timestamp?: number } | null
   limit?: number
@@ -135,6 +137,7 @@ type ChartCoreHostProps = {
   morganRangeMode?: MorganRangeMode
   onLoadStateChange?: (state: ChartLoadState) => void
   onMorganRangeSegmentChange?: (segment: MorganRangeSegment | null) => void
+  onPageCalculationContextReady?: () => void
   page?: ChartPageTarget | null
   period: string
   reloadId?: number
@@ -159,9 +162,32 @@ export type ChartPageTarget = {
   toGlobalIndex?: number | null
 }
 
+function createIndicatorWarmupRequests(state: PersistedIndicatorsState) {
+  const loaded = state.loaded
+  return [
+    ...(loaded.MA ? [{ name: 'MA' }] : []),
+    ...(loaded.RSI ? [{ name: 'RSI' }] : []),
+    ...(loaded.Stoch ? [{ name: 'Stoch' }] : []),
+    ...(loaded.MACD ? [{ name: 'MACD' }] : []),
+    ...(loaded.DPO ? [{ name: 'DPO' }] : []),
+    ...(loaded.VDO ? [{ name: 'VDO' }] : []),
+    ...(loaded.VMI ? [{ name: 'VMI' }] : []),
+    ...(loaded.TSI ? [{ name: 'TSI' }] : []),
+    ...(loaded.VI ? [{ name: 'VI' }] : []),
+    ...(loaded.AO ? [{ name: 'AO' }] : []),
+    ...(loaded.SQZMOM ? [{ name: 'SQZMOM' }] : []),
+    ...(loaded['MR-M5'] ? [{ name: 'MR-M5' }] : []),
+    ...(loaded['MR-M30'] ? [{ name: 'MR-M30' }] : []),
+    ...(loaded.MMF_V3 ? [{ name: 'MMF_V3' }] : []),
+    ...(loaded.VWAP ? [{ name: 'VWAP' }] : []),
+    ...(loaded.Vol ? [{ name: 'Vol' }] : []),
+  ]
+}
+
 export type ChartIndicatorCommand = {
   action: 'load' | 'unload'
   id: number
+  resetAxisOnCreate?: boolean
 } & (
   | { name: 'MA'; settings?: MaIndicatorSettings }
   | { name: 'MACD'; settings?: MacdIndicatorSettings }
@@ -256,17 +282,36 @@ function createCurrentIndicatorPageKey(chart: Chart, options: { pageIndex: numbe
   })
 }
 
-export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCommand, indicatorsEnabled = true, jump, limit, loadedStrategyKeys = [], maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings, vwapSettings }: ChartCoreHostProps) {
+export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCommand, indicatorsEnabled = true, indicatorsState, jump, limit, loadedStrategyKeys = [], maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, onPageCalculationContextReady, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings, vwapSettings }: ChartCoreHostProps) {
   const loadPlan = resolvePageLoadPlan({ jump, limit, page })
   const indicatorRuntimeEnabled = indicatorsEnabled && loadPlan.mode === 'realtime'
   const viewportScope = loadPlan.mode === 'realtime' ? 'realtime' : loadPlan.mode === 'history' ? `history:${page?.index ?? 0}` : 'jump'
+  const pageIndicatorWarmupPlan = useMemo(() => {
+    if (!indicatorsState || loadPlan.mode === 'jump') return null
+    return planPageIndicatorWarmup({
+      indicators: createIndicatorWarmupRequests(indicatorsState),
+      period,
+    })
+  }, [indicatorsState, loadPlan.mode, period])
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol, viewportScope })
   const [chartEverReady, setChartEverReady] = useState(false)
   const [mmfV2MomentumStats, setMmfV2MomentumStats] = useState<MmfV2MomentumStats | null>(null)
   const [mmfV2MomentumCrosshairIndex, setMmfV2MomentumCrosshairIndex] = useState<number | null>(null)
   const [mmfV2MomentumClockTime, setMmfV2MomentumClockTime] = useState(() => formatMomentumClockTime())
   const [mmfV2MomentumOverlayStyle, setMmfV2MomentumOverlayStyle] = useState({ right: 96, top: 180 })
-  const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, page, period, reloadId, symbol, totalRows, viewportScope })
+  const { loadState, setLoadState } = useChartDataLoad({
+    chartInstanceRef,
+    jump,
+    limit,
+    lookaheadRows: pageIndicatorWarmupPlan?.lookaheadRows,
+    page,
+    period,
+    reloadId,
+    symbol,
+    totalRows,
+    viewportScope,
+    warmupRows: pageIndicatorWarmupPlan?.warmupRows,
+  })
   const realtimeDataReady = !loadState.loading &&
     loadState.rows > 0 &&
     loadState.loadedSymbol === symbol &&
@@ -531,12 +576,11 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
   }], [maSettings, mmfSettings, morganRangeMode, period, stochSettings, symbol, tsiSettings, vdoSettings, vmiSettings, vwapSettings])
 
   const readCurrentPageCalculationContext = useCallback((chart: Chart) => {
-    if (!page || page.realtime !== false) return null
     const key = createPageCalculationContextKey({
       displayRows: chart.getDataList(),
-      pageIndex: page.index,
+      pageIndex: page?.index ?? 1,
       period,
-      realtime: false,
+      realtime: page?.realtime !== false,
       symbol,
     })
     return readPageCalculationContext(key)
@@ -802,7 +846,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       symbol,
     })
     applySnapshotCandleIndicatorCommand({
-      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      calcParams: [{ ...(settings ?? {}), pageKey, period, runtimeOnly: true, settingsHash, symbol }],
       chart,
       command,
       config,
@@ -866,7 +910,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       symbol,
     })
     applySnapshotPaneIndicatorCommand({
-      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      calcParams: [{ ...(settings ?? {}), pageKey, period, runtimeOnly: true, settingsHash, symbol }],
       chart,
       command,
       config,
@@ -908,7 +952,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       symbol,
     })
     applySnapshotPaneIndicatorCommand({
-      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      calcParams: [{ ...(settings ?? {}), pageKey, period, runtimeOnly: true, settingsHash, symbol }],
       chart,
       command,
       config,
@@ -948,14 +992,13 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       period,
       settings,
       symbol,
-      vdoSettings,
     })
     applySnapshotPaneIndicatorCommand({
-      calcParams: [{ pageKey, period, settings, settingsHash, symbol, vdoSettings }],
+      calcParams: [{ pageKey, period, runtimeOnly: true, settings, settingsHash, symbol }],
       chart,
       command,
       config,
-      createSnapshotRows: (realRows) => ({ vmiRows: calculateTradingViewVmiRows(realRows, settings, vdoSettings) }),
+      createSnapshotRows: (realRows) => ({ vmiRows: calculateTradingViewVmiRows(realRows, settings) }),
       isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
       pageKey,
       period,
@@ -966,7 +1009,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       symbol,
       writeStoredPaneHeight,
     })
-  }, [isIndicatorVisibleInCurrentPeriod, observeVmiPaneHeight, page?.index, page?.realtime, period, symbol, vdoSettings])
+  }, [isIndicatorVisibleInCurrentPeriod, observeVmiPaneHeight, page?.index, page?.realtime, period, symbol])
 
   const applyTsiCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
     if (command.name !== 'TSI') return
@@ -993,7 +1036,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       symbol,
     })
     applySnapshotPaneIndicatorCommand({
-      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      calcParams: [{ ...(settings ?? {}), pageKey, period, runtimeOnly: true, settingsHash, symbol }],
       chart,
       command,
       config,
@@ -1035,7 +1078,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       symbol,
     })
     applySnapshotPaneIndicatorCommand({
-      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      calcParams: [{ ...(settings ?? {}), pageKey, period, runtimeOnly: true, settingsHash, symbol }],
       chart,
       command,
       config,
@@ -1077,7 +1120,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       symbol,
     })
     applySnapshotPaneIndicatorCommand({
-      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      calcParams: [{ ...(settings ?? {}), pageKey, period, runtimeOnly: true, settingsHash, symbol }],
       chart,
       command,
       config,
@@ -1119,7 +1162,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       symbol,
     })
     applySnapshotPaneIndicatorCommand({
-      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      calcParams: [{ ...(settings ?? {}), pageKey, period, runtimeOnly: true, settingsHash, symbol }],
       chart,
       command,
       config,
@@ -1162,7 +1205,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       symbol,
     })
     applySnapshotPaneIndicatorCommand({
-      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      calcParams: [{ ...(settings ?? {}), pageKey, period, runtimeOnly: true, settingsHash, symbol }],
       chart,
       command,
       config,
@@ -1204,7 +1247,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       symbol,
     })
     applySnapshotPaneIndicatorCommand({
-      calcParams: [{ ...(settings ?? {}), pageKey, period, settingsHash, symbol }],
+      calcParams: [{ ...(settings ?? {}), pageKey, period, runtimeOnly: true, settingsHash, symbol }],
       chart,
       command,
       config,
@@ -1548,18 +1591,20 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
 
   useEffect(() => {
     const chart = chartInstanceRef.current
-    if (!chart || !page || page.realtime !== false) return
+    if (!chart || loadPlan.mode === 'jump') return
 
     const handleContextReady = (event: Event) => {
       const key = (event as CustomEvent<{ key?: string }>).detail?.key
       const currentKey = createPageCalculationContextKey({
         displayRows: chart.getDataList(),
-        pageIndex: page.index,
+        pageIndex: page?.index ?? 1,
         period,
-        realtime: false,
+        realtime: page?.realtime !== false,
         symbol,
       })
       if (key !== currentKey) return
+
+      onPageCalculationContextReady?.()
 
       if (chart.getIndicatorByPaneId('candle_pane', 'MMF_V3')) {
         applyMmfV3Command(chart, {
@@ -1583,7 +1628,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
 
     window.addEventListener(pageCalculationContextChangedEvent, handleContextReady)
     return () => window.removeEventListener(pageCalculationContextChangedEvent, handleContextReady)
-  }, [applyMmfV3Command, applyMorganRangeCommand, chartInstanceRef, mmfSettings, page, page?.index, page?.realtime, period, symbol])
+  }, [applyMmfV3Command, applyMorganRangeCommand, chartInstanceRef, loadPlan.mode, mmfSettings, onPageCalculationContextReady, page, page?.index, page?.realtime, period, symbol])
 
   useEffect(() => {
     const chart = chartInstanceRef.current

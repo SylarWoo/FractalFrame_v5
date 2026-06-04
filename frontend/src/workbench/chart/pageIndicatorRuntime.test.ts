@@ -3,6 +3,7 @@ import type { KLineData } from 'klinecharts'
 import { futurePlaceholderFlag } from './chartFuturePlaceholders'
 import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
 import {
+  createDisplayRowsSnapshotFromCalculationRows,
   createPageIndicatorRuntimeContext,
   writePageIndicatorRuntimeSnapshot,
 } from './pageIndicatorRuntime'
@@ -48,5 +49,26 @@ describe('pageIndicatorRuntime', () => {
     const snapshot = readIndicatorPageSnapshot(context.pageKey)
     expect(snapshot?.settingsHashes?.Stoch).toBe('settings-a')
     expect(snapshot?.byBarKey['XAUUSDm|M5|1700000300']?.stoch).toEqual({ k: 40, d: 50 })
+  })
+
+  it('aligns calculation-row indicator output back to display rows', () => {
+    const calculationRows = [
+      { timestamp: 1_699_999_700_000, open: 0, high: 0, low: 0, close: 0 },
+      rows[0],
+      rows[1],
+    ] as KLineData[]
+    const displayRows = [rows[0], rows[1]] as KLineData[]
+
+    const snapshotRows = createDisplayRowsSnapshotFromCalculationRows({
+      calculationRows,
+      createSnapshotRows: () => ({
+        maRows: [{}, { ma: 100 }, { ma: 101 }],
+      }),
+      displayRows,
+      period: 'M5',
+      symbol: 'XAUUSDm',
+    })
+
+    expect(snapshotRows.maRows).toEqual([{ ma: 100 }, { ma: 101 }])
   })
 })

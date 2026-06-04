@@ -5,9 +5,8 @@ import type { AoIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
-import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
-import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
+import { mapPageIndicatorSnapshotToDataList } from './pageIndicatorRuntime'
 
 export type AoIndicatorRow = {
   histogram?: number
@@ -20,10 +19,11 @@ function normalizeAoSettings(input?: Partial<AoIndicatorSettings>): AoIndicatorS
 }
 
 function readAoSnapshotContext(input: unknown) {
-  const context = input && typeof input === 'object' ? input as Partial<AoIndicatorSettings> & { pageKey?: string; period?: string; settingsHash?: string; symbol?: string } : {}
+  const context = input && typeof input === 'object' ? input as Partial<AoIndicatorSettings> & { pageKey?: string; period?: string; runtimeOnly?: boolean; settingsHash?: string; symbol?: string } : {}
   return {
     pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
     period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    runtimeOnly: context.runtimeOnly === true,
     settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
     symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
   }
@@ -211,6 +211,31 @@ export function calculateTradingViewAoRows(dataList: KLineData[], inputSettings:
   })
 }
 
+export function calculateAoRowsForKLineChart(dataList: KLineData[], inputContext: unknown): AoIndicatorRow[] {
+  const context = readAoSnapshotContext(inputContext)
+  if (context.pageKey && context.symbol && context.period) {
+    const rows = mapPageIndicatorSnapshotToDataList<AoIndicatorRow>({
+      dataList,
+      indicator: 'ao',
+      pageKey: context.pageKey,
+      period: context.period,
+      settingsHashKey: 'AO',
+      settingsHash: context.settingsHash,
+      symbol: context.symbol,
+    })
+    if (rows) {
+      return calculateWithoutFuturePlaceholders(dataList, () => rows)
+    }
+    if (context.runtimeOnly) {
+      return calculateWithoutFuturePlaceholders(dataList, (realRows) => realRows.map(() => ({})))
+    }
+  }
+  return calculateWithoutFuturePlaceholders(
+    dataList,
+    (realRows) => calculateTradingViewAoRows(realRows, inputContext as Partial<AoIndicatorSettings>),
+  )
+}
+
 export function ensureTradingViewAoIndicator() {
   if (registered) return
   registered = true
@@ -244,33 +269,6 @@ export function ensureTradingViewAoIndicator() {
 
       return true
     },
-    calc: (dataList, indicator) => {
-      const context = readAoSnapshotContext(indicator.calcParams[0])
-      if (context.pageKey && context.symbol && context.period) {
-        const snapshot = readIndicatorPageSnapshot(context.pageKey)
-        if (
-          snapshot &&
-          snapshot.symbol === context.symbol &&
-          snapshot.period === context.period &&
-          snapshot.settingsHashes?.AO === context.settingsHash
-        ) {
-          return calculateWithoutFuturePlaceholders(
-            dataList,
-            (realRows) => realRows.map((row) => {
-              const barKey = assignBarKey(row, context.symbol, context.period)
-              return snapshot.byBarKey[barKey]?.ao ?? {}
-            }),
-          )
-        }
-        return calculateWithoutFuturePlaceholders(
-          dataList,
-          (realRows) => calculateTradingViewAoRows(realRows, indicator.calcParams[0]),
-        )
-      }
-      return calculateWithoutFuturePlaceholders(
-        dataList,
-        (realRows) => calculateTradingViewAoRows(realRows, indicator.calcParams[0]),
-      )
-    },
+    calc: (dataList, indicator) => calculateAoRowsForKLineChart(dataList, indicator.calcParams[0]),
   })
 }

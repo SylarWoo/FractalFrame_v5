@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { calculateTradingViewMacdRows } from './tradingViewMacdIndicator'
+import { calculateMacdRowsForKLineChart, calculateTradingViewMacdRows } from './tradingViewMacdIndicator'
+import { createIndicatorSettingsHash } from './indicatorPageSnapshotStore'
+import {
+  createPageIndicatorRuntimeContext,
+  writePageIndicatorRuntimeSnapshot,
+} from './pageIndicatorRuntime'
 
 const closeData = (values: number[]) => values.map((close, index) => ({
   close,
@@ -7,6 +12,15 @@ const closeData = (values: number[]) => values.map((close, index) => ({
   low: close,
   open: close,
   timestamp: index,
+  volume: 1,
+}))
+
+const m5CloseData = (values: number[]) => values.map((close, index) => ({
+  close,
+  high: close,
+  low: close,
+  open: close,
+  timestamp: index * 300_000,
   volume: 1,
 }))
 
@@ -40,5 +54,55 @@ describe('calculateTradingViewMacdRows', () => {
     expect(rows[2].macd).toBe(0.5)
     expect(rows[3].signal).toBe(0.5)
     expect(rows[5].histogram).toBe(0)
+  })
+
+  it('reads page runtime cache instead of recalculating when runtimeOnly is enabled', () => {
+    const dataList = m5CloseData([1, 2, 3])
+    const context = createPageIndicatorRuntimeContext({
+      mode: 'realtime',
+      pageIndex: 1,
+      period: 'M5',
+      rows: dataList,
+      symbol: 'XAUUSDm',
+    })
+    const settingsHash = createIndicatorSettingsHash({ indicator: 'MACD', period: 'M5', settings: { fastLength: 2 }, symbol: 'XAUUSDm' })
+    writePageIndicatorRuntimeSnapshot({
+      context,
+      createSnapshotRows: () => ({
+        macdRows: [
+          { macd: 1 },
+          { histogram: 3, macd: 2, signal: 4 },
+          { histogram: 6, macd: 5, signal: 7 },
+        ],
+      }),
+      settingsHash,
+      settingsHashKey: 'MACD',
+    })
+
+    const rows = calculateMacdRowsForKLineChart(dataList, {
+      fastLength: 2,
+      pageKey: context.pageKey,
+      period: 'M5',
+      runtimeOnly: true,
+      settingsHash,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(rows[1]).toEqual({ histogram: 3, macd: 2, signal: 4 })
+    expect(rows[2]).toEqual({ histogram: 6, macd: 5, signal: 7 })
+  })
+
+  it('returns empty rows instead of recalculating when runtimeOnly cache is missing', () => {
+    const rows = calculateMacdRowsForKLineChart(m5CloseData([1, 2, 3, 4, 5]), {
+      fastLength: 1,
+      pageKey: 'missing-page',
+      period: 'M5',
+      runtimeOnly: true,
+      settingsHash: 'missing-settings',
+      slowLength: 1,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(rows).toEqual([{}, {}, {}, {}, {}])
   })
 })

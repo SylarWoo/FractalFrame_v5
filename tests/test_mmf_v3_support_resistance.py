@@ -7,8 +7,6 @@ from python.indicators.mmf_v3.support_resistance import classify_vmi_zero_levels
 
 def test_mmf_v3_support_uses_vmi_down_up_zero_window_lowest_stoch_low() -> None:
     features = _features([0.2, -0.3, -0.1, 0.2, 0.3])
-    features.loc[1, "vmiCrossDownZero"] = True
-    features.loc[3, "vmiCrossUpZero"] = True
     signals = [
         _signal("low", 1, 101),
         _signal("low", 2, 99),
@@ -29,8 +27,6 @@ def test_mmf_v3_support_uses_vmi_down_up_zero_window_lowest_stoch_low() -> None:
 
 def test_mmf_v3_resistance_uses_vmi_up_down_zero_window_highest_stoch_high() -> None:
     features = _features([-0.2, 0.4, 0.1, -0.2, -0.3])
-    features.loc[1, "vmiCrossUpZero"] = True
-    features.loc[3, "vmiCrossDownZero"] = True
     signals = [
         _signal("high", 1, 108),
         _signal("high", 2, 112),
@@ -49,18 +45,15 @@ def test_mmf_v3_resistance_uses_vmi_up_down_zero_window_highest_stoch_high() -> 
     }
 
 
-def test_mmf_v3_vmi_zero_windows_can_fall_back_to_histogram_crosses() -> None:
-    features = _features([0.1, -0.1, -0.2, 0.1])
+def test_mmf_v3_zero_windows_ignore_open_regions_without_return_cross() -> None:
+    features = _features([0.1, -0.2, -0.3, -0.4])
     signals = [
         _signal("low", 2, 98),
-        _signal("low", 3, 99),
     ]
 
     classifications = classify_vmi_zero_levels(features, signals, MmfV3Settings(show_support_level=True))
 
-    assert classifications == {
-        0: ("MMF_V3_SUPPORT", "support_vmi_cross_down_zero_1_to_cross_up_zero_3"),
-    }
+    assert classifications == {}
 
 
 def _features(vmi_values: list[float]) -> pd.DataFrame:
@@ -73,8 +66,6 @@ def _features(vmi_values: list[float]) -> pd.DataFrame:
             "low": 99 + index,
             "open": 100 + index,
             "time": index,
-            "vmiCrossDownZero": False,
-            "vmiCrossUpZero": False,
             "vmiHistogram": vmi,
         })
     return pd.DataFrame(rows)

@@ -5,9 +5,9 @@ import type { VdoIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
-import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
-import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
+import { mapPageIndicatorSnapshotToDataList } from './pageIndicatorRuntime'
+import { calculateVdoIndicatorRows } from './vdoCore'
 
 export type VdoIndicatorRow = {
   vdo?: number
@@ -22,23 +22,14 @@ function normalizeVdoSettings(input?: Partial<VdoIndicatorSettings>): VdoIndicat
 }
 
 function readVdoSnapshotContext(input: unknown) {
-  const context = input && typeof input === 'object' ? input as Partial<VdoIndicatorSettings> & { pageKey?: string; period?: string; settingsHash?: string; symbol?: string } : {}
+  const context = input && typeof input === 'object' ? input as Partial<VdoIndicatorSettings> & { pageKey?: string; period?: string; runtimeOnly?: boolean; settingsHash?: string; symbol?: string } : {}
   return {
     pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
     period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    runtimeOnly: context.runtimeOnly === true,
     settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
     symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
   }
-}
-
-function clampPeriod(value: unknown, fallback: number) {
-  const next = Math.round(Number(value))
-  return Number.isFinite(next) ? Math.max(1, Math.min(500, next)) : fallback
-}
-
-function clampSmoothingPeriod(value: unknown, fallback: number) {
-  const next = Math.round(Number(value))
-  return Number.isFinite(next) ? Math.max(0, Math.min(500, next)) : fallback
 }
 
 function clampOpacity(value: unknown, fallback = 1) {
@@ -225,118 +216,37 @@ function drawLineSeries(
   ctx.restore()
 }
 
-function calculateEmaSeries(values: Array<number | undefined>, period: number) {
-  const output: Array<number | undefined> = values.map(() => undefined)
-  if (period <= 1) return values
-  const alpha = 2 / (period + 1)
-  let previous: number | undefined
-
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index]
-    if (!Number.isFinite(value)) continue
-    previous = previous == null ? value : alpha * (value as number) + (1 - alpha) * previous
-    output[index] = previous
-  }
-
-  return output
-}
-
-function calculateSmaSeries(values: Array<number | undefined>, period: number) {
-  const output: Array<number | undefined> = values.map(() => undefined)
-  let sum = 0
-  let finiteCount = 0
-
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index]
-    if (Number.isFinite(value)) {
-      sum += value as number
-      finiteCount += 1
-    }
-
-    if (index >= period) {
-      const removed = values[index - period]
-      if (Number.isFinite(removed)) {
-        sum -= removed as number
-        finiteCount -= 1
-      }
-    }
-
-    if (index >= period - 1 && finiteCount === period) output[index] = sum / period
-  }
-
-  return output
-}
-
-function calculateRollingSum(values: number[], period: number) {
-  const output: Array<number | undefined> = values.map(() => undefined)
-  let sum = 0
-
-  for (let index = 0; index < values.length; index += 1) {
-    sum += values[index] ?? 0
-    if (index >= period) sum -= values[index - period] ?? 0
-    if (index >= period) output[index] = sum
-  }
-
-  return output
-}
-
 export function calculateTradingViewVdoRows(
   dataList: KLineData[],
   inputSettings: Partial<VdoIndicatorSettings> = defaultVdoIndicatorSettings,
   options: { includeMovingAverages?: boolean } = {},
 ): VdoIndicatorRow[] {
-  const settings = normalizeVdoSettings(inputSettings)
-  const length = clampPeriod(settings.length, defaultVdoIndicatorSettings.length)
-  const emaSmoothing = clampSmoothingPeriod(settings.emaSmoothing, defaultVdoIndicatorSettings.emaSmoothing)
-  const plusMovement: number[] = dataList.map(() => 0)
-  const minusMovement: number[] = dataList.map(() => 0)
-  const trueRange: number[] = dataList.map(() => 0)
+  return calculateVdoIndicatorRows(dataList, inputSettings, options)
+}
 
-  for (let index = 1; index < dataList.length; index += 1) {
-    const current = dataList[index]
-    const previous = dataList[index - 1]
-    const high = Number(current.high)
-    const low = Number(current.low)
-    const previousHigh = Number(previous.high)
-    const previousLow = Number(previous.low)
-    const previousClose = Number(previous.close)
-    plusMovement[index] = Math.abs(high - previousLow)
-    minusMovement[index] = Math.abs(low - previousHigh)
-    trueRange[index] = Math.max(high - low, Math.abs(high - previousClose), Math.abs(low - previousClose))
-  }
-
-  const plusSums = calculateRollingSum(plusMovement, length)
-  const minusSums = calculateRollingSum(minusMovement, length)
-  const trueRangeSums = calculateRollingSum(trueRange, length)
-
-  const rawValues = dataList.map((_, index) => {
-    const plusSum = plusSums[index]
-    const minusSum = minusSums[index]
-    const trueRangeSum = trueRangeSums[index]
-    if (!Number.isFinite(plusSum) || !Number.isFinite(minusSum) || !Number.isFinite(trueRangeSum)) return {}
-    if (trueRangeSum === 0) return {}
-    return { vdo: (plusSum as number) / (trueRangeSum as number) - (minusSum as number) / (trueRangeSum as number) }
-  })
-
-  const smoothedValues = emaSmoothing > 1 ? calculateEmaSeries(rawValues.map((row) => row.vdo), emaSmoothing) : []
-  const rows = emaSmoothing <= 1
-    ? rawValues
-    : rawValues.map((row, index) => {
-      const value = smoothedValues[index]
-      return Number.isFinite(value) ? { vdo: value } : row
+export function calculateVdoRowsForKLineChart(dataList: KLineData[], inputContext: unknown): VdoIndicatorRow[] {
+  const context = readVdoSnapshotContext(inputContext)
+  if (context.pageKey && context.symbol && context.period) {
+    const rows = mapPageIndicatorSnapshotToDataList<VdoIndicatorRow>({
+      dataList,
+      indicator: 'vdo',
+      pageKey: context.pageKey,
+      period: context.period,
+      settingsHashKey: 'VDO',
+      settingsHash: context.settingsHash,
+      symbol: context.symbol,
     })
-
-  if (options.includeMovingAverages === false) return rows
-
-  const maLength = clampPeriod(settings.vdoMaLength, defaultVdoIndicatorSettings.vdoMaLength)
-  const ma2Length = clampPeriod(settings.vdoMa2Length, defaultVdoIndicatorSettings.vdoMa2Length)
-  const vdoMaValues = calculateSmaSeries(rows.map((row) => row.vdo), maLength)
-  const vdoMa2Values = calculateSmaSeries(rows.map((row) => row.vdo), ma2Length)
-  return rows.map((row, index) => ({
-    ...row,
-    ...(Number.isFinite(vdoMaValues[index]) ? { vdoMa: vdoMaValues[index] } : {}),
-    ...(Number.isFinite(vdoMa2Values[index]) ? { vdoMa2: vdoMa2Values[index] } : {}),
-  }))
+    if (rows) {
+      return calculateWithoutFuturePlaceholders(dataList, () => rows)
+    }
+    if (context.runtimeOnly) {
+      return calculateWithoutFuturePlaceholders(dataList, (realRows) => realRows.map(() => ({})))
+    }
+  }
+  return calculateWithoutFuturePlaceholders(
+    dataList,
+    (realRows) => calculateTradingViewVdoRows(realRows, inputContext as Partial<VdoIndicatorSettings>),
+  )
 }
 
 export function ensureTradingViewVdoIndicator() {
@@ -405,33 +315,6 @@ export function ensureTradingViewVdoIndicator() {
       }, 'vdoMa2')
       return true
     },
-    calc: (dataList, indicator) => {
-      const context = readVdoSnapshotContext(indicator.calcParams[0])
-      if (context.pageKey && context.symbol && context.period) {
-        const snapshot = readIndicatorPageSnapshot(context.pageKey)
-        if (
-          snapshot &&
-          snapshot.symbol === context.symbol &&
-          snapshot.period === context.period &&
-          snapshot.settingsHashes?.VDO === context.settingsHash
-        ) {
-          return calculateWithoutFuturePlaceholders(
-            dataList,
-            (realRows) => realRows.map((row) => {
-              const barKey = assignBarKey(row, context.symbol, context.period)
-              return snapshot.byBarKey[barKey]?.vdo ?? {}
-            }),
-          )
-        }
-        return calculateWithoutFuturePlaceholders(
-          dataList,
-          (realRows) => calculateTradingViewVdoRows(realRows, indicator.calcParams[0] as Partial<VdoIndicatorSettings>),
-        )
-      }
-      return calculateWithoutFuturePlaceholders(
-        dataList,
-        (realRows) => calculateTradingViewVdoRows(realRows, indicator.calcParams[0] as Partial<VdoIndicatorSettings>),
-      )
-    },
+    calc: (dataList, indicator) => calculateVdoRowsForKLineChart(dataList, indicator.calcParams[0]),
   })
 }

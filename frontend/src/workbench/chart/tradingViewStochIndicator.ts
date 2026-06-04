@@ -5,9 +5,8 @@ import type { StochIndicatorSettings } from '../rightDrawer/indicatorPersistence
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
-import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
-import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
+import { mapPageIndicatorSnapshotToDataList } from './pageIndicatorRuntime'
 
 export type StochIndicatorRow = {
   d?: number
@@ -22,10 +21,11 @@ function normalizeStochSettings(input?: Partial<StochIndicatorSettings> | number
 }
 
 function readStochSnapshotContext(input: unknown) {
-  const context = input && typeof input === 'object' ? input as Partial<StochIndicatorSettings> & { pageKey?: string; period?: string; settingsHash?: string; symbol?: string } : {}
+  const context = input && typeof input === 'object' ? input as Partial<StochIndicatorSettings> & { pageKey?: string; period?: string; runtimeOnly?: boolean; settingsHash?: string; symbol?: string } : {}
   return {
     pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
     period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    runtimeOnly: context.runtimeOnly === true,
     settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
     symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
   }
@@ -123,6 +123,35 @@ function readIndicatorInputsVisible() {
 
 function readIndicatorValuesVisible() {
   return readSettingsBooleanValue(chartSettingKeys.statusIndicatorValuesVisible, chartSettingDefaults.statusIndicatorValuesVisible)
+}
+
+export function calculateStochRowsForKLineChart(dataList: KLineData[], inputContext: unknown): StochIndicatorRow[] {
+  const context = readStochSnapshotContext(inputContext)
+  if (context.pageKey && context.symbol && context.period) {
+    const rows = mapPageIndicatorSnapshotToDataList<StochIndicatorRow>({
+      dataList,
+      indicator: 'stoch',
+      pageKey: context.pageKey,
+      period: context.period,
+      settingsHashKey: 'Stoch',
+      settingsHash: context.settingsHash,
+      symbol: context.symbol,
+    })
+    if (rows) {
+      return calculateWithoutFuturePlaceholders(dataList, () => rows)
+    }
+    if (context.runtimeOnly) {
+      return calculateWithoutFuturePlaceholders(dataList, (realRows) => realRows.map(() => ({})))
+    }
+    return calculateWithoutFuturePlaceholders(
+      dataList,
+      (realRows) => calculateTradingViewStochRows(realRows, inputContext as Partial<StochIndicatorSettings>),
+    )
+  }
+  return calculateWithoutFuturePlaceholders(
+    dataList,
+    (realRows) => calculateTradingViewStochRows(realRows, inputContext as Partial<StochIndicatorSettings>),
+  )
 }
 
 function alignStrokePixel(value: number, lineWidth: number) {
@@ -319,32 +348,7 @@ export function ensureTradingViewStochIndicator() {
       return true
     },
     calc: (dataList, indicator) => {
-      const context = readStochSnapshotContext(indicator.calcParams[0])
-      if (context.pageKey && context.symbol && context.period) {
-        const snapshot = readIndicatorPageSnapshot(context.pageKey)
-        if (
-          snapshot &&
-          snapshot.symbol === context.symbol &&
-          snapshot.period === context.period &&
-          snapshot.settingsHashes?.Stoch === context.settingsHash
-        ) {
-          return calculateWithoutFuturePlaceholders(
-            dataList,
-            (realRows) => realRows.map((row) => {
-              const barKey = assignBarKey(row, context.symbol, context.period)
-              return snapshot.byBarKey[barKey]?.stoch ?? {}
-            }),
-          )
-        }
-        return calculateWithoutFuturePlaceholders(
-          dataList,
-          (realRows) => calculateTradingViewStochRows(realRows, indicator.calcParams[0]),
-        )
-      }
-      return calculateWithoutFuturePlaceholders(
-        dataList,
-        (realRows) => calculateTradingViewStochRows(realRows, indicator.calcParams[0]),
-      )
+      return calculateStochRowsForKLineChart(dataList, indicator.calcParams[0])
     },
   })
 }

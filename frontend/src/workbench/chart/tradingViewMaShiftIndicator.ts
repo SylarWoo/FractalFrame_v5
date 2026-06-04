@@ -5,9 +5,8 @@ import type { MaIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
-import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
-import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
+import { mapPageIndicatorSnapshotToDataList } from './pageIndicatorRuntime'
 
 export type MaShiftRow = {
   ma?: number
@@ -36,10 +35,11 @@ function normalizeMaSettings(input?: Partial<MaIndicatorSettings> | number): MaI
 }
 
 function readMaSnapshotContext(input: unknown) {
-  const context = input && typeof input === 'object' ? input as Partial<MaIndicatorSettings> & { pageKey?: string; settingsHash?: string; symbol?: string; period?: string } : {}
+  const context = input && typeof input === 'object' ? input as Partial<MaIndicatorSettings> & { pageKey?: string; period?: string; runtimeOnly?: boolean; settingsHash?: string; symbol?: string } : {}
   return {
     pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
     period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    runtimeOnly: context.runtimeOnly === true,
     settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
     symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
   }
@@ -419,6 +419,31 @@ export function calculateTradingViewMaShiftRows(dataList: KLineData[], inputSett
   return rows
 }
 
+export function calculateMaShiftRowsForKLineChart(dataList: KLineData[], inputContext: unknown): MaShiftRow[] {
+  const context = readMaSnapshotContext(inputContext)
+  if (context.pageKey && context.symbol && context.period) {
+    const rows = mapPageIndicatorSnapshotToDataList<MaShiftRow>({
+      dataList,
+      indicator: 'ma',
+      pageKey: context.pageKey,
+      period: context.period,
+      settingsHashKey: 'MA',
+      settingsHash: context.settingsHash,
+      symbol: context.symbol,
+    })
+    if (rows) {
+      return calculateWithoutFuturePlaceholders(dataList, () => rows)
+    }
+    if (context.runtimeOnly) {
+      return calculateWithoutFuturePlaceholders(dataList, (realRows) => realRows.map(() => ({})))
+    }
+  }
+  return calculateWithoutFuturePlaceholders(
+    dataList,
+    (realRows) => calculateTradingViewMaShiftRows(realRows, inputContext as Partial<MaIndicatorSettings>),
+  )
+}
+
 export function ensureTradingViewMaShiftIndicator() {
   if (registered) return
   registered = true
@@ -452,33 +477,6 @@ export function ensureTradingViewMaShiftIndicator() {
       }
     },
     draw: drawMaShiftIndicator,
-    calc: (dataList, indicator) => {
-      const context = readMaSnapshotContext(indicator.calcParams[0])
-      if (context.pageKey && context.symbol && context.period) {
-        const snapshot = readIndicatorPageSnapshot(context.pageKey)
-        if (
-          snapshot &&
-          snapshot.symbol === context.symbol &&
-          snapshot.period === context.period &&
-          snapshot.settingsHashes?.MA === context.settingsHash
-        ) {
-          return calculateWithoutFuturePlaceholders(
-            dataList,
-            (realRows) => realRows.map((row) => {
-              const barKey = assignBarKey(row, context.symbol, context.period)
-              return snapshot.byBarKey[barKey]?.ma ?? {}
-            }),
-          )
-        }
-        return calculateWithoutFuturePlaceholders(
-          dataList,
-          (realRows) => calculateTradingViewMaShiftRows(realRows, indicator.calcParams[0]),
-        )
-      }
-      return calculateWithoutFuturePlaceholders(
-        dataList,
-        (realRows) => calculateTradingViewMaShiftRows(realRows, indicator.calcParams[0]),
-      )
-    },
+    calc: (dataList, indicator) => calculateMaShiftRowsForKLineChart(dataList, indicator.calcParams[0]),
   })
 }

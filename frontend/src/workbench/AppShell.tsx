@@ -516,6 +516,7 @@ export function AppShell() {
             displayName={chartDisplayName}
             indicatorCommand={realtimeIndicatorRuntimeEnabled ? indicatorsController.command : null}
             indicatorsEnabled={realtimeIndicatorRuntimeEnabled}
+            indicatorsState={indicatorsController.settings}
             jump={chartJump}
             limit={chartTarget.limit}
             loadedStrategyKeys={chartStrategiesEnabled ? loadedStrategyKeys : []}
@@ -530,6 +531,7 @@ export function AppShell() {
             vwapSettings={indicatorsController.settings.vwap}
             onLoadStateChange={setChartLoadState}
             onMorganRangeSegmentChange={setMorganRangeSegment}
+            onPageCalculationContextReady={refreshLoadedIndicatorsVisibility}
             page={chartTarget.page}
             period={chartTarget.period}
             reloadId={chartTarget.reloadId}

@@ -11,7 +11,7 @@ from uuid import uuid4
 _MMF_V3_RESULT_CACHE_MAX = 64
 _MMF_V3_FEATURE_CACHE_MAX = 32
 _MMF_V3_JOB_MAX = 64
-_MMF_V3_SERVICE_CACHE_VERSION = "mmf_v3_service_cache_v50_vdo_inner_entry"
+_MMF_V3_SERVICE_CACHE_VERSION = "mmf_v3_service_cache_v53_vmi_zero_sr"
 _mmf_v3_result_cache: OrderedDict[tuple[Any, ...], dict[str, Any]] = OrderedDict()
 _mmf_v3_feature_cache: OrderedDict[tuple[Any, ...], tuple[Any, dict[str, Any]]] = OrderedDict()
 _mmf_v3_jobs: OrderedDict[str, dict[str, Any]] = OrderedDict()

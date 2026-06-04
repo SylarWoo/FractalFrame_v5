@@ -6,10 +6,12 @@ import { mainVolumeIndicatorName } from './mainVolumeIndicator'
 import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
 import type { VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import {
+  createDisplayRowsSnapshotFromCalculationRows,
   createPageIndicatorRuntimeContext,
   writePageIndicatorRuntimeSnapshot,
   type PageIndicatorSnapshotRowsInput,
 } from './pageIndicatorRuntime'
+import { readPageCalculationContext } from './pageCalculationContext'
 
 export type IndicatorPaneCommandName = 'DPO' | 'MACD' | 'RSI' | 'SQZMOM' | 'Stoch' | 'TSI' | 'VDO' | 'VI' | 'AO' | 'VMI'
 export type CandleIndicatorCommandName = 'MA' | 'VWAP'
@@ -79,21 +81,18 @@ export function applyPaneIndicatorCommand({
   if (command.action === 'unload') {
     persistPaneHeightAndDisconnect({ chart, config, writeStoredPaneHeight })
     chart.removeIndicator(config.paneId, config.name)
-    resetIndicatorAxis(chart, config)
     return
   }
 
   if (!isIndicatorVisible(config.name)) {
     persistPaneHeightAndDisconnect({ chart, config, writeStoredPaneHeight })
     chart.removeIndicator(config.paneId, config.name)
-    resetIndicatorAxis(chart, config)
     return
   }
 
   const calcParams = [config.resolveCalcParams ? config.resolveCalcParams(command) : command.settings]
   if (chart.getIndicatorByPaneId(config.paneId, config.name)) {
     chart.overrideIndicator({ name: config.name, calcParams }, config.paneId, config.observeHeight)
-    resetIndicatorAxis(chart, config)
     return
   }
 
@@ -104,10 +103,9 @@ export function applyPaneIndicatorCommand({
     () => {
       config.observeHeight()
       refreshChartDrawings()
-      resetIndicatorAxis(chart, config)
+      if (command.resetAxisOnCreate === true) resetIndicatorAxis(chart, config)
     },
   )
-  resetIndicatorAxis(chart, config)
 }
 
 export function applySnapshotPaneIndicatorCommand({
@@ -146,11 +144,11 @@ export function applySnapshotPaneIndicatorCommand({
   if (command.action === 'unload' || !isIndicatorVisible(config.name)) {
     persistPaneHeightAndDisconnect({ chart, config, writeStoredPaneHeight })
     chart.removeIndicator(config.paneId, config.name)
-    resetIndicatorAxis(chart, config)
     return
   }
 
   const dataList = chart.getDataList()
+  const pageCalculationContext = readPageCalculationContext(pageKey)
   const context = createPageIndicatorRuntimeContext({
     mode: pageKey.includes('|rt|') ? 'realtime' : 'history',
     pageIndex: 1,
@@ -159,16 +157,24 @@ export function applySnapshotPaneIndicatorCommand({
     rows: dataList,
     symbol,
   })
+  const snapshotRows = pageCalculationContext?.calculationRows.length
+    ? createDisplayRowsSnapshotFromCalculationRows({
+        calculationRows: pageCalculationContext.calculationRows,
+        createSnapshotRows,
+        displayRows: dataList,
+        period,
+        symbol,
+      })
+    : null
   writePageIndicatorRuntimeSnapshot({
     context,
-    createSnapshotRows: (realRows) => createSnapshotRows(realRows, dataList),
+    createSnapshotRows: (realRows) => snapshotRows ?? createSnapshotRows(realRows, dataList),
     settingsHash,
     settingsHashKey,
   })
 
   if (chart.getIndicatorByPaneId(config.paneId, config.name)) {
     chart.overrideIndicator({ name: config.name, calcParams }, config.paneId, config.observeHeight)
-    resetIndicatorAxis(chart, config)
     return
   }
 
@@ -179,10 +185,9 @@ export function applySnapshotPaneIndicatorCommand({
     () => {
       config.observeHeight()
       refreshChartDrawings()
-      resetIndicatorAxis(chart, config)
+      if (command.resetAxisOnCreate === true) resetIndicatorAxis(chart, config)
     },
   )
-  resetIndicatorAxis(chart, config)
 }
 
 export function applyCandleIndicatorCommand({
@@ -249,6 +254,7 @@ export function applySnapshotCandleIndicatorCommand({
   }
 
   const dataList = chart.getDataList()
+  const pageCalculationContext = readPageCalculationContext(pageKey)
   const context = createPageIndicatorRuntimeContext({
     mode: pageKey.includes('|rt|') ? 'realtime' : 'history',
     pageIndex: 1,
@@ -257,9 +263,18 @@ export function applySnapshotCandleIndicatorCommand({
     rows: dataList,
     symbol,
   })
+  const snapshotRows = pageCalculationContext?.calculationRows.length
+    ? createDisplayRowsSnapshotFromCalculationRows({
+        calculationRows: pageCalculationContext.calculationRows,
+        createSnapshotRows,
+        displayRows: dataList,
+        period,
+        symbol,
+      })
+    : null
   writePageIndicatorRuntimeSnapshot({
     context,
-    createSnapshotRows: (realRows) => createSnapshotRows(realRows, dataList),
+    createSnapshotRows: (realRows) => snapshotRows ?? createSnapshotRows(realRows, dataList),
     settingsHash,
     settingsHashKey,
   })
