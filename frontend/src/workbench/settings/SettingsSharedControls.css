@@ -112,6 +112,17 @@
   width: 120px;
 }
 
+.ff-settings-multicheck-select .ff-openable-select__button > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ff-settings-multicheck-select .ff-openable-select__chevron {
+  flex: 0 0 auto;
+}
+
 .ff-settings-multicheck-select__menu {
   position: absolute;
   top: 100%;

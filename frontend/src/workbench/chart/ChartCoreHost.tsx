@@ -9,8 +9,9 @@ import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
 import { chartRealtimeDataChangedEvent, useChartRealtimeTicks } from './useChartRealtimeTicks'
 import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
+import { useRealtimePriceMarker } from './useRealtimePriceMarker'
 import { useChartStepLoad } from './useChartStepLoad'
-import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay } from './mainVolumeIndicator'
+import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
 import {
   createIndicatorPageKey,
   createIndicatorSettingsHash,
@@ -18,8 +19,9 @@ import {
   readIndicatorPageSnapshot,
   writeIndicatorPageSnapshot,
 } from './indicatorPageSnapshotStore'
-import { applyMorganRangeOverlaySegments, applyMorganRangeOverlays, clearMorganRangeOverlays } from './useMorganRangeOverlays'
+import { applyMorganRangeOverlaySegments, clearMorganRangeOverlays } from './useMorganRangeOverlays'
 import {
+  alignMorganRangeSegmentsToDisplayRows,
   calculateMorganRangeSegmentsForModeCached,
   findMorganRangeSegmentByDataIndex,
   resolveMorganRangeBucketSeconds,
@@ -32,7 +34,7 @@ import { readCrosshairDataIndex } from './paneTitleOverlayContent'
 import { calculateTradingViewMaShiftRows, ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMmfIndicator } from './tradingViewMmfIndicator'
 import { ensureTradingViewMmfV2Indicator } from './tradingViewMmfV2Indicator'
-import { calculateMmfV3RowsForPage, ensureTradingViewMmfV3Indicator } from './tradingViewMmfV3Indicator'
+import { calculateMmfV3RowsForDisplayPage, calculateMmfV3RowsForPage, ensureTradingViewMmfV3Indicator } from './tradingViewMmfV3Indicator'
 import { bprM5StrategyIndicatorName, ensureTradingViewBprM5StrategyIndicator } from './tradingViewBprM5StrategyIndicator'
 import { calculateTradingViewMacdRows, ensureTradingViewMacdIndicator } from './tradingViewMacdIndicator'
 import { calculateTradingViewDpoRows, ensureTradingViewDpoIndicator } from './tradingViewDpoIndicator'
@@ -44,7 +46,7 @@ import { calculateTradingViewVdoRows, ensureTradingViewVdoIndicator } from './tr
 import { calculateTradingViewViRows, ensureTradingViewViIndicator } from './tradingViewViIndicator'
 import { calculateTradingViewAoRows, ensureTradingViewAoIndicator } from './tradingViewAoIndicator'
 import { calculateTradingViewVmiRows, ensureTradingViewVmiIndicator } from './tradingViewVmiIndicator'
-import { calculateTradingViewVwapRows, ensureTradingViewVwapIndicator } from './tradingViewVwapIndicator'
+import { ensureTradingViewVwapIndicator, tradingViewVwapIndicatorName } from './tradingViewVwapIndicator'
 import { ensureTradingViewMrIndicator, resolveTradingViewMrIndicatorName } from './tradingViewMrIndicator'
 import {
   applyCandleIndicatorCommand,
@@ -53,6 +55,18 @@ import {
   applySnapshotPaneIndicatorCommand,
   applyVolumeCommand,
 } from './chartIndicatorCommandHandlers'
+import {
+  createPageCalculationContextKey,
+  pageCalculationContextChangedEvent,
+  readPageCalculationContext,
+} from './pageCalculationContext'
+import {
+  applyRealtimeIndicatorCommandToState,
+  createInitialRealtimeIndicatorRuntimeState,
+  type RealtimeIndicatorRuntimeState,
+} from './realtimeIndicatorRuntime'
+import { normalizeRealtimePeriod } from './realtimeBarIdentity'
+import { resolvePageLoadPlan } from './pageLoader/pageLoadPlanner'
 import type {
   CandleIndicatorCommandName,
   CandleIndicatorConfig,
@@ -108,8 +122,10 @@ function refreshChartDrawings() {
 }
 
 type ChartCoreHostProps = {
+  bareKLineMode?: boolean
   displayName?: string
   indicatorCommand?: ChartIndicatorCommand | null
+  indicatorsEnabled?: boolean
   jump?: { id: number; timestamp?: number } | null
   limit?: number
   loadedStrategyKeys?: string[]
@@ -133,10 +149,14 @@ type ChartCoreHostProps = {
 }
 
 export type ChartPageTarget = {
+  fromGlobalIndex?: number | null
   index: number
   limit: number
   realtime: boolean
+  rows?: number
+  timeFrom?: number | null
   timeTo?: number | null
+  toGlobalIndex?: number | null
 }
 
 export type ChartIndicatorCommand = {
@@ -236,20 +256,27 @@ function createCurrentIndicatorPageKey(chart: Chart, options: { pageIndex: numbe
   })
 }
 
-export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, loadedStrategyKeys = [], maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings, vwapSettings }: ChartCoreHostProps) {
-  const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol })
+export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCommand, indicatorsEnabled = true, jump, limit, loadedStrategyKeys = [], maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings, vwapSettings }: ChartCoreHostProps) {
+  const loadPlan = resolvePageLoadPlan({ jump, limit, page })
+  const indicatorRuntimeEnabled = indicatorsEnabled && loadPlan.mode === 'realtime'
+  const viewportScope = loadPlan.mode === 'realtime' ? 'realtime' : loadPlan.mode === 'history' ? `history:${page?.index ?? 0}` : 'jump'
+  const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol, viewportScope })
+  const [chartEverReady, setChartEverReady] = useState(false)
   const [mmfV2MomentumStats, setMmfV2MomentumStats] = useState<MmfV2MomentumStats | null>(null)
   const [mmfV2MomentumCrosshairIndex, setMmfV2MomentumCrosshairIndex] = useState<number | null>(null)
   const [mmfV2MomentumClockTime, setMmfV2MomentumClockTime] = useState(() => formatMomentumClockTime())
   const [mmfV2MomentumOverlayStyle, setMmfV2MomentumOverlayStyle] = useState({ right: 96, top: 180 })
-  const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, page, period, reloadId, symbol, totalRows })
+  const { loadState, setLoadState } = useChartDataLoad({ chartInstanceRef, jump, limit, page, period, reloadId, symbol, totalRows, viewportScope })
   const realtimeDataReady = !loadState.loading &&
     loadState.rows > 0 &&
     loadState.loadedSymbol === symbol &&
     loadState.loadedPeriod === period
-  const realtimePageActive = page?.realtime !== false
-  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady && realtimePageActive, period, symbol, totalRows })
+  const chartSurfaceReady = loadState.error || realtimeDataReady
+  const suppressInitialSurface = !chartEverReady && !chartSurfaceReady
+  const realtimePageActive = loadPlan.chartBehavior.acceptRealtimeTicks
+  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady, period, renderActive: realtimePageActive, symbol, totalRows })
   const candleCountdown = useCurrentCandleCountdown({ chartInstanceRef, dataReady: realtimeDataReady && realtimePageActive, period, symbol })
+  const realtimePriceMarker = useRealtimePriceMarker({ chartInstanceRef, enabled: realtimeDataReady && !realtimePageActive, period, symbol })
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const stochPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const sqzmomPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
@@ -270,10 +297,70 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
   const morganRangeCrosshairIndexRef = useRef<number | null>(null)
   const morganRangePublishedSegmentRef = useRef('')
   const mmfV3StaticRequestIdRef = useRef(0)
+  const realtimeIndicatorRuntimeRef = useRef<RealtimeIndicatorRuntimeState | null>(null)
+
+  useEffect(() => {
+    if (!bareKLineMode) return
+    const chart = chartInstanceRef.current
+    realtimeIndicatorRuntimeRef.current = null
+    if (!chart) return
+    mainVolumeOverlayRef.current?.destroy()
+    mainVolumeOverlayRef.current = null
+    chart.removeIndicator('candle_pane', 'MMF')
+    chart.removeIndicator('candle_pane', 'MMF_V2')
+    chart.removeIndicator('candle_pane', 'MMF_V3')
+    chart.removeIndicator('candle_pane', 'MR_M5')
+    chart.removeIndicator('candle_pane', 'MR_M30')
+    chart.removeIndicator('candle_pane', 'MA')
+    chart.removeIndicator('candle_pane', 'VWAP')
+    chart.removeIndicator('candle_pane', tradingViewVwapIndicatorName)
+    chart.removeIndicator('candle_pane', mainVolumeIndicatorName)
+    chart.removeIndicator('candle_pane', bprM5StrategyIndicatorName)
+    chart.removeIndicator(rsiPaneId, 'RSI')
+    chart.removeIndicator(stochPaneId, 'Stoch')
+    chart.removeIndicator(sqzmomPaneId, 'SQZMOM')
+    chart.removeIndicator(macdPaneId, 'MACD')
+    chart.removeIndicator(dpoPaneId, 'DPO')
+    chart.removeIndicator(vdoPaneId, 'VDO')
+    chart.removeIndicator(tsiPaneId, 'TSI')
+    chart.removeIndicator(viPaneId, 'VI')
+    chart.removeIndicator(aoPaneId, 'AO')
+    chart.removeIndicator(vmiPaneId, 'VMI')
+    rsiPaneHeightObserverRef.current?.disconnect()
+    stochPaneHeightObserverRef.current?.disconnect()
+    sqzmomPaneHeightObserverRef.current?.disconnect()
+    macdPaneHeightObserverRef.current?.disconnect()
+    dpoPaneHeightObserverRef.current?.disconnect()
+    vdoPaneHeightObserverRef.current?.disconnect()
+    tsiPaneHeightObserverRef.current?.disconnect()
+    viPaneHeightObserverRef.current?.disconnect()
+    aoPaneHeightObserverRef.current?.disconnect()
+    vmiPaneHeightObserverRef.current?.disconnect()
+    rsiPaneHeightObserverRef.current = null
+    stochPaneHeightObserverRef.current = null
+    sqzmomPaneHeightObserverRef.current = null
+    macdPaneHeightObserverRef.current = null
+    dpoPaneHeightObserverRef.current = null
+    vdoPaneHeightObserverRef.current = null
+    tsiPaneHeightObserverRef.current = null
+    viPaneHeightObserverRef.current = null
+    aoPaneHeightObserverRef.current = null
+    vmiPaneHeightObserverRef.current = null
+    clearMorganRangeOverlays(chart, morganRangeOverlayIdsRef.current)
+    morganRangeModeRef.current = null
+    morganRangeIndicatorNameRef.current = null
+    morganRangeSettingsRef.current = null
+    morganRangePublishedSegmentRef.current = ''
+    onMorganRangeSegmentChange?.(null)
+  }, [bareKLineMode, chartInstanceRef, onMorganRangeSegmentChange])
 
   useEffect(() => {
     onLoadStateChange?.({ ...loadState, period, symbol, totalRows })
   }, [loadState, onLoadStateChange, period, symbol, totalRows])
+
+  useEffect(() => {
+    if (chartSurfaceReady) setChartEverReady(true)
+  }, [chartSurfaceReady])
 
   useChartStepLoad({ chartInstanceRef, period, setLoadState, stepLoad: stepLoad ?? null, symbol, totalRows })
 
@@ -374,6 +461,23 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
   const observeVmiPaneHeight = useCallback(() => observeIndicatorPaneHeight(vmiPaneId, vmiPaneHeightStorageKey, vmiPaneHeightObserverRef), [observeIndicatorPaneHeight])
   const isIndicatorVisibleInCurrentPeriod = useCallback((name: ChartIndicatorCommand['name']) => isStoredVisibilityRangePeriodVisible(`indicator:${name}`, period), [period])
 
+  const registerRealtimeIndicatorCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
+    if (!indicatorRuntimeEnabled) return null
+    const normalizedPeriod = normalizeRealtimePeriod(period)
+    const normalizedSymbol = symbol.trim()
+    const current = realtimeIndicatorRuntimeRef.current
+    const base = current && current.period === normalizedPeriod && current.symbol === normalizedSymbol
+      ? current
+      : createInitialRealtimeIndicatorRuntimeState({
+        bars: chart.getDataList(),
+        period,
+        symbol,
+      })
+    const next = applyRealtimeIndicatorCommandToState(base, command, chart.getDataList())
+    realtimeIndicatorRuntimeRef.current = next
+    return next
+  }, [indicatorRuntimeEnabled, period, symbol])
+
   const buildMmfCalcParams = useCallback((settings?: MmfIndicatorSettings) => [
     settings,
     {
@@ -426,6 +530,30 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
     vwapSettings,
   }], [maSettings, mmfSettings, morganRangeMode, period, stochSettings, symbol, tsiSettings, vdoSettings, vmiSettings, vwapSettings])
 
+  const readCurrentPageCalculationContext = useCallback((chart: Chart) => {
+    if (!page || page.realtime !== false) return null
+    const key = createPageCalculationContextKey({
+      displayRows: chart.getDataList(),
+      pageIndex: page.index,
+      period,
+      realtime: false,
+      symbol,
+    })
+    return readPageCalculationContext(key)
+  }, [page, page?.index, page?.realtime, period, symbol])
+
+  const resolveMorganRangeSegmentsForCurrentPage = useCallback((chart: Chart, mode: MorganRangeMode, futureBars: number) => {
+    const context = readCurrentPageCalculationContext(chart)
+    if (context?.calculationRows.length && context.displayRows.length) {
+      return alignMorganRangeSegmentsToDisplayRows({
+        calculationRows: context.calculationRows,
+        displayRows: stripFuturePlaceholders(chart.getDataList()),
+        segments: calculateMorganRangeSegmentsForModeCached(context.calculationRows, mode, futureBars),
+      })
+    }
+    return calculateMorganRangeSegmentsForModeCached(chart.getDataList(), mode, futureBars)
+  }, [readCurrentPageCalculationContext])
+
   const publishMorganRangeSegment = useCallback((dataIndex: number | null = morganRangeCrosshairIndexRef.current) => {
     const chart = chartInstanceRef.current
     const mode = morganRangeModeRef.current
@@ -450,7 +578,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
       symbol,
     })
     const segments = readIndicatorPageSnapshot(pageKey)?.morganRange?.segments
-      ?? calculateMorganRangeSegmentsForModeCached(chart.getDataList(), mode, futureBars)
+      ?? resolveMorganRangeSegmentsForCurrentPage(chart, mode, futureBars)
     const fallbackIndex = chart.getDataList().length - 1
     const segment = findMorganRangeSegmentByDataIndex(segments, dataIndex ?? fallbackIndex) ?? segments[segments.length - 1] ?? null
     const signature = segment
@@ -459,7 +587,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
     if (signature === morganRangePublishedSegmentRef.current) return
     morganRangePublishedSegmentRef.current = signature
     onMorganRangeSegmentChange?.(segment)
-  }, [chartInstanceRef, onMorganRangeSegmentChange, page?.index, page?.realtime, period, symbol])
+  }, [chartInstanceRef, onMorganRangeSegmentChange, page?.index, page?.realtime, period, resolveMorganRangeSegmentsForCurrentPage, symbol])
 
   const applyMorganRangeCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
     if (command.name !== 'MR-M5' && command.name !== 'MR-M30') return
@@ -494,7 +622,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
     const futureBars = Number.isFinite(periodSeconds) && periodSeconds > 0
       ? Math.round(resolveMorganRangeBucketSeconds(mode) / periodSeconds)
       : 0
-    const segments = futureBars > 0 ? calculateMorganRangeSegmentsForModeCached(chart.getDataList(), mode, futureBars) : []
+    const segments = futureBars > 0 ? resolveMorganRangeSegmentsForCurrentPage(chart, mode, futureBars) : []
     const pageKey = createCurrentIndicatorPageKey(chart, {
       pageIndex: page?.index ?? 1,
       period,
@@ -520,7 +648,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
     chart.createIndicator({ name: chartIndicatorName, calcParams: [command.settings] }, true, { id: 'candle_pane' })
     applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments)
     publishMorganRangeSegment()
-  }, [isIndicatorVisibleInCurrentPeriod, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, symbol])
+  }, [isIndicatorVisibleInCurrentPeriod, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, resolveMorganRangeSegmentsForCurrentPage, symbol])
 
   const applyMmfCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
     ensureTradingViewMmfIndicator()
@@ -568,6 +696,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
     const settings = command.name === 'MMF_V3' ? command.settings : undefined
     const dataList = chart.getDataList()
     const dataSignature = createChartDataSignature(chart)
+    const pageCalculationContext = readCurrentPageCalculationContext(chart)
     const pageKey = createIndicatorPageKey({
       pageIndex: page?.index ?? 1,
       period,
@@ -597,8 +726,13 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
       existingSnapshot.period === period.trim().toUpperCase() &&
       (existingSnapshot.settingsHashes?.MMF_V3 ?? existingSnapshot.settingsHash) === settingsHash,
     )
+    const contextFallbackRows = !snapshotReady && pageCalculationContext
+      ? stripFuturePlaceholders(dataList).map(() => ({}))
+      : null
     const fallbackCalcParams = snapshotReady
       ? buildMmfV3CalcParams(settings, { pageKey, settingsHash })
+      : contextFallbackRows
+      ? [{ ...buildMmfV3CalcParams(settings)[0], staticRows: contextFallbackRows }]
       : buildMmfV3CalcParams(settings)
     if (chart.getIndicatorByPaneId('candle_pane', 'MMF_V3')) {
       chart.overrideIndicator({ name: 'MMF_V3', calcParams: fallbackCalcParams, zLevel: mmfIndicatorZLevel }, 'candle_pane')
@@ -606,7 +740,14 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
       chart.createIndicator({ name: 'MMF_V3', calcParams: fallbackCalcParams, zLevel: mmfIndicatorZLevel }, true, { id: 'candle_pane' })
     }
     if (snapshotReady) return
-    calculateMmfV3RowsForPage(dataList, fallbackCalcParams[0])
+    const calculateRows = pageCalculationContext
+      ? calculateMmfV3RowsForDisplayPage({
+          calculationRows: pageCalculationContext.calculationRows,
+          displayRows: dataList,
+          inputContext: buildMmfV3CalcParams(settings)[0],
+        })
+      : calculateMmfV3RowsForPage(dataList, fallbackCalcParams[0])
+    calculateRows
       .then((staticRows) => {
         if (mmfV3StaticRequestIdRef.current !== requestId) return
         if (!isIndicatorVisibleInCurrentPeriod('MMF_V3')) return
@@ -639,7 +780,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
           currentChart.createIndicator({ name: 'MMF_V3', calcParams: fallbackCalcParams, zLevel: mmfIndicatorZLevel }, true, { id: 'candle_pane' })
         }
       })
-  }, [buildMmfV3CalcParams, chartInstanceRef, isIndicatorVisibleInCurrentPeriod, maSettings, morganRangeMode, page?.index, page?.realtime, period, stochSettings, symbol, tsiSettings, vdoSettings, vmiSettings, vwapSettings])
+  }, [buildMmfV3CalcParams, chartInstanceRef, isIndicatorVisibleInCurrentPeriod, maSettings, morganRangeMode, page?.index, page?.realtime, period, readCurrentPageCalculationContext, stochSettings, symbol, tsiSettings, vdoSettings, vmiSettings, vwapSettings])
 
   const applyMaCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
     if (command.name !== 'MA') return
@@ -677,37 +818,28 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
 
   const applyVwapCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
     if (command.name !== 'VWAP') return
-    const config: CandleIndicatorConfig = {
-      ensureRegistered: ensureTradingViewVwapIndicator,
-      name: 'VWAP',
+    ensureTradingViewVwapIndicator()
+    chart.removeIndicator('candle_pane', 'VWAP')
+    if (command.action === 'unload' || !isIndicatorVisibleInCurrentPeriod('VWAP')) {
+      chart.removeIndicator('candle_pane', tradingViewVwapIndicatorName)
+      return
     }
-    const settings = { ...command.settings, symbol }
-    const pageKey = createCurrentIndicatorPageKey(chart, {
-      pageIndex: page?.index ?? 1,
+    const runtime = realtimeIndicatorRuntimeRef.current
+    const vwapCalcSettings = {
+      ...command.settings,
       period,
-      realtime: page?.realtime !== false,
+      realtimeBarKeyFrom: runtime?.barKeyFrom ?? null,
+      realtimeBarKeyTo: runtime?.barKeyTo ?? null,
+      realtimeIndicatorPageKey: runtime?.pageKey ?? null,
       symbol,
-    })
-    const settingsHash = createIndicatorSettingsHash({
-      indicator: 'VWAP',
-      period,
-      settings,
-      symbol,
-    })
-    applySnapshotCandleIndicatorCommand({
-      calcParams: [{ ...settings, pageKey, period, settingsHash, symbol }],
-      chart,
-      command,
-      config,
-      createSnapshotRows: (realRows) => ({ vwapRows: calculateTradingViewVwapRows(realRows, settings) }),
-      isIndicatorVisible: isIndicatorVisibleInCurrentPeriod,
-      pageKey,
-      period,
-      settingsHash,
-      settingsHashKey: 'VWAP',
-      symbol,
-    })
-  }, [isIndicatorVisibleInCurrentPeriod, page?.index, page?.realtime, period, symbol])
+    }
+    const calcParams = [vwapCalcSettings]
+    if (chart.getIndicatorByPaneId('candle_pane', tradingViewVwapIndicatorName)) {
+      chart.overrideIndicator({ name: tradingViewVwapIndicatorName, calcParams }, 'candle_pane')
+    } else {
+      chart.createIndicator({ name: tradingViewVwapIndicatorName, calcParams }, true, { id: 'candle_pane' })
+    }
+  }, [isIndicatorVisibleInCurrentPeriod, period, symbol])
 
   const applyStochCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
     if (command.name !== 'Stoch') return
@@ -1172,6 +1304,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
   useEffect(() => {
     const chart = chartInstanceRef.current
     if (!chart || !indicatorCommand) return
+    registerRealtimeIndicatorCommand(chart, indicatorCommand)
 
     const paneIndicatorConfigs: Record<IndicatorPaneCommandName, IndicatorPaneConfig> = {
       DPO: {
@@ -1340,7 +1473,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
       VWAP: {
         ensureRegistered: ensureTradingViewVwapIndicator,
         name: 'VWAP',
-        resolveCalcParams: (command) => ({ ...command.settings, symbol }),
+        resolveCalcParams: (command) => ({ ...command.settings, period, symbol }),
       },
     }
     if (indicatorCommand.name === 'MA') {
@@ -1409,8 +1542,48 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
     observeViPaneHeight,
     observeAoPaneHeight,
     observeVmiPaneHeight,
+    registerRealtimeIndicatorCommand,
     symbol,
   ])
+
+  useEffect(() => {
+    const chart = chartInstanceRef.current
+    if (!chart || !page || page.realtime !== false) return
+
+    const handleContextReady = (event: Event) => {
+      const key = (event as CustomEvent<{ key?: string }>).detail?.key
+      const currentKey = createPageCalculationContextKey({
+        displayRows: chart.getDataList(),
+        pageIndex: page.index,
+        period,
+        realtime: false,
+        symbol,
+      })
+      if (key !== currentKey) return
+
+      if (chart.getIndicatorByPaneId('candle_pane', 'MMF_V3')) {
+        applyMmfV3Command(chart, {
+          action: 'load',
+          id: Date.now(),
+          name: 'MMF_V3',
+          settings: mmfSettings,
+        })
+      }
+
+      const mrName = morganRangeIndicatorNameRef.current
+      if (mrName) {
+        applyMorganRangeCommand(chart, {
+          action: 'load',
+          id: Date.now(),
+          name: mrName,
+          settings: morganRangeSettingsRef.current ?? undefined,
+        })
+      }
+    }
+
+    window.addEventListener(pageCalculationContextChangedEvent, handleContextReady)
+    return () => window.removeEventListener(pageCalculationContextChangedEvent, handleContextReady)
+  }, [applyMmfV3Command, applyMorganRangeCommand, chartInstanceRef, mmfSettings, page, page?.index, page?.realtime, period, symbol])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -1429,13 +1602,10 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
       symbol,
     })
     const segments = readIndicatorPageSnapshot(pageKey)?.morganRange?.segments
-    if (segments) {
-      applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments)
-    } else {
-      applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, mode)
-    }
+      ?? resolveMorganRangeSegmentsForCurrentPage(chart, mode, Math.round(resolveMorganRangeBucketSeconds(mode) / resolvePeriodSeconds(period)))
+    applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments)
     publishMorganRangeSegment()
-  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, loadState.rows, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, symbol])
+  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, loadState.rows, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, resolveMorganRangeSegmentsForCurrentPage, symbol])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -1461,11 +1631,8 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
           symbol,
         })
         const segments = readIndicatorPageSnapshot(pageKey)?.morganRange?.segments
-        if (segments) {
-          applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments)
-        } else {
-          applyMorganRangeOverlays(chart, period, morganRangeOverlayIdsRef.current, mode)
-        }
+          ?? resolveMorganRangeSegmentsForCurrentPage(chart, mode, Math.round(resolveMorganRangeBucketSeconds(mode) / resolvePeriodSeconds(period)))
+        applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments)
         publishMorganRangeSegment()
       })
     }
@@ -1478,7 +1645,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
       actions.forEach((action) => chart.unsubscribeAction(action, scheduleRefresh))
       window.removeEventListener(chartRealtimeDataChangedEvent, scheduleRefresh)
     }
-  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, symbol])
+  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, resolveMorganRangeSegmentsForCurrentPage, symbol])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
@@ -1584,7 +1751,7 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
   }, [chartInstanceRef])
 
   return (
-    <section className="ff-chart-core-host" aria-label={`${symbol} ${period} chart`}>
+    <section className="ff-chart-core-host" data-loading={suppressInitialSurface} aria-label={`${symbol} ${period} chart`}>
       <div ref={chartRef} className="ff-chart-core-host__canvas" />
       {candleCountdown.visible && (
         <div
@@ -1598,6 +1765,33 @@ export function ChartCoreHost({ displayName, indicatorCommand, jump, limit, load
           <span>{candleCountdown.price}</span>
           <span>{candleCountdown.text}</span>
         </div>
+      )}
+      {realtimePriceMarker.visible && (
+        <>
+          {realtimePriceMarker.lineVisible && (
+            <div
+              className="ff-chart-realtime-price-line"
+              style={{
+                borderTopColor: realtimePriceMarker.color,
+                top: `${realtimePriceMarker.top}px`,
+                width: `${realtimePriceMarker.lineWidth}px`,
+              }}
+            />
+          )}
+          {realtimePriceMarker.labelVisible && (
+            <div
+              className="ff-chart-realtime-price-marker"
+              style={{
+                ['--ff-current-candle-y-axis-width' as string]: `${realtimePriceMarker.axisWidth}px`,
+                backgroundColor: realtimePriceMarker.color,
+                top: `${realtimePriceMarker.top}px`,
+            }}
+          >
+            <span>{realtimePriceMarker.price}</span>
+            {realtimePriceMarker.text ? <span>{realtimePriceMarker.text}</span> : null}
+          </div>
+          )}
+        </>
       )}
       <MmfV2MomentumScaleTable
         crosshairIndex={mmfV2MomentumCrosshairIndex}

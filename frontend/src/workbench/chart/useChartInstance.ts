@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { dispose, init } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
-import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
+import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV6Persistence'
 import { marketStatusTitleChangedEvent } from '../mt5DataCenter/marketStatusTitleState'
 import { formatChartDate, readChartTimezone } from './chartTimeFormatting'
 import { readRightPlaceholderVisible, refreshChartFuturePlaceholders } from './chartFuturePlaceholders'
@@ -32,6 +32,7 @@ type UseChartInstanceOptions = {
   displayName?: string
   period: string
   symbol: string
+  viewportScope?: string
 }
 
 function applyChartStyles(chart: Chart, symbol: string, period: string, displayName?: string) {
@@ -50,19 +51,19 @@ function applyChartStyles(chart: Chart, symbol: string, period: string, displayN
   applySessionBreakIndicator(chart, symbol, period)
 }
 
-export function useChartInstance({ displayName, period, symbol }: UseChartInstanceOptions) {
+export function useChartInstance({ displayName, period, symbol, viewportScope = 'default' }: UseChartInstanceOptions) {
   const chartInstanceRef = useRef<Chart | null>(null)
   const chartRef = useRef<HTMLDivElement | null>(null)
-  const chartContextRef = useRef({ period, symbol })
+  const chartContextRef = useRef({ period, scope: viewportScope, symbol })
   const paneTitleOverlayRef = useRef<ReturnType<typeof installPaneTitleOverlay> | null>(null)
 
   useEffect(() => {
-    chartContextRef.current = { period, symbol }
+    chartContextRef.current = { period, scope: viewportScope, symbol }
     window.dispatchEvent(new Event(chartDrawingVisibilityRefreshEvent))
     window.requestAnimationFrame(() => {
       window.dispatchEvent(new Event(chartDrawingVisibilityRefreshEvent))
     })
-  }, [period, symbol])
+  }, [period, symbol, viewportScope])
 
   useEffect(() => {
     if (!chartRef.current) return

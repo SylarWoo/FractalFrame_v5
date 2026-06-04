@@ -4,6 +4,7 @@ import {
   readSettingsBooleanValue,
   readSettingsStringValue,
   readSettingsSymbolState,
+  settingsSymbolChangedEvent,
   writeSettingsSymbolStateValue,
 } from '../settingsSymbolState'
 import './SettingsSharedControls.css'
@@ -25,6 +26,17 @@ export function SettingsCheckRow({
     if (!storageKey) return checked
     return readSettingsBooleanValue(storageKey, checked)
   })
+
+  useEffect(() => {
+    if (!storageKey) return
+    const sync = () => setIsChecked(readSettingsBooleanValue(storageKey, checked))
+    window.addEventListener(settingsSymbolChangedEvent, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(settingsSymbolChangedEvent, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [checked, storageKey])
 
   return (
     <div className="ff-settings-status-row" data-inset={inset}>
@@ -54,6 +66,16 @@ export function SettingsCheckboxInput({
 }) {
   const [isChecked, setIsChecked] = useState(() => readSettingsBooleanValue(storageKey, checked))
 
+  useEffect(() => {
+    const sync = () => setIsChecked(readSettingsBooleanValue(storageKey, checked))
+    window.addEventListener(settingsSymbolChangedEvent, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(settingsSymbolChangedEvent, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [checked, storageKey])
+
   return (
     <input
       checked={isChecked}
@@ -71,11 +93,13 @@ export function SettingsCheckboxInput({
 export function SettingsMultiCheckSelect({
   ariaLabel,
   defaultValue,
+  onSelectedChange,
   storageKey,
   options,
 }: {
   ariaLabel: string
   defaultValue: string[]
+  onSelectedChange?: (selected: string[]) => void
   storageKey?: string
   options: Array<{ label: string; value: string }>
 }) {
@@ -133,7 +157,9 @@ export function SettingsMultiCheckSelect({
                     const next = new Set(current)
                     if (next.has(option.value)) next.delete(option.value)
                     else next.add(option.value)
-                    if (storageKey) writeSettingsSymbolStateValue(storageKey, [...next])
+                    const nextValues = [...next]
+                    if (storageKey) writeSettingsSymbolStateValue(storageKey, nextValues)
+                    onSelectedChange?.(nextValues)
                     return next
                   })
                 }}

@@ -4,12 +4,13 @@ import { ActionType, DomPosition } from 'klinecharts'
 import type { Chart, Coordinate } from 'klinecharts'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
 import { marketStatusTitleChangedEvent } from '../mt5DataCenter/marketStatusTitleState'
-import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV5Persistence'
+import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV6Persistence'
 import { readCandleBarStyle, resolveCandleValueColor } from './chartStyleReaders'
 import { formatGlobalPrice } from './globalPricePrecision'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { lastRealKLine } from './chartFuturePlaceholders'
 import { readCurrentCandleCountdownActive } from './currentCandleCountdownVisibility'
+import { clampPriceMarkerTop } from './priceMarkerPosition'
 
 type UseCurrentCandleCountdownOptions = {
   chartInstanceRef: MutableRefObject<Chart | null>
@@ -27,7 +28,7 @@ export type CurrentCandleCountdownState = {
   visible: boolean
 }
 
-function formatCountdown(ms: number) {
+export function formatCountdown(ms: number) {
   const totalSeconds = Math.max(0, Math.ceil(ms / 1000))
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
@@ -98,7 +99,6 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
       const pixel = chart.convertToPixel({ timestamp, value: close }, { paneId: 'candle_pane' })
       const coordinate = isCoordinate(pixel) ? pixel : pixel[0]
       const y = Number(coordinate?.y)
-      const hostTopOffset = 8
       const axisDom = chart.getDom('candle_pane', DomPosition.YAxis)
       const axisRect = axisDom?.getBoundingClientRect()
       const axisWidth = axisRect?.width ?? Number.NaN
@@ -115,7 +115,7 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
         color: resolveCandleValueColor(latest, barStyle),
         price: formatGlobalPrice(close, '', { symbol }),
         text: formatCountdown(endTimestamp - Date.now()),
-        top: Math.max(hostTopOffset, y + hostTopOffset),
+        top: clampPriceMarkerTop(chart, y),
         visible: true,
       }
       setState((current) => {

@@ -14,6 +14,7 @@ export type ChartViewportSnapshot = {
   period?: string
   rightTimestamp: number | null
   savedAt: string
+  scope?: string
   symbol?: string
   visibleTo: number
   yAxisRange: AxisRangeSnapshot | null
@@ -23,8 +24,8 @@ function finiteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-function viewportStorageKey(period: string) {
-  return `${viewportStoragePrefix}:global:${period.toUpperCase()}`
+function viewportStorageKey(period: string, scope = 'default') {
+  return `${viewportStoragePrefix}:global:${period.toUpperCase()}:${scope}`
 }
 
 function cookieNameForStorageKey(key: string) {
@@ -114,8 +115,8 @@ function normalizeAxisRange(range: Partial<AxisRangeSnapshot> | null | undefined
   }
 }
 
-export function readGlobalChartViewportSnapshot(period: string): ChartViewportSnapshot | null {
-  const snapshot = readViewportJson(viewportStorageKey(period))
+export function readGlobalChartViewportSnapshot(period: string, scope = 'default'): ChartViewportSnapshot | null {
+  const snapshot = readViewportJson(viewportStorageKey(period, scope))
   return normalizeChartViewportSnapshot(snapshot)
 }
 
@@ -133,14 +134,15 @@ function normalizeChartViewportSnapshot(snapshot: Partial<ChartViewportSnapshot>
     period: typeof snapshot.period === 'string' ? snapshot.period : undefined,
     rightTimestamp: finiteNumber(snapshot.rightTimestamp) ? snapshot.rightTimestamp : null,
     savedAt: typeof snapshot.savedAt === 'string' ? snapshot.savedAt : '',
+    scope: typeof snapshot.scope === 'string' ? snapshot.scope : undefined,
     symbol: typeof snapshot.symbol === 'string' ? snapshot.symbol : undefined,
     visibleTo: snapshot.visibleTo,
     yAxisRange: normalizeAxisRange(snapshot.yAxisRange),
   }
 }
 
-export function writeGlobalChartViewportSnapshot(period: string, snapshot: ChartViewportSnapshot) {
-  const nextSnapshot = { ...snapshot, period: period.toUpperCase() }
-  writeViewportJson(viewportStorageKey(period), nextSnapshot)
+export function writeGlobalChartViewportSnapshot(period: string, snapshot: ChartViewportSnapshot, scope = 'default') {
+  const nextSnapshot = { ...snapshot, period: period.toUpperCase(), scope }
+  writeViewportJson(viewportStorageKey(period, scope), nextSnapshot)
   writeViewportJson(latestViewportStorageKey, nextSnapshot)
 }

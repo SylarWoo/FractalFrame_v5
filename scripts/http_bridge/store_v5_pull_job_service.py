@@ -15,7 +15,7 @@ from .store_v5_pull_write_service import flush_pending_rows
 from .store_v5_status_service import format_utc_text, utc_now_iso
 
 
-def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | None, store_root: Path | None, fetch_chunk: int = 500_000) -> None:
+def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | None, store_root: Path | None, fetch_chunk: int = 20_000) -> None:
     from python.data_warehouse.store_v5.manifest_v5 import delete_dataset_cell, get_dataset_cell, mark_aggregated_dirty_for_symbol
     from python.data_warehouse.store_v5.ohlcv_schema_v5 import mt5_row_to_canonical
     from python.data_warehouse.store_v5.partitioned_parquet_writer_v5 import append_ohlcv_part_v5
@@ -97,8 +97,8 @@ def run_store_v5_pull_job(job_id: str, symbol: str, *, mode: str, count: int | N
             writeBatchRows=0,
             writeBatchWritten=0,
             pendingWriteRows=0,
-            progressLabel=f"Start reading MT5 M1, batch size {ctx.step:,} rows",
-            detailMessage="Reading M1 data from MT5",
+            progressLabel="准备拉取：读取本地最后一根 clean M1",
+            detailMessage="StoreV6-style pull: sequential batches from history head to latest tail",
         )
         if not fetch_store_v5_raw_m1(
             ctx,
@@ -222,7 +222,7 @@ def start_store_v5_pull_job(symbol: str, *, mode: str, count: int | None, store_
         "rawRowsCount": 0,
         "duplicateRows": 0,
         "chunksCompleted": 0,
-        "fetchChunkSize": 500_000,
+        "fetchChunkSize": 20_000,
         "maxCount": count,
         "currentBatchIndex": 0,
         "currentBatchRequested": 0,
@@ -230,8 +230,8 @@ def start_store_v5_pull_job(symbol: str, *, mode: str, count: int | None, store_
         "writeBatchRows": 0,
         "writeBatchWritten": 0,
         "pendingWriteRows": 0,
-        "progressLabel": "Preparing MT5 M1 pull",
-        "detailMessage": "Waiting for StoreV5 pull job to start",
+        "progressLabel": "准备拉取：读取本地最后一根 clean M1",
+        "detailMessage": "Waiting for StoreV6-style sequential pull job to start",
         "createdAt": now,
         "updatedAt": now,
         "lastEventId": 1,

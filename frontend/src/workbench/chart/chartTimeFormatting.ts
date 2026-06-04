@@ -10,6 +10,7 @@ export function resolvePeriodSeconds(period: string) {
   if (normalized.endsWith('H')) return Number(normalized.slice(0, -1)) * 60 * 60 || 60 * 60
   if (normalized === 'D1') return 24 * 60 * 60
   if (normalized === 'W1') return 7 * 24 * 60 * 60
+  if (normalized === 'MN' || normalized === 'MN1') return 30 * 24 * 60 * 60
   return 60
 }
 

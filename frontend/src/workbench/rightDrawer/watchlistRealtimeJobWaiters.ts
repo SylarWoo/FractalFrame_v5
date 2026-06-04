@@ -1,8 +1,8 @@
 import {
-  createStoreV5AggregateEventSource,
-  createStoreV5PullEventSource,
+  createStoreV6AggregateEventSource,
+  createStoreV6PullEventSource,
 } from '../../services/mt5/mt5SymbolsApi'
-import type { StoreV5AggregateJobPayload, StoreV5PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
+import type { StoreV6AggregateJobPayload, StoreV6PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
 
 type WatchlistRealtimeJobWaiterOptions = {
   isActive: () => boolean
@@ -16,7 +16,7 @@ function parseJobPayload<T>(event: Event) {
 
 export function waitForWatchlistPullJob(jobId: string, symbol: string, options: WatchlistRealtimeJobWaiterOptions) {
   return new Promise<void>((resolve, reject) => {
-    const source = createStoreV5PullEventSource(jobId)
+    const source = createStoreV6PullEventSource(jobId)
     const cleanup = () => source.close()
     const fail = (message: string) => {
       cleanup()
@@ -25,7 +25,7 @@ export function waitForWatchlistPullJob(jobId: string, symbol: string, options: 
 
     source.addEventListener('progress', (event) => {
       try {
-        const payload = parseJobPayload<StoreV5PullJobPayload>(event)
+        const payload = parseJobPayload<StoreV6PullJobPayload>(event)
         if (!options.isActive()) {
           cleanup()
           resolve()
@@ -58,7 +58,7 @@ export function waitForWatchlistPullJob(jobId: string, symbol: string, options: 
 
 export function waitForWatchlistAggregateJob(jobId: string, symbol: string, options: WatchlistRealtimeJobWaiterOptions) {
   return new Promise<void>((resolve, reject) => {
-    const source = createStoreV5AggregateEventSource(jobId)
+    const source = createStoreV6AggregateEventSource(jobId)
     const cleanup = () => source.close()
     const fail = (message: string) => {
       cleanup()
@@ -67,7 +67,7 @@ export function waitForWatchlistAggregateJob(jobId: string, symbol: string, opti
 
     source.addEventListener('progress', (event) => {
       try {
-        const payload = parseJobPayload<StoreV5AggregateJobPayload>(event)
+        const payload = parseJobPayload<StoreV6AggregateJobPayload>(event)
         if (!options.isActive()) {
           cleanup()
           resolve()

@@ -1,14 +1,14 @@
 import { getMt5Json } from './mt5ApiClient'
-import type { Mt5M1CheckJobPayload, StoreV5CheckPayload } from './types'
+import type { Mt5M1CheckJobPayload, StoreV6CheckPayload } from './types'
 
-export async function fetchStoreV5Check(symbol: string, count?: number): Promise<StoreV5CheckPayload> {
+export async function fetchStoreV6Check(symbol: string, count?: number): Promise<StoreV6CheckPayload> {
   const params = new URLSearchParams()
   params.set('symbol', symbol)
   if (typeof count === 'number' && Number.isFinite(count)) {
     params.set('count', String(count))
   }
 
-  return getMt5Json<StoreV5CheckPayload>(
+  return getMt5Json<StoreV6CheckPayload>(
     '/api/market-data/v1/mt5/m1/check',
     params,
     { requirePayloadOk: true },

@@ -137,7 +137,7 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
 .ff-right-drawer__body {
   display: grid;
   flex: 1 1 auto;
-  grid-template-rows: minmax(180px, var(--ff-mt5-top-pane-height)) 5px minmax(120px, 1fr);
+  grid-template-rows: minmax(180px, var(--ff-mt5-top-pane-height)) 10px minmax(120px, 1fr);
   min-height: 0;
   overflow: hidden;
 }
@@ -146,11 +146,24 @@ body[data-fractalframe-right-widget-drawer-resizing='true'] .ff-app-main {
 .ff-mt5-pane-splitter {
   position: relative;
   z-index: 10;
-  border-top: 1px solid transparent;
-  border-bottom: 1px solid transparent;
+  margin: 0 var(--ff-mt5-panel-x);
+  border: 0;
   background: transparent;
   cursor: ns-resize;
   touch-action: none;
+}
+
+.ff-mt5-pane-splitter::before {
+  content: none;
+}
+
+.ff-mt5-pane-splitter::after {
+  content: none;
+}
+
+.ff-mt5-pane-splitter:hover::after,
+body[data-fractalframe-right-widget-drawer-splitting='true'] .ff-mt5-pane-splitter::after {
+  content: none;
 }
 
 .ff-right-drawer > :not(.ff-right-drawer__resize-handle) {

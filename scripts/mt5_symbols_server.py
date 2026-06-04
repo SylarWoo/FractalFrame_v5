@@ -36,6 +36,8 @@ from http_bridge.indicator_service import calculate_mmf_indicator_from_rows, cal
 from http_bridge.mmf_v2_indicator_service import get_mmf_v2_indicator_job, start_mmf_v2_indicator_job
 from http_bridge.mmf_v3_indicator_service import get_mmf_v3_indicator_job, start_mmf_v3_indicator_job
 from http_bridge.sse import send_aggregate_job_events as send_aggregate_job_events_sse
+from http_bridge.sse import send_store_v6_aggregate_job_events as send_store_v6_aggregate_job_events_sse
+from http_bridge.sse import send_store_v6_pull_job_events as send_store_v6_pull_job_events_sse
 from http_bridge.sse import send_mt5_tick_events as send_mt5_tick_events_sse
 from http_bridge.sse import send_pull_job_events as send_pull_job_events_sse
 from http_bridge.mt5_symbol_service import query_mt5_rates_live, query_mt5_tick_live, read_symbol_cache, scan_mt5_symbols
@@ -65,6 +67,29 @@ from http_bridge.store_v5_status_service import (
     list_store_v5_symbols,
 )
 from http_bridge.store_v5_routes import handle_store_v5_get, handle_store_v5_post
+from http_bridge.store_v6_routes import handle_store_v6_get, handle_store_v6_post
+from http_bridge.store_v6_operations_service import (
+    audit_store_v6,
+    aggregate_store_v6,
+    check_store_v6,
+    delete_store_v6_aggregated_timeframes,
+    delete_store_v6_symbol,
+    list_store_v6_symbols,
+    query_store_v6_index_times,
+    query_store_v6_ohlcv,
+)
+from http_bridge.store_v6_daily_maintenance_service import (
+    daily_maintenance_events,
+    daily_maintenance_status,
+    start_daily_maintenance_scheduler,
+    start_daily_maintenance as start_store_v6_daily_maintenance,
+)
+from http_bridge.store_v6_pull_job_service import start_store_v6_pull_job
+from http_bridge.store_v6_pull_job_state import (
+    get_store_v6_pull_job as _get_store_v6_pull_job,
+    set_store_v6_pull_job as _set_store_v6_pull_job,
+)
+from http_bridge.store_v6_aggregate_job_service import _get_aggregate_job_v6, _set_aggregate_job_v6, cancel_store_v6_aggregate_jobs_for_symbol, start_store_v6_aggregate_job
 
 
 DEFAULT_CACHE_ROOT = ROOT / "runtime_data" / "instruments" / "mt5"
@@ -182,6 +207,13 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
     cache_root = DEFAULT_CACHE_ROOT
     store_root: Path | None = None
 
+    def store_v6_root(self) -> Path | None:
+        if self.store_root is None:
+            return None
+        if self.store_root.name == "store_v6":
+            return self.store_root
+        return self.store_root.parent / "store_v6"
+
     def do_OPTIONS(self) -> None:
         self.send_response(204)
         self.send_cors_headers()
@@ -191,6 +223,8 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         services = sys.modules[__name__]
         if handle_indicator_post(self, parsed, services):
+            return
+        if handle_store_v6_post(self, parsed, services):
             return
         if handle_store_v5_post(self, parsed, services):
             return
@@ -258,6 +292,8 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
             return
         if handle_store_v5_get(self, parsed, services):
             return
+        if handle_store_v6_get(self, parsed, services):
+            return
         self.send_json(404, error_payload("not_found", parsed.path))
 
     def send_cors_headers(self) -> None:
@@ -282,8 +318,14 @@ class Mt5SymbolsHandler(BaseHTTPRequestHandler):
     def send_pull_job_events(self, job_id: str) -> None:
         send_pull_job_events_sse(self, job_id, utc_now_iso=utc_now_iso)
 
+    def send_store_v6_pull_job_events(self, job_id: str) -> None:
+        send_store_v6_pull_job_events_sse(self, job_id, utc_now_iso=utc_now_iso)
+
     def send_aggregate_job_events(self, job_id: str) -> None:
         send_aggregate_job_events_sse(self, job_id, utc_now_iso=utc_now_iso)
+
+    def send_store_v6_aggregate_job_events(self, job_id: str) -> None:
+        send_store_v6_aggregate_job_events_sse(self, job_id, utc_now_iso=utc_now_iso)
 
     def log_message(self, format: str, *args: Any) -> None:
         if not should_log_access(self.path):
@@ -306,14 +348,15 @@ def main() -> int:
     Mt5SymbolsHandler.cache_root = args.cache_root.resolve()
     Mt5SymbolsHandler.store_root = args.store_root.resolve() if args.store_root else None
     server = ThreadingHTTPServer((args.host, args.port), Mt5SymbolsHandler)
+    start_daily_maintenance_scheduler(store_root=Mt5SymbolsHandler.store_root)
     LOGGER.info("listening on http://%s:%s", args.host, args.port)
     LOGGER.info("endpoint /api/market-data/v1/mt5/symbols?refresh=1")
     LOGGER.info("endpoint /api/market-data/v1/mt5/rates?symbol=XAUUSDm&timeframe=M5")
     LOGGER.info("endpoint /api/market-data/v1/mt5/m1/check?symbol=XAUUSDm")
-    LOGGER.info("endpoint /api/market-data/v1/store-v5/status?symbol=XAUUSDm")
-    LOGGER.info("endpoint /api/market-data/v1/store-v5/pull?symbol=XAUUSDm")
-    LOGGER.info("endpoint /api/market-data/v1/store-v5/aggregate?symbol=XAUUSDm")
-    LOGGER.info("endpoint /api/market-data/v1/store-v5/query?symbol=XAUUSDm&timeframe=M1")
+    LOGGER.info("endpoint /api/market-data/v1/store-v6/status?symbol=XAUUSDm")
+    LOGGER.info("endpoint /api/market-data/v1/store-v6/pull?symbol=XAUUSDm")
+    LOGGER.info("endpoint /api/market-data/v1/store-v6/aggregate?symbol=XAUUSDm")
+    LOGGER.info("endpoint /api/market-data/v1/store-v6/query?symbol=XAUUSDm&timeframe=M1")
     LOGGER.info("cache %s", Mt5SymbolsHandler.cache_root)
     LOGGER.info("store %s", Mt5SymbolsHandler.store_root or "default runtime_data/store_v5")
     LOGGER.info("cors origin configured by FRACTALFRAME_CORS_ORIGIN")

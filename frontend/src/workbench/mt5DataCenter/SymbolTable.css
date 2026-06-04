@@ -4,10 +4,9 @@
   margin: 0 var(--ff-mt5-panel-x);
   overflow-x: hidden;
   overflow-y: auto;
-  border-top: 1px solid #dbe3ef;
-  border-right: 1px solid #dbe3ef;
+  border: 0;
   border-bottom: 1px solid #dbe3ef;
-  border-left: 1px solid #dbe3ef;
+  background: transparent;
 }
 
 .ff-symbol-table {
@@ -23,18 +22,12 @@
 .ff-symbol-table td {
   height: 23px;
   border: 0;
-  border-right: 1px solid #dbe3ef;
   border-bottom: 1px solid #dbe3ef;
   padding: 0 6px;
   overflow: hidden;
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.ff-symbol-table th:last-child,
-.ff-symbol-table td:last-child {
-  border-right: 0;
 }
 
 .ff-symbol-table th {

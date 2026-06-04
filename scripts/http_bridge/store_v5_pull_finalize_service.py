@@ -63,8 +63,8 @@ def finalize_store_v5_pull_job(
         cleanStatus="pending",
         firstTimeText=format_utc_text(ctx.first_time),
         lastTimeText=format_utc_text(ctx.last_time),
-        progressLabel=f"Completed: read {ctx.rows_fetched_total:,}, wrote {ctx.rows_written_total:,}, duplicates {ctx.duplicate_rows_total:,}",
-        detailMessage="Local M1 raw_direct updated",
+        progressLabel="拉取完成，仓库已推进到最新",
+        detailMessage=f"Completed: read {ctx.rows_fetched_total:,}, wrote {ctx.rows_written_total:,}, duplicates {ctx.duplicate_rows_total:,}",
         result=report,
         finishedAt=utc_now_iso(),
     )

@@ -23,6 +23,7 @@ class StoreV5PullContext:
     previous_raw_rows_count: int = 0
     previous_raw_mt5_rows_count: int = 0
     range_window: dict[str, Any] | None = None
+    available_bars: int | None = None
     seen_times: set[int] = field(default_factory=set)
     write_buffer_target: int = 500_000
     pending_rows: list[dict[str, Any]] = field(default_factory=list)
@@ -79,6 +80,7 @@ def build_pull_context(
     step = max(1, int(fetch_chunk))
     target = int(count) if count is not None and int(count) > 0 else None
     ctx = StoreV5PullContext(root=root, raw_key=raw_key, direct_key=direct_key, mode=mode, step=step, target=target, pos=0)
+    ctx.write_buffer_target = step
 
     def clear_raw() -> None:
         raw_root = dataset_root(provider="mt5", symbol=symbol, mode="raw_direct", timeframe="M1", store_root=root)
@@ -91,6 +93,8 @@ def build_pull_context(
         return ctx
 
     raw_cell = get_dataset_cell(root, raw_key)
+    direct_cell = get_dataset_cell(root, direct_key)
+    tail_cell = direct_cell if direct_cell and direct_cell.get("lastTime") is not None else raw_cell
     if not raw_cell or raw_cell.get("lastTime") is None:
         ctx.mode = "refresh"
         clear_raw()
@@ -100,18 +104,19 @@ def build_pull_context(
     ctx.previous_last_time = safe_int(raw_cell.get("lastTime") or raw_cell.get("lastRawM1Time"))
     ctx.previous_raw_rows_count = int(raw_cell.get("rowsCount") or raw_cell.get("rawRowsCount") or 0)
     ctx.previous_raw_mt5_rows_count = int(raw_cell.get("rowsCount") or raw_cell.get("mt5RowsCount") or ctx.previous_raw_rows_count)
-    if ctx.previous_last_time is None:
+    tail_last_time = safe_int((tail_cell or {}).get("lastTrueM1Time") or (tail_cell or {}).get("lastTime") or (tail_cell or {}).get("lastRawM1Time"))
+    if ctx.previous_last_time is None or tail_last_time is None:
         ctx.mode = "refresh"
         clear_raw()
         return ctx
 
-    overlap_bars = 1000
-    from_time = max(0, int(ctx.previous_last_time) - overlap_bars * 60)
+    from_time = max(0, int(tail_last_time) + 60)
     ctx.range_window = {
         "fromTime": from_time,
         "toTime": int(datetime.now(timezone.utc).timestamp()),
-        "overlapBars": overlap_bars,
+        "overlapBars": 0,
         "previousFirstTime": ctx.previous_first_time,
         "previousLastTime": ctx.previous_last_time,
+        "previousCleanTailTime": tail_last_time,
     }
     return ctx

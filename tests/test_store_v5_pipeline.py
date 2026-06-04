@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pandas as pd
+
 from python.data_warehouse.aggregate.aggregate_from_m1_service_v1 import aggregate_from_m1_store_v5
 from python.data_warehouse.mt5.mt5_m1_clean_service_v1 import clean_raw_m1_to_direct_store_v5
 from python.data_warehouse.mt5.mt5_m1_pull_service_v1 import pull_mt5_m1_to_store_v5
@@ -49,6 +51,10 @@ class StorePipelineTests(unittest.TestCase):
             direct_key = dataset_key(provider="mt5", symbol="XAUUSDm", mode="direct", timeframe="M1")
             self.assertIn(raw_key, manifest["datasets"])
             self.assertNotIn(direct_key, manifest["datasets"])
+            raw_root = store_root / manifest["datasets"][raw_key]["rootPath"]
+            raw_frame = pd.read_parquet(next(raw_root.rglob("part-*.parquet")))
+            self.assertIn("barKey", raw_frame.columns)
+            self.assertEqual(raw_frame.sort_values("time").iloc[0]["barKey"], f"XAUUSDm|M1|{ANCHOR}")
 
             clean = clean_raw_m1_to_direct_store_v5(symbol="XAUUSDm", store_root=store_root)
             self.assertTrue(clean["ok"])

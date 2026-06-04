@@ -2,11 +2,14 @@ import type { MutableRefObject } from 'react'
 import type { Chart } from 'klinecharts'
 import type { KLineData } from 'klinecharts'
 import type { ChartIndicatorCommand } from './ChartCoreHost'
-import { createIndicatorSnapshotRows, writeIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
 import { mainVolumeIndicatorName } from './mainVolumeIndicator'
 import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
-import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import type { VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import {
+  createPageIndicatorRuntimeContext,
+  writePageIndicatorRuntimeSnapshot,
+  type PageIndicatorSnapshotRowsInput,
+} from './pageIndicatorRuntime'
 
 export type IndicatorPaneCommandName = 'DPO' | 'MACD' | 'RSI' | 'SQZMOM' | 'Stoch' | 'TSI' | 'VDO' | 'VI' | 'AO' | 'VMI'
 export type CandleIndicatorCommandName = 'MA' | 'VWAP'
@@ -28,8 +31,6 @@ export type CandleIndicatorConfig = {
   name: CandleIndicatorCommandName
   resolveCalcParams?: (command: ChartIndicatorCommand) => unknown
 }
-
-type IndicatorSnapshotRowsInput = Omit<Partial<Parameters<typeof createIndicatorSnapshotRows>[0]>, 'period' | 'rows' | 'symbol'>
 
 type VolumeOverlay = {
   destroy: () => void
@@ -129,7 +130,7 @@ export function applySnapshotPaneIndicatorCommand({
   chart: Chart
   command: ChartIndicatorCommand
   config: IndicatorPaneConfig
-  createSnapshotRows: (realRows: KLineData[], dataList: KLineData[]) => IndicatorSnapshotRowsInput
+  createSnapshotRows: (realRows: KLineData[], dataList: KLineData[]) => PageIndicatorSnapshotRowsInput
   isIndicatorVisible: (name: ChartIndicatorCommand['name']) => boolean
   pageKey: string
   period: string
@@ -150,19 +151,19 @@ export function applySnapshotPaneIndicatorCommand({
   }
 
   const dataList = chart.getDataList()
-  const realRows = stripFuturePlaceholders(dataList)
-  writeIndicatorPageSnapshot({
+  const context = createPageIndicatorRuntimeContext({
+    mode: pageKey.includes('|rt|') ? 'realtime' : 'history',
+    pageIndex: 1,
     pageKey,
-    period: period.trim().toUpperCase(),
-    rows: createIndicatorSnapshotRows({
-      period,
-      rows: dataList,
-      symbol,
-      ...createSnapshotRows(realRows, dataList),
-    }),
+    period,
+    rows: dataList,
+    symbol,
+  })
+  writePageIndicatorRuntimeSnapshot({
+    context,
+    createSnapshotRows: (realRows) => createSnapshotRows(realRows, dataList),
     settingsHash,
     settingsHashKey,
-    symbol,
   })
 
   if (chart.getIndicatorByPaneId(config.paneId, config.name)) {
@@ -232,7 +233,7 @@ export function applySnapshotCandleIndicatorCommand({
   chart: Chart
   command: ChartIndicatorCommand
   config: CandleIndicatorConfig
-  createSnapshotRows: (realRows: KLineData[], dataList: KLineData[]) => IndicatorSnapshotRowsInput
+  createSnapshotRows: (realRows: KLineData[], dataList: KLineData[]) => PageIndicatorSnapshotRowsInput
   isIndicatorVisible: (name: ChartIndicatorCommand['name']) => boolean
   pageKey: string
   period: string
@@ -248,19 +249,19 @@ export function applySnapshotCandleIndicatorCommand({
   }
 
   const dataList = chart.getDataList()
-  const realRows = stripFuturePlaceholders(dataList)
-  writeIndicatorPageSnapshot({
+  const context = createPageIndicatorRuntimeContext({
+    mode: pageKey.includes('|rt|') ? 'realtime' : 'history',
+    pageIndex: 1,
     pageKey,
-    period: period.trim().toUpperCase(),
-    rows: createIndicatorSnapshotRows({
-      period,
-      rows: dataList,
-      symbol,
-      ...createSnapshotRows(realRows, dataList),
-    }),
+    period,
+    rows: dataList,
+    symbol,
+  })
+  writePageIndicatorRuntimeSnapshot({
+    context,
+    createSnapshotRows: (realRows) => createSnapshotRows(realRows, dataList),
     settingsHash,
     settingsHashKey,
-    symbol,
   })
 
   if (chart.getIndicatorByPaneId('candle_pane', config.name)) {

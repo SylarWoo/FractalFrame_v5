@@ -1,8 +1,9 @@
 import type { KLineData } from 'klinecharts'
+import { storeV6HistoryPageSize, storeV6LivePageSize } from './pagePartition/pagePartitionBuilder'
 
-export const initialLoadLimit = 5_000
-export const maxInitialLoadLimit = 5_000
-export const historyPageSize = 5_000
+export const initialLoadLimit = storeV6LivePageSize
+export const maxInitialLoadLimit = storeV6HistoryPageSize
+export const historyPageSize = storeV6HistoryPageSize
 export const jumpWindowBars = 50_000
 export const jumpDisplayWindowBars = 2_400
 export const jumpBarSpace = 6
@@ -35,7 +36,23 @@ export function mergeKLineData(...sets: KLineData[][]): KLineData[] {
     rows.forEach((row) => {
       const timestamp = Number(row.timestamp)
       if (!Number.isFinite(timestamp)) return
-      rowsByTimestamp.set(timestamp, { ...row, timestamp })
+      const existing = rowsByTimestamp.get(timestamp) as (KLineData & Record<string, unknown>) | undefined
+      const next = { ...row, timestamp } as KLineData & Record<string, unknown>
+      rowsByTimestamp.set(timestamp, {
+        ...(existing ?? {}),
+        ...next,
+        barKey: next.barKey ?? existing?.barKey,
+        globalIndex: next.globalIndex ?? existing?.globalIndex,
+        identityStatus: next.identityStatus ?? existing?.identityStatus,
+        isClosed: next.isClosed ?? existing?.isClosed,
+        isRealtime: next.isRealtime ?? existing?.isRealtime,
+        period: next.period ?? existing?.period,
+        sessionId: next.sessionId ?? existing?.sessionId,
+        source: next.source ?? existing?.source,
+        symbol: next.symbol ?? existing?.symbol,
+        time: next.time ?? existing?.time,
+        tradingDay: next.tradingDay ?? existing?.tradingDay,
+      } as KLineData)
     })
   })
   return [...rowsByTimestamp.values()].sort((left, right) => Number(left.timestamp) - Number(right.timestamp))

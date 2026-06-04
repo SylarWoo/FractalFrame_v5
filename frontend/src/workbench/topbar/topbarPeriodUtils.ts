@@ -1,7 +1,8 @@
 import { readJson } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
+import { normalizePeriodForUi, periodToStoreTimeframe } from '../mt5DataCenter/storeV6StatusFormat'
 
-export type StoreV5StatusSnapshot = {
+export type StoreV6StatusSnapshot = {
   directM1?: {
     rowsCount?: number | null
     trueM1RowsCount?: number | null
@@ -21,9 +22,9 @@ export type PeriodOption = {
   rowsCount?: number | null
 }
 
-export const periodOrder = ['M1', 'M5', 'M15', 'M30', 'H1', 'H2', 'H3', 'H4', 'D1', 'W1', 'MN1']
+export const periodOrder = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN']
 
-function resolveDirectM1Rows(status: StoreV5StatusSnapshot | null) {
+function resolveDirectM1Rows(status: StoreV6StatusSnapshot | null) {
   return status?.directM1?.rowsCount
     ?? status?.directM1?.trueM1RowsCount
     ?? status?.rawDirectM1?.rowsCount
@@ -41,13 +42,13 @@ export function readShortcutPeriods() {
   return rows
     .filter((row) => typeof row?.period === 'string' && row.period.trim())
     .map((row) => ({
-      period: row.period.trim().toUpperCase(),
+      period: normalizePeriodForUi(row.period),
       rowsCount: row.rowsCount ?? null,
     }))
 }
 
 export function readPeriodsForSymbol(symbol: string) {
-  const statuses = readJson<Record<string, StoreV5StatusSnapshot>>(storageKeys.importCenterStoreV5Status, {})
+  const statuses = readJson<Record<string, StoreV6StatusSnapshot>>(storageKeys.importCenterStoreV6Status, {})
   const status = statuses?.[symbol] ?? null
   const savedPeriods = readShortcutPeriods()
   const directRows = resolveDirectM1Rows(status)
@@ -59,7 +60,7 @@ export function readPeriodsForSymbol(symbol: string) {
   const cellsByPeriod = new Map(
     (status?.aggregated ?? [])
       .filter((cell) => typeof cell.timeframe === 'string')
-      .map((cell) => [String(cell.timeframe).toUpperCase(), cell]),
+      .map((cell) => [normalizePeriodForUi(String(cell.timeframe)), cell]),
   )
   const aggregate = periodOrder.filter((period) => period !== 'M1').flatMap((period) => {
     const rowsCount = cellsByPeriod.get(period)?.rowsCount
@@ -91,5 +92,5 @@ export function resolveShortcutActivePeriod(activePeriod: string, periods: Perio
 }
 
 export function periodToChartPeriod(period: string) {
-  return period.toUpperCase()
+  return periodToStoreTimeframe(period)
 }

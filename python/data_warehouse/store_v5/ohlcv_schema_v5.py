@@ -20,6 +20,14 @@ CANONICAL_COLUMNS = [
     "ingestedAt",
 ]
 
+STORE_V6_IDENTITY_COLUMNS = [
+    "barKey",
+    "quality",
+    "rejectReason",
+]
+
+PARQUET_COLUMNS = CANONICAL_COLUMNS + STORE_V6_IDENTITY_COLUMNS
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -90,5 +98,12 @@ def normalize_ohlcv_rows_v5(
     df["timeframe"] = timeframe
     df["source"] = df.get("source", source)
     df["ingestedAt"] = df.get("ingestedAt", now)
-    df = df[CANONICAL_COLUMNS].sort_values("time")
+    if "barKey" not in df.columns:
+        df["barKey"] = df["symbol"].astype(str) + "|" + df["timeframe"].astype(str) + "|" + df["time"].astype(str)
+    if "quality" not in df.columns:
+        source_text = str(source)
+        df["quality"] = "clean" if "clean" in source_text or "aggregate" in source_text else "raw"
+    if "rejectReason" not in df.columns:
+        df["rejectReason"] = None
+    df = df[PARQUET_COLUMNS].sort_values("time")
     return df.drop_duplicates("time", keep="last").reset_index(drop=True)

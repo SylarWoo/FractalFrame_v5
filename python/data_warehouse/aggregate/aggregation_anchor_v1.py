@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 
 ANCHOR_UTC2200 = "UTC2200"
-SUPPORTED_TIMEFRAMES = ["M5", "M15", "M30", "H1", "H2", "H3", "H4", "D1", "W1", "MN1"]
+SUPPORTED_TIMEFRAMES = ["M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]
 
 
 FIXED_SECONDS = {
@@ -12,8 +12,6 @@ FIXED_SECONDS = {
     "M15": 15 * 60,
     "M30": 30 * 60,
     "H1": 60 * 60,
-    "H2": 2 * 60 * 60,
-    "H3": 3 * 60 * 60,
     "H4": 4 * 60 * 60,
     "D1": 24 * 60 * 60,
     "W1": 7 * 24 * 60 * 60,

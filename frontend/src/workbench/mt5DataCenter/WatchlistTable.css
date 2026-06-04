@@ -2,7 +2,7 @@
 
 .ff-import-watchlist-panel {
   display: grid;
-  grid-template-rows: minmax(96px, auto) 6px auto;
+  grid-template-rows: minmax(96px, auto) 10px;
   min-height: 0;
   margin-top: 10px;
   overflow: hidden;
@@ -16,7 +16,7 @@
   border-top: 1px solid #dbe3ef;
   border-left: 1px solid #dbe3ef;
   border-right: 1px solid #dbe3ef;
-  border-bottom: 1px solid #dbe3ef;
+  border-bottom: 0;
   background: #ffffff;
 }
 
@@ -158,7 +158,35 @@ body[data-fractalframe-mt5-column-resizing='true'] .ff-watchlist-table__column-r
 
 .ff-watchlist-table-splitter {
   position: relative;
-  height: 6px;
+  height: 10px;
+  margin: 0 0 2px;
   cursor: ns-resize;
   touch-action: none;
+}
+
+.ff-watchlist-table-splitter::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: #dbe3ef;
+  content: '';
+}
+
+.ff-watchlist-table-splitter::after {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 42px;
+  height: 3px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  content: '';
+  transform: translate(-50%, -1px);
+}
+
+.ff-watchlist-table-splitter:hover::after,
+body[data-fractalframe-right-widget-drawer-splitting='true'] .ff-watchlist-table-splitter::after {
+  background: #94a3b8;
 }

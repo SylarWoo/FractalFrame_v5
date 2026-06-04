@@ -17,8 +17,8 @@ const saveDelayMs = 180
 
 const readyKeys = new WeakMap<Chart, string>()
 
-function viewportReadyKey(symbol: string, period: string) {
-  return `${symbol}:${period.toUpperCase()}`
+function viewportReadyKey(symbol: string, period: string, scope = 'default') {
+  return `${symbol}:${period.toUpperCase()}:${scope}`
 }
 
 function resolveRightVisibleDataIndex(chart: Chart) {
@@ -48,8 +48,8 @@ function normalizeOffsetRightDistance(chart: Chart, value: unknown) {
   return Math.max(0, Math.min(distance, maxDistance))
 }
 
-export function markChartViewportPersistenceReady(chart: Chart, symbol: string, period: string) {
-  readyKeys.set(chart, viewportReadyKey(symbol, period))
+export function markChartViewportPersistenceReady(chart: Chart, symbol: string, period: string, scope = 'default') {
+  readyKeys.set(chart, viewportReadyKey(symbol, period, scope))
 }
 
 export function captureChartViewportSnapshot(chart: Chart, forceYAxisRange = false): ChartViewportSnapshot | null {
@@ -109,28 +109,30 @@ export function restoreChartViewportSnapshot(chart: Chart, snapshot: ChartViewpo
   return true
 }
 
-export function restoreChartViewportState(chart: Chart, symbol: string, period: string) {
-  const snapshot = readLatestChartViewportSnapshot() ?? readGlobalChartViewportSnapshot(period)
+export function restoreChartViewportState(chart: Chart, symbol: string, period: string, scope = 'default') {
+  const latest = readLatestChartViewportSnapshot()
+  const snapshot = latest?.scope === scope ? latest : readGlobalChartViewportSnapshot(period, scope)
   if (snapshot?.symbol && snapshot.symbol !== symbol) {
     return restoreChartViewportSnapshot(chart, { ...snapshot, yAxisRange: null })
   }
   return restoreChartViewportSnapshot(chart, snapshot)
 }
 
-function saveChartViewportState(chart: Chart, symbol: string, period: string, forceYAxisRange = false) {
-  if (readyKeys.get(chart) !== viewportReadyKey(symbol, period)) return
+function saveChartViewportState(chart: Chart, symbol: string, period: string, scope = 'default', forceYAxisRange = false) {
+  if (readyKeys.get(chart) !== viewportReadyKey(symbol, period, scope)) return
   const snapshot = captureChartViewportSnapshot(chart, forceYAxisRange)
   if (!snapshot) return
   snapshot.symbol = symbol
   snapshot.period = period.toUpperCase()
+  snapshot.scope = scope
   if (!snapshot.yAxisRange) {
-    const previous = readGlobalChartViewportSnapshot(period) ?? readLatestChartViewportSnapshot()
-    snapshot.yAxisRange = previous?.yAxisRange ?? null
+    const previous = readGlobalChartViewportSnapshot(period, scope)
+    snapshot.yAxisRange = isAxisRangeUsableForVisiblePrices(chart, previous?.yAxisRange) ? previous?.yAxisRange ?? null : null
   }
-  writeGlobalChartViewportSnapshot(period, snapshot)
+  writeGlobalChartViewportSnapshot(period, snapshot, scope)
 }
 
-export function installChartViewportPersistence(chart: Chart, getContext: () => { period: string; symbol: string }) {
+export function installChartViewportPersistence(chart: Chart, getContext: () => { period: string; scope?: string; symbol: string }) {
   let timer = 0
 
   const saveNow = (forceYAxisRange = false) => {
@@ -140,7 +142,7 @@ export function installChartViewportPersistence(chart: Chart, getContext: () => 
     }
     const context = getContext()
     if (!context.symbol || !context.period) return
-    saveChartViewportState(chart, context.symbol, context.period, forceYAxisRange)
+    saveChartViewportState(chart, context.symbol, context.period, context.scope ?? 'default', forceYAxisRange)
   }
 
   const scheduleSave = (forceYAxisRange = false) => {

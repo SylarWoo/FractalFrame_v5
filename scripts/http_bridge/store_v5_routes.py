@@ -7,7 +7,7 @@ from .query_params import clamp_m1_check_count, query_bool, safe_query_int
 from .response import error_payload
 from .route_helpers import parse_timeframes, required_job_id, required_symbol
 
-AGGREGATE_TIMEFRAMES_DEFAULT = "M5,M15,M30,H1,H2,H3,H4,D1,W1,MN1"
+AGGREGATE_TIMEFRAMES_DEFAULT = "M5,M15,M30,H1,H4,D1,W1,MN"
 
 
 def handle_store_v5_post(handler: Any, parsed: ParseResult, services: Any) -> bool:

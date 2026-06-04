@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { Chart } from 'klinecharts'
-import { loadStoreV5KLineData } from '../../datafeed/storeV5KLineDatafeed'
+import { loadStoreV6KLineData } from '../../datafeed/storeV6KLineDatafeed'
 import { chartError, chartInfo } from './chartLogger'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import { historyPageSize, mergeKLineData, resolveHasMoreOlder } from './chartCoreDataUtils'
@@ -60,12 +60,12 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
           timeFrom: Math.floor(newest.timestamp / 1000) + 1,
         }
 
-    chartInfo('[StoreV5Datafeed] request manual step start', {
+    chartInfo('[StoreV6Datafeed] request manual step start', {
       direction: stepLoad.direction,
       ...options,
     })
 
-    loadStoreV5KLineData(options)
+    loadStoreV6KLineData(options)
       .then((data) => {
         if (disposed) return
         const merged = stepLoad.direction === 'left'
@@ -78,7 +78,7 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
           totalRows,
         })
 
-        chartInfo('[StoreV5Datafeed] callback manual step done', {
+        chartInfo('[StoreV6Datafeed] callback manual step done', {
           direction: stepLoad.direction,
           rows: data.length,
           mergedRows: merged.length,
@@ -109,7 +109,7 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
       .catch((error: unknown) => {
         if (disposed) return
 
-        chartError('[StoreV5Datafeed] request manual step failed', error)
+        chartError('[StoreV6Datafeed] request manual step failed', error)
         setLoadState((current) => ({
           ...current,
           error: true,

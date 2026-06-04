@@ -10,6 +10,8 @@ from .store_v5_status_service import utc_now_iso
 from .mt5_m1_check_job_state import M1_CHECK_JOB_STORE
 from .store_v5_aggregate_job_service import AGGREGATE_JOB_STORE
 from .store_v5_pull_job_state import PULL_JOB_STORE
+from .store_v6_aggregate_job_state import STORE_V6_AGGREGATE_JOB_STORE, STORE_V6_AGGREGATE_JOBS
+from .store_v6_pull_job_state import STORE_V6_PULL_JOB_STORE, STORE_V6_PULL_JOBS
 
 
 STARTED_AT = utc_now_iso()
@@ -65,12 +67,14 @@ def runtime_observability(*, cache_root: Path, store_root: Path | None) -> dict[
         "publishedAt": utc_now_iso(),
         "paths": {
             "cacheRoot": str(cache_root),
-            "storeRoot": str(store_root) if store_root else "default runtime_data/store_v5",
+            "storeRoot": str(store_root) if store_root else "default runtime_data/store_v6",
         },
         "jobs": {
             "m1Check": {"count": len(M1_CHECK_JOBS), "failed": count_failed(M1_CHECK_JOBS)},
             "pull": {"count": len(PULL_JOBS), "failed": count_failed(PULL_JOBS)},
             "aggregate": {"count": len(AGGREGATE_JOBS), "failed": count_failed(AGGREGATE_JOBS)},
+            "storeV6Pull": {"count": len(STORE_V6_PULL_JOBS), "failed": count_failed(STORE_V6_PULL_JOBS)},
+            "storeV6Aggregate": {"count": len(STORE_V6_AGGREGATE_JOBS), "failed": count_failed(STORE_V6_AGGREGATE_JOBS)},
         },
         "activeOperations": active_operations(),
     }
@@ -85,6 +89,8 @@ def job_history(limit: int = 20) -> dict[str, Any]:
             "m1Check": M1_CHECK_JOB_STORE.recent(limit=limit),
             "pull": PULL_JOB_STORE.recent(limit=limit),
             "aggregate": AGGREGATE_JOB_STORE.recent(limit=limit),
+            "storeV6Pull": STORE_V6_PULL_JOB_STORE.recent(limit=limit),
+            "storeV6Aggregate": STORE_V6_AGGREGATE_JOB_STORE.recent(limit=limit),
         },
     }
 

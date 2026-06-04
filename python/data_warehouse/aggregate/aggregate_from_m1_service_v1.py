@@ -176,6 +176,8 @@ def aggregate_from_m1_store_v5(
     full_source_df: pd.DataFrame | None = None
     for timeframe in target_timeframes:
         timeframe = timeframe.strip().upper()
+        if timeframe == "MN":
+            timeframe = "MN1"
         if timeframe not in SUPPORTED_TIMEFRAMES:
             results[timeframe] = {"ok": False, "error": "unsupported_timeframe"}
             continue

@@ -1,4 +1,4 @@
-import type { StoreV5AggregatePayload, StoreV5CheckPayload, StoreV5PullPayload } from './storeV5Types'
+import type { StoreV6AggregatePayload, StoreV6CheckPayload, StoreV6PullPayload } from './storeV6Types'
 
 export type Mt5M1CheckJobPayload = {
   ok: boolean
@@ -18,10 +18,10 @@ export type Mt5M1CheckJobPayload = {
   progressPercent?: number | null
   firstTimeText?: string | null
   lastTimeText?: string | null
-  result?: StoreV5CheckPayload
+  result?: StoreV6CheckPayload
 }
 
-export type StoreV5PullJobPayload = {
+export type StoreV6PullJobPayload = {
   ok: boolean
   jobId: string
   symbol: string
@@ -32,6 +32,8 @@ export type StoreV5PullJobPayload = {
   currentAction?: string
   progressPercent?: number | null
   progressLabel?: string
+  sessionRuleId?: string | null
+  sessionRuleVersion?: number | null
   detailMessage?: string
   rowsFetched?: number
   rowsWritten?: number
@@ -58,12 +60,12 @@ export type StoreV5PullJobPayload = {
   cleanupKeptRows?: number
   firstTimeText?: string | null
   lastTimeText?: string | null
-  result?: StoreV5PullPayload
+  result?: StoreV6PullPayload
   createdAt?: string
   updatedAt?: string
 }
 
-export type StoreV5AggregateJobPayload = {
+export type StoreV6AggregateJobPayload = {
   ok: boolean
   jobId: string
   symbol: string
@@ -76,8 +78,16 @@ export type StoreV5AggregateJobPayload = {
   totalTargets?: number
   progressPercent?: number | null
   progressLabel?: string
-  results?: StoreV5AggregatePayload['results']
-  result?: StoreV5AggregatePayload
+  sessionRuleId?: string | null
+  sessionRuleVersion?: number | null
+  aggregateBatchSize?: number
+  currentBatchIndex?: number
+  currentBatchTotal?: number
+  sourceRowsProcessed?: number
+  sourceRowsTotal?: number
+  rowsWritten?: number
+  results?: StoreV6AggregatePayload['results']
+  result?: StoreV6AggregatePayload
   periods: string[]
   currentPeriod?: string
   completed: number

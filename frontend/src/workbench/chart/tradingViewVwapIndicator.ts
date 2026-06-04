@@ -1,42 +1,53 @@
-import { IndicatorSeries, LineType, registerIndicator } from 'klinecharts'
+import { IndicatorSeries, registerIndicator } from 'klinecharts'
 import type { IndicatorCreateTooltipDataSourceParams, KLineData } from 'klinecharts'
 import { defaultVwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { VwapAnchorPeriod, VwapIndicatorSettings, VwapSource } from '../rightDrawer/indicatorPersistence'
+import { normalizeVwapSettings as normalizePersistedVwapSettings } from '../rightDrawer/indicatorSettingsSchema'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
-import { assignBarKey } from './barIdentity'
 import { formatIndicatorValue } from './indicatorValueFormat'
-import { readIndicatorPageSnapshot } from './indicatorPageSnapshotStore'
 
 export type VwapIndicatorRow = {
+  barKey?: string
   lowerBand1?: number
+  lowerBand2?: number
+  lowerBand3?: number
   upperBand1?: number
+  upperBand2?: number
+  upperBand3?: number
   vwap?: number
 }
 
 type VwapCalcSettings = Partial<VwapIndicatorSettings> & {
   period?: string
+  realtimeBarKeyFrom?: string | null
+  realtimeBarKeyTo?: string | null
+  realtimeIndicatorPageKey?: string | null
   symbol?: string
 }
 
-let registered = false
-const vwapRowsCacheByDataList = new WeakMap<KLineData[], Map<string, VwapIndicatorRow[]>>()
-const maxVwapRowsCacheEntriesPerDataList = 8
-const vwapFillPathCache = new WeakMap<object, { path: Path2D; signature: string }>()
-
-function normalizeVwapSettings(input?: VwapCalcSettings): VwapIndicatorSettings {
-  return { ...defaultVwapIndicatorSettings, ...(input ?? {}) }
+type VwapKLineData = KLineData & {
+  barKey?: string
+  realTime?: number
+  realTimestamp?: number
+  realVolume?: number
+  real_volume?: number
+  sessionId?: string
+  sourceTimestamp?: number
+  tickVolume?: number
+  tick_volume?: number
+  tradingDay?: string
+  vol?: number
+  Volume?: number
 }
 
-function readVwapSnapshotContext(input: unknown) {
-  const context = input && typeof input === 'object' ? input as VwapCalcSettings & { pageKey?: string; settingsHash?: string; period?: string } : {}
-  return {
-    pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
-    period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
-    settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
-    symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
-  }
+export const vwapIndicatorAlgorithmVersion = 'vwap-tv-clean-v1'
+export const tradingViewVwapIndicatorName = 'FF_TRADINGVIEW_VWAP'
+let registered = false
+
+function normalizeVwapSettings(input?: VwapCalcSettings): VwapIndicatorSettings {
+  return normalizePersistedVwapSettings({ ...defaultVwapIndicatorSettings, ...(input ?? {}) })
 }
 
 function clampOpacity(value: unknown, fallback = 1) {
@@ -64,40 +75,19 @@ function lineDashForStyle(style: VwapIndicatorSettings['vwapLineStyle']) {
   return []
 }
 
-function klineLineTypeForStyle(style: VwapIndicatorSettings['vwapLineStyle']) {
-  return style === 'solid' ? LineType.Solid : LineType.Dashed
-}
-
-function createLineFigureStyle(
-  color: string,
-  visible: boolean,
-  lineStyle: VwapIndicatorSettings['vwapLineStyle'],
-  lineWidth: number,
-  opacity: number,
-) {
-  return {
-    color: visible ? colorWithAlpha(color, clampOpacity(opacity)) : 'rgba(0,0,0,0)',
-    dashedValue: lineDashForStyle(lineStyle),
-    size: clampLineWidth(lineWidth),
-    smooth: false,
-    style: klineLineTypeForStyle(lineStyle) as never,
-  }
-}
-
-function createVwapLineFigures() {
+function createInvisibleScaleFigures() {
+  const styles = () => ({
+    color: 'rgba(0,0,0,0)',
+    size: 1,
+  })
   return [
-    { key: 'vwap', title: 'VWAP: ', type: 'line', styles: (_data: unknown, indicator: { calcParams: unknown[] }) => {
-      const settings = normalizeVwapSettings(indicator.calcParams[0] as VwapCalcSettings)
-      return createLineFigureStyle(settings.vwapColor, settings.vwapVisible, settings.vwapLineStyle, settings.vwapLineWidth, settings.vwapOpacity)
-    } },
-    { key: 'upperBand1', title: 'Upper Band #1: ', type: 'line', styles: (_data: unknown, indicator: { calcParams: unknown[] }) => {
-      const settings = normalizeVwapSettings(indicator.calcParams[0] as VwapCalcSettings)
-      return createLineFigureStyle(settings.band1UpperColor, settings.band1Visible && settings.band1UpperVisible, settings.band1UpperLineStyle, settings.band1UpperLineWidth, settings.band1UpperOpacity)
-    } },
-    { key: 'lowerBand1', title: 'Lower Band #1: ', type: 'line', styles: (_data: unknown, indicator: { calcParams: unknown[] }) => {
-      const settings = normalizeVwapSettings(indicator.calcParams[0] as VwapCalcSettings)
-      return createLineFigureStyle(settings.band1LowerColor, settings.band1Visible && settings.band1LowerVisible, settings.band1LowerLineStyle, settings.band1LowerLineWidth, settings.band1LowerOpacity)
-    } },
+    { key: 'vwap', title: 'VWAP: ', type: 'line', styles },
+    { key: 'upperBand1', title: 'Upper Band #1: ', type: 'line', styles },
+    { key: 'lowerBand1', title: 'Lower Band #1: ', type: 'line', styles },
+    { key: 'upperBand2', title: 'Upper Band #2: ', type: 'line', styles },
+    { key: 'lowerBand2', title: 'Lower Band #2: ', type: 'line', styles },
+    { key: 'upperBand3', title: 'Upper Band #3: ', type: 'line', styles },
+    { key: 'lowerBand3', title: 'Lower Band #3: ', type: 'line', styles },
   ]
 }
 
@@ -121,6 +111,19 @@ function formatVwapValue(value: number | undefined, precision: VwapIndicatorSett
   return formatIndicatorValue(value, precision, 3)
 }
 
+function alignStrokePixel(value: number, lineWidth: number) {
+  return lineWidth % 2 === 1 ? Math.round(value) + 0.5 : Math.round(value)
+}
+
+function normalizePeriod(period?: string) {
+  return period?.trim().toUpperCase() ?? ''
+}
+
+function shouldHideOnCurrentPeriod(settings: VwapIndicatorSettings, period?: string) {
+  if (!settings.hideOnDailyOrAbove) return false
+  return /^[1-9]?\d*[DWM]$/.test(normalizePeriod(period))
+}
+
 function isCryptoSymbol(symbol: string) {
   const normalized = symbol.toUpperCase()
   return /^(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|LTC|BCH|DOT|AVAX|TRX|LINK)/.test(normalized)
@@ -131,38 +134,49 @@ function resolveSessionAnchorHourUtc(symbol?: string) {
   return symbol && isCryptoSymbol(symbol) ? 0 : 22
 }
 
-function resolveAnchorKey(timestampMs: number, anchorPeriod: VwapAnchorPeriod, symbol?: string) {
+function resolveTimestampMs(row: KLineData) {
+  const source = row as VwapKLineData
+  const raw = typeof source.realTime === 'number'
+    ? source.realTime
+    : typeof source.realTimestamp === 'number'
+      ? source.realTimestamp
+      : typeof source.sourceTimestamp === 'number'
+        ? source.sourceTimestamp
+        : row.timestamp
+  return raw < 1_000_000_000_000 ? raw * 1000 : raw
+}
+
+function resolveCalendarAnchorKey(timestampMs: number, anchorPeriod: VwapAnchorPeriod, symbol?: string) {
   const anchorHourUtc = anchorPeriod === 'session' ? resolveSessionAnchorHourUtc(symbol) : 0
-  const anchorMs = anchorHourUtc * 60 * 60 * 1000
-  const anchoredTimestampMs = timestampMs - anchorMs
+  const anchoredTimestampMs = timestampMs - anchorHourUtc * 60 * 60 * 1000
   const date = new Date(anchoredTimestampMs)
   const year = date.getUTCFullYear()
   const month = date.getUTCMonth()
-  const day = Math.floor(anchoredTimestampMs / (24 * 60 * 60 * 1000))
+  const day = Math.floor(anchoredTimestampMs / 86_400_000)
 
-  if (anchorPeriod === 'week') return Math.floor((day + 4) / 7)
-  if (anchorPeriod === 'month') return year * 12 + month
-  if (anchorPeriod === 'quarter') return year * 4 + Math.floor(month / 3)
-  if (anchorPeriod === 'year') return year
-  if (anchorPeriod === 'decade') return Math.floor(year / 10)
-  if (anchorPeriod === 'century') return Math.floor(year / 100)
-  return day
+  if (anchorPeriod === 'week') return `week:${Math.floor((day + 4) / 7)}`
+  if (anchorPeriod === 'month') return `month:${year * 12 + month}`
+  if (anchorPeriod === 'quarter') return `quarter:${year * 4 + Math.floor(month / 3)}`
+  if (anchorPeriod === 'year') return `year:${year}`
+  if (anchorPeriod === 'decade') return `decade:${Math.floor(year / 10)}`
+  if (anchorPeriod === 'century') return `century:${Math.floor(year / 100)}`
+  return `session:${day}`
 }
 
-function resolveRealTimestampMs(data: KLineData) {
-  const row = data as KLineData & {
-    realTime?: number
-    realTimestamp?: number
-    sourceTimestamp?: number
+function resolveAnchorKey(row: KLineData, settings: VwapIndicatorSettings, symbol?: string) {
+  const source = row as VwapKLineData
+  if (settings.anchorPeriod === 'session') {
+    if (typeof source.tradingDay === 'string' && source.tradingDay.trim()) return `tradingDay:${source.tradingDay.trim()}`
+    if (typeof source.sessionId === 'string' && source.sessionId.trim()) return `sessionId:${source.sessionId.trim()}`
   }
-  const raw = typeof row.realTime === 'number'
-    ? row.realTime
-    : typeof row.realTimestamp === 'number'
-      ? row.realTimestamp
-      : typeof row.sourceTimestamp === 'number'
-        ? row.sourceTimestamp
-        : data.timestamp
-  return raw < 1_000_000_000_000 ? raw * 1000 : raw
+  return resolveCalendarAnchorKey(resolveTimestampMs(row), settings.anchorPeriod, symbol)
+}
+
+function resolveExplicitSessionAnchorKey(row: KLineData) {
+  const source = row as VwapKLineData
+  if (typeof source.tradingDay === 'string' && source.tradingDay.trim()) return `tradingDay:${source.tradingDay.trim()}`
+  if (typeof source.sessionId === 'string' && source.sessionId.trim()) return `sessionId:${source.sessionId.trim()}`
+  return null
 }
 
 function calculateSourceValue(row: KLineData, source: VwapSource) {
@@ -194,83 +208,77 @@ function calculateSourceValue(row: KLineData, source: VwapSource) {
 }
 
 function readVolume(row: KLineData) {
-  const source = row as KLineData & {
-    realVolume?: number
-    real_volume?: number
-    tickVolume?: number
-    tick_volume?: number
-    vol?: number
-    Volume?: number
-  }
+  const source = row as VwapKLineData
   const value = Number(source.volume ?? source.tick_volume ?? source.tickVolume ?? source.real_volume ?? source.realVolume ?? source.vol ?? source.Volume)
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
 
-function createVwapSettingsSignature(settings: VwapIndicatorSettings, symbol?: string) {
-  return [
-    settings.anchorPeriod,
-    settings.source,
-    settings.bandCalculationMode,
-    settings.band1Multiplier,
-    settings.offset,
-    symbol ?? '',
-  ].join('|')
+function readBarKey(row: KLineData | undefined) {
+  const value = (row as VwapKLineData | undefined)?.barKey
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
-function createVwapDataSignature(dataList: KLineData[]) {
-  const first = dataList[0]
-  const middle = dataList[Math.floor(dataList.length / 2)]
-  const last = dataList[dataList.length - 1]
-  const rowSignature = (row: KLineData | undefined) => row
-    ? [row.timestamp, row.open, row.high, row.low, row.close, readVolume(row)].join(':')
-    : ''
-  return [
-    dataList.length,
-    rowSignature(first),
-    rowSignature(middle),
-    rowSignature(last),
-  ].join('|')
+function calculateBandDistance(vwap: number, variance: number, multiplier: number, mode: VwapIndicatorSettings['bandCalculationMode']) {
+  if (!Number.isFinite(multiplier)) return 0
+  if (mode === 'percentage') return Math.abs(vwap * multiplier / 100)
+  return Math.sqrt(Math.max(0, variance)) * multiplier
 }
 
-function readCachedVwapRows(dataList: KLineData[], cacheKey: string) {
-  const cache = vwapRowsCacheByDataList.get(dataList)
-  if (!cache) return null
-  const rows = cache.get(cacheKey) ?? null
-  if (!rows) return null
-  cache.delete(cacheKey)
-  cache.set(cacheKey, rows)
-  return rows
-}
-
-function writeCachedVwapRows(dataList: KLineData[], cacheKey: string, rows: VwapIndicatorRow[]) {
-  let cache = vwapRowsCacheByDataList.get(dataList)
-  if (!cache) {
-    cache = new Map()
-    vwapRowsCacheByDataList.set(dataList, cache)
-  }
-  cache.set(cacheKey, rows)
-  while (cache.size > maxVwapRowsCacheEntriesPerDataList) {
-    const oldest = cache.keys().next().value
-    if (oldest == null) break
-    cache.delete(oldest)
+function createBandRows(row: KLineData, vwap: number, variance: number, settings: VwapIndicatorSettings): VwapIndicatorRow {
+  const band1 = calculateBandDistance(vwap, variance, settings.band1Multiplier, settings.bandCalculationMode)
+  const band2 = calculateBandDistance(vwap, variance, settings.band2Multiplier, settings.bandCalculationMode)
+  const band3 = calculateBandDistance(vwap, variance, settings.band3Multiplier, settings.bandCalculationMode)
+  return {
+    barKey: readBarKey(row),
+    lowerBand1: vwap - band1,
+    lowerBand2: vwap - band2,
+    lowerBand3: vwap - band3,
+    upperBand1: vwap + band1,
+    upperBand2: vwap + band2,
+    upperBand3: vwap + band3,
+    vwap,
   }
 }
 
-function calculateTradingViewVwapRowsUncached(dataList: KLineData[], settings: VwapIndicatorSettings, symbol?: string): VwapIndicatorRow[] {
-  const calculatedRows: VwapIndicatorRow[] = []
-  let currentSessionKey: number | null = null
+function applyOffset(rows: VwapIndicatorRow[], dataList: KLineData[], offset: number) {
+  if (offset === 0) return rows
+  const shifted = dataList.map((row) => ({ barKey: readBarKey(row) }))
+  rows.forEach((row, index) => {
+    const targetIndex = index + offset
+    if (targetIndex >= 0 && targetIndex < shifted.length) {
+      shifted[targetIndex] = { ...row, barKey: readBarKey(dataList[targetIndex]) }
+    }
+  })
+  return shifted
+}
+
+export function calculateTradingViewVwapRows(dataList: KLineData[], inputSettings?: VwapCalcSettings): VwapIndicatorRow[] {
+  const settings = normalizeVwapSettings(inputSettings)
+  if (shouldHideOnCurrentPeriod(settings, inputSettings?.period)) {
+    return dataList.map((row) => ({ barKey: readBarKey(row) }))
+  }
+
+  const symbol = typeof inputSettings?.symbol === 'string' ? inputSettings.symbol : undefined
+  const rows: VwapIndicatorRow[] = []
+  let currentAnchorKey = ''
   let cumulativePriceVolume = 0
   let cumulativePriceSquaredVolume = 0
   let cumulativeVolume = 0
+  let currentCalendarAnchorKey = ''
 
   for (const row of dataList) {
-    const sessionKey = resolveAnchorKey(resolveRealTimestampMs(row), settings.anchorPeriod, symbol)
-    if (currentSessionKey !== sessionKey) {
-      currentSessionKey = sessionKey
+    const calendarAnchorKey = resolveCalendarAnchorKey(resolveTimestampMs(row), settings.anchorPeriod, symbol)
+    const explicitAnchorKey = settings.anchorPeriod === 'session' ? resolveExplicitSessionAnchorKey(row) : null
+    const anchorKey = explicitAnchorKey == null && currentAnchorKey && calendarAnchorKey === currentCalendarAnchorKey
+      ? currentAnchorKey
+      : explicitAnchorKey ?? resolveAnchorKey(row, settings, symbol)
+    if (anchorKey !== currentAnchorKey) {
+      currentAnchorKey = anchorKey
       cumulativePriceVolume = 0
       cumulativePriceSquaredVolume = 0
       cumulativeVolume = 0
     }
+    currentCalendarAnchorKey = calendarAnchorKey
 
     const source = calculateSourceValue(row, settings.source)
     const volume = readVolume(row)
@@ -280,136 +288,141 @@ function calculateTradingViewVwapRowsUncached(dataList: KLineData[], settings: V
       cumulativeVolume += volume
     }
 
-    if (cumulativeVolume > 0) {
-      const vwap = cumulativePriceVolume / cumulativeVolume
-      const variance = Math.max(0, cumulativePriceSquaredVolume / cumulativeVolume - vwap * vwap)
-      const bandDistance = settings.bandCalculationMode === 'percentage'
-        ? Math.abs(vwap * settings.band1Multiplier / 100)
-        : Math.sqrt(variance) * settings.band1Multiplier
-      calculatedRows.push({ lowerBand1: vwap - bandDistance, upperBand1: vwap + bandDistance, vwap })
+    if (cumulativeVolume <= 0) {
+      rows.push({ barKey: readBarKey(row) })
+      continue
+    }
+
+    const vwap = cumulativePriceVolume / cumulativeVolume
+    const variance = cumulativePriceSquaredVolume / cumulativeVolume - vwap * vwap
+    rows.push(createBandRows(row, vwap, variance, settings))
+  }
+
+  return applyOffset(rows, dataList, settings.offset)
+}
+
+function convertIndicatorPoint(
+  xAxis: { convertToPixel: (value: number) => number },
+  yAxis: { convertToPixel: (value: number) => number },
+  index: number,
+  value: number,
+) {
+  if (!Number.isFinite(value)) return null
+  const x = xAxis.convertToPixel(index)
+  const y = yAxis.convertToPixel(value)
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null
+}
+
+function drawIndicatorLineSeries(
+  ctx: CanvasRenderingContext2D,
+  rows: VwapIndicatorRow[],
+  from: number,
+  to: number,
+  key: keyof VwapIndicatorRow,
+  color: string,
+  visible: boolean,
+  lineStyle: VwapIndicatorSettings['vwapLineStyle'],
+  lineWidth: number,
+  opacity: number,
+  xAxis: { convertToPixel: (value: number) => number },
+  yAxis: { convertToPixel: (value: number) => number },
+) {
+  if (!visible) return
+  const width = clampLineWidth(lineWidth)
+  let started = false
+  ctx.save()
+  ctx.beginPath()
+  ctx.lineCap = 'butt'
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = width
+  ctx.strokeStyle = colorWithAlpha(color, opacity)
+  ctx.setLineDash(lineDashForStyle(lineStyle))
+
+  for (let index = from; index <= to; index += 1) {
+    const value = rows[index]?.[key]
+    const point = typeof value === 'number' ? convertIndicatorPoint(xAxis, yAxis, index, value) : null
+    if (!point) {
+      started = false
+      continue
+    }
+    const y = alignStrokePixel(point.y, width)
+    if (!started) {
+      ctx.moveTo(point.x, y)
+      started = true
     } else {
-      calculatedRows.push({})
+      ctx.lineTo(point.x, y)
     }
   }
 
-  if (settings.offset === 0) return calculatedRows
-
-  const rows: VwapIndicatorRow[] = dataList.map(() => ({}))
-  calculatedRows.forEach((row, index) => {
-    const targetIndex = index + settings.offset
-    if (targetIndex >= 0 && targetIndex < rows.length) rows[targetIndex] = row
-  })
-  return rows
+  ctx.stroke()
+  ctx.restore()
 }
 
-export function calculateTradingViewVwapRows(dataList: KLineData[], inputSettings?: VwapCalcSettings): VwapIndicatorRow[] {
-  const settings = normalizeVwapSettings(inputSettings)
-  const symbol = typeof inputSettings?.symbol === 'string' ? inputSettings.symbol : undefined
-  const cacheKey = [
-    createVwapSettingsSignature(settings, symbol),
-    createVwapDataSignature(dataList),
-  ].join('||')
-  const cachedRows = readCachedVwapRows(dataList, cacheKey)
-  if (cachedRows) return cachedRows
-  const rows = calculateTradingViewVwapRowsUncached(dataList, settings, symbol)
-  writeCachedVwapRows(dataList, cacheKey, rows)
-  return rows
+function drawIndicatorBandFill(
+  ctx: CanvasRenderingContext2D,
+  rows: VwapIndicatorRow[],
+  from: number,
+  to: number,
+  settings: VwapIndicatorSettings,
+  xAxis: { convertToPixel: (value: number) => number },
+  yAxis: { convertToPixel: (value: number) => number },
+) {
+  if (!settings.band1Visible || !settings.band1FillVisible || clampOpacity(settings.band1FillOpacity) <= 0) return
+  const path = new Path2D()
+  let started = false
+  for (let index = from; index <= to; index += 1) {
+    const value = rows[index]?.upperBand1
+    const point = typeof value === 'number' ? convertIndicatorPoint(xAxis, yAxis, index, value) : null
+    if (!point) {
+      started = false
+      continue
+    }
+    if (!started) {
+      path.moveTo(point.x, point.y)
+      started = true
+    } else {
+      path.lineTo(point.x, point.y)
+    }
+  }
+  for (let index = to; index >= from; index -= 1) {
+    const value = rows[index]?.lowerBand1
+    const point = typeof value === 'number' ? convertIndicatorPoint(xAxis, yAxis, index, value) : null
+    if (point) path.lineTo(point.x, point.y)
+  }
+  path.closePath()
+  ctx.save()
+  ctx.fillStyle = colorWithAlpha(settings.band1FillColor, settings.band1FillOpacity)
+  ctx.fill(path)
+  ctx.restore()
 }
 
-function createVwapFillSignature({
-  end,
+function drawTradingViewVwapIndicator({
+  ctx,
   indicator,
-  settings,
-  start,
   visibleRange,
   xAxis,
   yAxis,
 }: {
-  end: number
-  indicator: { result: VwapIndicatorRow[] }
-  settings: VwapIndicatorSettings
-  start: number
+  ctx: CanvasRenderingContext2D
+  indicator: { calcParams: unknown[]; result: VwapIndicatorRow[] }
   visibleRange: { from: number; to: number }
   xAxis: { convertToPixel: (value: number) => number }
   yAxis: { convertToPixel: (value: number) => number }
 }) {
-  const middle = Math.floor((start + end) / 2)
-  const sample = (index: number) => {
-    const row = indicator.result[index]
-    return row
-      ? [
-          index,
-          row.upperBand1,
-          row.lowerBand1,
-          xAxis.convertToPixel(index).toFixed(2),
-          Number.isFinite(row.upperBand1) ? yAxis.convertToPixel(row.upperBand1 as number).toFixed(2) : '',
-          Number.isFinite(row.lowerBand1) ? yAxis.convertToPixel(row.lowerBand1 as number).toFixed(2) : '',
-        ].join(':')
-      : `${index}:`
-  }
-  return [
-    indicator.result.length,
-    start,
-    end,
-    visibleRange.from.toFixed(3),
-    visibleRange.to.toFixed(3),
-    settings.band1FillColor,
-    settings.band1FillOpacity,
-    sample(start),
-    sample(middle),
-    sample(end),
-  ].join('|')
-}
+  const settings = normalizeVwapSettings(indicator.calcParams[0] as VwapCalcSettings)
+  const rows = indicator.result
+  const from = Math.max(0, Math.floor(Number(visibleRange.from)) - 1)
+  const to = Math.min(rows.length - 1, Math.ceil(Number(visibleRange.to)) + 1)
+  if (to < from) return
 
-function createVwapFillPath({
-  end,
-  indicator,
-  start,
-  xAxis,
-  yAxis,
-}: {
-  end: number
-  indicator: { result: VwapIndicatorRow[] }
-  start: number
-  xAxis: { convertToPixel: (value: number) => number }
-  yAxis: { convertToPixel: (value: number) => number }
-}) {
-  const path = new Path2D()
-  let started = false
-
-  for (let index = start; index <= end; index += 1) {
-    const upper = indicator.result[index]?.upperBand1
-    if (!Number.isFinite(upper)) {
-      started = false
-      continue
-    }
-    const x = xAxis.convertToPixel(index)
-    const y = yAxis.convertToPixel(upper as number)
-    if (!started) {
-      path.moveTo(x, y)
-      started = true
-    } else {
-      path.lineTo(x, y)
-    }
-  }
-
-  for (let index = end; index >= start; index -= 1) {
-    const lower = indicator.result[index]?.lowerBand1
-    if (!Number.isFinite(lower)) continue
-    path.lineTo(xAxis.convertToPixel(index), yAxis.convertToPixel(lower as number))
-  }
-
-  path.closePath()
-  return path
-}
-
-function shouldSkipDenseVwapFill(input: unknown, visibleRange: { from: number; to: number }) {
-  const context = input && typeof input === 'object' ? input as VwapCalcSettings : {}
-  const period = typeof context.period === 'string' ? context.period.trim().toUpperCase() : ''
-  const visibleBars = Math.max(0, Math.ceil(visibleRange.to) - Math.floor(visibleRange.from) + 1)
-  if ((period === 'M1' || period === '1M') && visibleBars > 650) return true
-  if (period === 'M5' && visibleBars > 900) return true
-  return visibleBars > 1600
+  drawIndicatorBandFill(ctx, rows, from, to, settings, xAxis, yAxis)
+  drawIndicatorLineSeries(ctx, rows, from, to, 'vwap', settings.vwapColor, settings.vwapVisible, settings.vwapLineStyle, settings.vwapLineWidth, settings.vwapOpacity, xAxis, yAxis)
+  drawIndicatorLineSeries(ctx, rows, from, to, 'upperBand1', settings.band1UpperColor, settings.band1Visible && settings.band1UpperVisible, settings.band1UpperLineStyle, settings.band1UpperLineWidth, settings.band1UpperOpacity, xAxis, yAxis)
+  drawIndicatorLineSeries(ctx, rows, from, to, 'lowerBand1', settings.band1LowerColor, settings.band1Visible && settings.band1LowerVisible, settings.band1LowerLineStyle, settings.band1LowerLineWidth, settings.band1LowerOpacity, xAxis, yAxis)
+  drawIndicatorLineSeries(ctx, rows, from, to, 'upperBand2', settings.band1UpperColor, settings.band2Visible, settings.band1UpperLineStyle, settings.band1UpperLineWidth, settings.band1UpperOpacity, xAxis, yAxis)
+  drawIndicatorLineSeries(ctx, rows, from, to, 'lowerBand2', settings.band1LowerColor, settings.band2Visible, settings.band1LowerLineStyle, settings.band1LowerLineWidth, settings.band1LowerOpacity, xAxis, yAxis)
+  drawIndicatorLineSeries(ctx, rows, from, to, 'upperBand3', settings.band1UpperColor, settings.band3Visible, settings.band1UpperLineStyle, settings.band1UpperLineWidth, settings.band1UpperOpacity, xAxis, yAxis)
+  drawIndicatorLineSeries(ctx, rows, from, to, 'lowerBand3', settings.band1LowerColor, settings.band3Visible, settings.band1LowerLineStyle, settings.band1LowerLineWidth, settings.band1LowerOpacity, xAxis, yAxis)
 }
 
 export function ensureTradingViewVwapIndicator() {
@@ -417,13 +430,14 @@ export function ensureTradingViewVwapIndicator() {
   registered = true
 
   registerIndicator<VwapIndicatorRow>({
-    name: 'VWAP',
+    name: tradingViewVwapIndicatorName,
     shortName: 'VWAP',
     series: IndicatorSeries.Price,
     precision: 2,
-    figures: createVwapLineFigures(),
-    regenerateFigures: createVwapLineFigures,
-    createTooltipDataSource: (params) => {
+    shouldOhlc: true,
+    figures: createInvisibleScaleFigures(),
+    regenerateFigures: createInvisibleScaleFigures,
+    createTooltipDataSource: (params: IndicatorCreateTooltipDataSourceParams<VwapIndicatorRow>) => {
       const settings = normalizeVwapSettings(params.indicator.calcParams[0] as VwapCalcSettings)
       const row = params.indicator.result[resolveTooltipIndex(params)]
       const inputsText = settings.inputsInStatusLine && readIndicatorInputsVisible()
@@ -445,68 +459,13 @@ export function ensureTradingViewVwapIndicator() {
         values,
       }
     },
-    draw: ({ ctx, indicator, visibleRange, xAxis, yAxis }) => {
-      const settings = normalizeVwapSettings(indicator.calcParams[0] as VwapCalcSettings)
-      if (!settings.band1Visible || !settings.band1FillVisible) return false
-      if (clampOpacity(settings.band1FillOpacity) <= 0) return false
-      if (shouldSkipDenseVwapFill(indicator.calcParams[0], visibleRange)) return false
-
-      const start = Math.max(0, Math.floor(visibleRange.from) - 1)
-      const end = Math.min(indicator.result.length - 1, Math.ceil(visibleRange.to) + 1)
-      if (end < start) return false
-
-      const signature = createVwapFillSignature({ end, indicator, settings, start, visibleRange, xAxis, yAxis })
-      let cached = vwapFillPathCache.get(indicator)
-      if (!cached || cached.signature !== signature) {
-        cached = { path: createVwapFillPath({ end, indicator, start, xAxis, yAxis }), signature }
-        vwapFillPathCache.set(indicator, cached)
-      }
-
-      ctx.save()
-      ctx.fillStyle = colorWithAlpha(settings.band1FillColor, settings.band1FillOpacity)
-      ctx.fill(cached.path)
-      ctx.restore()
-      return false
+    draw: (params) => {
+      drawTradingViewVwapIndicator(params)
+      return true
     },
-    calc: (dataList, indicator) => {
-      const context = readVwapSnapshotContext(indicator.calcParams[0])
-      if (context.pageKey && context.symbol && context.period) {
-        const snapshot = readIndicatorPageSnapshot(context.pageKey)
-        if (
-          snapshot &&
-          snapshot.symbol === context.symbol &&
-          snapshot.period === context.period &&
-          snapshot.settingsHashes?.VWAP === context.settingsHash
-        ) {
-          const snapshotCacheKey = [
-            'snapshot',
-            context.pageKey,
-            context.symbol,
-            context.period,
-            context.settingsHash,
-            createVwapDataSignature(dataList),
-          ].join('||')
-          const cachedSnapshotRows = readCachedVwapRows(dataList, snapshotCacheKey)
-          if (cachedSnapshotRows) return cachedSnapshotRows
-          const snapshotRows = calculateWithoutFuturePlaceholders(
-            dataList,
-            (realRows) => realRows.map((row) => {
-              const barKey = assignBarKey(row, context.symbol, context.period)
-              return snapshot.byBarKey[barKey]?.vwap ?? {}
-            }),
-          )
-          writeCachedVwapRows(dataList, snapshotCacheKey, snapshotRows)
-          return snapshotRows
-        }
-        return calculateWithoutFuturePlaceholders(
-          dataList,
-          (realRows) => calculateTradingViewVwapRows(realRows, indicator.calcParams[0] as VwapCalcSettings | undefined),
-        )
-      }
-      return calculateWithoutFuturePlaceholders(
-        dataList,
-        (realRows) => calculateTradingViewVwapRows(realRows, indicator.calcParams[0] as VwapCalcSettings | undefined),
-      )
-    },
+    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
+      dataList,
+      (realRows) => calculateTradingViewVwapRows(realRows, indicator.calcParams[0] as VwapCalcSettings | undefined),
+    ),
   })
 }

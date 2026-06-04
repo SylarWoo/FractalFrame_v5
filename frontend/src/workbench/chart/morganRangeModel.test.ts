@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { KLineData } from 'klinecharts'
 import {
+  alignMorganRangeSegmentsToDisplayRows,
   calculateMorganRangeSegments,
   calculateMorganRangeSegmentsForMode,
   collectD1MorganCandles,
@@ -115,5 +116,18 @@ describe('morganRangeModel', () => {
     expect(segments[0].startIndex).toBe(7)
     expect(segments[0].endIndex).toBe(54)
     expect(segments[1].startIndex).toBe(55)
+  })
+
+  it('aligns Morgan range segments calculated with warmup rows back to display rows', () => {
+    const start = utc('2026-05-25T02:00:00.000Z')
+    const calculationRows = Array.from({ length: 12 }, (_, index) => row(start + index * 4 * 60 * 60 * 1000, 100))
+    const displayRows = calculationRows.slice(8, 11)
+    const segments = calculateMorganRangeSegments(calculationRows, 1)
+    const aligned = alignMorganRangeSegmentsToDisplayRows({ calculationRows, displayRows, segments })
+
+    expect(aligned.length).toBeGreaterThan(0)
+    expect(aligned[0].startIndex).toBe(0)
+    expect(aligned[0].startTimestamp).toBe(displayRows[0].timestamp)
+    expect(aligned[0].endIndex).toBeLessThan(displayRows.length)
   })
 })

@@ -33,15 +33,17 @@ describe('topbarPeriodUtils', () => {
   })
 
   it('keeps the expected shortcut period order', () => {
-    expect(periodOrder).toEqual(['M1', 'M5', 'M15', 'M30', 'H1', 'H2', 'H3', 'H4', 'D1', 'W1', 'MN1'])
+    expect(periodOrder).toEqual(['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN'])
     expect(periodToChartPeriod('M1')).toBe('M1')
     expect(periodToChartPeriod('H4')).toBe('H4')
+    expect(periodToChartPeriod('MN')).toBe('MN1')
   })
 
   it('normalizes saved shortcut periods and filters malformed rows', () => {
     installStorage({
       [storageKeys.importCenterShortcutMenuPeriods]: JSON.stringify([
         { period: ' h4 ', rowsCount: 4 },
+        { period: 'MN1', rowsCount: 12 },
         { period: '', rowsCount: 1 },
         { rowsCount: 3 },
         { period: 'M1', rowsCount: 10 },
@@ -50,22 +52,25 @@ describe('topbarPeriodUtils', () => {
 
     expect(readShortcutPeriods()).toEqual([
       { period: 'H4', rowsCount: 4 },
+      { period: 'MN', rowsCount: 12 },
       { period: 'M1', rowsCount: 10 },
     ])
     expect(readShortcutMenuPeriods()).toEqual([
       { period: 'M1', rowsCount: 10 },
       { period: 'H4', rowsCount: 4 },
+      { period: 'MN', rowsCount: 12 },
     ])
   })
 
   it('merges direct, aggregated, and saved periods for a symbol in stable order', () => {
     installStorage({
       [storageKeys.importCenterShortcutMenuPeriods]: JSON.stringify([{ period: 'D1', rowsCount: 7 }]),
-      [storageKeys.importCenterStoreV5Status]: JSON.stringify({
+      [storageKeys.importCenterStoreV6Status]: JSON.stringify({
         XAUUSDm: {
           directM1: { rowsCount: 100 },
           aggregated: [
             { timeframe: 'H4', rowsCount: 40 },
+            { timeframe: 'MN1', rowsCount: 11 },
             { timeframe: 'M5', rowsCount: 80 },
             { timeframe: 'W1', rowsCount: 0 },
           ],
@@ -78,6 +83,7 @@ describe('topbarPeriodUtils', () => {
       { period: 'M5', rowsCount: 80 },
       { period: 'H4', rowsCount: 40 },
       { period: 'D1', rowsCount: 7 },
+      { period: 'MN', rowsCount: 11 },
     ])
   })
 })

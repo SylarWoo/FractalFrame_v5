@@ -63,6 +63,8 @@ def query_store_v5_ohlcv(params: dict[str, list[str]], store_root: Path | None =
 
     symbol = (params.get("symbol") or [""])[0].strip()
     timeframe = (params.get("timeframe") or ["M1"])[0].strip().upper()
+    if timeframe == "MN":
+        timeframe = "MN1"
     mode = (params.get("mode") or ["direct"])[0].strip().lower()
     base_timeframe = (params.get("baseTimeframe") or params.get("base_timeframe") or ["M1"])[0].strip().upper()
     anchor = (params.get("anchor") or ["UTC2200"])[0].strip().upper()

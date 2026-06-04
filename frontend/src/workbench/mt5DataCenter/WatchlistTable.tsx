@@ -2,7 +2,7 @@ import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import type { Mt5RealtimeTick, Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
 import { formatGlobalPrice, formatGlobalPriceDelta } from '../chart/globalPricePrecision'
 import { resolveMt5SymbolDisplay } from '../rightDrawer/mt5SymbolDisplay'
-import { formatMarketChange, formatMarketPercent } from './storeV5StatusFormat'
+import { formatMarketChange, formatMarketPercent } from './storeV6StatusFormat'
 import './WatchlistTable.css'
 
 export type WatchlistTableColumnKey = 'symbol' | 'name' | 'assetType' | 'last' | 'change'
@@ -16,11 +16,8 @@ type WatchlistTableProps = {
   onResetColumnWidth: (column: WatchlistTableColumnKey) => void
   onResetHeight: () => void
   onSelectSymbol: (symbol: string) => void
-  onToggleRealtime: () => void
   selectedSymbol: string
   watchlistRealtimeEnabled: boolean
-  watchlistRealtimeLog: string[]
-  watchlistRealtimeReady: boolean
   watchlistRows: Mt5SymbolRow[]
   watchlistTableHeight: number
   watchlistTableWrapRef: RefObject<HTMLDivElement | null>
@@ -34,11 +31,8 @@ export function WatchlistTable({
   onResetColumnWidth,
   onResetHeight,
   onSelectSymbol,
-  onToggleRealtime,
   selectedSymbol,
   watchlistRealtimeEnabled,
-  watchlistRealtimeLog,
-  watchlistRealtimeReady,
   watchlistRows,
   watchlistTableHeight,
   watchlistTableWrapRef,
@@ -121,31 +115,6 @@ export function WatchlistTable({
         aria-label="Resize watchlist table"
         tabIndex={0}
       />
-      <div className="ff-watchlist-realtime-controls">
-        <button
-          className="ff-watchlist-realtime-toggle"
-          data-active={watchlistRealtimeEnabled}
-          data-ready={watchlistRealtimeReady}
-          onClick={onToggleRealtime}
-          type="button"
-          aria-pressed={watchlistRealtimeEnabled}
-        >
-          <span>{watchlistRealtimeEnabled && !watchlistRealtimeReady ? 'Syncing' : 'Realtime'}</span>
-          <i aria-hidden="true" />
-        </button>
-      </div>
-      {watchlistRealtimeLog.length > 0 && (
-        <div className="ff-watchlist-realtime-log" aria-label="Realtime sync log">
-          <div className="ff-watchlist-realtime-log__title">
-            {watchlistRealtimeReady ? 'Realtime Feed' : 'Realtime Sync'}
-          </div>
-          <div className="ff-watchlist-realtime-log__body">
-            {watchlistRealtimeLog.map((line, index) => (
-              <div key={`${line}-${index}`}>{line}</div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

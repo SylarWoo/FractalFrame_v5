@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Mt5RealtimeTick, StoreV5CheckPayload } from '../../services/mt5/mt5SymbolsApi'
+import type { Mt5RealtimeTick, StoreV6CheckPayload } from '../../services/mt5/mt5SymbolsApi'
 import type { ChartPageTarget } from '../chart/ChartCoreHost'
 import {
   readPersistedRealtimeSnapshot,
   readWatchlistRealtimeEnabled,
   savePersistedRealtimeSnapshot,
   saveWatchlistRealtimeEnabled,
-} from '../mt5DataCenter/storeV5Persistence'
+} from '../mt5DataCenter/storeV6Persistence'
 import { useWatchlistRealtimeLog } from './useWatchlistRealtimeLog'
 import { useForegroundTickStream } from './useForegroundTickStream'
 
@@ -16,7 +16,7 @@ type UseWatchlistRealtimeOptions = {
   selectedStoreTableKey: string
   storePanelPersistenceEnabled: boolean
   watchlistSymbols: string[]
-  setLocalStoreStatus: (payload: StoreV5CheckPayload | null) => void
+  setLocalStoreStatus: (payload: StoreV6CheckPayload | null) => void
   onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }) => void
 }
 

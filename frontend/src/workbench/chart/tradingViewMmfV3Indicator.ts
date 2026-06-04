@@ -525,6 +525,37 @@ export function calculateMmfV3RowsForPage(dataList: KLineData[], inputContext?: 
   })
 }
 
+export function calculateMmfV3RowsForDisplayPage({
+  calculationRows,
+  displayRows,
+  inputContext,
+}: {
+  calculationRows: KLineData[]
+  displayRows: KLineData[]
+  inputContext?: unknown
+}): Promise<MmfV3IndicatorRow[]> {
+  const context = {
+    ...(inputContext && typeof inputContext === 'object' ? inputContext as Record<string, unknown> : {}),
+    pageKey: undefined,
+    staticRows: undefined,
+    visibleFrom: undefined,
+    visibleTo: undefined,
+  }
+  const displayRealRows = stripFuturePlaceholders(displayRows)
+  const calculationRealRows = stripFuturePlaceholders(calculationRows)
+  return calculateRemoteMmfV3Rows(calculationRealRows, context)
+    .then((calculatedRows) => {
+      const rowsByBarKey = new Map<string, MmfV3IndicatorRow>()
+      calculationRealRows.forEach((row, index) => {
+        rowsByBarKey.set(assignBarKey(row, normalizeMmfV3Context(context).symbol, normalizeMmfV3Context(context).period), calculatedRows[index] ?? {})
+      })
+      return displayRealRows.map((row) => {
+        const barKey = assignBarKey(row, normalizeMmfV3Context(context).symbol, normalizeMmfV3Context(context).period)
+        return rowsByBarKey.get(barKey) ?? {}
+      })
+    })
+}
+
 function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<MmfV3IndicatorRow>) {
   const crosshairIndex = Number(params.crosshair?.dataIndex)
   if (Number.isFinite(crosshairIndex)) return Math.max(0, Math.min(params.indicator.result.length - 1, Math.round(crosshairIndex)))

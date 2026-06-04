@@ -19,4 +19,4 @@ def required_job_id(query: dict[str, list[str]]) -> str:
 
 def parse_timeframes(value: str, default: str = "") -> list[str]:
     raw = value or default
-    return [item.strip().upper() for item in raw.split(",") if item.strip()]
+    return ["MN1" if item.strip().upper() == "MN" else item.strip().upper() for item in raw.split(",") if item.strip()]

@@ -6,9 +6,9 @@ import {
   readWatchlistSymbols,
   sharedSelectionChangedEvent,
   shortcutMenuChangedEvent,
-  storeV5StatusChangedEvent,
+  storeV6StatusChangedEvent,
   watchlistChangedEvent,
-} from '../mt5DataCenter/storeV5Persistence'
+} from '../mt5DataCenter/storeV6Persistence'
 import {
   periodToChartPeriod,
   readPeriodsForSymbol,
@@ -57,12 +57,12 @@ export function useShortcutMenuState({ onOpenChart }: UseShortcutMenuStateOption
 
     window.addEventListener(shortcutMenuChangedEvent, refresh)
     window.addEventListener(watchlistChangedEvent, refresh)
-    window.addEventListener(storeV5StatusChangedEvent, refresh)
+    window.addEventListener(storeV6StatusChangedEvent, refresh)
     window.addEventListener('storage', refresh)
     return () => {
       window.removeEventListener(shortcutMenuChangedEvent, refresh)
       window.removeEventListener(watchlistChangedEvent, refresh)
-      window.removeEventListener(storeV5StatusChangedEvent, refresh)
+      window.removeEventListener(storeV6StatusChangedEvent, refresh)
       window.removeEventListener('storage', refresh)
     }
   }, [])

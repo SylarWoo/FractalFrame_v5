@@ -60,11 +60,15 @@ export function SettingsCoordinatesPanel() {
           <span>商品代码</span>
           <SettingsMultiCheckSelect
             ariaLabel="商品代码标签"
-            defaultValue={['value', 'line']}
+            defaultValue={['value', 'line', 'history-label']}
+            onSelectedChange={(selected) => {
+              if (!selected.includes('value')) writeSettingsSymbolStateValue(chartSettingKeys.currentCandleCountdownVisible, false)
+            }}
             storageKey="coordinates.symbolLabel.visibleParts"
             options={[
               { label: '值', value: 'value' },
               { label: '线形图', value: 'line' },
+              { label: '历史标签', value: 'history-label' },
             ]}
           />
           <SettingsLineSwatch color="#26a69a" storageKey="coordinates.symbolLabel.line" />

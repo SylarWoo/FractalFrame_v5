@@ -1,22 +1,22 @@
-﻿import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import './RightDrawer.css'
 import '../mt5DataCenter/Mt5DataCenterPanel.css'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
-import { formatSymbolStatus, normalizeStoredStatus, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
-import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
-import { clearStorePanelPersistence, getInitialSymbolSnapshot, mergeSymbolRowsWithSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV5Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV5Persistence'
-import type { SelectedPanelTab } from '../mt5DataCenter/storeV5Persistence'
+import { formatSymbolStatus, normalizeStoredStatus, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV6StatusFormat'
+import type { StoreTableRow } from '../mt5DataCenter/storeV6StatusFormat'
+import { clearStorePanelPersistence, getInitialSymbolSnapshot, mergeSymbolRowsWithSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV6Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV6Persistence'
+import type { SelectedPanelTab } from '../mt5DataCenter/storeV6Persistence'
 import { storeTableAggregatePeriods } from './rightDrawerStoreTables'
 import { useRightDrawerResize } from './useRightDrawerResize'
 import { useRightDrawerSelection } from './useRightDrawerSelection'
-import { useStoreV5Jobs } from './useStoreV5Jobs'
+import { useStoreV6Jobs } from './useStoreV6Jobs'
 import { useWatchlistRealtime } from './useWatchlistRealtime'
 import { RightDrawerFrame } from './RightDrawerFrame'
 import { RightDrawerSettingsHost } from './RightDrawerSettingsHost'
 import type { RightDrawerProps } from './RightDrawerTypes'
 import {
-  fetchStoreV5Status,
+  fetchStoreV6Status,
   fetchMt5Symbols,
 } from '../../services/mt5/mt5SymbolsApi'
 import type { Mt5SymbolRow } from '../../services/mt5/mt5SymbolsApi'
@@ -93,8 +93,10 @@ export function RightDrawer({
     watchlistTableWrapRef,
   } = useRightDrawerResize({ drawerWidth, onResize })
   const {
-    canAggregateStoreV5,
+    canAggregateStoreV6,
+    aggregateProgress,
     handleAggregateStore,
+    handleCancelAggregateStore,
     handleCancelMt5M1Check,
     handleCancelPullStore,
     handleCheckMt5M1Staged,
@@ -102,6 +104,7 @@ export function RightDrawer({
     handleDeleteLocalStore,
     handleDeleteSelectedAggregates,
     handlePullStore,
+    handlePreparePagePartition,
     handleRefreshStoreStatus,
     localStoreStatus,
     m1CheckJob,
@@ -120,7 +123,7 @@ export function RightDrawer({
     storeOperationProgress,
     toggleAggregatePeriod,
     toggleAllAggregatePeriods,
-  } = useStoreV5Jobs({
+  } = useStoreV6Jobs({
     selectedSymbol,
     selectedRowSymbol: selectedSymbol,
     selectedStoreTableKey,
@@ -230,7 +233,7 @@ export function RightDrawer({
           symbols: rows,
         })
         if (nextSelectedSymbol) {
-          const localStatus = await fetchStoreV5Status(nextSelectedSymbol)
+          const localStatus = await fetchStoreV6Status(nextSelectedSymbol)
           if (cancelled) return
           setLocalStoreStatus(localStatus)
           setSelectedStoreTableKey(readPersistedStoreTableSelection(nextSelectedSymbol, storePanelPersistenceEnabled))
@@ -243,7 +246,7 @@ export function RightDrawer({
         const message = err instanceof Error ? err.message : String(err)
         setError(message)
         setStatus(initialSnapshot?.symbols.length
-          ? `${initialSnapshot.status} MT5 缓存刷新失败：${message}`
+          ? `${initialSnapshot.status} MT5 后台刷新失败：${message}`
           : `MT5 品种缓存读取失败：${message}`)
       } finally {
         if (!cancelled) setLoading(false)
@@ -308,7 +311,7 @@ export function RightDrawer({
     setStatus(refresh ? '正在扫描 MT5 品种...' : '正在读取 MT5 品种缓存...')
 
     try {
-      const payload = await fetchMt5Symbols({ limit: 50000, refresh })
+      const payload = await fetchMt5Symbols({ includeSessions: refresh, limit: 50000, refresh })
         const rows = mergeSymbolRowsWithSnapshot(Array.isArray(payload.symbols) ? payload.symbols : [], symbols)
       const merge = payload.scanReport ?? payload.cache?.lastScanReport
       const nextSelectedSymbol =
@@ -324,7 +327,7 @@ export function RightDrawer({
       setSymbols(rows)
       setSelectedSymbol(nextSelectedSymbol)
       const persistedCheck = readPersistedM1CheckResult(nextSelectedSymbol, storePanelPersistenceEnabled)
-      const persistedStoreStatus = readPersistedStoreV5Status(nextSelectedSymbol, storePanelPersistenceEnabled)
+      const persistedStoreStatus = readPersistedStoreV6Status(nextSelectedSymbol, storePanelPersistenceEnabled)
       setStoreCheck(persistedCheck?.payload ?? null)
       setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')
       setLocalStoreStatus(persistedStoreStatus?.payload ?? null)
@@ -350,7 +353,7 @@ export function RightDrawer({
 
   function handleSelectSymbol(symbol: string) {
     const persistedCheck = readPersistedM1CheckResult(symbol, storePanelPersistenceEnabled)
-    const persistedStoreStatus = readPersistedStoreV5Status(symbol, storePanelPersistenceEnabled)
+    const persistedStoreStatus = readPersistedStoreV6Status(symbol, storePanelPersistenceEnabled)
     const period = periodFromStoreTableKey(selectedStoreTableKey) || readSharedSelection().period || 'M1'
     setSelectedSymbol(symbol)
     setStoreCheck(persistedCheck?.payload ?? null)
@@ -455,10 +458,12 @@ export function RightDrawer({
           />
         ) : renderedActiveDrawer === 'mt5' ? (
           <RightDrawerMt5Body
-            canAggregateStoreV5={canAggregateStoreV5}
+            aggregateProgress={aggregateProgress}
+            canAggregateStoreV6={canAggregateStoreV6}
             columnWidths={columnWidths} error={error} loading={loading}
             localStoreStatus={localStoreStatus} m1CheckJob={m1CheckJob} mt5M1LastCheckedAt={mt5M1LastCheckedAt}
             onAggregateStore={handleAggregateStore}
+            onCancelAggregateStore={handleCancelAggregateStore}
             onCancelMt5M1Check={handleCancelMt5M1Check} onCancelPullStore={handleCancelPullStore}
             onCheckMt5M1Staged={handleCheckMt5M1Staged} onCleanLocalM1={handleCleanLocalM1}
             onColumnResizePointerDown={handleColumnResizePointerDown}
@@ -467,6 +472,7 @@ export function RightDrawer({
             onLoadSymbols={loadSymbols}
             onOpenChart={onOpenChart}
             onOpenStoreTableRow={handleOpenStoreTableRow} onOpenWatchlistPeriod={handleOpenWatchlistPeriod}
+            onPreparePagePartition={handlePreparePagePartition}
             onPullStore={handlePullStore} onRefreshStoreStatus={handleRefreshStoreStatus}
             onRepairM1Gaps={handleRefreshStoreStatus}
             onResetColumnWidth={resetColumnWidth}

@@ -40,8 +40,8 @@ def flush_pending_rows(
         firstTimeText=format_utc_text(ctx.first_time),
         lastTimeText=format_utc_text(ctx.last_time),
         cleanStatus="pending",
-        progressLabel=f"Writing batch: {batch_rows:,}, total written {ctx.rows_written_total:,}",
-        detailMessage="Writing StoreV5 raw_direct/M1 parquet",
+        progressLabel="正在写入 Raw Store",
+        detailMessage=f"Writing batch: {batch_rows:,}, total written {ctx.rows_written_total:,}",
     )
     write = append_ohlcv_part_v5(
         ctx.pending_rows,
@@ -96,6 +96,6 @@ def flush_pending_rows(
         firstTimeText=format_utc_text(ctx.first_time),
         lastTimeText=format_utc_text(ctx.last_time),
         cleanStatus="pending",
-        progressLabel=f"Batch written: {batch_written:,}, total {ctx.rows_written_total:,}",
-        detailMessage="Current parquet batch written",
+        progressLabel="本批完成，准备下一批",
+        detailMessage=f"Batch written: {batch_written:,}, total {ctx.rows_written_total:,}",
     )

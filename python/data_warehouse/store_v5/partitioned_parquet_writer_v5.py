@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from .manifest_v5 import load_manifest_v5, save_manifest_v5, utc_now_iso
-from .ohlcv_schema_v5 import CANONICAL_COLUMNS, normalize_ohlcv_rows_v5
+from .ohlcv_schema_v5 import PARQUET_COLUMNS, normalize_ohlcv_rows_v5
 from .store_v5_paths import (
     SCHEMA_VERSION,
     STORE_VERSION,
@@ -106,7 +106,7 @@ def append_ohlcv_part_v5(
             first_time = int(partition_df["time"].min())
             part_name = f"part-{pd.to_datetime(first_time, unit='s', utc=True).strftime('%Y%m%d')}-{uuid.uuid4().hex[:8]}.parquet"
             out = partition_dir / part_name
-            partition_df[CANONICAL_COLUMNS].to_parquet(out, index=False, engine="pyarrow")
+            partition_df[PARQUET_COLUMNS].to_parquet(out, index=False, engine="pyarrow")
             rows_written += len(partition_df)
             written_files.append(str(out))
 

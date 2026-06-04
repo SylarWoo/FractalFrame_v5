@@ -21,6 +21,7 @@ import { readCandleBarStyle, resolveCandleValueColor, resolveStatusTitle } from 
 import { formatGlobalPrice } from './globalPricePrecision'
 import { formatIndicatorValue } from './indicatorValueFormat'
 import { mainVolumeIndicatorName } from './mainVolumeIndicator'
+import { tradingViewVwapIndicatorName } from './tradingViewVwapIndicator'
 
 export type PaneTitleContext = {
   displayName?: string
@@ -398,7 +399,7 @@ function createCandleMaParts(chart: Chart, crosshairIndex: number | null) {
 }
 
 function createCandleVwapParts(chart: Chart, crosshairIndex: number | null) {
-  const indicator = indicatorFromChart(chart, 'candle_pane', 'VWAP')
+  const indicator = indicatorFromChart(chart, 'candle_pane', tradingViewVwapIndicatorName)
   if (!indicator) return []
   const settings = mergeSettings(defaultVwapIndicatorSettings, indicator.calcParams?.[0])
   const row = readIndicatorRow(chart, indicator, crosshairIndex)

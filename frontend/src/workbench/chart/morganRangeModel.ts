@@ -237,6 +237,63 @@ export function calculateMorganRangeSegmentsForModeCached(dataList: KLineData[],
   return segments
 }
 
+export function alignMorganRangeSegmentsToDisplayRows({
+  calculationRows,
+  displayRows,
+  segments,
+}: {
+  calculationRows: KLineData[]
+  displayRows: KLineData[]
+  segments: MorganRangeSegment[]
+}) {
+  const realCalculationRows = stripFuturePlaceholders(calculationRows)
+  const realDisplayRows = stripFuturePlaceholders(displayRows)
+  if (!realCalculationRows.length || !realDisplayRows.length || !segments.length) return []
+
+  const displayIndexByTimestamp = new Map<number, number>()
+  realDisplayRows.forEach((row, index) => {
+    const timestamp = Number(row.timestamp)
+    if (Number.isFinite(timestamp)) displayIndexByTimestamp.set(timestamp, index)
+  })
+
+  const lastDisplayIndex = realDisplayRows.length - 1
+  const aligned: MorganRangeSegment[] = []
+  segments.forEach((segment) => {
+    const startTimestamp = Number(realCalculationRows[segment.startIndex]?.timestamp ?? segment.startTimestamp)
+    const endTimestamp = Number(realCalculationRows[Math.min(segment.endIndex, realCalculationRows.length - 1)]?.timestamp)
+    if (!Number.isFinite(startTimestamp) || !Number.isFinite(endTimestamp)) return
+
+    let startIndex: number | null = null
+    let endIndex: number | null = null
+    for (let index = 0; index < realDisplayRows.length; index += 1) {
+      const timestamp = Number(realDisplayRows[index]?.timestamp)
+      if (!Number.isFinite(timestamp)) continue
+      if (timestamp >= startTimestamp && timestamp <= endTimestamp) {
+        if (startIndex == null) startIndex = index
+        endIndex = index
+      }
+    }
+
+    if (startIndex == null || endIndex == null) {
+      const exactStart = displayIndexByTimestamp.get(startTimestamp)
+      const exactEnd = displayIndexByTimestamp.get(endTimestamp)
+      if (exactStart == null && exactEnd == null) return
+      startIndex = exactStart ?? 0
+      endIndex = exactEnd ?? lastDisplayIndex
+    }
+
+    const displayStartRow = realDisplayRows[startIndex]
+    if (!displayStartRow) return
+    aligned.push({
+      ...segment,
+      endIndex: Math.max(startIndex, Math.min(endIndex, lastDisplayIndex)),
+      startIndex,
+      startTimestamp: Number(displayStartRow.timestamp),
+    })
+  })
+  return aligned
+}
+
 export function calculateMorganRangeSegments(dataList: KLineData[], futureBars = 0): MorganRangeSegment[] {
   return calculateMorganRangeSegmentsForMode(dataList, 'H4_M5', futureBars)
 }

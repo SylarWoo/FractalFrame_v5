@@ -1,18 +1,18 @@
 import { useEffect, useMemo } from 'react'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
-import type { Mt5SymbolRow, StoreV5CheckPayload } from '../../services/mt5/mt5SymbolsApi'
+import type { Mt5SymbolRow, StoreV6CheckPayload } from '../../services/mt5/mt5SymbolsApi'
 import type { ChartPageTarget } from '../chart/ChartCoreHost'
-import type { StoreTableRow } from '../mt5DataCenter/storeV5StatusFormat'
-import { storeTableKeyForPeriod } from '../mt5DataCenter/storeV5StatusFormat'
+import type { StoreTableRow } from '../mt5DataCenter/storeV6StatusFormat'
+import { storeTableKeyForPeriod } from '../mt5DataCenter/storeV6StatusFormat'
 import {
   readPersistedM1CheckResult,
-  readPersistedStoreV5Status,
+  readPersistedStoreV6Status,
   readSharedSelection,
   saveShortcutMenuPeriods,
   saveSymbolSnapshot,
   sharedSelectionChangedEvent,
-} from '../mt5DataCenter/storeV5Persistence'
-import type { SharedSelection } from '../mt5DataCenter/storeV5Persistence'
+} from '../mt5DataCenter/storeV6Persistence'
+import type { SharedSelection } from '../mt5DataCenter/storeV6Persistence'
 import { resolveMt5SymbolDisplay } from './mt5SymbolDisplay'
 import {
   buildVisibleStoreTableRows,
@@ -27,10 +27,10 @@ type UseRightDrawerSelectionOptions = {
   setSelectedSymbol: Dispatch<SetStateAction<string>>
   status: string
   storePanelPersistenceEnabled: boolean
-  setStoreCheck: Dispatch<SetStateAction<StoreV5CheckPayload | null>>
+  setStoreCheck: Dispatch<SetStateAction<StoreV6CheckPayload | null>>
   setMt5M1LastCheckedAt: Dispatch<SetStateAction<string>>
-  localStoreStatus: StoreV5CheckPayload | null
-  setLocalStoreStatus: Dispatch<SetStateAction<StoreV5CheckPayload | null>>
+  localStoreStatus: StoreV6CheckPayload | null
+  setLocalStoreStatus: Dispatch<SetStateAction<StoreV6CheckPayload | null>>
   watchlistSymbols: string[]
   shortcutMenuEnabled: boolean
   selectedStoreTableKey: string
@@ -116,7 +116,7 @@ export function useRightDrawerSelection({
 
       if (nextSymbol && nextSymbol !== selectedSymbol) {
         const persistedCheck = readPersistedM1CheckResult(nextSymbol, storePanelPersistenceEnabled)
-        const persistedStoreStatus = readPersistedStoreV5Status(nextSymbol, storePanelPersistenceEnabled)
+        const persistedStoreStatus = readPersistedStoreV6Status(nextSymbol, storePanelPersistenceEnabled)
         setSelectedSymbol(nextSymbol)
         setStoreCheck(persistedCheck?.payload ?? null)
         setMt5M1LastCheckedAt(persistedCheck?.checkedAt ?? '')

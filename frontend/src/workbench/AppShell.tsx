@@ -32,7 +32,7 @@ import { objectTreeDrawingsChangedEvent } from './rightDrawer/objectTree/objectT
 import type { ObjectTreeDrawingItem } from './rightDrawer/objectTree/objectTreeTypes'
 import type { IndicatorShortcutItem, RightDrawerId, StrategyShortcutItem } from './rightDrawer/RightDrawerTypes'
 import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
-import { formatChartLoadStatus } from './mt5DataCenter/storeV5StatusFormat'
+import { formatChartLoadStatus } from './mt5DataCenter/storeV6StatusFormat'
 import { readBooleanFlag, readJson, readString, removeStorageItem, writeBooleanFlag, writeJson, writeString } from './persistence/jsonStorage'
 import { storageKeys } from './persistence/storageKeys'
 import { readSettingsBooleanValue, readSettingsStringValue, settingsSymbolChangedEvent } from './settingsSymbolState'
@@ -100,6 +100,8 @@ const strategyRows = [
 ] as const
 
 const strategyLabels = Object.fromEntries(strategyRows.map((row) => [row.key, row.name]))
+const chartIndicatorsEnabled = true
+const chartStrategiesEnabled = false
 
 function readInitialIndicatorShortcutKeys() {
   const parsed = readJson<unknown[]>(storageKeys.indicatorShortcutKeys, [])
@@ -235,7 +237,7 @@ export function AppShell() {
   const [strategyShortcutKeys, setStrategyShortcutKeys] = useState<string[]>(readInitialStrategyShortcutKeys)
   const [strategyPersistenceEnabled, setStrategyPersistenceEnabled] = useState(readInitialStrategyPersistenceEnabled)
   const [loadedStrategyKeys, setLoadedStrategyKeys] = useState<string[]>(readInitialLoadedStrategyKeys)
-  const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }>(() => {
+  const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null; limit?: number; reloadId?: number; page?: ChartPageTarget | null }>(() => {
     const shared = readSharedSelection()
     return {
       symbol: shared.symbol,
@@ -257,6 +259,9 @@ export function AppShell() {
       chartTarget.reloadId ?? '',
     ].join(':'),
   })
+  const realtimeIndicatorRuntimeEnabled = chartIndicatorsEnabled &&
+    chartTarget.page?.realtime !== false &&
+    chartJump?.timestamp == null
   const loadedIndicatorKeys = indicatorsController.loadedIndicatorKeys
   const refreshLoadedIndicatorsVisibility = indicatorsController.refreshLoadedIndicatorsVisibility
   const indicatorShortcuts: IndicatorShortcutItem[] = indicatorShortcutKeys.map((key) => ({
@@ -509,13 +514,15 @@ export function AppShell() {
         >
           <ChartCoreHost
             displayName={chartDisplayName}
-            indicatorCommand={indicatorsController.command}
+            indicatorCommand={realtimeIndicatorRuntimeEnabled ? indicatorsController.command : null}
+            indicatorsEnabled={realtimeIndicatorRuntimeEnabled}
             jump={chartJump}
-            loadedStrategyKeys={loadedStrategyKeys}
+            limit={chartTarget.limit}
+            loadedStrategyKeys={chartStrategiesEnabled ? loadedStrategyKeys : []}
             maSettings={indicatorsController.settings.ma}
             mmfLoaded={false}
             mmfSettings={indicatorsController.settings.mmfV3}
-            morganRangeMode={loadedIndicatorKeys.includes('MR-M30') && chartTarget.period === 'M30' ? 'D1_M30' : 'H4_M5'}
+            morganRangeMode={realtimeIndicatorRuntimeEnabled && loadedIndicatorKeys.includes('MR-M30') && chartTarget.period === 'M30' ? 'D1_M30' : 'H4_M5'}
             stochSettings={indicatorsController.settings.stoch}
             tsiSettings={indicatorsController.settings.tsi}
             vdoSettings={indicatorsController.settings.vdo}

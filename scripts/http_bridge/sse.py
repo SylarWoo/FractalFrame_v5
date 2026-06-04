@@ -6,6 +6,8 @@ from typing import Any, Callable
 
 from .jobs import AGGREGATE_JOBS, AGGREGATE_JOBS_CONDITION, AGGREGATE_JOB_TERMINAL_PHASES, PULL_JOBS, PULL_JOBS_CONDITION, PULL_JOB_TERMINAL_PHASES
 from .response import start_sse
+from .store_v6_aggregate_job_state import STORE_V6_AGGREGATE_JOBS, STORE_V6_AGGREGATE_JOBS_CONDITION
+from .store_v6_pull_job_state import STORE_V6_PULL_JOBS, STORE_V6_PULL_JOBS_CONDITION
 
 
 def send_mt5_tick_events(
@@ -125,6 +127,28 @@ def send_aggregate_job_events(handler: Any, job_id: str, *, utc_now_iso: Callabl
         job_id,
         jobs=AGGREGATE_JOBS,
         condition=AGGREGATE_JOBS_CONDITION,
+        terminal_phases=AGGREGATE_JOB_TERMINAL_PHASES,
+        utc_now_iso=utc_now_iso,
+    )
+
+
+def send_store_v6_pull_job_events(handler: Any, job_id: str, *, utc_now_iso: Callable[[], str]) -> None:
+    send_job_events(
+        handler,
+        job_id,
+        jobs=STORE_V6_PULL_JOBS,
+        condition=STORE_V6_PULL_JOBS_CONDITION,
+        terminal_phases=PULL_JOB_TERMINAL_PHASES,
+        utc_now_iso=utc_now_iso,
+    )
+
+
+def send_store_v6_aggregate_job_events(handler: Any, job_id: str, *, utc_now_iso: Callable[[], str]) -> None:
+    send_job_events(
+        handler,
+        job_id,
+        jobs=STORE_V6_AGGREGATE_JOBS,
+        condition=STORE_V6_AGGREGATE_JOBS_CONDITION,
         terminal_phases=AGGREGATE_JOB_TERMINAL_PHASES,
         utc_now_iso=utc_now_iso,
     )

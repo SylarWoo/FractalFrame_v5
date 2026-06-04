@@ -19,7 +19,7 @@ export function readSymbolLabelVisibleParts() {
   const visibleParts = readSettingsSymbolState()['coordinates.symbolLabel.visibleParts']
   return Array.isArray(visibleParts)
     ? visibleParts.filter((value): value is string => typeof value === 'string')
-    : ['value', 'line']
+    : ['value', 'line', 'history-label']
 }
 
 export function readAxisTextSize() {

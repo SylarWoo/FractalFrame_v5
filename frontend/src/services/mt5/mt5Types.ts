@@ -58,6 +58,16 @@ export type Mt5SymbolsPayload = {
     added?: number
     updated?: number
   }
+  storeV6Sessions?: {
+    ok?: boolean
+    status?: string
+    count?: number
+    detailsPath?: string
+    rulesPath?: string
+    symbolsDir?: string
+    updatedAt?: string
+    error?: string
+  } | null
   cache?: {
     ready?: boolean
     updatedAt?: string

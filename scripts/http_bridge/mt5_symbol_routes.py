@@ -46,9 +46,9 @@ def handle_mt5_symbols_get(handler: Any, parsed: ParseResult, services: Any) -> 
     refresh = first_query_value(query, "refresh", default="0").lower() in {"1", "true", "yes"}
     include_sessions = first_query_value(query, "sessions", "includeSessions", default="0").lower() in {"1", "true", "yes"}
     payload = (
-        services.scan_mt5_symbols(handler.cache_root, query=text_query, market=market, limit=limit, include_sessions=include_sessions)
+        services.scan_mt5_symbols(handler.cache_root, query=text_query, market=market, limit=limit, include_sessions=include_sessions, store_root=handler.store_v6_root())
         if refresh
-        else services.read_symbol_cache(handler.cache_root, query=text_query, market=market, limit=limit, include_sessions=include_sessions)
+        else services.read_symbol_cache(handler.cache_root, query=text_query, market=market, limit=limit, include_sessions=include_sessions, store_root=handler.store_v6_root())
     )
     handler.send_json(200 if payload.get("ok") is True else 503, payload)
     return True

@@ -17,11 +17,10 @@ MT5_TIMEFRAME_NAMES = {
     "M15": "TIMEFRAME_M15",
     "M30": "TIMEFRAME_M30",
     "H1": "TIMEFRAME_H1",
-    "H2": "TIMEFRAME_H2",
-    "H3": "TIMEFRAME_H3",
     "H4": "TIMEFRAME_H4",
     "D1": "TIMEFRAME_D1",
     "W1": "TIMEFRAME_W1",
+    "MN": "TIMEFRAME_MN1",
     "MN1": "TIMEFRAME_MN1",
 }
 
@@ -299,9 +298,11 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def normalize_timeframe(value: str) -> str:
     timeframe = str(value or "M1").strip().upper()
+    if timeframe == "MN1":
+        return "MN"
     if timeframe == "1M":
         return "M1"
-    if timeframe.endswith("M") and timeframe != "MN1":
+    if timeframe.endswith("M") and timeframe != "MN":
         return f"M{timeframe[:-1]}"
     if timeframe.endswith("H"):
         return f"H{timeframe[:-1]}"
@@ -509,7 +510,16 @@ def filter_symbols(symbols: list[dict[str, Any]], query: str, market: str, limit
     return rows
 
 
-def scan_mt5_symbols(cache_root: Path, query: str, market: str, limit: int, include_sessions: bool = False) -> dict[str, Any]:
+def sync_store_v6_symbol_sessions(rows: list[dict[str, Any]], *, store_root: Path | None, generated_at: str) -> dict[str, Any] | None:
+    try:
+        from python.data_warehouse.store_v6.symbol_sessions_v6 import sync_symbol_sessions_v6
+
+        return sync_symbol_sessions_v6(rows, store_root=store_root, generated_at=generated_at)
+    except Exception as exc:
+        return {"ok": False, "status": "store_v6_symbol_sessions_sync_failed", "error": str(exc)}
+
+
+def scan_mt5_symbols(cache_root: Path, query: str, market: str, limit: int, include_sessions: bool = False, store_root: Path | None = None) -> dict[str, Any]:
     published_at = utc_now_iso()
     base_fail = {
         "ok": False,
@@ -548,6 +558,8 @@ def scan_mt5_symbols(cache_root: Path, query: str, market: str, limit: int, incl
         all_rows = [symbol_row(item, published_at) for item in raw_symbols]
         all_rows = [row for row in all_rows if row.get("symbol")]
         all_rows.sort(key=lambda item: str(item.get("symbol", "")).lower())
+        if include_sessions:
+            attach_symbol_sessions(mt5, all_rows)
 
         previous = read_json(cache_root / SYMBOL_CACHE_FILE)
         previous_symbols = previous.get("symbols") if isinstance(previous, dict) and isinstance(previous.get("symbols"), list) else []
@@ -581,10 +593,9 @@ def scan_mt5_symbols(cache_root: Path, query: str, market: str, limit: int, incl
         }
         write_json(cache_root / SYMBOL_CACHE_FILE, cache_payload)
         write_json(cache_root / SYMBOL_REPORT_FILE, report)
+        store_v6_sessions = sync_store_v6_symbol_sessions(all_rows, store_root=store_root, generated_at=published_at) if include_sessions else None
 
         rows = filter_symbols(all_rows, query=query, market=market, limit=limit)
-        if include_sessions:
-            attach_symbol_sessions(mt5, rows)
         return {
             "ok": True,
             "status": "mt5_symbol_universe_incremental_cache_ready_v1",
@@ -599,6 +610,7 @@ def scan_mt5_symbols(cache_root: Path, query: str, market: str, limit: int, incl
                 "reportPath": str(cache_root / SYMBOL_REPORT_FILE),
                 "updatedAt": published_at,
             },
+            "storeV6Sessions": store_v6_sessions,
             "publishedAt": utc_now_iso(),
             "updatedAt": published_at,
         }
@@ -612,7 +624,7 @@ def scan_mt5_symbols(cache_root: Path, query: str, market: str, limit: int, incl
                 pass
 
 
-def read_symbol_cache(cache_root: Path, query: str, market: str, limit: int, include_sessions: bool = False) -> dict[str, Any]:
+def read_symbol_cache(cache_root: Path, query: str, market: str, limit: int, include_sessions: bool = False, store_root: Path | None = None) -> dict[str, Any]:
     published_at = utc_now_iso()
     cache_path = cache_root / SYMBOL_CACHE_FILE
     payload = read_json(cache_path)
@@ -633,6 +645,7 @@ def read_symbol_cache(cache_root: Path, query: str, market: str, limit: int, inc
     rows = filter_symbols(all_symbols, query=query, market=market, limit=limit)
     if include_sessions and rows:
         attach_exported_symbol_sessions(None, rows)
+        sync_store_v6_symbol_sessions(rows, store_root=store_root, generated_at=published_at)
     return {
         "ok": True,
         "status": "mt5_symbol_universe_cache_ready_v1",
