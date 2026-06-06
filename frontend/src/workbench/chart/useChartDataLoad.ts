@@ -5,7 +5,7 @@ import type { Chart, KLineData } from 'klinecharts'
 import { loadStoreV6KLineData } from '../../datafeed/storeV6KLineDatafeed'
 import { chartError, chartInfo } from './chartLogger'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
-import { applyNewDataWithFuturePlaceholders, stripFuturePlaceholders } from './chartFuturePlaceholders'
+import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { applySessionBreakIndicator } from './sessionBreakIndicator'
 import {
   jumpBarSpace,
@@ -25,12 +25,13 @@ import {
 import type { ChartPageTarget } from './ChartCoreHost'
 import { preparePageDataPackage } from './pageData/pageDataManager'
 import { writePageDataPackage } from './pageData/pageDataCache'
-import { createPageDataSliceFromDisplayRows } from './pageData/pageDataProvider'
 import { pageDataPackageToSlice } from './pageData/pageDataSlice'
 import { writePageCalculationContext } from './pageCalculationContext'
 import { resolvePageLoadPlan } from './pageLoader/pageLoadPlanner'
-import { applyChartPageWindow } from './chartAdapter/chartWindowAdapter'
+import { applyChartPageWindow, clearChartPageWindow } from './chartAdapter/chartWindowAdapter'
 import { createChartPageWindow } from './pageWindow/chartPageWindow'
+import { createHistoryPageWindow } from './pageWindow/historyPageWindow'
+import { createRealtimePageWindow } from './pageWindow/realtimePageWindow'
 import { readRealtimePageBuffer, writeRealtimePageBuffer } from './realtimePageBuffer'
 
 export type ChartLoadStateCore = {
@@ -238,13 +239,11 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
         target: options.jumpTimestamp,
         hasMoreOlder,
       })
-      applyChartPageWindow(chart, createChartPageWindow(createPageDataSliceFromDisplayRows({
-        displayRows: data,
-        mode: 'history',
-        pageIndex: 0,
+      applyChartPageWindow(chart, createHistoryPageWindow({
+        rows: data,
         period: options.period,
         symbol: options.symbol,
-      })), { hasMoreOlder })
+      }), { hasMoreOlder })
       applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
@@ -272,7 +271,7 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
     .catch((error: unknown) => {
       if (options.shouldIgnore()) return
       chartError('[StoreV6Datafeed] request jump failed', error)
-      applyNewDataWithFuturePlaceholders(chart, [], options.period, false)
+      clearChartPageWindow(chart, options.period)
       options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: jumpDisplayWindowBars, rows: 0 })
     })
 }
@@ -339,7 +338,7 @@ function loadPagedWindow(chart: Chart, options: LoadOptions & { page: ChartPageT
     .catch((error: unknown) => {
       if (options.shouldIgnore()) return
       chartError('[StoreV6Datafeed] request page failed', error)
-      applyNewDataWithFuturePlaceholders(chart, [], options.period, false)
+      clearChartPageWindow(chart, options.period)
       options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: limit, rows: 0 })
     })
 }
@@ -414,13 +413,19 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
         totalRows: options.totalRows,
       })
       chartInfo('[StoreV6Datafeed] callback init done', { rows: data.length, hasMoreOlder })
-      applyChartPageWindow(chart, createChartPageWindow(createPageDataSliceFromDisplayRows({
-        displayRows: data,
-        mode: options.followLatest ? 'realtime' : 'history',
-        pageIndex: options.page?.index ?? 1,
-        period: options.period,
-        symbol: options.symbol,
-      })), { hasMoreOlder })
+      applyChartPageWindow(chart, options.followLatest
+        ? createRealtimePageWindow({
+            rows: data,
+            pageIndex: options.page?.index ?? 1,
+            period: options.period,
+            symbol: options.symbol,
+          })
+        : createHistoryPageWindow({
+            rows: data,
+            pageIndex: options.page?.index ?? 0,
+            period: options.period,
+            symbol: options.symbol,
+          }), { hasMoreOlder })
       applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
@@ -446,7 +451,7 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
     })
     .catch(() => {
       if (options.shouldIgnore()) return
-      applyNewDataWithFuturePlaceholders(chart, [], options.period, false)
+      clearChartPageWindow(chart, options.period)
       options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: options.requestedRows, rows: 0 })
     })
 }

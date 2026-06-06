@@ -11,11 +11,13 @@ import { storageKeys } from '../persistence/storageKeys'
 import { dispatchWorkbenchEvent, workbenchEvents } from '../persistence/workbenchEvents'
 import { applyPriceVolumePrecision } from './chartStyleAppliers'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
-import { applyNewDataWithFuturePlaceholders, stripFuturePlaceholders } from './chartFuturePlaceholders'
+import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { mergeKLineData } from './chartCoreDataUtils'
 import { storeV6HistoryPageSize, storeV6LivePageSize } from './pagePartition/pagePartitionBuilder'
 import { readRealtimePageBuffer, upsertRealtimePageBufferRow, writeRealtimePageBuffer } from './realtimePageBuffer'
 import { enrichRealtimeBarIdentity, normalizeRealtimePeriod } from './realtimeBarIdentity'
+import { applyChartPageWindow, updateChartPageWindowTail } from './chartAdapter/chartWindowAdapter'
+import { createRealtimePageWindow } from './pageWindow/realtimePageWindow'
 
 type UseChartRealtimeTicksOptions = {
   chartInstanceRef: MutableRefObject<Chart | null>
@@ -287,7 +289,9 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       if (!chart || rows.length === 0) return
       const currentRows = chart.getDataList()
       if (!shouldApplyRows(currentRows, rows)) return
-      applyNewDataWithFuturePlaceholders(chart, rows, period, false, () => {
+      applyChartPageWindow(chart, createRealtimePageWindow({ period, rows, symbol }), { hasMoreOlder: false })
+      window.requestAnimationFrame(() => {
+        if (disposed) return
         applyPriceVolumePrecision(chart, symbol)
         dispatchChartRealtimeDataChanged()
       })
@@ -407,7 +411,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       }
       if (tickDataReadyFallbackTimer !== 0) window.clearTimeout(tickDataReadyFallbackTimer)
       tickDataReadyFallbackTimer = window.setTimeout(finishRealtimeTickUpdate, 120)
-      chart.updateData(realtimeRows[realtimeRows.length - 1] ?? nextRow)
+      updateChartPageWindowTail(chart, createRealtimePageWindow({ period, rows: realtimeRows, symbol }))
     }
 
     const requestRateVolume = (detail: Mt5RealtimeTickEventDetail) => {

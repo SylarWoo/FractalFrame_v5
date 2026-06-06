@@ -9,8 +9,7 @@ import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { applyPriceVolumePrecision } from './chartStyleAppliers'
 import { scheduleResetYAxisAutoScaleFlags } from './chartAxisInteraction'
 import { applyChartPageWindow } from './chartAdapter/chartWindowAdapter'
-import { createPageDataSliceFromDisplayRows } from './pageData/pageDataProvider'
-import { createChartPageWindow } from './pageWindow/chartPageWindow'
+import { createHistoryPageWindow } from './pageWindow/historyPageWindow'
 
 type StepLoad = { direction: 'left' | 'right'; id: number } | null
 type LoadState = {
@@ -89,13 +88,11 @@ export function useChartStepLoad({ chartInstanceRef, period, setLoadState, stepL
         const targetTimestamp = stepLoad.direction === 'left'
           ? data[Math.floor(data.length / 2)]?.timestamp
           : data[Math.max(0, data.length - Math.floor(data.length / 2) - 1)]?.timestamp
-        applyChartPageWindow(chart, createChartPageWindow(createPageDataSliceFromDisplayRows({
-          displayRows: merged,
-          mode: 'history',
-          pageIndex: 0,
+        applyChartPageWindow(chart, createHistoryPageWindow({
+          rows: merged,
           period,
           symbol,
-        })), { hasMoreOlder })
+        }), { hasMoreOlder })
         applyPriceVolumePrecision(chart, symbol)
         window.setTimeout(() => {
           if (disposed) return
