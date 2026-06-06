@@ -20,6 +20,11 @@ type SessionBreakCoordinate = {
   x: number
 }
 
+type SessionBreakKLineData = KLineData & {
+  sessionId?: string
+  tradingDay?: string
+}
+
 type IndicatorXAxisAdapter = {
   convertToPixel?: (value: number) => number
 }
@@ -90,7 +95,24 @@ function resolveRealTimestampMs(data: KLineData) {
   return raw < 1_000_000_000_000 ? raw * 1000 : raw
 }
 
-function isSessionBreakRow(previous: KLineData, current: KLineData, symbol: string) {
+function resolveExplicitSessionBreakKey(row: KLineData) {
+  const source = row as SessionBreakKLineData
+  if (typeof source.tradingDay === 'string' && source.tradingDay.trim()) {
+    return `tradingDay:${source.tradingDay.trim()}`
+  }
+  if (typeof source.sessionId === 'string' && source.sessionId.trim()) {
+    return `sessionId:${source.sessionId.trim()}`
+  }
+  return null
+}
+
+export function isSessionBreakRow(previous: KLineData, current: KLineData, symbol: string) {
+  const previousExplicitKey = resolveExplicitSessionBreakKey(previous)
+  const currentExplicitKey = resolveExplicitSessionBreakKey(current)
+  if (previousExplicitKey && currentExplicitKey) {
+    return previousExplicitKey !== currentExplicitKey
+  }
+
   const anchorHourUtc = resolveSessionAnchorHourUtc(symbol)
   return resolveSessionDayKey(resolveRealTimestampMs(previous), anchorHourUtc)
     !== resolveSessionDayKey(resolveRealTimestampMs(current), anchorHourUtc)

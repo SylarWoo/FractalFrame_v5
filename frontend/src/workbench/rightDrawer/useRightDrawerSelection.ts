@@ -41,6 +41,31 @@ type UseRightDrawerSelectionOptions = {
   onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }) => void
 }
 
+export function parseSymbolSearchTokens(query: string) {
+  return query
+    .split(/[,\s，、;；|]+/g)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+export function symbolRowMatchesSearchTokens(row: Mt5SymbolRow, tokens: string[]) {
+  if (tokens.length === 0) return true
+  const display = resolveMt5SymbolDisplay(row)
+  const searchableText = [
+    row.symbol,
+    row.name,
+    row.description,
+    row.path,
+    row.category,
+    display.chineseName,
+    display.assetType,
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  return tokens.some((token) => searchableText.includes(token))
+}
+
 export function useRightDrawerSelection({
   query,
   symbols,
@@ -62,23 +87,9 @@ export function useRightDrawerSelection({
   onOpenChart,
 }: UseRightDrawerSelectionOptions) {
   const visibleSymbols = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    if (!normalizedQuery) return symbols
-    return symbols.filter((row) => {
-      const display = resolveMt5SymbolDisplay(row)
-      return [
-        row.symbol,
-        row.name,
-        row.description,
-        row.path,
-        row.category,
-        display.chineseName,
-        display.assetType,
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(normalizedQuery)
-    })
+    const tokens = parseSymbolSearchTokens(query)
+    if (tokens.length === 0) return symbols
+    return symbols.filter((row) => symbolRowMatchesSearchTokens(row, tokens))
   }, [query, symbols])
 
   const selectedRow = useMemo(() => {

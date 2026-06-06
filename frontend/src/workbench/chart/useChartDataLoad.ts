@@ -147,7 +147,27 @@ export function useChartDataLoad({
       chart.setLoadDataCallback(({ callback }) => callback([], false))
       if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer)
     }
-  }, [chartInstanceRef, jump?.id, jump?.timestamp, limit, lookaheadRows, page, page?.index, page?.limit, page?.realtime, page?.rows, page?.timeFrom, page?.timeTo, period, reloadId, symbol, totalRows, viewportScope, warmupRows])
+  }, [
+    chartInstanceRef,
+    jump?.id,
+    jump?.timestamp,
+    limit,
+    lookaheadRows,
+    page?.fromGlobalIndex,
+    page?.index,
+    page?.limit,
+    page?.realtime,
+    page?.rows,
+    page?.timeFrom,
+    page?.timeTo,
+    page?.toGlobalIndex,
+    period,
+    reloadId,
+    symbol,
+    totalRows,
+    viewportScope,
+    warmupRows,
+  ])
 
   return { loadState, setLoadState }
 }

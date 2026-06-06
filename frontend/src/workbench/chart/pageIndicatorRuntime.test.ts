@@ -51,6 +51,31 @@ describe('pageIndicatorRuntime', () => {
     expect(snapshot?.byBarKey['XAUUSDm|M5|1700000300']?.stoch).toEqual({ k: 40, d: 50 })
   })
 
+  it('deduplicates page rows by barKey before writing runtime snapshots', () => {
+    const context = createPageIndicatorRuntimeContext({
+      mode: 'realtime',
+      pageIndex: 1,
+      period: 'M5',
+      rows: [
+        rows[0],
+        { ...rows[0], close: 9 },
+        rows[1],
+      ] as KLineData[],
+      symbol: 'XAUUSDm',
+    })
+
+    expect(context.rowsCount).toBe(2)
+    expect(() => writePageIndicatorRuntimeSnapshot({
+      context,
+      createSnapshotRows: () => ({ stochRows: [{ k: 20, d: 30 }, { k: 40, d: 50 }] }),
+      settingsHash: 'settings-dedupe',
+      settingsHashKey: 'Stoch',
+    })).not.toThrow()
+
+    const snapshot = readIndicatorPageSnapshot(context.pageKey)
+    expect(snapshot?.rows).toHaveLength(2)
+  })
+
   it('aligns calculation-row indicator output back to display rows', () => {
     const calculationRows = [
       { timestamp: 1_699_999_700_000, open: 0, high: 0, low: 0, close: 0 },

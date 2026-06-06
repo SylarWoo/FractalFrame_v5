@@ -29,6 +29,14 @@ export type PageIndicatorSnapshotRowsInput = Omit<
   'period' | 'rows' | 'symbol'
 >
 
+function normalizeUniquePageIndicatorRows(rows: KLineData[], symbol: string, period: string) {
+  const rowsByBarKey = new Map<string, KLineData>()
+  stripFuturePlaceholders(rows).forEach((row) => {
+    rowsByBarKey.set(createBarKey(symbol, period, getKLineTimeSeconds(row)), row)
+  })
+  return [...rowsByBarKey.values()]
+}
+
 export function createPageIndicatorRuntimeContext({
   mode,
   pageIndex,
@@ -46,7 +54,7 @@ export function createPageIndicatorRuntimeContext({
 }): PageIndicatorRuntimeContext {
   const normalizedPeriod = period.trim().toUpperCase()
   const normalizedSymbol = symbol.trim()
-  const realRows = stripFuturePlaceholders(rows)
+  const realRows = normalizeUniquePageIndicatorRows(rows, normalizedSymbol, normalizedPeriod)
   const first = realRows[0]
   const last = realRows[realRows.length - 1]
   return {
@@ -73,10 +81,11 @@ export function assertUniquePageIndicatorBarKeys(context: PageIndicatorRuntimeCo
   for (const row of context.rows) {
     const barKey = createBarKey(context.symbol, context.period, getKLineTimeSeconds(row))
     if (seen.has(barKey)) {
-      throw new Error(`Duplicate page indicator barKey: ${barKey}`)
+      return false
     }
     seen.add(barKey)
   }
+  return true
 }
 
 export function writePageIndicatorRuntimeSnapshot({
