@@ -33,10 +33,27 @@ function Stop-RepoPortProcess {
   }
 }
 
+function Wait-RepoProcessExit {
+  param([int]$TimeoutMilliseconds = 2500)
+  $deadline = (Get-Date).AddMilliseconds($TimeoutMilliseconds)
+  do {
+    $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+      Where-Object {
+        $commandLine = ($_.CommandLine -replace "\\", "/")
+        $commandLine -like "*$repoRootPattern*" -and (
+          $commandLine -like "*scripts/mt5_symbols_server.py*" -or
+          ($commandLine -like "*frontend*" -and $commandLine -like "*vite*")
+        )
+      }
+    if (-not $processes) { return }
+    Start-Sleep -Milliseconds 100
+  } while ((Get-Date) -lt $deadline)
+}
+
 Stop-RepoBackendProcess
 Stop-RepoPortProcess -TargetPort $BackendPort
 Stop-RepoPortProcess -TargetPort $FrontendPort
-Start-Sleep -Milliseconds 300
+Wait-RepoProcessExit
 $backendBusy = Get-NetTCPConnection -LocalPort $BackendPort -State Listen -ErrorAction SilentlyContinue
 $frontendBusy = Get-NetTCPConnection -LocalPort $FrontendPort -State Listen -ErrorAction SilentlyContinue
 if ($backendBusy) { throw "Backend port $BackendPort is already in use." }
@@ -60,7 +77,6 @@ try {
     Pop-Location
   }
 } finally {
-  if ($backend -and -not $backend.HasExited) {
-    Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
-  }
+  Stop-RepoBackendProcess
+  Stop-RepoPortProcess -TargetPort $BackendPort
 }

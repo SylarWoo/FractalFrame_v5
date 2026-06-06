@@ -32,9 +32,23 @@ function Stop-RepoPortProcess {
   }
 }
 
+function Wait-RepoFrontendExit {
+  param([int]$TimeoutMilliseconds = 2500)
+  $deadline = (Get-Date).AddMilliseconds($TimeoutMilliseconds)
+  do {
+    $processes = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+      Where-Object {
+        $commandLine = ($_.CommandLine -replace "\\", "/")
+        $commandLine -like "*$repoRootPattern/frontend*" -and $commandLine -like "*vite*"
+      }
+    if (-not $processes) { return }
+    Start-Sleep -Milliseconds 100
+  } while ((Get-Date) -lt $deadline)
+}
+
 Stop-RepoFrontendProcess
 Stop-RepoPortProcess -TargetPort $Port
-Start-Sleep -Milliseconds 300
+Wait-RepoFrontendExit
 $existing = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
 if ($existing) {
   throw "Port $Port is already in use."

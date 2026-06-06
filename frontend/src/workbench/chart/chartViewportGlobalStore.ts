@@ -1,4 +1,3 @@
-import { readJson, writeJson } from '../persistence/jsonStorage'
 import type { AxisRangeSnapshot } from './chartViewportAxisRange'
 import { minCompressedBarSpace } from './chartBarSpaceCompression'
 
@@ -6,6 +5,7 @@ const viewportStoragePrefix = 'fractalframe:chartViewport:v4'
 const latestViewportStorageKey = `${viewportStoragePrefix}:latest`
 const cookieMaxAgeSeconds = 60 * 60 * 24 * 365
 const devViewportStateEndpoint = '/__fractalframe_chart_viewport_state'
+const devViewportStateCache = new Map<string, unknown>()
 
 export type ChartViewportSnapshot = {
   barSpace: number
@@ -53,7 +53,27 @@ function writeCookieJson(key: string, value: unknown) {
   document.cookie = `${cookieNameForStorageKey(key)}=${payload}; max-age=${cookieMaxAgeSeconds}; path=/; SameSite=Lax`
 }
 
+function readLocalViewportJson<T>(key: string): T | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(key)
+    return raw ? JSON.parse(raw) as T : null
+  } catch {
+    return null
+  }
+}
+
+function writeLocalViewportJson(key: string, value: unknown) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Ignore restricted storage modes.
+  }
+}
+
 function readDevServerJson<T>(key: string): T | null {
+  if (devViewportStateCache.has(key)) return devViewportStateCache.get(key) as T
   if (typeof window === 'undefined' || typeof XMLHttpRequest === 'undefined') return null
   try {
     const xhr = new XMLHttpRequest()
@@ -61,13 +81,16 @@ function readDevServerJson<T>(key: string): T | null {
     xhr.send()
     if (xhr.status !== 200) return null
     const response = JSON.parse(xhr.responseText) as { value?: T | null }
-    return response.value ?? null
+    const value = response.value ?? null
+    if (value !== null) devViewportStateCache.set(key, value)
+    return value
   } catch {
     return null
   }
 }
 
 function writeDevServerJson(key: string, value: unknown) {
+  devViewportStateCache.set(key, value)
   if (typeof window === 'undefined' || typeof fetch === 'undefined') return
   try {
     void fetch(devViewportStateEndpoint, {
@@ -81,21 +104,21 @@ function writeDevServerJson(key: string, value: unknown) {
 }
 
 function readViewportJson(key: string) {
+  const snapshot = readCookieJson<Partial<ChartViewportSnapshot>>(key)
+    ?? readLocalViewportJson<Partial<ChartViewportSnapshot>>(key)
+  if (snapshot) return snapshot
+
   const serverSnapshot = readDevServerJson<Partial<ChartViewportSnapshot>>(key)
   if (serverSnapshot) {
-    writeJson(key, serverSnapshot)
+    writeLocalViewportJson(key, serverSnapshot)
     writeCookieJson(key, serverSnapshot)
     return serverSnapshot
   }
-
-  const snapshot = readCookieJson<Partial<ChartViewportSnapshot>>(key)
-    ?? readJson<Partial<ChartViewportSnapshot> | null>(key, null)
-  if (snapshot) writeDevServerJson(key, snapshot)
   return snapshot
 }
 
 function writeViewportJson(key: string, snapshot: ChartViewportSnapshot) {
-  writeJson(key, snapshot)
+  writeLocalViewportJson(key, snapshot)
   writeCookieJson(key, snapshot)
   writeDevServerJson(key, snapshot)
 }
