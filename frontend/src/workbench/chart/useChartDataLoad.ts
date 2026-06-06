@@ -25,8 +25,12 @@ import {
 import type { ChartPageTarget } from './ChartCoreHost'
 import { preparePageDataPackage } from './pageData/pageDataManager'
 import { writePageDataPackage } from './pageData/pageDataCache'
+import { createPageDataSliceFromDisplayRows } from './pageData/pageDataProvider'
+import { pageDataPackageToSlice } from './pageData/pageDataSlice'
 import { writePageCalculationContext } from './pageCalculationContext'
 import { resolvePageLoadPlan } from './pageLoader/pageLoadPlanner'
+import { applyChartPageWindow } from './chartAdapter/chartWindowAdapter'
+import { createChartPageWindow } from './pageWindow/chartPageWindow'
 import { readRealtimePageBuffer, writeRealtimePageBuffer } from './realtimePageBuffer'
 
 export type ChartLoadStateCore = {
@@ -234,7 +238,13 @@ function loadJumpWindow(chart: Chart, options: LoadOptions & { jumpTimestamp: nu
         target: options.jumpTimestamp,
         hasMoreOlder,
       })
-      applyNewDataWithFuturePlaceholders(chart, data, options.period, hasMoreOlder)
+      applyChartPageWindow(chart, createChartPageWindow(createPageDataSliceFromDisplayRows({
+        displayRows: data,
+        mode: 'history',
+        pageIndex: 0,
+        period: options.period,
+        symbol: options.symbol,
+      })), { hasMoreOlder })
       applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
@@ -306,7 +316,8 @@ function loadPagedWindow(chart: Chart, options: LoadOptions & { page: ChartPageT
         page: pagePackage.pageIndex,
         warmupRows: pagePackage.warmupRows.length,
       })
-      applyNewDataWithFuturePlaceholders(chart, data, options.period, false)
+      const pageWindow = createChartPageWindow(pageDataPackageToSlice(pagePackage))
+      applyChartPageWindow(chart, pageWindow, { hasMoreOlder: false })
       applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
@@ -403,7 +414,13 @@ function loadInitialWindow(chart: Chart, options: LoadOptions & { requestedRows:
         totalRows: options.totalRows,
       })
       chartInfo('[StoreV6Datafeed] callback init done', { rows: data.length, hasMoreOlder })
-      applyNewDataWithFuturePlaceholders(chart, data, options.period, hasMoreOlder)
+      applyChartPageWindow(chart, createChartPageWindow(createPageDataSliceFromDisplayRows({
+        displayRows: data,
+        mode: options.followLatest ? 'realtime' : 'history',
+        pageIndex: options.page?.index ?? 1,
+        period: options.period,
+        symbol: options.symbol,
+      })), { hasMoreOlder })
       applyPriceVolumePrecision(chart, options.symbol)
       options.setFallbackTimer(window.setTimeout(() => {
         if (options.shouldIgnore()) return
