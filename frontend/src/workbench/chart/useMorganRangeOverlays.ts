@@ -43,6 +43,7 @@ export function applyMorganRangeOverlaySegments(
   overlayIds: Set<string>,
   mode: MorganRangeMode,
   segments: MorganRangeSegment[],
+  forceRebuild = false,
 ) {
   if (!isMorganRangeModeVisible(mode, period)) {
     clearMorganRangeOverlays(chart, overlayIds)
@@ -86,7 +87,7 @@ export function applyMorganRangeOverlaySegments(
     ].join(':')).join(';'),
   ].join('|')
 
-  if (morganRangeOverlaySignatures.get(overlayIds) === signature) return
+  if (!forceRebuild && morganRangeOverlaySignatures.get(overlayIds) === signature) return
 
   clearMorganRangeOverlays(chart, overlayIds)
   morganRangeOverlaySignatures.set(overlayIds, signature)

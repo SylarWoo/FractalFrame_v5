@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import type { Chart } from 'klinecharts'
+import { chartManualYAxisRangeChangeEvent } from './chartAxisInteraction'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
 import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
@@ -1677,17 +1678,25 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
         })
         const segments = readIndicatorPageSnapshot(pageKey)?.morganRange?.segments
           ?? resolveMorganRangeSegmentsForCurrentPage(chart, mode, Math.round(resolveMorganRangeBucketSeconds(mode) / resolvePeriodSeconds(period)))
-        applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments)
+        applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments, true)
         publishMorganRangeSegment()
       })
     }
 
-    const actions = [ActionType.OnDataReady, ActionType.OnZoom]
+    const actions = [
+      ActionType.OnDataReady,
+      ActionType.OnPaneDrag,
+      ActionType.OnScroll,
+      ActionType.OnVisibleRangeChange,
+      ActionType.OnZoom,
+    ]
     actions.forEach((action) => chart.subscribeAction(action, scheduleRefresh))
+    window.addEventListener(chartManualYAxisRangeChangeEvent, scheduleRefresh)
     window.addEventListener(chartRealtimeDataChangedEvent, scheduleRefresh)
     return () => {
       window.cancelAnimationFrame(frame)
       actions.forEach((action) => chart.unsubscribeAction(action, scheduleRefresh))
+      window.removeEventListener(chartManualYAxisRangeChangeEvent, scheduleRefresh)
       window.removeEventListener(chartRealtimeDataChangedEvent, scheduleRefresh)
     }
   }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, resolveMorganRangeSegmentsForCurrentPage, symbol])
