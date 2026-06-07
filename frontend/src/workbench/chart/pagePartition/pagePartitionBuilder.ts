@@ -4,7 +4,7 @@ export const storeV6HistoryPageSize = 2_500
 import { buildM5TradingDaySlidingWeekPartition } from './timeAligned/m5TradingDaySlidingWeekPaginator'
 import { buildRowsBasedPagePartition } from './rowsBasedPagePartitionBuilder'
 
-const enableM5TimeAlignedPaginator = false
+const enableM5TimeAlignedPaginator = true
 
 export type StoreV6PagePartitionStatus = 'empty' | 'insufficient_rows' | 'missing_selection' | 'ready'
 
