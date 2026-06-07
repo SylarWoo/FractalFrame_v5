@@ -283,6 +283,14 @@ function createCurrentIndicatorPageKey(chart: Chart, options: { pageIndex: numbe
   })
 }
 
+function isM5TimePage(period: string, page: ChartPageTarget | null | undefined) {
+  return period.trim().toUpperCase() === 'M5' &&
+    typeof page?.timeFrom === 'number' &&
+    Number.isFinite(page.timeFrom) &&
+    typeof page.timeTo === 'number' &&
+    Number.isFinite(page.timeTo)
+}
+
 export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCommand, indicatorsEnabled = true, indicatorsState, jump, limit, loadedStrategyKeys = [], maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, onPageCalculationContextReady, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings, vwapSettings }: ChartCoreHostProps) {
   const loadPlan = resolvePageLoadPlan({ jump, limit, page })
   const indicatorRuntimeEnabled = indicatorsEnabled && loadPlan.mode === 'realtime'
@@ -319,8 +327,17 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     loadState.loadedPeriod === period
   const chartSurfaceReady = loadState.error || realtimeDataReady
   const suppressInitialSurface = !chartEverReady && !chartSurfaceReady
-  const realtimePageActive = loadPlan.chartBehavior.acceptRealtimeTicks
-  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady, period, renderActive: realtimePageActive, symbol, totalRows })
+  const m5TimePage = isM5TimePage(period, page)
+  const realtimePageActive = loadPlan.chartBehavior.acceptRealtimeTicks && !m5TimePage
+  useChartRealtimeTicks({
+    chartInstanceRef,
+    dataReady: realtimeDataReady,
+    period,
+    renderActive: realtimePageActive,
+    renderMode: m5TimePage ? 'off' : 'full-window',
+    symbol,
+    totalRows,
+  })
   const candleCountdown = useCurrentCandleCountdown({ chartInstanceRef, dataReady: realtimeDataReady && realtimePageActive, period, symbol })
   const realtimePriceMarker = useRealtimePriceMarker({ chartInstanceRef, enabled: realtimeDataReady && !realtimePageActive, period, symbol })
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)

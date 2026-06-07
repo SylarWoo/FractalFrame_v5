@@ -24,6 +24,7 @@ type UseChartRealtimeTicksOptions = {
   dataReady?: boolean
   period: string
   renderActive?: boolean
+  renderMode?: 'full-window' | 'off' | 'tail-only'
   symbol: string
   totalRows?: number | null
 }
@@ -227,7 +228,7 @@ export function resolveMt5RateVolumeForPeriodStart(
   return Number.isFinite(volume) && volume >= 0 ? volume : null
 }
 
-export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, period, renderActive = true, symbol }: UseChartRealtimeTicksOptions) {
+export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, period, renderActive = true, renderMode = 'full-window', symbol }: UseChartRealtimeTicksOptions) {
   const [realtimeEnabled, setRealtimeEnabled] = useState(readWatchlistRealtimeEnabled)
 
   useEffect(() => {
@@ -258,6 +259,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
     const periodSeconds = resolvePeriodSeconds(period)
     const realtimeWindowLimits = resolveRealtimeWindowLimits(period)
     const initialRealtimeBackfillEnabled = false
+    const canRenderRealtime = renderActive && renderMode !== 'off'
 
     const finishRealtimeTickUpdate = () => {
       if (tickDataReadySubscribedChart) {
@@ -285,6 +287,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
 
     const applyRealtimePageRows = (rows: KLineData[]) => {
       if (disposed) return
+      if (renderMode !== 'full-window') return
       const chart = chartInstanceRef.current
       if (!chart || rows.length === 0) return
       const currentRows = chart.getDataList()
@@ -326,14 +329,14 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
               const realtimePageRows = mergeKLineData(localRows, rows).slice(-realtimeWindowLimits.maxRows)
               writeRealtimePageBuffer(symbol, period, realtimePageRows)
               saveRealtimePageSnapshot({ localRows: localRows.length, pageSize: realtimeWindowLimits.maxRows, period, rows: realtimePageRows, symbol })
-              if (renderActive && dataReady) applyRealtimePageRows(realtimePageRows)
+              if (canRenderRealtime && dataReady) applyRealtimePageRows(realtimePageRows)
             })
             .catch(() => {
               if (disposed) return
               const realtimePageRows = rows.slice(-realtimeWindowLimits.maxRows)
               writeRealtimePageBuffer(symbol, period, realtimePageRows)
               saveRealtimePageSnapshot({ localRows: 0, pageSize: realtimeWindowLimits.maxRows, period, rows: realtimePageRows, symbol })
-              if (renderActive && dataReady) applyRealtimePageRows(realtimePageRows)
+              if (canRenderRealtime && dataReady) applyRealtimePageRows(realtimePageRows)
             })
         })
         .catch(() => {})
@@ -347,7 +350,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       const last = resolveTickLast(detail)
       if (typeof last !== 'number' || !Number.isFinite(last)) return
       const chart = chartInstanceRef.current
-      const rows = renderActive && dataReady && chart
+      const rows = canRenderRealtime && dataReady && chart
         ? stripFuturePlaceholders(chart.getDataList())
         : readRealtimePageBuffer(symbol, period)
       const latest = rows[rows.length - 1]
@@ -393,7 +396,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       })
       if (!nextRow) return
       const realtimeRows = upsertRealtimePageBufferRow(symbol, period, nextRow, { persist: shouldAppendNewBar })
-      if (!renderActive || !dataReady || !chart) {
+      if (!canRenderRealtime || !dataReady || !chart) {
         saveRealtimePageSnapshot({ localRows: 0, pageSize: realtimeRows.length, period, rows: realtimeRows, symbol })
         if (realtimeRows.length >= realtimePageRolloverRows) {
           const bucket = Math.floor((realtimeRows.length - realtimePageWindowRows) / Math.max(1, realtimePageRolloverStepRows))
@@ -498,5 +501,5 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
       }
       window.removeEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
     }
-  }, [chartInstanceRef, dataReady, period, realtimeEnabled, renderActive, symbol])
+  }, [chartInstanceRef, dataReady, period, realtimeEnabled, renderActive, renderMode, symbol])
 }
