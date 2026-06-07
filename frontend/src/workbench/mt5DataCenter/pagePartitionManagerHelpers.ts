@@ -1,5 +1,10 @@
 import type { StoreV6PagePartitionItem } from '../chart/pagePartition/pagePartitionBuilder'
-import { storeV6HistoryPageSize, storeV6LivePageSize } from '../chart/pagePartition/pagePartitionBuilder'
+import {
+  m5TimeAlignedPartitionProfileVersion,
+  storeV6HistoryPageSize,
+  storeV6LivePageSize,
+  type StoreV6PagePartitionMode,
+} from '../chart/pagePartition/pagePartitionBuilder'
 import { readRealtimePageBuffer } from '../chart/realtimePageBuffer'
 import { readJson, readString, writeJson } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
@@ -13,7 +18,9 @@ export type PersistedPageIndex = {
   livePageSize: number
   pageSize: number
   pages: RealtimePageRow[]
+  partitionMode?: StoreV6PagePartitionMode
   period: string
+  profileVersion?: number
   symbol: string
   totalRows: number | null
 }
@@ -171,6 +178,12 @@ export function writePageIndexCache(key: string, value: PersistedPageIndex) {
   })
 }
 
+export function deletePageIndexCache(key: string) {
+  const cache = readPageIndexCache()
+  delete cache[key]
+  writeJson(storageKeys.realtimePageIndexCache, cache)
+}
+
 export function readLastResetCache() {
   return readJson<Record<string, PersistedPageResetInfo>>(storageKeys.realtimePageLastResetCache, {})
 }
@@ -189,8 +202,12 @@ export function readPageTableHeight() {
     : defaultPageTableHeight
 }
 
-export function isCurrentCache(value: PersistedPageIndex | undefined) {
-  return value?.pageSize === historicalPageSize && value.livePageSize === realtimePageSize
+export function isCurrentCache(value: PersistedPageIndex | undefined, expectedMode: StoreV6PagePartitionMode) {
+  if (value?.pageSize !== historicalPageSize || value.livePageSize !== realtimePageSize) return false
+  const actualMode = value.partitionMode ?? 'rows'
+  if (actualMode !== expectedMode) return false
+  if (expectedMode === 'm5-time') return value.profileVersion === m5TimeAlignedPartitionProfileVersion
+  return true
 }
 
 export function readRolloverDetail(event: Event) {

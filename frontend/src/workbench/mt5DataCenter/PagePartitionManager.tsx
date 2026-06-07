@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+﻿import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ChartPageTarget } from '../chart/ChartCoreHost'
-import { buildStoreV6PagePartition } from '../chart/pagePartition/pagePartitionBuilder'
+import {
+  buildStoreV6PagePartition,
+  m5TimeAlignedPartitionProfileVersion,
+  resolveStoreV6PagePartitionMode,
+} from '../chart/pagePartition/pagePartitionBuilder'
 import { writeRealtimePageBuffer } from '../chart/realtimePageBuffer'
 import { loadStoreV6KLineData } from '../../datafeed/storeV6KLineDatafeed'
 import { writeString } from '../persistence/jsonStorage'
@@ -13,6 +17,7 @@ import type { StoreV6CheckPayload } from '../../services/mt5/mt5SymbolsApi'
 import {
   applyLiveRowsFromBuffer,
   defaultPageTableHeight,
+  deletePageIndexCache,
   enrichPageTimeRanges,
   formatMaintenanceSummary,
   formatPageRange,
@@ -83,12 +88,15 @@ export function PagePartitionManager({
 
   const persistPages = (nextPages: RealtimePageRow[], totalRowsOverride = pageTotalRows) => {
     if (!cacheKey || !selectedSymbol || !selectedPeriod) return
+    const partitionMode = resolveStoreV6PagePartitionMode(selectedPeriod)
     writePageIndexCache(cacheKey, {
       builtAt: new Date().toISOString(),
       livePageSize: realtimePageSize,
       pageSize: historicalPageSize,
       pages: nextPages,
+      partitionMode,
       period: selectedPeriod,
+      profileVersion: partitionMode === 'm5-time' ? m5TimeAlignedPartitionProfileVersion : undefined,
       symbol: selectedSymbol,
       totalRows: totalRowsOverride,
     })
@@ -130,6 +138,7 @@ export function PagePartitionManager({
       reloadId: reloadIdRef.current,
       page: {
         fromGlobalIndex: page.fromGlobalIndex,
+        identity: page.identity,
         index: page.index,
         limit: page.limit,
         realtime: page.realtime,
@@ -152,9 +161,16 @@ export function PagePartitionManager({
         return
       }
       const cached = readPageIndexCache()[cacheKey]
+      const partitionMode = resolveStoreV6PagePartitionMode(selectedPeriod)
+      const cacheCurrent = isCurrentCache(cached, partitionMode)
+      if (cached && !cacheCurrent) deletePageIndexCache(cacheKey)
       setLastResetInfo(readLastResetCache()[cacheKey] ?? null)
-      setPages(isCurrentCache(cached) && selectedPeriod ? applyLiveRowsFromBuffer(cached.pages, { period: selectedPeriod, symbol: selectedSymbol }) : [])
-      if (isCurrentCache(cached)) {
+      setPages(cacheCurrent && selectedPeriod
+        ? partitionMode === 'm5-time'
+          ? cached.pages
+          : applyLiveRowsFromBuffer(cached.pages, { period: selectedPeriod, symbol: selectedSymbol })
+        : [])
+      if (cacheCurrent) {
         setPageTotalRows(cached.totalRows)
         setPartitionStatus(`已缓存 ${cached.pages.length.toLocaleString('en-US')} 页，点击更新可按当前 StoreV6 重新定位分页符。`)
       }
@@ -191,6 +207,7 @@ export function PagePartitionManager({
       if (!detail) return
       if (detail.symbol && selectedSymbol && detail.symbol !== selectedSymbol) return
       if (detail.period && selectedPeriod && detail.period.toUpperCase() !== selectedPeriod.toUpperCase()) return
+      if (resolveStoreV6PagePartitionMode(selectedPeriod) === 'm5-time') return
       setPages((current) => current.map((page) => {
         if (!page.realtime || page.index !== 1) return page
         return {
@@ -213,6 +230,7 @@ export function PagePartitionManager({
       if (!detail) return
       if (detail.symbol && selectedSymbol && detail.symbol !== selectedSymbol) return
       if (detail.period && selectedPeriod && detail.period.toUpperCase() !== selectedPeriod.toUpperCase()) return
+      if (resolveStoreV6PagePartitionMode(selectedPeriod) === 'm5-time') return
       setPartitionStatus(`实时页已增长到 ${formatPageRows(detail.rows)} 根，达到 ${formatPageRows(detail.thresholdRows)} 根整理边界；正在自动整理并重建分页。`)
       if (!building) buildPages('auto')
     }
@@ -230,6 +248,8 @@ export function PagePartitionManager({
       let rebuiltLiveRows = 0
       let latestTime: number | null = null
       let nextTotalRows = pageTotalRows
+      const partitionMode = resolveStoreV6PagePartitionMode(period)
+      const timeAlignedM5 = partitionMode === 'm5-time'
       if (onPreparePagePartition) {
         setPartitionStatus('正在执行完整整理链：拉取 -> 聚合 -> audit/repair...')
         const preparedStatus = await onPreparePagePartition()
@@ -238,14 +258,14 @@ export function PagePartitionManager({
       }
       try {
         const latestRows = await loadStoreV6KLineData({
-          limit: realtimePageSize,
+          limit: timeAlignedM5 ? 1 : realtimePageSize,
           period,
           symbol: selectedSymbol,
         })
         if (latestRows.length) {
           const latestRow = latestRows[latestRows.length - 1]
           latestTime = typeof latestRow?.timestamp === 'number' ? Math.floor(latestRow.timestamp / 1000) : null
-          rebuiltLiveRows = writeRealtimePageBuffer(selectedSymbol, period, latestRows).length
+          rebuiltLiveRows = timeAlignedM5 ? 0 : writeRealtimePageBuffer(selectedSymbol, period, latestRows).length
         }
       } catch {
         rebuiltLiveRows = 0
@@ -258,14 +278,14 @@ export function PagePartitionManager({
         symbol: selectedSymbol,
         totalRows: nextTotalRows,
       })
-      const pagesWithLiveBuffer = applyLiveRowsFromBuffer(partition.pages, { period, symbol: selectedSymbol })
+      const pagesForUi = timeAlignedM5 ? partition.pages : applyLiveRowsFromBuffer(partition.pages, { period, symbol: selectedSymbol })
       enrichmentSeqRef.current += 1
-      persistPages(pagesWithLiveBuffer, nextTotalRows)
+      persistPages(pagesForUi, nextTotalRows)
       setSelectedPage(1)
-      setPages(pagesWithLiveBuffer)
+      setPages(pagesForUi)
       setPartitionStatus(partition.statusText)
-      const livePage = pagesWithLiveBuffer[0]
-      if (livePage) openPage(livePage, pagesWithLiveBuffer)
+      const livePage = pagesForUi[0]
+      if (livePage) openPage(livePage, pagesForUi)
       const resetInfo: PersistedPageResetInfo = {
         period,
         reason,
@@ -318,6 +338,7 @@ export function PagePartitionManager({
   }
 
   const updateSummary = latestUpdateSummary(formatResetInfoSummary(lastResetInfo), maintenanceSummary)
+  const currentPartitionMode = resolveStoreV6PagePartitionMode(selectedPeriod)
 
   return (
     <div className="ff-import-selected-settings" role="tabpanel">
@@ -394,7 +415,9 @@ export function PagePartitionManager({
         tabIndex={0}
       />
       <div className="ff-import-selected-settings__meta">
-        第 1 页使用实时页 {formatPageRows(realtimePageSize)} 根，后续每页 {formatPageRows(historicalPageSize)} 根；当前总数 {formatPageRows(pageTotalRows)}。
+        {currentPartitionMode === 'm5-time'
+          ? `M5 使用交易日时间分页，行数按点击页面后的 timeFrom/timeTo 查询；当前总数 ${formatPageRows(pageTotalRows)}。`
+          : `第 1 页使用实时页 ${formatPageRows(realtimePageSize)} 根，后续每页 ${formatPageRows(historicalPageSize)} 根；当前总数 ${formatPageRows(pageTotalRows)}。`}
       </div>
     </div>
   )

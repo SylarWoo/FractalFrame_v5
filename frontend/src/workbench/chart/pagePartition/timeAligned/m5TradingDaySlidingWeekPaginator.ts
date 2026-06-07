@@ -50,11 +50,25 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
   const latestTime = typeof options.latestTime === 'number' && Number.isFinite(options.latestTime)
     ? Math.floor(options.latestTime)
     : null
-  if (latestTime == null) return fallback
+  if (latestTime == null) {
+    return {
+      ...fallback,
+      pages: [],
+      status: 'empty',
+      statusText: 'M5 时间分页缺少最新 K 线时间，无法生成时间页表。',
+    }
+  }
 
   const profile = m5TradingDaySlidingWeekProfile
   const anchorBoundary = floorToTradingDayBoundarySeconds(latestTime, profile)
-  if (anchorBoundary == null) return fallback
+  if (anchorBoundary == null) {
+    return {
+      ...fallback,
+      pages: [],
+      status: 'empty',
+      statusText: 'M5 时间分页无法识别交易日边界。',
+    }
+  }
 
   const limit = estimateM5TimePageLimit(profile)
   const pages: StoreV6PagePartitionItem[] = [

@@ -5,6 +5,13 @@ import { buildM5TradingDaySlidingWeekPartition } from './timeAligned/m5TradingDa
 import { buildRowsBasedPagePartition } from './rowsBasedPagePartitionBuilder'
 
 const enableM5TimeAlignedPaginator = true
+export const m5TimeAlignedPartitionProfileVersion = 1
+
+export type StoreV6PagePartitionMode = 'm5-time' | 'rows'
+
+export function resolveStoreV6PagePartitionMode(period: string | null | undefined): StoreV6PagePartitionMode {
+  return enableM5TimeAlignedPaginator && String(period ?? '').trim().toUpperCase() === 'M5' ? 'm5-time' : 'rows'
+}
 
 export type StoreV6PagePartitionStatus = 'empty' | 'insufficient_rows' | 'missing_selection' | 'ready'
 
@@ -41,7 +48,7 @@ export function buildStoreV6PagePartition(options: {
   totalRows?: number | null
 }): StoreV6PagePartition {
   const fallback = buildRowsBasedPagePartition(options)
-  if (enableM5TimeAlignedPaginator && String(options.period ?? '').trim().toUpperCase() === 'M5') {
+  if (resolveStoreV6PagePartitionMode(options.period) === 'm5-time') {
     return buildM5TradingDaySlidingWeekPartition({
       fallback,
       latestTime: options.latestTime,
