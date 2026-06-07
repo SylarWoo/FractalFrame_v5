@@ -2,6 +2,7 @@ import type {
   StoreV6PagePartition,
   StoreV6PagePartitionItem,
 } from '../pagePartitionBuilder'
+import { createPageIdentity } from '../../pageIdentity'
 import {
   estimateM5TimePageLimit,
   m5TradingDaySlidingWeekProfile,
@@ -16,10 +17,12 @@ function createTimePage(options: {
   index: number
   limit: number
   realtime: boolean
+  period: string
+  symbol: string
   timeFrom: number
   timeTo: number
 }): StoreV6PagePartitionItem {
-  return {
+  const page: StoreV6PagePartitionItem = {
     fromGlobalIndex: null,
     index: options.index,
     limit: options.limit,
@@ -29,6 +32,10 @@ function createTimePage(options: {
     timeFrom: options.timeFrom,
     timeTo: options.timeTo,
     toGlobalIndex: null,
+  }
+  return {
+    ...page,
+    identity: createPageIdentity(page, options.symbol, options.period),
   }
 }
 
@@ -54,7 +61,9 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
     createTimePage({
       index: 1,
       limit,
+      period: fallback.period,
       realtime: true,
+      symbol: fallback.symbol,
       timeFrom: subtractCalendarDays(anchorBoundary, profile.windowDays),
       timeTo: latestTime,
     }),
@@ -65,7 +74,9 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
     pages.push(createTimePage({
       index: pages.length + 1,
       limit,
+      period: fallback.period,
       realtime: false,
+      symbol: fallback.symbol,
       timeFrom: subtractCalendarDays(historyTimeTo, profile.windowDays),
       timeTo: historyTimeTo,
     }))

@@ -128,18 +128,21 @@ export function createIndicatorSettingsHash(value: unknown) {
 }
 
 export function createIndicatorPageKey({
+  pageIdentity,
   pageIndex,
   period,
   realtime,
   rows,
   symbol,
 }: {
+  pageIdentity?: string | null
   pageIndex: number
   period: string
   realtime: boolean
   rows: KLineData[]
   symbol: string
 }) {
+  if (pageIdentity) return pageIdentity
   const realRows = stripFuturePlaceholders(rows)
   const first = realRows[0]
   const last = realRows[realRows.length - 1]

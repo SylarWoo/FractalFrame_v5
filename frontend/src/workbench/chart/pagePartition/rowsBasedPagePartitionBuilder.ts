@@ -2,6 +2,7 @@ import {
   type StoreV6PagePartition,
   type StoreV6PagePartitionItem,
 } from './pagePartitionBuilder'
+import { createPageIdentity } from '../pageIdentity'
 
 const rowsBasedLivePageSize = 2_000
 const rowsBasedHistoryPageSize = 2_500
@@ -54,7 +55,7 @@ export function buildRowsBasedPagePartition(options: {
   const liveRows = Math.min(totalRows, livePageSize)
   const liveFromGlobalIndex = totalRows - liveRows
   const liveToGlobalIndex = totalRows - 1
-  pages.push({
+  const livePage: StoreV6PagePartitionItem = {
     fromGlobalIndex: liveFromGlobalIndex,
     index: 1,
     limit: livePageSize,
@@ -62,13 +63,17 @@ export function buildRowsBasedPagePartition(options: {
     realtime: true,
     rows: liveRows,
     toGlobalIndex: liveToGlobalIndex,
+  }
+  pages.push({
+    ...livePage,
+    identity: createPageIdentity(livePage, symbol, period),
   })
 
   let nextHistoryToIndex = liveFromGlobalIndex - 1
   while (nextHistoryToIndex >= 0) {
     const rows = Math.min(historyPageSize, nextHistoryToIndex + 1)
     const fromGlobalIndex = nextHistoryToIndex - rows + 1
-    pages.push({
+    const historyPage: StoreV6PagePartitionItem = {
       fromGlobalIndex,
       index: pages.length + 1,
       limit: historyPageSize,
@@ -76,6 +81,10 @@ export function buildRowsBasedPagePartition(options: {
       realtime: false,
       rows,
       toGlobalIndex: nextHistoryToIndex,
+    }
+    pages.push({
+      ...historyPage,
+      identity: createPageIdentity(historyPage, symbol, period),
     })
     nextHistoryToIndex = fromGlobalIndex - 1
   }

@@ -9,17 +9,20 @@ function normalizePeriod(period: string) {
 
 export function createPageDataKey({
   displayRows,
+  pageIdentity,
   pageIndex,
   period,
   realtime,
   symbol,
 }: {
   displayRows: KLineData[]
+  pageIdentity?: string | null
   pageIndex: number
   period: string
   realtime: boolean
   symbol: string
 }) {
+  if (pageIdentity) return pageIdentity
   const realRows = stripFuturePlaceholders(displayRows)
   const first = realRows[0]
   const last = realRows[realRows.length - 1]

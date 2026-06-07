@@ -10,6 +10,7 @@ export type StoreV6PagePartitionStatus = 'empty' | 'insufficient_rows' | 'missin
 
 export type StoreV6PagePartitionItem = {
   fromGlobalIndex: number | null
+  identity?: string | null
   index: number
   limit: number
   pageType: 'live' | 'history'

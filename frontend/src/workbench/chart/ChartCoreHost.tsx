@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import type { Chart } from 'klinecharts'
@@ -69,6 +69,7 @@ import {
 import { normalizeRealtimePeriod } from './realtimeBarIdentity'
 import { resolvePageLoadPlan } from './pageLoader/pageLoadPlanner'
 import { planPageIndicatorWarmup } from './indicatorWarmupPlanner'
+import { createPageIdentity } from './pageIdentity'
 import type {
   CandleIndicatorCommandName,
   CandleIndicatorConfig,
@@ -154,6 +155,7 @@ type ChartCoreHostProps = {
 
 export type ChartPageTarget = {
   fromGlobalIndex?: number | null
+  identity?: string | null
   index: number
   limit: number
   realtime: boolean
@@ -273,8 +275,9 @@ function createChartDataSignature(chart: Chart) {
   ].join('|')
 }
 
-function createCurrentIndicatorPageKey(chart: Chart, options: { pageIndex: number; period: string; realtime: boolean; symbol: string }) {
+function createCurrentIndicatorPageKey(chart: Chart, options: { page?: ChartPageTarget | null; pageIndex: number; period: string; realtime: boolean; symbol: string }) {
   return createIndicatorPageKey({
+    pageIdentity: options.page?.identity ?? createPageIdentity(options.page, options.symbol, options.period),
     pageIndex: options.pageIndex,
     period: options.period,
     realtime: options.realtime,
@@ -579,6 +582,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
   const readCurrentPageCalculationContext = useCallback((chart: Chart) => {
     const key = createPageCalculationContextKey({
       displayRows: chart.getDataList(),
+      pageIdentity: page?.identity ?? createPageIdentity(page, symbol, period),
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -617,6 +621,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const futureBars = Math.round(resolveMorganRangeBucketSeconds(mode) / periodSeconds)
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -669,6 +674,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       : 0
     const segments = futureBars > 0 ? resolveMorganRangeSegmentsForCurrentPage(chart, mode, futureBars) : []
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -743,6 +749,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     const dataSignature = createChartDataSignature(chart)
     const pageCalculationContext = readCurrentPageCalculationContext(chart)
     const pageKey = createIndicatorPageKey({
+      pageIdentity: page?.identity ?? createPageIdentity(page, symbol, period),
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -835,6 +842,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -899,6 +907,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -941,6 +950,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -983,6 +993,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -1025,6 +1036,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -1067,6 +1079,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -1109,6 +1122,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -1151,6 +1165,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -1194,6 +1209,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -1236,6 +1252,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -1279,6 +1296,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -1598,6 +1616,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       const key = (event as CustomEvent<{ key?: string }>).detail?.key
       const currentKey = createPageCalculationContextKey({
         displayRows: chart.getDataList(),
+        pageIdentity: page?.identity ?? createPageIdentity(page, symbol, period),
         pageIndex: page?.index ?? 1,
         period,
         realtime: page?.realtime !== false,
@@ -1642,6 +1661,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       return
     }
     const pageKey = createCurrentIndicatorPageKey(chart, {
+      page,
       pageIndex: page?.index ?? 1,
       period,
       realtime: page?.realtime !== false,
@@ -1671,13 +1691,14 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
           return
         }
         const pageKey = createCurrentIndicatorPageKey(chart, {
+          page,
           pageIndex: page?.index ?? 1,
           period,
           realtime: page?.realtime !== false,
           symbol,
         })
         const segments = readIndicatorPageSnapshot(pageKey)?.morganRange?.segments
-          ?? resolveMorganRangeSegmentsForCurrentPage(chart, mode, Math.round(resolveMorganRangeBucketSeconds(mode) / resolvePeriodSeconds(period)))
+        if (!segments) return
         applyMorganRangeOverlaySegments(chart, period, morganRangeOverlayIdsRef.current, mode, segments, true)
         publishMorganRangeSegment()
       })
@@ -1699,7 +1720,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       window.removeEventListener(chartManualYAxisRangeChangeEvent, scheduleRefresh)
       window.removeEventListener(chartRealtimeDataChangedEvent, scheduleRefresh)
     }
-  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, onMorganRangeSegmentChange, page?.index, page?.realtime, period, publishMorganRangeSegment, resolveMorganRangeSegmentsForCurrentPage, symbol])
+  }, [chartInstanceRef, isIndicatorVisibleInCurrentPeriod, loadState.loading, onMorganRangeSegmentChange, page, page?.index, page?.realtime, period, publishMorganRangeSegment, symbol])
 
   useEffect(() => {
     const chart = chartInstanceRef.current

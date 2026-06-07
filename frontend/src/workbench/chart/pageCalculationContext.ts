@@ -19,18 +19,20 @@ export const pageCalculationContextChangedEvent = pageDataPackageChangedEvent
 
 export function createPageCalculationContextKey({
   displayRows,
+  pageIdentity,
   pageIndex,
   period,
   realtime,
   symbol,
 }: {
   displayRows: KLineData[]
+  pageIdentity?: string | null
   pageIndex: number
   period: string
   realtime: boolean
   symbol: string
 }) {
-  return createPageDataKey({ displayRows, pageIndex, period, realtime, symbol })
+  return createPageDataKey({ displayRows, pageIdentity, pageIndex, period, realtime, symbol })
 }
 
 function packageToContext(entry: PageDataPackage): PageCalculationContext {

@@ -2,6 +2,7 @@ import type { KLineData } from 'klinecharts'
 import { loadStoreV6KLineData } from '../../../datafeed/storeV6KLineDatafeed'
 import { mergeKLineData } from '../chartCoreDataUtils'
 import { resolvePeriodSeconds } from '../chartTimeFormatting'
+import { createPageIdentity } from '../pageIdentity'
 import { createPageDataKey, normalizePageDataBars } from './pageDataKey'
 import type { PageDataSlice, PageDataSliceRequest } from './pageDataSlice'
 
@@ -117,6 +118,13 @@ export async function loadPageDataSlice(request: PageDataSliceRequest): Promise<
   const normalizedCalculationRows = normalizePageDataBars(calculationRows, request.symbol, request.period)
   const key = createPageDataKey({
     displayRows,
+    pageIdentity: createPageIdentity({
+      fromGlobalIndex: request.fromGlobalIndex,
+      index: request.pageIndex,
+      timeFrom: request.timeFrom,
+      timeTo: request.timeTo,
+      toGlobalIndex: request.toGlobalIndex,
+    }, request.symbol, request.period),
     pageIndex: request.pageIndex,
     period: request.period,
     realtime: request.mode === 'realtime',
