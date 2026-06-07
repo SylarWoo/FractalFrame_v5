@@ -7,17 +7,13 @@ import { queryStoreV6IndexTimes } from '../../services/mt5/mt5SymbolsApi'
 import type { StoreV6CheckPayload, StoreV6DailyMaintenanceEvent } from '../../services/mt5/mt5SymbolsApi'
 
 export type RealtimePageRow = StoreV6PagePartitionItem
-export type PagePartitionMode = 'm5-calendar-time' | 'rows'
-export const m5CalendarPartitionProfileVersion = 1
 
 export type PersistedPageIndex = {
   builtAt: string
   livePageSize: number
   pageSize: number
   pages: RealtimePageRow[]
-  partitionMode?: PagePartitionMode
   period: string
-  profileVersion?: number
   symbol: string
   totalRows: number | null
 }
@@ -193,17 +189,8 @@ export function readPageTableHeight() {
     : defaultPageTableHeight
 }
 
-export function resolvePartitionMode(period: string | null | undefined): PagePartitionMode {
-  return String(period ?? '').trim().toUpperCase() === 'M5' ? 'm5-calendar-time' : 'rows'
-}
-
-export function isCurrentCache(value: PersistedPageIndex | undefined, period?: string | null) {
-  if (value?.pageSize !== historicalPageSize || value.livePageSize !== realtimePageSize) return false
-  const expectedMode = resolvePartitionMode(period ?? value.period)
-  const actualMode = value.partitionMode ?? 'rows'
-  if (actualMode !== expectedMode) return false
-  if (expectedMode === 'm5-calendar-time') return value.profileVersion === m5CalendarPartitionProfileVersion
-  return true
+export function isCurrentCache(value: PersistedPageIndex | undefined) {
+  return value?.pageSize === historicalPageSize && value.livePageSize === realtimePageSize
 }
 
 export function readRolloverDetail(event: Event) {

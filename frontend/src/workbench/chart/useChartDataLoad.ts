@@ -133,7 +133,7 @@ export function useChartDataLoad({
     chart.setLoadDataCallback(({ callback }) => callback([], false))
 
     const setFallbackTimer = (timer: number) => { fallbackTimer = timer }
-    if (loadPlan.page && (loadPlan.mode === 'history' || hasPageTimeWindow(loadPlan.page))) {
+    if (loadPlan.mode === 'history' && loadPlan.page) {
       loadPagedWindow(chart, { inheritedViewport, lookaheadRows, page: loadPlan.page, period, setFallbackTimer, setLoadState, shouldIgnore, symbol, viewportScope, warmupRows })
     } else if (loadPlan.mode === 'jump' && jump?.timestamp != null) {
       loadJumpWindow(chart, { inheritedViewport, jumpTimestamp: jump.timestamp, period, setFallbackTimer, setLoadState, shouldIgnore, symbol, viewportScope })
@@ -184,15 +184,6 @@ type LoadOptions = {
   symbol: string
   viewportScope: string
   warmupRows?: number
-}
-
-function hasPageTimeWindow(page: ChartPageTarget | null | undefined) {
-  return typeof page?.timeFrom === 'number' && Number.isFinite(page.timeFrom)
-    && typeof page.timeTo === 'number' && Number.isFinite(page.timeTo)
-}
-
-function isM5TimePage(period: string, page: ChartPageTarget | null | undefined) {
-  return period.trim().toUpperCase() === 'M5' && hasPageTimeWindow(page)
 }
 
 function findNearestDataIndex(chart: Chart, timestamp: number) {
@@ -310,15 +301,6 @@ function loadPagedWindow(chart: Chart, options: LoadOptions & { page: ChartPageT
   const timeTo = typeof options.page.timeTo === 'number' && Number.isFinite(options.page.timeTo)
     ? options.page.timeTo
     : undefined
-  const timeFrom = typeof options.page.timeFrom === 'number' && Number.isFinite(options.page.timeFrom)
-    ? options.page.timeFrom
-    : undefined
-  if (isM5TimePage(options.period, options.page) && options.page.realtime && timeFrom != null && timeTo != null) {
-    loadM5RealtimeTimeWindow(chart, { ...options, limit, timeFrom, timeTo })
-    return
-  }
-  const warmupRows = isM5TimePage(options.period, options.page) ? 0 : options.warmupRows
-  const lookaheadRows = isM5TimePage(options.period, options.page) ? 0 : options.lookaheadRows
   chartInfo('[StoreV6Datafeed] request page start', {
     fromGlobalIndex: options.page.fromGlobalIndex,
     symbol: options.symbol,
@@ -330,18 +312,16 @@ function loadPagedWindow(chart: Chart, options: LoadOptions & { page: ChartPageT
   })
   preparePageDataPackage({
     fromGlobalIndex: options.page.fromGlobalIndex,
-    lookaheadRows,
+    lookaheadRows: options.lookaheadRows,
     pageIndex: options.page.index,
     period: options.period,
     realtime: options.page.realtime,
     rows: limit,
     symbol: options.symbol,
-    timeFrom,
+    timeFrom: options.page.timeFrom,
     timeTo,
     toGlobalIndex: options.page.toGlobalIndex,
-    warmupRows,
-  }, {
-    skipIndicatorCalculation: isM5TimePage(options.period, options.page),
+    warmupRows: options.warmupRows,
   })
     .then((pagePackage) => {
       if (options.shouldIgnore()) return
@@ -380,61 +360,6 @@ function loadPagedWindow(chart: Chart, options: LoadOptions & { page: ChartPageT
       chartError('[StoreV6Datafeed] request page failed', error)
       clearChartPageWindow(chart, options.period)
       options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: limit, rows: 0 })
-    })
-}
-
-function loadM5RealtimeTimeWindow(chart: Chart, options: LoadOptions & {
-  limit: number
-  page: ChartPageTarget
-  timeFrom: number
-  timeTo: number
-}) {
-  chartInfo('[StoreV6Datafeed] request M5 realtime time page start', {
-    limit: options.limit,
-    page: options.page.index,
-    period: options.period,
-    symbol: options.symbol,
-    timeFrom: options.timeFrom,
-    timeTo: options.timeTo,
-  })
-  loadStoreV6KLineData({
-    limit: options.limit,
-    period: options.period,
-    symbol: options.symbol,
-    timeFrom: options.timeFrom,
-    timeTo: options.timeTo,
-  })
-    .then((data) => {
-      if (options.shouldIgnore()) return
-      chartInfo('[StoreV6Datafeed] callback M5 realtime time page done', { rows: data.length, page: options.page.index })
-      applyChartPageWindow(chart, createRealtimePageWindow({
-        rows: data,
-        pageIndex: options.page.index,
-        period: options.period,
-        symbol: options.symbol,
-      }), { hasMoreOlder: false })
-      applyPriceVolumePrecision(chart, options.symbol)
-      options.setFallbackTimer(window.setTimeout(() => {
-        if (options.shouldIgnore()) return
-        scheduleResetYAxisAutoScaleFlags(chart)
-        applySessionBreakIndicator(chart, options.symbol, options.period)
-        scheduleResetYAxisAutoScaleFlags(chart)
-        options.setLoadState({
-          error: false,
-          loadedPeriod: options.period,
-          loadedSymbol: options.symbol,
-          loadingMore: false,
-          loading: false,
-          requestedRows: options.limit,
-          rows: stripFuturePlaceholders(chart.getDataList()).length || data.length,
-        })
-      }, 0))
-    })
-    .catch((error: unknown) => {
-      if (options.shouldIgnore()) return
-      chartError('[StoreV6Datafeed] request M5 realtime time page failed', error)
-      clearChartPageWindow(chart, options.period)
-      options.setLoadState({ error: true, loadingMore: false, loading: false, requestedRows: options.limit, rows: 0 })
     })
 }
 

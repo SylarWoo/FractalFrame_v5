@@ -50,5 +50,4 @@ export type PageDataPackageRequest = {
 export type PageDataIndicatorCalculationRequest = {
   indicators?: Array<'MMF_V3' | 'MR_M5' | 'MR_M30'>
   morganRangeMode?: MorganRangeMode
-  skipIndicatorCalculation?: boolean
 }

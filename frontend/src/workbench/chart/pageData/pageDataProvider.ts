@@ -2,7 +2,6 @@ import type { KLineData } from 'klinecharts'
 import { loadStoreV6KLineData } from '../../../datafeed/storeV6KLineDatafeed'
 import { mergeKLineData } from '../chartCoreDataUtils'
 import { resolvePeriodSeconds } from '../chartTimeFormatting'
-import { estimateM5CalendarPageLimit } from '../pagePartition/calendarPageProfiles'
 import { createPageDataKey, normalizePageDataBars } from './pageDataKey'
 import type { PageDataSlice, PageDataSliceRequest } from './pageDataSlice'
 
@@ -16,9 +15,6 @@ function finiteNumber(value: unknown): number | undefined {
 function resolveDisplayLimit(request: PageDataSliceRequest) {
   const rows = finiteNumber(request.rows)
   if (rows != null) return Math.max(1, Math.round(rows))
-  if (request.period.trim().toUpperCase() === 'M5' && finiteNumber(request.timeFrom) != null && finiteNumber(request.timeTo) != null) {
-    return estimateM5CalendarPageLimit()
-  }
   return 1
 }
 

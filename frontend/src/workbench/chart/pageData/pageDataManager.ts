@@ -9,7 +9,6 @@ export async function preparePageDataPackage(
   indicatorRequest: PageDataIndicatorCalculationRequest = {},
 ) {
   const loaded = await loadPageDataPackage(request)
-  if (indicatorRequest.skipIndicatorCalculation) return writePageDataPackage(loaded)
   return writePageDataPackage(calculatePageIndicatorTables(loaded, indicatorRequest))
 }
 

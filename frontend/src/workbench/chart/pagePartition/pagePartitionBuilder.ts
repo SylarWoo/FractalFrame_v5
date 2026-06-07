@@ -1,7 +1,10 @@
 export const storeV6LivePageSize = 2_000
 export const storeV6HistoryPageSize = 2_500
 
+import { buildM5TradingDaySlidingWeekPartition } from './timeAligned/m5TradingDaySlidingWeekPaginator'
 import { buildRowsBasedPagePartition } from './rowsBasedPagePartitionBuilder'
+
+const enableM5TimeAlignedPaginator = false
 
 export type StoreV6PagePartitionStatus = 'empty' | 'insufficient_rows' | 'missing_selection' | 'ready'
 
@@ -36,5 +39,12 @@ export function buildStoreV6PagePartition(options: {
   symbol?: string
   totalRows?: number | null
 }): StoreV6PagePartition {
-  return buildRowsBasedPagePartition(options)
+  const fallback = buildRowsBasedPagePartition(options)
+  if (enableM5TimeAlignedPaginator && String(options.period ?? '').trim().toUpperCase() === 'M5') {
+    return buildM5TradingDaySlidingWeekPartition({
+      fallback,
+      latestTime: options.latestTime,
+    })
+  }
+  return fallback
 }
