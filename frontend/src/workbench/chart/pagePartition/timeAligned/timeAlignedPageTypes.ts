@@ -5,6 +5,8 @@ export type TimeAlignedPageProfile = {
   windowDays: number
 }
 
+export const m5TimeAlignedPartitionProfileVersion = 1
+
 export const m5TradingDaySlidingWeekProfile: TimeAlignedPageProfile = {
   boundaryHour: 6,
   skipWeekends: true,

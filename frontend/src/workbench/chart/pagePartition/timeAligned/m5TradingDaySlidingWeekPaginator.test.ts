@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildRowsBasedPagePartition } from '../rowsBasedPagePartitionBuilder'
 import { buildM5TradingDaySlidingWeekPartition } from './m5TradingDaySlidingWeekPaginator'
+import { m5TimeAlignedPartitionProfileVersion } from './timeAlignedPageTypes'
 
 function utcSeconds(year: number, month: number, day: number, hour: number, minute = 0) {
   return Date.UTC(year, month - 1, day, hour, minute) / 1000
@@ -32,6 +33,8 @@ describe('buildM5TradingDaySlidingWeekPartition', () => {
       timeTo: latestTime,
       toGlobalIndex: null,
     }))
+    expect(partition.partitionMode).toBe('m5-time')
+    expect(partition.profileVersion).toBe(m5TimeAlignedPartitionProfileVersion)
     expect(partition.pages[1]).toEqual(expect.objectContaining({
       fromGlobalIndex: null,
       index: 2,

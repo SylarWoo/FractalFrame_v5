@@ -61,7 +61,7 @@ describe('buildStoreV6PagePartition', () => {
     ])
   })
 
-  it('routes M5 to time aligned pages through the single partition entry', () => {
+  it('keeps M5 on row pages when time aligned pagination is disabled', () => {
     const latestTime = Date.UTC(2026, 0, 15, 6, 0) / 1000
     const partition = buildStoreV6PagePartition({
       latestTime,
@@ -71,25 +71,22 @@ describe('buildStoreV6PagePartition', () => {
     })
 
     expect(partition.status).toBe('ready')
+    expect(partition.partitionMode).toBe('rows')
     expect(partition.pages[0]).toEqual(expect.objectContaining({
-      fromGlobalIndex: null,
+      fromGlobalIndex: 6_200,
       index: 1,
       pageType: 'live',
       realtime: true,
-      rows: null,
-      timeFrom: Date.UTC(2026, 0, 7, 22, 0) / 1000,
-      timeTo: latestTime,
-      toGlobalIndex: null,
+      rows: 2_000,
+      toGlobalIndex: 8_199,
     }))
     expect(partition.pages[1]).toEqual(expect.objectContaining({
-      fromGlobalIndex: null,
+      fromGlobalIndex: 3_700,
       index: 2,
       pageType: 'history',
       realtime: false,
-      rows: null,
-      timeFrom: Date.UTC(2026, 0, 6, 22, 0) / 1000,
-      timeTo: Date.UTC(2026, 0, 13, 22, 0) / 1000,
-      toGlobalIndex: null,
+      rows: 2_500,
+      toGlobalIndex: 6_199,
     }))
   })
 })

@@ -1,6 +1,5 @@
-import type { StoreV6PagePartitionItem } from '../chart/pagePartition/pagePartitionBuilder'
+import type { StoreV6PagePartition, StoreV6PagePartitionItem } from '../chart/pagePartition/pagePartitionBuilder'
 import {
-  m5TimeAlignedPartitionProfileVersion,
   storeV6HistoryPageSize,
   storeV6LivePageSize,
   type StoreV6PagePartitionMode,
@@ -202,12 +201,14 @@ export function readPageTableHeight() {
     : defaultPageTableHeight
 }
 
-export function isCurrentCache(value: PersistedPageIndex | undefined, expectedMode: StoreV6PagePartitionMode) {
+export function isCurrentCache(
+  value: PersistedPageIndex | undefined,
+  expectedPartition: Pick<StoreV6PagePartition, 'partitionMode' | 'profileVersion'>,
+) {
   if (value?.pageSize !== historicalPageSize || value.livePageSize !== realtimePageSize) return false
   const actualMode = value.partitionMode ?? 'rows'
-  if (actualMode !== expectedMode) return false
-  if (expectedMode === 'm5-time') return value.profileVersion === m5TimeAlignedPartitionProfileVersion
-  return true
+  if (actualMode !== expectedPartition.partitionMode) return false
+  return value.profileVersion === expectedPartition.profileVersion
 }
 
 export function readRolloverDetail(event: Event) {

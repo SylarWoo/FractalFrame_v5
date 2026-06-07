@@ -29,8 +29,10 @@ export function buildRowsBasedPagePartition(options: {
     return {
       historyPageSize,
       livePageSize,
+      partitionMode: 'rows',
       pages: [],
       period,
+      profileVersion: 1,
       status: 'missing_selection',
       statusText: '请选择交易品种和周期。',
       symbol,
@@ -42,8 +44,10 @@ export function buildRowsBasedPagePartition(options: {
     return {
       historyPageSize,
       livePageSize,
+      partitionMode: 'rows',
       pages: [],
       period,
+      profileVersion: 1,
       status: 'empty',
       statusText: '历史数据不够，请先准备 StoreV6 历史数据。',
       symbol,
@@ -92,8 +96,10 @@ export function buildRowsBasedPagePartition(options: {
   return {
     historyPageSize,
     livePageSize,
+    partitionMode: 'rows',
     pages,
     period,
+    profileVersion: 1,
     status: totalRows < livePageSize ? 'insufficient_rows' : 'ready',
     statusText: totalRows < livePageSize
       ? `历史数据不够，实时页需要 ${livePageSize.toLocaleString('en-US')} 根，请先准备 StoreV6 历史数据。`

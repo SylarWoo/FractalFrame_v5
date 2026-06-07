@@ -5,6 +5,7 @@ import type {
 import { createPageIdentity } from '../../pageIdentity'
 import {
   estimateM5TimePageLimit,
+  m5TimeAlignedPartitionProfileVersion,
   m5TradingDaySlidingWeekProfile,
 } from './timeAlignedPageTypes'
 import {
@@ -45,14 +46,19 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
 }): StoreV6PagePartition {
   const { fallback } = options
   if (fallback.period.trim().toUpperCase() !== 'M5') return fallback
-  if (!fallback.pages.length) return fallback
+  const timeAlignedFallback: StoreV6PagePartition = {
+    ...fallback,
+    partitionMode: 'm5-time',
+    profileVersion: m5TimeAlignedPartitionProfileVersion,
+  }
+  if (!fallback.pages.length) return timeAlignedFallback
 
   const latestTime = typeof options.latestTime === 'number' && Number.isFinite(options.latestTime)
     ? Math.floor(options.latestTime)
     : null
   if (latestTime == null) {
     return {
-      ...fallback,
+      ...timeAlignedFallback,
       pages: [],
       status: 'empty',
       statusText: 'M5 时间分页缺少最新 K 线时间，无法生成时间页表。',
@@ -63,7 +69,7 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
   const anchorBoundary = floorToTradingDayBoundarySeconds(latestTime, profile)
   if (anchorBoundary == null) {
     return {
-      ...fallback,
+      ...timeAlignedFallback,
       pages: [],
       status: 'empty',
       statusText: 'M5 时间分页无法识别交易日边界。',
@@ -98,7 +104,7 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
   }
 
   return {
-    ...fallback,
+    ...timeAlignedFallback,
     historyPageSize: limit,
     livePageSize: limit,
     pages,
