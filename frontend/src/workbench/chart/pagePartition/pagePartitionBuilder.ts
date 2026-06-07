@@ -1,7 +1,6 @@
 export const storeV6LivePageSize = 2_000
 export const storeV6HistoryPageSize = 2_500
 
-import { buildM5CalendarPagePartition } from './m5CalendarPageAligner'
 import { buildRowsBasedPagePartition } from './rowsBasedPagePartitionBuilder'
 
 export type StoreV6PagePartitionStatus = 'empty' | 'insufficient_rows' | 'missing_selection' | 'ready'
@@ -37,9 +36,5 @@ export function buildStoreV6PagePartition(options: {
   symbol?: string
   totalRows?: number | null
 }): StoreV6PagePartition {
-  const fallback = buildRowsBasedPagePartition(options)
-  return buildM5CalendarPagePartition({
-    fallback,
-    latestTime: options.latestTime,
-  })
+  return buildRowsBasedPagePartition(options)
 }
