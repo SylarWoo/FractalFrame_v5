@@ -223,6 +223,7 @@ export function PagePartitionManager({
       if (!detail) return
       if (detail.symbol && selectedSymbol && detail.symbol !== selectedSymbol) return
       if (detail.period && selectedPeriod && detail.period.toUpperCase() !== selectedPeriod.toUpperCase()) return
+      if (selectedPeriod && isM5CalendarPagePeriod(selectedPeriod)) return
       setPartitionStatus(`实时页已增长到 ${formatPageRows(detail.rows)} 根，达到 ${formatPageRows(detail.thresholdRows)} 根整理边界；正在自动整理并重建分页。`)
       if (!building) buildPages('auto')
     }
