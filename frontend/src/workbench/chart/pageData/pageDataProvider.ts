@@ -2,6 +2,7 @@ import type { KLineData } from 'klinecharts'
 import { loadStoreV6KLineData } from '../../../datafeed/storeV6KLineDatafeed'
 import { mergeKLineData } from '../chartCoreDataUtils'
 import { resolvePeriodSeconds } from '../chartTimeFormatting'
+import { estimateM5CalendarPageLimit } from '../pagePartition/calendarPageProfiles'
 import { createPageDataKey, normalizePageDataBars } from './pageDataKey'
 import type { PageDataSlice, PageDataSliceRequest } from './pageDataSlice'
 
@@ -10,6 +11,15 @@ export const defaultPageLookaheadRows = 0
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function resolveDisplayLimit(request: PageDataSliceRequest) {
+  const rows = finiteNumber(request.rows)
+  if (rows != null) return Math.max(1, Math.round(rows))
+  if (request.period.trim().toUpperCase() === 'M5' && finiteNumber(request.timeFrom) != null && finiteNumber(request.timeTo) != null) {
+    return estimateM5CalendarPageLimit()
+  }
+  return 1
 }
 
 function resolveDisplayOffset(warmupRows: KLineData[], calculationRows: KLineData[], displayRows: KLineData[]) {
@@ -69,7 +79,7 @@ async function loadDisplayRows(request: PageDataSliceRequest) {
 
   const indexFrom = finiteNumber(request.fromGlobalIndex)
   const indexTo = finiteNumber(request.toGlobalIndex)
-  const limit = Math.max(1, Math.round(Number(request.rows ?? 0)))
+  const limit = resolveDisplayLimit(request)
   return loadStoreV6KLineData({
     indexFrom,
     indexTo,

@@ -228,6 +228,7 @@ export function PagePartitionManager({
     setBuilding(true)
     void (async () => {
       let rebuiltLiveRows = 0
+      let latestTime: number | null = null
       let nextTotalRows = pageTotalRows
       if (onPreparePagePartition) {
         setPartitionStatus('正在执行完整整理链：拉取 -> 聚合 -> audit/repair...')
@@ -242,6 +243,8 @@ export function PagePartitionManager({
           symbol: selectedSymbol,
         })
         if (latestRows.length) {
+          const latestRow = latestRows[latestRows.length - 1]
+          latestTime = typeof latestRow?.timestamp === 'number' ? Math.floor(latestRow.timestamp / 1000) : null
           rebuiltLiveRows = writeRealtimePageBuffer(selectedSymbol, period, latestRows).length
         }
       } catch {
@@ -249,6 +252,7 @@ export function PagePartitionManager({
       }
       const partition = buildStoreV6PagePartition({
         historyPageSize: historicalPageSize,
+        latestTime,
         livePageSize: realtimePageSize,
         period,
         symbol: selectedSymbol,

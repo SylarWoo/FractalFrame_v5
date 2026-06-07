@@ -23,6 +23,17 @@ export type PageLoadPlan = {
   requestedRows: number
 }
 
+function hasExplicitTimeWindow(page: ChartPageTarget | null | undefined) {
+  return typeof page?.timeFrom === 'number' && typeof page.timeTo === 'number'
+}
+
+function resolvePageLimit(page: ChartPageTarget | null | undefined, fallback: number) {
+  if (!hasExplicitTimeWindow(page)) return fallback
+  return typeof page?.limit === 'number' && Number.isFinite(page.limit)
+    ? Math.max(1, Math.round(page.limit))
+    : fallback
+}
+
 export function resolvePageLoadPlan(options: {
   jump?: { id: number; timestamp?: number } | null
   limit?: number
@@ -47,7 +58,7 @@ export function resolvePageLoadPlan(options: {
   }
 
   if (options.page?.realtime === false) {
-    const limit = storeV6HistoryPageSize
+    const limit = resolvePageLimit(options.page, storeV6HistoryPageSize)
     return {
       chartBehavior: {
         acceptRealtimeTicks: false,
@@ -72,7 +83,7 @@ export function resolvePageLoadPlan(options: {
     }
   }
 
-  const limit = storeV6LivePageSize
+  const limit = resolvePageLimit(options.page, storeV6LivePageSize)
   return {
     chartBehavior: {
       acceptRealtimeTicks: true,

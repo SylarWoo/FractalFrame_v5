@@ -70,6 +70,38 @@ describe('pageLoadPlanner', () => {
     expect(historyPlan.page?.rows).toBe(2_500)
   })
 
+  it('honors explicit time-window page limits', () => {
+    const realtimePlan = resolvePageLoadPlan({
+      page: {
+        fromGlobalIndex: null,
+        index: 1,
+        limit: 2_272,
+        realtime: true,
+        rows: null,
+        timeFrom: 100,
+        timeTo: 200,
+        toGlobalIndex: null,
+      },
+    })
+    const historyPlan = resolvePageLoadPlan({
+      page: {
+        fromGlobalIndex: null,
+        index: 2,
+        limit: 2_272,
+        realtime: false,
+        rows: null,
+        timeFrom: 10,
+        timeTo: 99,
+        toGlobalIndex: null,
+      },
+    })
+
+    expect(realtimePlan.requestedRows).toBe(2_272)
+    expect(realtimePlan.page?.rows).toBe(2_272)
+    expect(historyPlan.requestedRows).toBe(2_272)
+    expect(historyPlan.page?.rows).toBe(2_272)
+  })
+
   it('keeps jump loads static', () => {
     const plan = resolvePageLoadPlan({ jump: { id: 1, timestamp: 1_700_000_000_000 } })
 

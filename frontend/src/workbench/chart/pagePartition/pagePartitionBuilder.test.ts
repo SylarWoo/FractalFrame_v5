@@ -4,7 +4,7 @@ import { buildStoreV6PagePartition } from './pagePartitionBuilder'
 describe('buildStoreV6PagePartition', () => {
   it('builds a live page from the newest 2000 rows and history pages from older rows', () => {
     const partition = buildStoreV6PagePartition({
-      period: 'M5',
+      period: 'M15',
       symbol: 'XAUUSDm',
       totalRows: 8_200,
     })
@@ -59,5 +59,52 @@ describe('buildStoreV6PagePartition', () => {
         toGlobalIndex: 599,
       }),
     ])
+  })
+
+  it('routes M5 to calendar time pages without probing rows or global indexes', () => {
+    const latestTime = Date.UTC(2026, 0, 16, 3, 0) / 1000
+    const partition = buildStoreV6PagePartition({
+      latestTime,
+      period: 'M5',
+      symbol: 'XAUUSDm',
+      totalRows: 8_200,
+    })
+
+    expect(partition.status).toBe('ready')
+    expect(partition.pages[0]).toEqual(expect.objectContaining({
+      fromGlobalIndex: null,
+      index: 1,
+      pageType: 'live',
+      realtime: true,
+      rows: null,
+      timeFrom: Date.UTC(2026, 0, 8, 22, 0) / 1000,
+      timeTo: latestTime,
+      toGlobalIndex: null,
+    }))
+    expect(partition.pages[1]).toEqual(expect.objectContaining({
+      fromGlobalIndex: null,
+      index: 2,
+      pageType: 'history',
+      realtime: false,
+      rows: null,
+      timeFrom: Date.UTC(2026, 0, 7, 22, 0) / 1000,
+      timeTo: Date.UTC(2026, 0, 14, 22, 0) / 1000,
+      toGlobalIndex: null,
+    }))
+  })
+
+  it('skips weekend boundaries when stepping M5 history pages', () => {
+    const latestTime = Date.UTC(2026, 0, 19, 3, 0) / 1000
+    const partition = buildStoreV6PagePartition({
+      latestTime,
+      period: 'M5',
+      symbol: 'XAUUSDm',
+      totalRows: 8_200,
+    })
+
+    expect(partition.pages[1]).toEqual(expect.objectContaining({
+      timeFrom: Date.UTC(2026, 0, 9, 22, 0) / 1000,
+      timeTo: Date.UTC(2026, 0, 16, 22, 0) / 1000,
+    }))
   })
 })

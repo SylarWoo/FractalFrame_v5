@@ -226,6 +226,7 @@ export function applyLiveRowsFromBuffer(pages: RealtimePageRow[], options: {
   const last = buffer[buffer.length - 1]
   return pages.map((page) => {
     if (!page.realtime || page.index !== 1) return page
+    if (page.fromGlobalIndex == null && page.toGlobalIndex == null && hasPageRangeTime(page)) return page
     return {
       ...page,
       rows: buffer.length,

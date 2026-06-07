@@ -133,7 +133,7 @@ export function useChartDataLoad({
     chart.setLoadDataCallback(({ callback }) => callback([], false))
 
     const setFallbackTimer = (timer: number) => { fallbackTimer = timer }
-    if (loadPlan.mode === 'history' && loadPlan.page) {
+    if (loadPlan.page && (loadPlan.mode === 'history' || hasPageTimeWindow(loadPlan.page))) {
       loadPagedWindow(chart, { inheritedViewport, lookaheadRows, page: loadPlan.page, period, setFallbackTimer, setLoadState, shouldIgnore, symbol, viewportScope, warmupRows })
     } else if (loadPlan.mode === 'jump' && jump?.timestamp != null) {
       loadJumpWindow(chart, { inheritedViewport, jumpTimestamp: jump.timestamp, period, setFallbackTimer, setLoadState, shouldIgnore, symbol, viewportScope })
@@ -184,6 +184,11 @@ type LoadOptions = {
   symbol: string
   viewportScope: string
   warmupRows?: number
+}
+
+function hasPageTimeWindow(page: ChartPageTarget | null | undefined) {
+  return typeof page?.timeFrom === 'number' && Number.isFinite(page.timeFrom)
+    && typeof page.timeTo === 'number' && Number.isFinite(page.timeTo)
 }
 
 function findNearestDataIndex(chart: Chart, timestamp: number) {

@@ -157,7 +157,7 @@ export type ChartPageTarget = {
   index: number
   limit: number
   realtime: boolean
-  rows?: number
+  rows?: number | null
   timeFrom?: number | null
   timeTo?: number | null
   toGlobalIndex?: number | null
