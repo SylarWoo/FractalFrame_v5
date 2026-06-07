@@ -36,6 +36,7 @@ import {
   readRealtimeBufferDetail,
   readRolloverDetail,
   realtimePageSize,
+  resolvePartitionKind,
   resolveRowsFromStoreStatus,
   writeLastResetCache,
   writePageIndexCache,
@@ -79,7 +80,20 @@ export function PagePartitionManager({
     ?? storeRows.find((row) => row.period.toUpperCase() === selectedPeriod)
   const totalRows = parseRowsCount(selectedStoreRow?.rowsCount ?? selectedStoreRow?.count)
   const [pageTotalRows, setPageTotalRows] = useState<number | null>(totalRows)
-  const cacheKey = selectedSymbol && selectedPeriod ? pageCacheKey(selectedSymbol, selectedPeriod) : ''
+  const partitionForCacheKey = buildStoreV6PagePartition({
+    historyPageSize: historicalPageSize,
+    livePageSize: realtimePageSize,
+    period: selectedPeriod,
+    symbol: selectedSymbol,
+    totalRows,
+  })
+  const cacheKey = selectedSymbol && selectedPeriod
+    ? pageCacheKey(
+        selectedSymbol,
+        selectedPeriod,
+        partitionForCacheKey.partitionMode === 'm5-time' ? 'time' : 'rows',
+      )
+    : ''
 
   useEffect(() => {
     setPageTotalRows(totalRows)
@@ -105,6 +119,7 @@ export function PagePartitionManager({
       livePageSize: realtimePageSize,
       pageSize: historicalPageSize,
       pages: nextPages,
+      partitionKind: resolvePartitionKind(nextPages),
       partitionMode: partition.partitionMode,
       period: selectedPeriod,
       profileVersion: partition.profileVersion,
@@ -177,7 +192,7 @@ export function PagePartitionManager({
       if (cached && !cacheCurrent) deletePageIndexCache(cacheKey)
       setLastResetInfo(readLastResetCache()[cacheKey] ?? null)
       setPages(cacheCurrent && selectedPeriod
-        ? currentPartition.partitionMode === 'm5-time'
+        ? resolvePartitionKind(cached.pages) === 'time'
           ? cached.pages
           : applyLiveRowsFromBuffer(cached.pages, { period: selectedPeriod, symbol: selectedSymbol })
         : [])
@@ -218,6 +233,7 @@ export function PagePartitionManager({
       if (!detail) return
       if (detail.symbol && selectedSymbol && detail.symbol !== selectedSymbol) return
       if (detail.period && selectedPeriod && detail.period.toUpperCase() !== selectedPeriod.toUpperCase()) return
+      if (resolvePartitionKind(pages) === 'time') return
       if (buildCurrentPartition().partitionMode !== 'rows') return
       setPages((current) => current.map((page) => {
         if (!page.realtime || page.index !== 1) return page
@@ -233,7 +249,7 @@ export function PagePartitionManager({
     return () => {
       window.removeEventListener(workbenchEvents.realtimePageBufferChanged, handleRealtimeBufferChanged)
     }
-  }, [selectedPeriod, selectedSymbol])
+  }, [pages, selectedPeriod, selectedSymbol])
 
   useEffect(() => {
     const handleRealtimePageRollover = (event: Event) => {
@@ -241,6 +257,7 @@ export function PagePartitionManager({
       if (!detail) return
       if (detail.symbol && selectedSymbol && detail.symbol !== selectedSymbol) return
       if (detail.period && selectedPeriod && detail.period.toUpperCase() !== selectedPeriod.toUpperCase()) return
+      if (resolvePartitionKind(pages) === 'time') return
       if (buildCurrentPartition().partitionMode !== 'rows') return
       setPartitionStatus(`实时页已增长到 ${formatPageRows(detail.rows)} 根，达到 ${formatPageRows(detail.thresholdRows)} 根整理边界；正在自动整理并重建分页。`)
       if (!building) buildPages('auto')
@@ -249,7 +266,7 @@ export function PagePartitionManager({
     return () => {
       window.removeEventListener(workbenchEvents.realtimePageRolloverRequested, handleRealtimePageRollover)
     }
-  }, [building, selectedPeriod, selectedSymbol])
+  }, [building, pages, selectedPeriod, selectedSymbol])
 
   function buildPages(reason: 'auto' | 'manual' = 'manual') {
     const period = selectedPeriod
@@ -282,9 +299,9 @@ export function PagePartitionManager({
         rebuiltLiveRows = 0
       }
       const partition = buildCurrentPartition(latestTime, nextTotalRows)
-      const pagesForUi = partition.partitionMode === 'rows'
-        ? applyLiveRowsFromBuffer(partition.pages, { period, symbol: selectedSymbol })
-        : partition.pages
+      const pagesForUi = resolvePartitionKind(partition.pages) === 'time'
+        ? partition.pages
+        : applyLiveRowsFromBuffer(partition.pages, { period, symbol: selectedSymbol })
       enrichmentSeqRef.current += 1
       persistPages(pagesForUi, nextTotalRows, partition)
       setSelectedPage(1)

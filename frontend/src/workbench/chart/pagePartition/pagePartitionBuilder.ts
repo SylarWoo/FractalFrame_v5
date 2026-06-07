@@ -5,7 +5,7 @@ import { buildM5TradingDaySlidingWeekPartition } from './timeAligned/m5TradingDa
 export { m5TimeAlignedPartitionProfileVersion } from './timeAligned/timeAlignedPageTypes'
 import { buildRowsBasedPagePartition } from './rowsBasedPagePartitionBuilder'
 
-const enableM5TimeAlignedPaginator = false
+const enableM5TimeAlignedPaginator = true
 
 export type StoreV6PagePartitionMode = 'm5-time' | 'rows'
 

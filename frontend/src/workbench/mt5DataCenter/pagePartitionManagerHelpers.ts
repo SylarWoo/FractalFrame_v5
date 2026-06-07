@@ -17,6 +17,7 @@ export type PersistedPageIndex = {
   livePageSize: number
   pageSize: number
   pages: RealtimePageRow[]
+  partitionKind?: 'rows' | 'time'
   partitionMode?: StoreV6PagePartitionMode
   period: string
   profileVersion?: number
@@ -87,6 +88,20 @@ function formatResetTime(value: string | null | undefined) {
 
 export function hasPageRangeTime(page: RealtimePageRow) {
   return typeof page.timeFrom === 'number' && typeof page.timeTo === 'number'
+}
+
+export function isTimePartitionPage(page: RealtimePageRow | null | undefined) {
+  return Boolean(
+    page &&
+    typeof page.timeFrom === 'number' &&
+    typeof page.timeTo === 'number' &&
+    page.fromGlobalIndex == null &&
+    page.toGlobalIndex == null,
+  )
+}
+
+export function resolvePartitionKind(pages: RealtimePageRow[] | null | undefined) {
+  return isTimePartitionPage(pages?.[0]) ? 'time' : 'rows'
 }
 
 export function formatPageRange(page: RealtimePageRow) {
@@ -162,8 +177,8 @@ export function resolveRowsFromStoreStatus(payload: StoreV6CheckPayload | null |
   return parseRowsCount(aggregate?.rowsCount)
 }
 
-export function pageCacheKey(symbol: string, period: string) {
-  return `${symbol.trim().toUpperCase()}:${period.trim().toUpperCase()}`
+export function pageCacheKey(symbol: string, period: string, partitionKind: 'rows' | 'time' = 'rows') {
+  return `${symbol.trim().toUpperCase()}:${period.trim().toUpperCase()}:${partitionKind}`
 }
 
 export function readPageIndexCache() {
@@ -208,7 +223,10 @@ export function isCurrentCache(
   if (value?.pageSize !== historicalPageSize || value.livePageSize !== realtimePageSize) return false
   const actualMode = value.partitionMode ?? 'rows'
   if (actualMode !== expectedPartition.partitionMode) return false
-  return value.profileVersion === expectedPartition.profileVersion
+  if (value.profileVersion !== expectedPartition.profileVersion) return false
+  const expectedKind = expectedPartition.partitionMode === 'm5-time' ? 'time' : 'rows'
+  const actualKind = value.partitionKind ?? resolvePartitionKind(value.pages)
+  return actualKind === expectedKind && actualKind === resolvePartitionKind(value.pages)
 }
 
 export function readRolloverDetail(event: Event) {

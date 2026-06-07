@@ -61,7 +61,7 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
       ...timeAlignedFallback,
       pages: [],
       status: 'empty',
-      statusText: 'M5 时间分页缺少最新 K 线时间，无法生成时间页表。',
+      statusText: 'M5 时间分页已启用，但缺少最新 K 线时间，无法生成时间页表。',
     }
   }
 
@@ -72,7 +72,7 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
       ...timeAlignedFallback,
       pages: [],
       status: 'empty',
-      statusText: 'M5 时间分页无法识别交易日边界。',
+      statusText: 'M5 时间分页已启用，但无法识别交易日边界。',
     }
   }
 
@@ -108,6 +108,6 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
     historyPageSize: limit,
     livePageSize: limit,
     pages,
-    statusText: 'M5 时间分页已按交易日边界生成。',
+    statusText: 'M5 时间分页已启用，已按交易日 06:00 边界生成时间页表。',
   }
 }
