@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
-import type { ChartPageTarget } from '../chart/ChartCoreHost'
+import type { ChartPageTarget } from '../chart/chartRuntimeTypes'
+import { resolveStoreV6PagePartitionMode } from '../chart/pagePartition/pagePartitionBuilder'
 import {
   cancelStoreV6AggregateJob,
   cancelStoreV6AggregateJobsForSymbol,
@@ -106,6 +107,7 @@ export function useStoreV6Jobs({
 
   function openChartForStatus(symbol: string, payload: StoreV6CheckPayload) {
     const period = periodFromStoreTableKey(selectedStoreTableKey) || readSharedSelection().period || 'M1'
+    if (resolveStoreV6PagePartitionMode(period) === 'm5-time') return
     const count = rowsForStorePeriod(payload, period)
     onOpenChart?.({
       symbol,
@@ -277,9 +279,11 @@ export function useStoreV6Jobs({
     }
   }
 
-  async function handlePreparePagePartition() {
+  async function handlePreparePagePartition(period?: string) {
     const symbol = selectedRowSymbol
     if (!symbol) throw new Error('请选择交易品种。')
+    const normalizedPeriod = String(period || periodFromStoreTableKey(selectedStoreTableKey) || '').trim().toUpperCase()
+    const targetAggregatePeriods = normalizedPeriod === 'M5' ? ['M5'] : null
     setStoreCheckLoading(true)
     setStoreCheckError('')
     setPullProgress(null)
@@ -312,7 +316,10 @@ export function useStoreV6Jobs({
 
       const afterPullStatus = await fetchStoreV6Status(symbol)
       setLocalStoreStatus(afterPullStatus)
-      const periods = resolveStoreV6AggregateTargets(afterPullStatus)
+      const allPeriods = resolveStoreV6AggregateTargets(afterPullStatus)
+      const periods = targetAggregatePeriods
+        ? allPeriods.filter((item) => targetAggregatePeriods.includes(item))
+        : allPeriods
       if (periods.length) {
         setAggregateProgress(createPendingAggregateProgress(symbol, periods))
         setStoreActionStatus(`整理分页前置链：正在聚合 ${periods.join(', ')}...`)
@@ -323,15 +330,21 @@ export function useStoreV6Jobs({
         if (activeAggregateJobRef.current !== startedAggregate.jobId) throw new Error('store_v6_aggregate_cancelled')
         setAggregateProgress(createCompletedAggregateProgress(startedAggregate.jobId, symbol, periods))
       } else {
-        setStoreActionStatus('整理分页前置链：聚合已是最新，正在 audit/repair...')
+        setStoreActionStatus(targetAggregatePeriods
+          ? 'M5 分页前置链：M5 聚合已是最新，正在生成分页。'
+          : '整理分页前置链：聚合已是最新，正在 audit/repair...')
       }
 
-      setStoreActionStatus('整理分页前置链：正在执行 audit/repair...')
-      await auditStoreV6(symbol, { repair: true })
+      if (!targetAggregatePeriods) {
+        setStoreActionStatus('整理分页前置链：正在执行 audit/repair...')
+        await auditStoreV6(symbol, { repair: true })
+      }
       const payload = await fetchStoreV6Status(symbol)
       setLocalStoreStatus(payload)
       savePersistedStoreV6Status(symbol, payload, new Date().toISOString(), storePanelPersistenceEnabled)
-      setStoreActionStatus('整理分页前置链完成，正在重建实时缓存和分页。')
+      setStoreActionStatus(targetAggregatePeriods
+        ? 'M5 分页前置链完成，正在生成时间分页。'
+        : '整理分页前置链完成，正在重建实时缓存和分页。')
       window.setTimeout(() => {
         setAggregateProgress((current) => (current?.phase === 'completed' ? null : current))
         setStoreActionStatus('')

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Mt5RealtimeTick, StoreV6CheckPayload } from '../../services/mt5/mt5SymbolsApi'
-import type { ChartPageTarget } from '../chart/ChartCoreHost'
+import type { ChartPageTarget } from '../chart/chartRuntimeTypes'
 import {
   readPersistedRealtimeSnapshot,
   readWatchlistRealtimeEnabled,

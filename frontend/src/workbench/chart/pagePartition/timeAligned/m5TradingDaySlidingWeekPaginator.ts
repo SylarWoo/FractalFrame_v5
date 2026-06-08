@@ -1,8 +1,5 @@
-import type {
-  StoreV6PagePartition,
-  StoreV6PagePartitionItem,
-} from '../pagePartitionBuilder'
 import { createPageIdentity } from '../../pageIdentity'
+import type { StoreV6PagePartition, StoreV6PagePartitionItem } from '../pagePartitionBuilder'
 import {
   estimateM5TimePageLimit,
   m5TimeAlignedPartitionProfileVersion,
@@ -13,11 +10,11 @@ import {
   previousTradingDayBoundarySeconds,
   subtractCalendarDays,
 } from './tradingDayBoundary'
+import { resolveTimeAlignedTradingProfile } from './timeAlignedTradingProfile'
 
 function createTimePage(options: {
   index: number
   limit: number
-  realtime: boolean
   period: string
   symbol: string
   timeFrom: number
@@ -27,8 +24,8 @@ function createTimePage(options: {
     fromGlobalIndex: null,
     index: options.index,
     limit: options.limit,
-    pageType: options.realtime ? 'live' : 'history',
-    realtime: options.realtime,
+    pageType: options.index === 1 ? 'live' : 'history',
+    realtime: false,
     rows: null,
     timeFrom: options.timeFrom,
     timeTo: options.timeTo,
@@ -45,31 +42,37 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
   latestTime?: number | null
 }): StoreV6PagePartition {
   const { fallback } = options
-  if (fallback.period.trim().toUpperCase() !== 'M5') return fallback
-  const timeAlignedFallback: StoreV6PagePartition = {
+  const timeFallback: StoreV6PagePartition = {
     ...fallback,
     partitionMode: 'm5-time',
     profileVersion: m5TimeAlignedPartitionProfileVersion,
   }
-  if (!fallback.pages.length) return timeAlignedFallback
+  if (fallback.period.trim().toUpperCase() !== 'M5') return fallback
+  if (!fallback.pages.length) return timeFallback
 
   const latestTime = typeof options.latestTime === 'number' && Number.isFinite(options.latestTime)
     ? Math.floor(options.latestTime)
     : null
   if (latestTime == null) {
     return {
-      ...timeAlignedFallback,
+      ...timeFallback,
       pages: [],
       status: 'empty',
-      statusText: 'M5 时间分页已启用，但缺少最新 K 线时间，无法生成时间页表。',
+      statusText: 'M5 时间分页已启用，等待 StoreV6 最新 K 线时间后生成时间页表。',
     }
   }
 
-  const profile = m5TradingDaySlidingWeekProfile
-  const anchorBoundary = floorToTradingDayBoundarySeconds(latestTime, profile)
+  const tradingProfile = resolveTimeAlignedTradingProfile(fallback.symbol)
+  const profile = {
+    ...m5TradingDaySlidingWeekProfile,
+    boundaryHourShanghai: tradingProfile.boundaryHourShanghai,
+    boundaryMinuteShanghai: tradingProfile.boundaryMinuteShanghai,
+  }
+  const boundaryOptions = { skipWeekends: tradingProfile.weekendClosed }
+  const anchorBoundary = floorToTradingDayBoundarySeconds(latestTime, profile, boundaryOptions)
   if (anchorBoundary == null) {
     return {
-      ...timeAlignedFallback,
+      ...timeFallback,
       pages: [],
       status: 'empty',
       statusText: 'M5 时间分页已启用，但无法识别交易日边界。',
@@ -77,37 +80,62 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
   }
 
   const limit = estimateM5TimePageLimit(profile)
+  const liveTimeFrom = subtractCalendarDays(anchorBoundary, profile.windowDays)
+  if (!tradingProfile.weekendClosed) {
+    const windowSeconds = profile.windowDays * 24 * 60 * 60
+    const pages: StoreV6PagePartitionItem[] = []
+    let pageTimeFrom = liveTimeFrom
+    while (pages.length < fallback.pages.length) {
+      pages.push(createTimePage({
+        index: pages.length + 1,
+        limit,
+        period: fallback.period,
+        symbol: fallback.symbol,
+        timeFrom: pageTimeFrom,
+        timeTo: pageTimeFrom + windowSeconds - 1,
+      }))
+      pageTimeFrom = previousTradingDayBoundarySeconds(pageTimeFrom, profile, boundaryOptions)
+    }
+
+    return {
+      ...timeFallback,
+      historyPageSize: limit,
+      livePageSize: limit,
+      pages,
+      statusText: 'M5 时间分页已启用，时间边界将解析为 StoreV6 globalIndex 后显示。',
+    }
+  }
+
   const pages: StoreV6PagePartitionItem[] = [
     createTimePage({
       index: 1,
       limit,
       period: fallback.period,
-      realtime: true,
       symbol: fallback.symbol,
-      timeFrom: subtractCalendarDays(anchorBoundary, profile.windowDays),
-      timeTo: latestTime,
+      timeFrom: liveTimeFrom,
+      timeTo: anchorBoundary - 1,
     }),
   ]
 
-  let historyTimeTo = previousTradingDayBoundarySeconds(anchorBoundary, profile)
+  let newerPageStart = liveTimeFrom
   while (pages.length < fallback.pages.length) {
+    const historyTimeFrom = subtractCalendarDays(previousTradingDayBoundarySeconds(newerPageStart, profile, boundaryOptions), profile.windowDays)
     pages.push(createTimePage({
       index: pages.length + 1,
       limit,
       period: fallback.period,
-      realtime: false,
       symbol: fallback.symbol,
-      timeFrom: subtractCalendarDays(historyTimeTo, profile.windowDays),
-      timeTo: historyTimeTo,
+      timeFrom: historyTimeFrom,
+      timeTo: newerPageStart - 1,
     }))
-    historyTimeTo = previousTradingDayBoundarySeconds(historyTimeTo, profile)
+    newerPageStart = historyTimeFrom
   }
 
   return {
-    ...timeAlignedFallback,
+    ...timeFallback,
     historyPageSize: limit,
     livePageSize: limit,
     pages,
-    statusText: 'M5 时间分页已启用，已按交易日 06:00 边界生成时间页表。',
+    statusText: 'M5 时间分页已启用，时间边界将解析为 StoreV6 globalIndex 后显示。',
   }
 }

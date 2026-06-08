@@ -15,6 +15,7 @@ import {
   readShortcutMenuPeriods,
   resolveShortcutActivePeriod,
 } from './topbarPeriodUtils'
+import { resolveStoreV6PagePartitionMode } from '../chart/pagePartition/pagePartitionBuilder'
 import type { PeriodOption } from './topbarPeriodUtils'
 
 export type OpenChartOptions = {
@@ -87,6 +88,7 @@ export function useShortcutMenuState({ onOpenChart }: UseShortcutMenuStateOption
     if (!fallback) return
     setActivePeriod(fallback.period)
     publishSharedSelection(symbol, fallback.period)
+    if (resolveStoreV6PagePartitionMode(fallback.period) === 'm5-time') return
     const symbolPeriods = readPeriodsForSymbol(symbol)
     const symbolPeriod = symbolPeriods.find((item) => item.period === fallback.period)
     onOpenChart?.({
@@ -100,6 +102,7 @@ export function useShortcutMenuState({ onOpenChart }: UseShortcutMenuStateOption
     if (!selectedSymbol) return
     setActivePeriod(option.period)
     publishSharedSelection(selectedSymbol, option.period)
+    if (resolveStoreV6PagePartitionMode(option.period) === 'm5-time') return
     const symbolPeriods = readPeriodsForSymbol(selectedSymbol)
     const symbolPeriod = symbolPeriods.find((item) => item.period === option.period)
     onOpenChart?.({

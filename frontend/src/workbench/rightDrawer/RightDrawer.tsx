@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import './RightDrawer.css'
 import '../mt5DataCenter/Mt5DataCenterPanel.css'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
+import { resolveStoreV6PagePartitionMode } from '../chart/pagePartition/pagePartitionBuilder'
 import { formatSymbolStatus, normalizeStoredStatus, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV6StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV6StatusFormat'
 import { clearStorePanelPersistence, getInitialSymbolSnapshot, mergeSymbolRowsWithSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV6Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV6Persistence'
@@ -31,6 +32,10 @@ function hasLoadedSymbolSessions(row: Mt5SymbolRow | undefined) {
   if (!row?.sessions) return false
   if (row.sessionsSource) return true
   return [...(row.sessions.quote ?? []), ...(row.sessions.trade ?? [])].some((value) => String(value ?? '').trim())
+}
+
+function shouldSkipChartOpen(period: string | null | undefined) {
+  return resolveStoreV6PagePartitionMode(period) === 'm5-time'
 }
 
 export function RightDrawer({
@@ -363,11 +368,13 @@ export function RightDrawer({
     setStoreCheckError('')
     setStoreActionStatus('')
     publishSharedSelection(symbol, period)
-    onOpenChart?.({
-      symbol,
-      period,
-      totalRows: null,
-    })
+    if (!shouldSkipChartOpen(period)) {
+      onOpenChart?.({
+        symbol,
+        period,
+        totalRows: null,
+      })
+    }
     if (symbols.length) {
       saveSymbolSnapshot({
         selectedSymbol: symbol,
@@ -415,11 +422,13 @@ export function RightDrawer({
     setSelectedStoreTableKey(key)
     savePersistedStoreTableSelection(symbol, key, storePanelPersistenceEnabled)
     publishSharedSelection(symbol, row.period)
-    onOpenChart?.({
-      symbol,
-      period: row.period,
-      totalRows: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : null,
-    })
+    if (!shouldSkipChartOpen(row.period)) {
+      onOpenChart?.({
+        symbol,
+        period: row.period,
+        totalRows: typeof row.rowsCount === 'number' && Number.isFinite(row.rowsCount) ? row.rowsCount : null,
+      })
+    }
   }
 
   function handleOpenWatchlistPeriod(row: StoreTableRow) {

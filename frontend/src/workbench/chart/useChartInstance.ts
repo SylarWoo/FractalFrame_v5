@@ -30,12 +30,13 @@ import { installYAxisDragOptimization } from './chartAxisInteraction'
 
 type UseChartInstanceOptions = {
   displayName?: string
+  featureMode?: 'full' | 'minimal'
   period: string
   symbol: string
   viewportScope?: string
 }
 
-function applyChartStyles(chart: Chart, symbol: string, period: string, displayName?: string) {
+function applyChartStyles(chart: Chart, symbol: string, period: string, displayName: string | undefined, featureMode: 'full' | 'minimal') {
   chart.setTimezone(readChartTimezone())
   chart.setCustomApi({ formatDate: formatChartDate })
   applyPriceVolumePrecision(chart, symbol)
@@ -48,10 +49,10 @@ function applyChartStyles(chart: Chart, symbol: string, period: string, displayN
   applyCandleBarStyle(chart)
   applyCandleTooltipStyle(chart, symbol, period, displayName)
   applyLastPriceLineStyle(chart, symbol)
-  applySessionBreakIndicator(chart, symbol, period)
+  if (featureMode === 'full') applySessionBreakIndicator(chart, symbol, period)
 }
 
-export function useChartInstance({ displayName, period, symbol, viewportScope = 'default' }: UseChartInstanceOptions) {
+export function useChartInstance({ displayName, featureMode = 'full', period, symbol, viewportScope = 'default' }: UseChartInstanceOptions) {
   const chartInstanceRef = useRef<Chart | null>(null)
   const chartRef = useRef<HTMLDivElement | null>(null)
   const chartContextRef = useRef({ period, scope: viewportScope, symbol })
@@ -100,14 +101,16 @@ export function useChartInstance({ displayName, period, symbol, viewportScope = 
     let cleanupYAxisDragOptimization: (() => void) | null = null
     window.requestAnimationFrame(() => {
       if (chart) {
-        cleanupYAxisDragOptimization = installYAxisDragOptimization(chart)
-        cleanupBarSpaceCompression = installChartBarSpaceCompression(chart)
-        cleanupMouseBehaviorOverrides = installChartMouseBehaviorOverrides(chart)
-        cleanupDrawingTools = installChartDrawingTools(chart, () => chartContextRef.current.period)
-        cleanupViewportPersistence = installChartViewportPersistence(chart, () => chartContextRef.current)
+        if (featureMode === 'full') {
+          cleanupYAxisDragOptimization = installYAxisDragOptimization(chart)
+          cleanupBarSpaceCompression = installChartBarSpaceCompression(chart)
+          cleanupMouseBehaviorOverrides = installChartMouseBehaviorOverrides(chart)
+          cleanupDrawingTools = installChartDrawingTools(chart, () => chartContextRef.current.period)
+          cleanupViewportPersistence = installChartViewportPersistence(chart, () => chartContextRef.current)
+        }
       }
     })
-    if (chart && domPaneTitleOverlayEnabled) {
+    if (chart && domPaneTitleOverlayEnabled && featureMode === 'full') {
       paneTitleOverlayRef.current = installPaneTitleOverlay(chart, container, { period: '', symbol: '' })
     }
 
@@ -125,14 +128,14 @@ export function useChartInstance({ displayName, period, symbol, viewportScope = 
       chartInstanceRef.current = null
       if (chart) dispose(chart)
     }
-  }, [])
+  }, [featureMode])
 
   useEffect(() => {
     paneTitleOverlayRef.current?.updateContext({ displayName, period, symbol })
     const apply = () => {
       const chart = chartInstanceRef.current
       if (chart) {
-        applyChartStyles(chart, symbol, period, displayName)
+        applyChartStyles(chart, symbol, period, displayName, featureMode)
         paneTitleOverlayRef.current?.update()
       }
     }
@@ -147,7 +150,7 @@ export function useChartInstance({ displayName, period, symbol, viewportScope = 
       window.removeEventListener(marketStatusTitleChangedEvent, apply)
       window.removeEventListener('storage', apply)
     }
-  }, [displayName, period, symbol])
+  }, [displayName, featureMode, period, symbol])
 
   useEffect(() => {
     const chart = chartInstanceRef.current

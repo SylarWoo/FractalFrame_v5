@@ -2,7 +2,6 @@ export const storeV6LivePageSize = 2_000
 export const storeV6HistoryPageSize = 2_500
 
 import { buildM5TradingDaySlidingWeekPartition } from './timeAligned/m5TradingDaySlidingWeekPaginator'
-export { m5TimeAlignedPartitionProfileVersion } from './timeAligned/timeAlignedPageTypes'
 import { buildRowsBasedPagePartition } from './rowsBasedPagePartitionBuilder'
 
 const enableM5TimeAlignedPaginator = true

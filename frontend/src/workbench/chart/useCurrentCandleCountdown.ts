@@ -142,11 +142,9 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
         update()
       })
     }
-    const intervalId = window.setInterval(update, 250)
+    const intervalId = window.setInterval(update, 1_000)
     const actions = [
       ActionType.OnDataReady,
-      ActionType.OnScroll,
-      ActionType.OnVisibleRangeChange,
       ActionType.OnZoom,
     ]
     const chart = chartInstanceRef.current

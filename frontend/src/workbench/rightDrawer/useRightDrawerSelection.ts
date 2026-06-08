@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { Mt5SymbolRow, StoreV6CheckPayload } from '../../services/mt5/mt5SymbolsApi'
-import type { ChartPageTarget } from '../chart/ChartCoreHost'
+import type { ChartPageTarget } from '../chart/chartRuntimeTypes'
+import { resolveStoreV6PagePartitionMode } from '../chart/pagePartition/pagePartitionBuilder'
 import type { StoreTableRow } from '../mt5DataCenter/storeV6StatusFormat'
 import { storeTableKeyForPeriod } from '../mt5DataCenter/storeV6StatusFormat'
 import {
@@ -64,6 +65,10 @@ export function symbolRowMatchesSearchTokens(row: Mt5SymbolRow, tokens: string[]
     .toLowerCase()
 
   return tokens.some((token) => searchableText.includes(token))
+}
+
+function shouldSkipChartOpen(period: string | null | undefined) {
+  return resolveStoreV6PagePartitionMode(period) === 'm5-time'
 }
 
 export function useRightDrawerSelection({
@@ -185,6 +190,10 @@ export function useRightDrawerSelection({
 
     const row = visibleStoreTableRows.find((item) => `${item.kind}-${item.period}` === selectedStoreTableKey)
     if (!row) return
+    if (shouldSkipChartOpen(row.period)) {
+      autoOpenedStoreTableRef.current = autoOpenKey
+      return
+    }
 
     autoOpenedStoreTableRef.current = autoOpenKey
     onOpenChart?.({

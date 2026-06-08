@@ -1,49 +1,53 @@
 import type { TimeAlignedPageProfile } from './timeAlignedPageTypes'
 
-const secondsPerDay = 86_400
-const secondsPerHour = 3_600
-const shanghaiUtcOffsetSeconds = 8 * secondsPerHour
+const shanghaiOffsetSeconds = 8 * 60 * 60
+const daySeconds = 24 * 60 * 60
 
-function normalizeSeconds(value: number | null | undefined) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null
-  return Math.floor(value)
+function boundaryOffsetSeconds(profile: TimeAlignedPageProfile) {
+  return (profile.boundaryHourShanghai * 60 + profile.boundaryMinuteShanghai) * 60 - shanghaiOffsetSeconds
 }
 
-export function isShanghaiWeekendBoundary(boundarySeconds: number) {
-  const shanghaiDate = new Date((boundarySeconds + shanghaiUtcOffsetSeconds) * 1000)
-  const day = shanghaiDate.getUTCDay()
-  return day === 0 || day === 6
+function dayNumberAtShanghaiBoundary(seconds: number, profile: TimeAlignedPageProfile) {
+  return Math.floor((seconds - boundaryOffsetSeconds(profile)) / daySeconds)
+}
+
+function boundaryFromDayNumber(dayNumber: number, profile: TimeAlignedPageProfile) {
+  return dayNumber * daySeconds + boundaryOffsetSeconds(profile)
+}
+
+function shanghaiWeekday(seconds: number) {
+  const date = new Date((seconds + shanghaiOffsetSeconds) * 1000)
+  return date.getUTCDay()
+}
+
+function isWeekendBoundary(seconds: number) {
+  const weekday = shanghaiWeekday(seconds)
+  return weekday === 0 || weekday === 6
+}
+
+export function floorToTradingDayBoundarySeconds(seconds: number, profile: TimeAlignedPageProfile, options: { skipWeekends?: boolean } = {}) {
+  if (!Number.isFinite(seconds)) return null
+  const skipWeekends = options.skipWeekends !== false
+  let dayNumber = dayNumberAtShanghaiBoundary(Math.floor(seconds), profile)
+  let boundary = boundaryFromDayNumber(dayNumber, profile)
+  while (skipWeekends && isWeekendBoundary(boundary)) {
+    dayNumber -= 1
+    boundary = boundaryFromDayNumber(dayNumber, profile)
+  }
+  return boundary
+}
+
+export function previousTradingDayBoundarySeconds(boundary: number, profile: TimeAlignedPageProfile, options: { skipWeekends?: boolean } = {}) {
+  const skipWeekends = options.skipWeekends !== false
+  let dayNumber = dayNumberAtShanghaiBoundary(boundary, profile) - 1
+  let previous = boundaryFromDayNumber(dayNumber, profile)
+  while (skipWeekends && isWeekendBoundary(previous)) {
+    dayNumber -= 1
+    previous = boundaryFromDayNumber(dayNumber, profile)
+  }
+  return previous
 }
 
 export function subtractCalendarDays(seconds: number, days: number) {
-  return seconds - Math.max(0, Math.floor(days)) * secondsPerDay
-}
-
-export function previousTradingDayBoundarySeconds(boundarySeconds: number, profile: Pick<TimeAlignedPageProfile, 'skipWeekends'>) {
-  let candidate = boundarySeconds - secondsPerDay
-  while (profile.skipWeekends && isShanghaiWeekendBoundary(candidate)) {
-    candidate -= secondsPerDay
-  }
-  return candidate
-}
-
-export function floorToTradingDayBoundarySeconds(
-  seconds: number | null | undefined,
-  profile: Pick<TimeAlignedPageProfile, 'boundaryHour' | 'skipWeekends' | 'timezone'>,
-) {
-  const normalized = normalizeSeconds(seconds)
-  if (normalized == null) return null
-
-  if (profile.timezone !== 'Asia/Shanghai') return null
-
-  const localSeconds = normalized + shanghaiUtcOffsetSeconds
-  const localBoundaryOffset = profile.boundaryHour * secondsPerHour
-  const localBoundaryDay = Math.floor((localSeconds - localBoundaryOffset) / secondsPerDay)
-  let boundary = localBoundaryDay * secondsPerDay + localBoundaryOffset - shanghaiUtcOffsetSeconds
-
-  while (profile.skipWeekends && isShanghaiWeekendBoundary(boundary)) {
-    boundary = previousTradingDayBoundarySeconds(boundary, profile)
-  }
-
-  return boundary
+  return seconds - Math.max(0, Math.round(days)) * daySeconds
 }

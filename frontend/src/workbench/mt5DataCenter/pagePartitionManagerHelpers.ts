@@ -7,7 +7,7 @@ import {
 import { readRealtimePageBuffer } from '../chart/realtimePageBuffer'
 import { readJson, readString, writeJson } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
-import { queryStoreV6IndexTimes } from '../../services/mt5/mt5SymbolsApi'
+import { queryStoreV6IndexTimes, queryStoreV6Ohlcv } from '../../services/mt5/mt5SymbolsApi'
 import type { StoreV6CheckPayload, StoreV6DailyMaintenanceEvent } from '../../services/mt5/mt5SymbolsApi'
 
 export type RealtimePageRow = StoreV6PagePartitionItem
@@ -64,6 +64,32 @@ export function formatPageDateTime(seconds: number | null | undefined) {
   }).format(new Date(seconds * 1000))
 }
 
+export function formatPageDateTimeWithWeekday(seconds: number | null | undefined) {
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return '-'
+  return formatPageTradingDateTime(seconds)
+}
+
+export function formatPageTradingDateTime(seconds: number, suffix = '') {
+  const date = new Date(seconds * 1000)
+  const shanghaiSeconds = seconds + 8 * 60 * 60
+  const localSecondsInDay = ((shanghaiSeconds % 86_400) + 86_400) % 86_400
+  const weekdaySeconds = localSecondsInDay < 6 * 60 * 60 ? seconds - 86_400 : seconds
+  const weekday = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    weekday: 'short',
+  }).format(new Date(weekdaySeconds * 1000))
+  const dateTime = new Intl.DateTimeFormat('zh-CN', {
+    day: '2-digit',
+    hour: '2-digit',
+    hour12: false,
+    minute: '2-digit',
+    month: '2-digit',
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+  }).format(date)
+  return `${weekday}${suffix} ${dateTime}`
+}
+
 export function formatPageRows(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('en-US') : '-'
 }
@@ -104,12 +130,16 @@ export function resolvePartitionKind(pages: RealtimePageRow[] | null | undefined
   return isTimePartitionPage(pages?.[0]) ? 'time' : 'rows'
 }
 
+export function resolvePartitionCacheKind(partition: Pick<StoreV6PagePartition, 'partitionMode'>) {
+  return partition.partitionMode === 'm5-time' ? 'time' : 'rows'
+}
+
 export function formatPageRange(page: RealtimePageRow) {
   if (typeof page.timeFrom === 'number' && typeof page.timeTo === 'number') {
-    return `${formatPageDateTime(page.timeFrom)} ~ ${formatPageDateTime(page.timeTo)}`
+    return `${formatPageTradingDateTime(page.timeFrom, '开盘')} ~ ${formatPageTradingDateTime(page.timeTo, '停盘')}`
   }
   if (typeof page.timeFrom === 'number' || typeof page.timeTo === 'number') {
-    return `${formatPageDateTime(page.timeFrom)} ~ ${formatPageDateTime(page.timeTo)}`
+    return `${formatPageDateTimeWithWeekday(page.timeFrom)} ~ ${formatPageDateTimeWithWeekday(page.timeTo)}`
   }
   return `${formatPageGlobalIndex(page.fromGlobalIndex)} ~ ${page.realtime ? '当前' : formatPageGlobalIndex(page.toGlobalIndex)}`
 }
@@ -177,6 +207,21 @@ export function resolveRowsFromStoreStatus(payload: StoreV6CheckPayload | null |
   return parseRowsCount(aggregate?.rowsCount)
 }
 
+export function resolveLastTimeFromStoreStatus(payload: StoreV6CheckPayload | null | undefined, period: string) {
+  const normalizedPeriod = period.trim().toUpperCase()
+  if (!payload || !normalizedPeriod) return null
+  if (normalizedPeriod === 'M1') {
+    return typeof payload.directM1?.lastTime === 'number'
+      ? payload.directM1.lastTime
+      : typeof payload.rawDirectM1?.lastTime === 'number'
+      ? payload.rawDirectM1.lastTime
+      : null
+  }
+  const normalizedStorePeriod = normalizedPeriod === 'MN' ? 'MN1' : normalizedPeriod
+  const aggregate = payload.aggregated.find((cell) => String(cell.timeframe || '').trim().toUpperCase() === normalizedStorePeriod)
+  return typeof aggregate?.lastTime === 'number' ? aggregate.lastTime : null
+}
+
 export function pageCacheKey(symbol: string, period: string, partitionKind: 'rows' | 'time' = 'rows') {
   return `${symbol.trim().toUpperCase()}:${period.trim().toUpperCase()}:${partitionKind}`
 }
@@ -224,9 +269,12 @@ export function isCurrentCache(
   const actualMode = value.partitionMode ?? 'rows'
   if (actualMode !== expectedPartition.partitionMode) return false
   if (value.profileVersion !== expectedPartition.profileVersion) return false
-  const expectedKind = expectedPartition.partitionMode === 'm5-time' ? 'time' : 'rows'
+  const expectedKind = resolvePartitionCacheKind(expectedPartition)
   const actualKind = value.partitionKind ?? resolvePartitionKind(value.pages)
-  return actualKind === expectedKind && actualKind === resolvePartitionKind(value.pages)
+  const actualPageKind = expectedKind === 'time' && value.partitionMode === 'm5-time'
+    ? 'time'
+    : resolvePartitionKind(value.pages)
+  return actualKind === expectedKind && actualKind === actualPageKind
 }
 
 export function readRolloverDetail(event: Event) {
@@ -324,4 +372,66 @@ export async function enrichPageTimeRanges(options: {
     timeFrom: typeof page.fromGlobalIndex === 'number' ? timesByIndex.get(page.fromGlobalIndex) ?? null : null,
     timeTo: typeof page.toGlobalIndex === 'number' ? timesByIndex.get(page.toGlobalIndex) ?? null : null,
   }))
+}
+
+export async function materializeTimePageIndexRanges(options: {
+  pages: RealtimePageRow[]
+  period: string
+  symbol: string
+}) {
+  const timeframe = normalizeTimeframeForStore(options.period)
+  const isM1 = timeframe === 'M1'
+  const materializePage = async (page: RealtimePageRow): Promise<RealtimePageRow> => {
+    if (typeof page.timeFrom !== 'number' || typeof page.timeTo !== 'number') {
+      return page
+    }
+    try {
+      const payload = await queryStoreV6Ohlcv({
+        anchor: isM1 ? undefined : 'UTC2200',
+        baseTimeframe: isM1 ? undefined : 'M1',
+        mode: isM1 ? 'direct' : 'aggregated',
+        symbol: options.symbol,
+        timeframe,
+        timeFrom: page.timeFrom,
+        timeTo: page.timeTo,
+      })
+      const fromGlobalIndex = typeof payload.metadata?.indexFromResult === 'number'
+        ? Math.round(payload.metadata.indexFromResult)
+        : null
+      const toGlobalIndex = typeof payload.metadata?.indexToResult === 'number'
+        ? Math.round(payload.metadata.indexToResult)
+        : null
+      const rows = typeof payload.rowsCount === 'number' && Number.isFinite(payload.rowsCount)
+        ? payload.rowsCount
+        : fromGlobalIndex != null && toGlobalIndex != null
+        ? Math.max(0, toGlobalIndex - fromGlobalIndex + 1)
+        : 0
+      return {
+        ...page,
+        fromGlobalIndex,
+        limit: Math.max(1, rows || page.limit),
+        rows,
+        timeFrom: typeof payload.metadata?.timeFromResult === 'number' ? payload.metadata.timeFromResult : page.timeFrom,
+        timeTo: typeof payload.metadata?.timeToResult === 'number' ? payload.metadata.timeToResult : page.timeTo,
+        toGlobalIndex,
+      }
+    } catch {
+      return {
+        ...page,
+        rows: 0,
+      }
+    }
+  }
+  const concurrency = 8
+  const materialized: RealtimePageRow[] = new Array(options.pages.length)
+  let nextIndex = 0
+  const workers = Array.from({ length: Math.min(concurrency, options.pages.length) }, async () => {
+    while (nextIndex < options.pages.length) {
+      const index = nextIndex
+      nextIndex += 1
+      materialized[index] = await materializePage(options.pages[index])
+    }
+  })
+  await Promise.all(workers)
+  return materialized
 }

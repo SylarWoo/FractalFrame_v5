@@ -61,7 +61,7 @@ describe('buildStoreV6PagePartition', () => {
     ])
   })
 
-  it('keeps M5 on row pages when time aligned pagination is disabled', () => {
+  it('builds M5 time page labels before StoreV6 index materialization', () => {
     const latestTime = Date.UTC(2026, 0, 15, 6, 0) / 1000
     const partition = buildStoreV6PagePartition({
       latestTime,
@@ -71,22 +71,26 @@ describe('buildStoreV6PagePartition', () => {
     })
 
     expect(partition.status).toBe('ready')
-    expect(partition.partitionMode).toBe('rows')
+    expect(partition.partitionMode).toBe('m5-time')
     expect(partition.pages[0]).toEqual(expect.objectContaining({
-      fromGlobalIndex: 6_200,
+      fromGlobalIndex: null,
       index: 1,
       pageType: 'live',
-      realtime: true,
-      rows: 2_000,
-      toGlobalIndex: 8_199,
+      realtime: false,
+      rows: null,
+      timeTo: Date.UTC(2026, 0, 14, 22, 0) / 1000 - 1,
+      toGlobalIndex: null,
     }))
     expect(partition.pages[1]).toEqual(expect.objectContaining({
-      fromGlobalIndex: 3_700,
+      fromGlobalIndex: null,
       index: 2,
       pageType: 'history',
       realtime: false,
-      rows: 2_500,
-      toGlobalIndex: 6_199,
+      rows: null,
+      toGlobalIndex: null,
     }))
+    expect(typeof partition.pages[0]?.timeFrom).toBe('number')
+    expect(typeof partition.pages[1]?.timeFrom).toBe('number')
+    expect(typeof partition.pages[1]?.timeTo).toBe('number')
   })
 })

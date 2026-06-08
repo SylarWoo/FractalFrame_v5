@@ -2,7 +2,7 @@ import type { ChartPageTarget } from '../ChartCoreHost'
 import { resolveInitialLimit } from '../chartCoreDataUtils'
 import { storeV6HistoryPageSize, storeV6LivePageSize } from '../pagePartition/pagePartitionBuilder'
 
-export type PageLoadMode = 'realtime' | 'history' | 'jump'
+export type PageLoadMode = 'blank' | 'realtime' | 'history' | 'jump'
 
 export type PageLoadPlan = {
   chartBehavior: {
@@ -39,6 +39,23 @@ export function resolvePageLoadPlan(options: {
   limit?: number
   page?: ChartPageTarget | null
 }): PageLoadPlan {
+  if (options.page?.blank === true) {
+    return {
+      chartBehavior: {
+        acceptRealtimeTicks: false,
+        followLatest: false,
+        showCountdown: false,
+      },
+      mode: 'blank',
+      page: options.page,
+      query: {
+        limit: 0,
+        type: 'page',
+      },
+      requestedRows: 0,
+    }
+  }
+
   if (options.jump?.timestamp != null) {
     return {
       chartBehavior: {

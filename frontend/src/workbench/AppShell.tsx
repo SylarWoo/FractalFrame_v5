@@ -1,10 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { bottomPanels } from './bottomDrawer/bottomPanels'
 import { BottomWorkspace } from './bottomDrawer/BottomWorkspace'
-import { ChartCoreHost } from './chart/ChartCoreHost'
-import type { ChartLoadState, ChartPageTarget } from './chart/ChartCoreHost'
-import type { MorganRangeSegment } from './chart/morganRangeModel'
+import { ChartWorkspaceV2 } from './chart/ChartWorkspaceV2'
+import { storeV6VolIndicatorIdV2, type StoreV6IndicatorRequestSpecV2 } from './chart/indicatorRequestV2'
+import {
+  readKLineChartRefreshRestoreConfigV2,
+  restoreKLineChartRefreshTargetV2,
+  writeKLineChartRefreshRestoreConfigV2,
+} from './chart/klineChartRendererV2/klineChartRefreshRestoreConfigV2'
+import { kLineChartConfigV2 } from './chart/klineChartRendererV2/klineChartConfigV2'
+import type { ChartLoadState, ChartPageNavigation, ChartPageTarget } from './chart/chartRuntimeTypes'
+import type { StoreV6HistoryPageWindow } from './chart/historyPageWindowV2'
+import { resolveStoreV6PagePartitionMode } from './chart/pagePartition/pagePartitionBuilder'
 import {
   LEFT_RAIL_BRUSH_SVGREPO_ICON_48,
   LEFT_RAIL_CURSOR_ARROW_SVGREPO_ICON_48,
@@ -100,8 +108,6 @@ const strategyRows = [
 ] as const
 
 const strategyLabels = Object.fromEntries(strategyRows.map((row) => [row.key, row.name]))
-const chartIndicatorsEnabled = true
-const chartStrategiesEnabled = false
 
 function readInitialIndicatorShortcutKeys() {
   const parsed = readJson<unknown[]>(storageKeys.indicatorShortcutKeys, [])
@@ -173,6 +179,55 @@ function periodToChartPeriod(period: string) {
   return period.toUpperCase()
 }
 
+function isIsolatedChartPeriod(period: string | null | undefined) {
+  return resolveStoreV6PagePartitionMode(period) === 'm5-time'
+}
+
+function createBlankChartTarget(symbol: string, period: string) {
+  return {
+    symbol,
+    period,
+    limit: 0,
+    page: {
+      blank: true,
+      fromGlobalIndex: null,
+      index: 0,
+      limit: 0,
+      realtime: false,
+      rows: 0,
+      toGlobalIndex: null,
+    },
+  }
+}
+
+function readInitialChartTarget(): ChartTarget {
+  const restoreConfig = kLineChartConfigV2.refreshRestore.restoreLastPageOnRefresh
+    ? readKLineChartRefreshRestoreConfigV2()
+    : null
+  if (restoreConfig && isIsolatedChartPeriod(restoreConfig.period)) {
+    return createBlankChartTarget(restoreConfig.symbol, restoreConfig.period)
+  }
+  const shared = readSharedSelection()
+  const period = periodToChartPeriod(shared.period)
+  if (isIsolatedChartPeriod(period)) return createBlankChartTarget(shared.symbol, period)
+  return {
+    symbol: shared.symbol,
+    period,
+  }
+}
+
+type ChartTarget = {
+  historyPageWindow?: StoreV6HistoryPageWindow | null
+  pageNavigation?: ChartPageNavigation | null
+  symbol: string
+  period: string
+  realtimeEnabled?: boolean
+  totalRows?: number | null
+  limit?: number
+  reloadId?: number
+  page?: ChartPageTarget | null
+}
+
 function readSymbolDisplayName(symbol: string) {
   const parsed = readJson<{ symbols?: Mt5SymbolRow[] } | null>(storageKeys.importCenterSymbolSnapshot, null)
   const row = parsed?.symbols?.find((item) => item.symbol === symbol)
@@ -237,17 +292,8 @@ export function AppShell() {
   const [strategyShortcutKeys, setStrategyShortcutKeys] = useState<string[]>(readInitialStrategyShortcutKeys)
   const [strategyPersistenceEnabled, setStrategyPersistenceEnabled] = useState(readInitialStrategyPersistenceEnabled)
   const [loadedStrategyKeys, setLoadedStrategyKeys] = useState<string[]>(readInitialLoadedStrategyKeys)
-  const [chartTarget, setChartTarget] = useState<{ symbol: string; period: string; totalRows?: number | null; limit?: number; reloadId?: number; page?: ChartPageTarget | null }>(() => {
-    const shared = readSharedSelection()
-    return {
-      symbol: shared.symbol,
-      period: periodToChartPeriod(shared.period),
-    }
-  })
-  const [chartJump, setChartJump] = useState<{ id: number; timestamp?: number } | null>(null)
-  const [chartStepLoad, setChartStepLoad] = useState<{ direction: 'left' | 'right'; id: number } | null>(null)
+  const [chartTarget, setChartTarget] = useState<ChartTarget>(readInitialChartTarget)
   const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
-  const [morganRangeSegment, setMorganRangeSegment] = useState<MorganRangeSegment | null>(null)
   const indicatorsController = useIndicatorsController({
     chartLoadState,
     chartPeriod: chartTarget.period,
@@ -259,10 +305,18 @@ export function AppShell() {
       chartTarget.reloadId ?? '',
     ].join(':'),
   })
-  const realtimeIndicatorRuntimeEnabled = chartIndicatorsEnabled &&
-    chartTarget.page?.realtime !== false &&
-    chartJump?.timestamp == null
   const loadedIndicatorKeys = indicatorsController.loadedIndicatorKeys
+  const chartIndicatorRequestsV2 = useMemo<StoreV6IndicatorRequestSpecV2[]>(() => {
+    if (!loadedIndicatorKeys.includes('Vol')) return []
+    return [{
+      id: storeV6VolIndicatorIdV2,
+      params: indicatorsController.settings.vol,
+    }]
+  }, [indicatorsController.settings.vol, loadedIndicatorKeys])
+  const chartWorkspaceTarget = useMemo(() => ({
+    ...chartTarget,
+    indicatorRequests: chartIndicatorRequestsV2,
+  }), [chartIndicatorRequestsV2, chartTarget])
   const refreshLoadedIndicatorsVisibility = indicatorsController.refreshLoadedIndicatorsVisibility
   const indicatorShortcuts: IndicatorShortcutItem[] = indicatorShortcutKeys.map((key) => ({
     key,
@@ -458,16 +512,71 @@ export function AppShell() {
     removeStorageItem(storageKeys.strategyLoadedKeys)
   }
 
+  function openChartTarget(nextTarget: ChartTarget) {
+    const period = periodToChartPeriod(nextTarget.period)
+    if (isIsolatedChartPeriod(period) && nextTarget.historyPageWindow) {
+      writeKLineChartRefreshRestoreConfigV2({
+        pageIndex: nextTarget.page?.index ?? nextTarget.historyPageWindow.pageIndex,
+        period,
+        realtimeEnabled: nextTarget.realtimeEnabled,
+        symbol: nextTarget.symbol,
+      })
+      setChartTarget({
+        ...nextTarget,
+        period,
+      })
+      return
+    }
+    if (isIsolatedChartPeriod(period) && nextTarget.page?.blank !== true) {
+      setChartTarget({
+        ...createBlankChartTarget(nextTarget.symbol, period),
+        reloadId: nextTarget.reloadId,
+        totalRows: nextTarget.totalRows,
+      })
+      return
+    }
+    setChartTarget({
+      ...nextTarget,
+      period,
+    })
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    if (!kLineChartConfigV2.refreshRestore.restoreLastPageOnRefresh) return
+    if (!isIsolatedChartPeriod(chartTarget.period) || chartTarget.historyPageWindow || chartTarget.page?.blank !== true) return
+    void restoreKLineChartRefreshTargetV2()
+      .then((target) => {
+        if (cancelled || !target) return
+        setChartTarget({
+          historyPageWindow: target.historyPageWindow,
+          page: target.page,
+          pageNavigation: target.pageNavigation,
+          period: target.period,
+          realtimeEnabled: target.realtimeEnabled,
+          reloadId: Date.now(),
+          symbol: target.symbol,
+          totalRows: target.totalRows,
+        })
+      })
+      .catch(() => {
+        // A missing or stale local restore cache should leave the clean blank chart.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [chartTarget.historyPageWindow, chartTarget.page?.blank, chartTarget.period])
+
   return (
     <div className="ff-app-shell">
       <TopBar
         indicatorShortcuts={indicatorShortcuts}
         strategyShortcuts={strategyShortcuts}
         onIndicatorShortcutToggle={handleToggleIndicatorShortcutLoad}
-        onJumpChartToTime={(timestamp) => setChartJump({ id: Date.now(), timestamp })}
-        onLoadChartStep={(direction) => setChartStepLoad({ direction, id: Date.now() })}
-        onOpenChart={setChartTarget}
-        onResetChartToLatest={() => setChartJump({ id: Date.now() })}
+        onJumpChartToTime={() => undefined}
+        onLoadChartStep={() => undefined}
+        onOpenChart={openChartTarget}
+        onResetChartToLatest={() => undefined}
         onStrategyShortcutToggle={handleToggleStrategyShortcutLoad}
       />
 
@@ -512,32 +621,10 @@ export function AppShell() {
             ['--ff-bottom-drawer-height' as string]: bottomDrawerOpen ? `${bottomDrawerHeight}px` : '40px',
           }}
         >
-          <ChartCoreHost
+          <ChartWorkspaceV2
             displayName={chartDisplayName}
-            indicatorCommand={realtimeIndicatorRuntimeEnabled ? indicatorsController.command : null}
-            indicatorsEnabled={realtimeIndicatorRuntimeEnabled}
-            indicatorsState={indicatorsController.settings}
-            jump={chartJump}
-            limit={chartTarget.limit}
-            loadedStrategyKeys={chartStrategiesEnabled ? loadedStrategyKeys : []}
-            maSettings={indicatorsController.settings.ma}
-            mmfLoaded={false}
-            mmfSettings={indicatorsController.settings.mmfV3}
-            morganRangeMode={realtimeIndicatorRuntimeEnabled && loadedIndicatorKeys.includes('MR-M30') && chartTarget.period === 'M30' ? 'D1_M30' : 'H4_M5'}
-            stochSettings={indicatorsController.settings.stoch}
-            tsiSettings={indicatorsController.settings.tsi}
-            vdoSettings={indicatorsController.settings.vdo}
-            vmiSettings={indicatorsController.settings.vmi}
-            vwapSettings={indicatorsController.settings.vwap}
             onLoadStateChange={setChartLoadState}
-            onMorganRangeSegmentChange={setMorganRangeSegment}
-            onPageCalculationContextReady={refreshLoadedIndicatorsVisibility}
-            page={chartTarget.page}
-            period={chartTarget.period}
-            reloadId={chartTarget.reloadId}
-            stepLoad={chartStepLoad}
-            symbol={chartTarget.symbol}
-            totalRows={chartTarget.totalRows}
+            target={chartWorkspaceTarget}
           />
           {chartLoadStatusVisible && (
             <div className="ff-workspace-chart-load-status" aria-label="Chart load status">
@@ -565,14 +652,14 @@ export function AppShell() {
           loadedIndicatorKeys={loadedIndicatorKeys}
           loadedStrategyKeys={loadedStrategyKeys}
           strategyPersistenceEnabled={strategyPersistenceEnabled}
-          morganRangeSegment={morganRangeSegment}
+          morganRangeSegment={null}
           onClose={() => setActiveRightDrawer(null)}
           onIndicatorShortcutKeysChange={setIndicatorShortcutKeys}
           onStrategyLoad={handleLoadStrategy}
           onStrategyPersistenceEnabledChange={handleStrategyPersistenceEnabledChange}
           onStrategyShortcutKeysChange={setStrategyShortcutKeys}
           onStrategyUnload={handleUnloadStrategy}
-          onOpenChart={setChartTarget}
+          onOpenChart={openChartTarget}
           onResize={setRightDrawerWidth}
           onToggleDrawer={(drawer) => setActiveRightDrawer((current) => (current === drawer ? null : drawer))}
           strategyShortcutKeys={strategyShortcutKeys}

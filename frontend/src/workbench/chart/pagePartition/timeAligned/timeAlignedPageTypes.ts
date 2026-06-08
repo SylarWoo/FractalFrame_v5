@@ -1,19 +1,17 @@
+export const m5TimeAlignedPartitionProfileVersion = 1
+
 export type TimeAlignedPageProfile = {
-  boundaryHour: number
-  skipWeekends: boolean
-  timezone: 'Asia/Shanghai'
+  boundaryHourShanghai: number
+  boundaryMinuteShanghai: number
   windowDays: number
 }
 
-export const m5TimeAlignedPartitionProfileVersion = 1
-
 export const m5TradingDaySlidingWeekProfile: TimeAlignedPageProfile = {
-  boundaryHour: 6,
-  skipWeekends: true,
-  timezone: 'Asia/Shanghai',
+  boundaryHourShanghai: 6,
+  boundaryMinuteShanghai: 0,
   windowDays: 7,
 }
 
-export function estimateM5TimePageLimit(profile = m5TradingDaySlidingWeekProfile) {
-  return profile.windowDays * 24 * 12 + 256
+export function estimateM5TimePageLimit(profile: TimeAlignedPageProfile) {
+  return Math.ceil((profile.windowDays * 24 * 60) / 5)
 }

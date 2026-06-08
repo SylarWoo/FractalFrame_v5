@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MutableRefObject } from 'react'
 import { ActionType } from 'klinecharts'
 import type { Chart } from 'klinecharts'
@@ -6,12 +6,8 @@ import { chartManualYAxisRangeChangeEvent } from './chartAxisInteraction'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
 import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
-import { useChartDataLoad } from './useChartDataLoad'
 import { useChartInstance } from './useChartInstance'
-import { chartRealtimeDataChangedEvent, useChartRealtimeTicks } from './useChartRealtimeTicks'
-import { useCurrentCandleCountdown } from './useCurrentCandleCountdown'
-import { useRealtimePriceMarker } from './useRealtimePriceMarker'
-import { useChartStepLoad } from './useChartStepLoad'
+import { chartRealtimeDataChangedEvent } from './useChartRealtimeTicks'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
 import {
   createIndicatorPageKey,
@@ -67,8 +63,6 @@ import {
   type RealtimeIndicatorRuntimeState,
 } from './realtimeIndicatorRuntime'
 import { normalizeRealtimePeriod } from './realtimeBarIdentity'
-import { resolvePageLoadPlan } from './pageLoader/pageLoadPlanner'
-import { planPageIndicatorWarmup } from './indicatorWarmupPlanner'
 import { createPageIdentity } from './pageIdentity'
 import type {
   CandleIndicatorCommandName,
@@ -154,6 +148,7 @@ type ChartCoreHostProps = {
 }
 
 export type ChartPageTarget = {
+  blank?: boolean
   fromGlobalIndex?: number | null
   identity?: string | null
   index: number
@@ -163,28 +158,6 @@ export type ChartPageTarget = {
   timeFrom?: number | null
   timeTo?: number | null
   toGlobalIndex?: number | null
-}
-
-function createIndicatorWarmupRequests(state: PersistedIndicatorsState) {
-  const loaded = state.loaded
-  return [
-    ...(loaded.MA ? [{ name: 'MA' }] : []),
-    ...(loaded.RSI ? [{ name: 'RSI' }] : []),
-    ...(loaded.Stoch ? [{ name: 'Stoch' }] : []),
-    ...(loaded.MACD ? [{ name: 'MACD' }] : []),
-    ...(loaded.DPO ? [{ name: 'DPO' }] : []),
-    ...(loaded.VDO ? [{ name: 'VDO' }] : []),
-    ...(loaded.VMI ? [{ name: 'VMI' }] : []),
-    ...(loaded.TSI ? [{ name: 'TSI' }] : []),
-    ...(loaded.VI ? [{ name: 'VI' }] : []),
-    ...(loaded.AO ? [{ name: 'AO' }] : []),
-    ...(loaded.SQZMOM ? [{ name: 'SQZMOM' }] : []),
-    ...(loaded['MR-M5'] ? [{ name: 'MR-M5' }] : []),
-    ...(loaded['MR-M30'] ? [{ name: 'MR-M30' }] : []),
-    ...(loaded.MMF_V3 ? [{ name: 'MMF_V3' }] : []),
-    ...(loaded.VWAP ? [{ name: 'VWAP' }] : []),
-    ...(loaded.Vol ? [{ name: 'Vol' }] : []),
-  ]
 }
 
 export type ChartIndicatorCommand = {
@@ -286,46 +259,35 @@ function createCurrentIndicatorPageKey(chart: Chart, options: { page?: ChartPage
   })
 }
 
-export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCommand, indicatorsEnabled = true, indicatorsState, jump, limit, loadedStrategyKeys = [], maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, onPageCalculationContextReady, page, period, reloadId, stepLoad, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings, vwapSettings }: ChartCoreHostProps) {
-  const loadPlan = resolvePageLoadPlan({ jump, limit, page })
-  const indicatorRuntimeEnabled = indicatorsEnabled && loadPlan.mode === 'realtime'
-  const viewportScope = loadPlan.mode === 'realtime' ? 'realtime' : loadPlan.mode === 'history' ? `history:${page?.index ?? 0}` : 'jump'
-  const pageIndicatorWarmupPlan = useMemo(() => {
-    if (!indicatorsState || loadPlan.mode === 'jump') return null
-    return planPageIndicatorWarmup({
-      indicators: createIndicatorWarmupRequests(indicatorsState),
-      period,
-    })
-  }, [indicatorsState, loadPlan.mode, period])
-  const { chartInstanceRef, chartRef } = useChartInstance({ displayName, period, symbol, viewportScope })
+export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCommand, loadedStrategyKeys = [], maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, onPageCalculationContextReady, page, period, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings, vwapSettings }: ChartCoreHostProps) {
+  const indicatorRuntimeEnabled = false
+  const viewportScope = 'empty'
+  const { chartInstanceRef, chartRef } = useChartInstance({ displayName, featureMode: 'minimal', period, symbol, viewportScope })
   const [chartEverReady, setChartEverReady] = useState(false)
   const [mmfV2MomentumStats, setMmfV2MomentumStats] = useState<MmfV2MomentumStats | null>(null)
   const [mmfV2MomentumCrosshairIndex, setMmfV2MomentumCrosshairIndex] = useState<number | null>(null)
   const [mmfV2MomentumClockTime, setMmfV2MomentumClockTime] = useState(() => formatMomentumClockTime())
   const [mmfV2MomentumOverlayStyle, setMmfV2MomentumOverlayStyle] = useState({ right: 96, top: 180 })
-  const { loadState, setLoadState } = useChartDataLoad({
-    chartInstanceRef,
-    jump,
-    limit,
-    lookaheadRows: pageIndicatorWarmupPlan?.lookaheadRows,
-    page,
+  const [loadState] = useState<ChartLoadState>({
+    error: false,
+    loadedPeriod: '',
+    loadedSymbol: '',
+    loading: false,
+    loadingMore: false,
     period,
-    reloadId,
+    requestedRows: 0,
+    rows: 0,
     symbol,
     totalRows,
-    viewportScope,
-    warmupRows: pageIndicatorWarmupPlan?.warmupRows,
   })
-  const realtimeDataReady = !loadState.loading &&
+  const chartSurfaceReady = loadState.error || (
     loadState.rows > 0 &&
     loadState.loadedSymbol === symbol &&
     loadState.loadedPeriod === period
-  const chartSurfaceReady = loadState.error || realtimeDataReady
+  )
   const suppressInitialSurface = !chartEverReady && !chartSurfaceReady
-  const realtimePageActive = loadPlan.chartBehavior.acceptRealtimeTicks
-  useChartRealtimeTicks({ chartInstanceRef, dataReady: realtimeDataReady, period, renderActive: realtimePageActive, symbol, totalRows })
-  const candleCountdown = useCurrentCandleCountdown({ chartInstanceRef, dataReady: realtimeDataReady && realtimePageActive, period, symbol })
-  const realtimePriceMarker = useRealtimePriceMarker({ chartInstanceRef, enabled: realtimeDataReady && !realtimePageActive, period, symbol })
+  const candleCountdown = { axisWidth: 0, color: '', price: '', text: '', top: 0, visible: false }
+  const realtimePriceMarker = { axisWidth: 0, color: '', labelVisible: false, lineVisible: false, lineWidth: 0, price: '', text: '', top: 0, visible: false }
   const rsiPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const stochPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
   const sqzmomPaneHeightObserverRef = useRef<ResizeObserver | null>(null)
@@ -410,8 +372,6 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
   useEffect(() => {
     if (chartSurfaceReady) setChartEverReady(true)
   }, [chartSurfaceReady])
-
-  useChartStepLoad({ chartInstanceRef, period, setLoadState, stepLoad: stepLoad ?? null, symbol, totalRows })
 
   const persistVisiblePaneHeights = useCallback(() => {
     const chart = chartInstanceRef.current
@@ -1610,7 +1570,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
 
   useEffect(() => {
     const chart = chartInstanceRef.current
-    if (!chart || loadPlan.mode === 'jump') return
+    if (!chart) return
 
     const handleContextReady = (event: Event) => {
       const key = (event as CustomEvent<{ key?: string }>).detail?.key
@@ -1648,7 +1608,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
 
     window.addEventListener(pageCalculationContextChangedEvent, handleContextReady)
     return () => window.removeEventListener(pageCalculationContextChangedEvent, handleContextReady)
-  }, [applyMmfV3Command, applyMorganRangeCommand, chartInstanceRef, loadPlan.mode, mmfSettings, onPageCalculationContextReady, page, page?.index, page?.realtime, period, symbol])
+  }, [applyMmfV3Command, applyMorganRangeCommand, chartInstanceRef, mmfSettings, onPageCalculationContextReady, page, page?.index, page?.realtime, period, symbol])
 
   useEffect(() => {
     const chart = chartInstanceRef.current

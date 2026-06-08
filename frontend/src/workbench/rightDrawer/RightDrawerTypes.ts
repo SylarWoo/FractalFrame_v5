@@ -1,4 +1,5 @@
-import type { ChartPageTarget } from '../chart/ChartCoreHost'
+import type { ChartPageNavigation, ChartPageTarget } from '../chart/chartRuntimeTypes'
+import type { StoreV6HistoryPageWindow } from '../chart/historyPageWindowV2'
 import type { MorganRangeSegment } from '../chart/morganRangeModel'
 import type { IndicatorsController } from '../indicators/useIndicatorsController'
 import type { SupportedChartIndicator } from './indicatorDefinitions'
@@ -38,5 +39,5 @@ export type RightDrawerProps = {
   onToggleDrawer: (drawer: RightDrawerId) => void
   strategyPersistenceEnabled: boolean
   strategyShortcutKeys: string[]
-  onOpenChart?: (options: { symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }) => void
+  onOpenChart?: (options: { historyPageWindow?: StoreV6HistoryPageWindow | null; pageNavigation?: ChartPageNavigation | null; realtimeEnabled?: boolean; symbol: string; period: string; totalRows?: number | null; reloadId?: number; page?: ChartPageTarget | null }) => void
 }

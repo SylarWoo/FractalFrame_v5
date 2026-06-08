@@ -3,10 +3,12 @@ import type { Chart, KLineData } from 'klinecharts'
 import { readSettingsBooleanValue, readSettingsSymbolState } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
+import { resolveTimeAlignedTradingProfile } from './pagePartition/timeAligned/timeAlignedTradingProfile'
 
 const sessionBreakIndicatorName = 'FF_SESSION_BREAKS'
 const sessionBreakMinVisibleLineDistancePx = 14
 let sessionBreakIndicatorRegistered = false
+const appliedSessionBreakSignatures = new WeakMap<Chart, string>()
 
 type SettingsSwatchValue = {
   hex?: string
@@ -58,24 +60,19 @@ function readSessionBreakVisible() {
   return readSettingsBooleanValue(chartSettingKeys.sessionBreakVisible, chartSettingDefaults.sessionBreakVisible)
 }
 
-function isCryptoSymbol(symbol: string) {
-  const normalized = symbol.toUpperCase()
-  return /^(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|LTC|BCH|DOT|AVAX|TRX|LINK)/.test(normalized)
-    || /(^|[^A-Z])(BTC|ETH|SOL|XRP|BNB|ADA|DOGE|LTC|BCH|DOT|AVAX|TRX|LINK)([^A-Z]|$)/.test(normalized)
-}
-
 function shouldShowSessionBreaksForPeriod(period: string) {
   const periodSeconds = resolvePeriodSeconds(period)
   return Number.isFinite(periodSeconds) && periodSeconds > 0 && periodSeconds < 24 * 60 * 60
 }
 
-function resolveSessionAnchorHourUtc(symbol: string) {
-  return isCryptoSymbol(symbol) ? 0 : 22
+function resolveSessionAnchorMinuteUtc(symbol: string) {
+  const profile = resolveTimeAlignedTradingProfile(symbol)
+  return (((profile.boundaryHourShanghai - 8 + 24) % 24) * 60) + profile.boundaryMinuteShanghai
 }
 
-function resolveSessionDayKey(timestampMs: number, anchorHourUtc: number) {
+function resolveSessionDayKey(timestampMs: number, anchorMinuteUtc: number) {
   const timestampSeconds = Math.floor(timestampMs / 1000)
-  const anchorSeconds = Math.max(0, Math.min(23, Math.trunc(anchorHourUtc))) * 60 * 60
+  const anchorSeconds = Math.max(0, Math.min(24 * 60 - 1, Math.trunc(anchorMinuteUtc))) * 60
   return Math.floor((timestampSeconds - anchorSeconds) / (24 * 60 * 60))
 }
 
@@ -113,9 +110,9 @@ export function isSessionBreakRow(previous: KLineData, current: KLineData, symbo
     return previousExplicitKey !== currentExplicitKey
   }
 
-  const anchorHourUtc = resolveSessionAnchorHourUtc(symbol)
-  return resolveSessionDayKey(resolveRealTimestampMs(previous), anchorHourUtc)
-    !== resolveSessionDayKey(resolveRealTimestampMs(current), anchorHourUtc)
+  const anchorMinuteUtc = resolveSessionAnchorMinuteUtc(symbol)
+  return resolveSessionDayKey(resolveRealTimestampMs(previous), anchorMinuteUtc)
+    !== resolveSessionDayKey(resolveRealTimestampMs(current), anchorMinuteUtc)
 }
 
 function collectSessionBreakCoordinates(
@@ -200,8 +197,12 @@ function ensureSessionBreakIndicatorRegistered() {
 
 export function applySessionBreakIndicator(chart: Chart, symbol: string, period: string) {
   ensureSessionBreakIndicatorRegistered()
+  const visible = readSessionBreakVisible()
+  const signature = `${symbol}:${period}:${visible ? 'visible' : 'hidden'}`
+  if (appliedSessionBreakSignatures.get(chart) === signature) return
+  appliedSessionBreakSignatures.set(chart, signature)
   chart.removeIndicator('candle_pane', sessionBreakIndicatorName)
-  if (readSessionBreakVisible()) {
+  if (visible) {
     chart.createIndicator({ name: sessionBreakIndicatorName, extendData: { period, symbol }, visible: true, zLevel: 0 }, true, { id: 'candle_pane' })
   }
 }

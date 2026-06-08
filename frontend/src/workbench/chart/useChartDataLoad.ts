@@ -52,6 +52,7 @@ type UseChartDataLoadOptions = {
   page?: ChartPageTarget | null
   period: string
   reloadId?: number
+  suspended?: boolean
   symbol: string
   totalRows?: number | null
   viewportScope?: string
@@ -66,6 +67,7 @@ export function useChartDataLoad({
   page,
   period,
   reloadId,
+  suspended = false,
   symbol,
   totalRows,
   viewportScope = 'default',
@@ -84,6 +86,7 @@ export function useChartDataLoad({
   })
 
   useEffect(() => {
+    if (suspended) return
     let disposed = false
     const chart = chartInstanceRef.current
     const requestSeq = requestSeqRef.current + 1
@@ -133,7 +136,18 @@ export function useChartDataLoad({
     chart.setLoadDataCallback(({ callback }) => callback([], false))
 
     const setFallbackTimer = (timer: number) => { fallbackTimer = timer }
-    if (loadPlan.mode === 'history' && loadPlan.page) {
+    if (loadPlan.mode === 'blank') {
+      clearChartPageWindow(chart, period)
+      setLoadState({
+        error: false,
+        loadedPeriod: period,
+        loadedSymbol: symbol,
+        loadingMore: false,
+        loading: false,
+        requestedRows: 0,
+        rows: 0,
+      })
+    } else if (loadPlan.mode === 'history' && loadPlan.page) {
       loadPagedWindow(chart, { inheritedViewport, lookaheadRows, page: loadPlan.page, period, setFallbackTimer, setLoadState, shouldIgnore, symbol, viewportScope, warmupRows })
     } else if (loadPlan.mode === 'jump' && jump?.timestamp != null) {
       loadJumpWindow(chart, { inheritedViewport, jumpTimestamp: jump.timestamp, period, setFallbackTimer, setLoadState, shouldIgnore, symbol, viewportScope })
@@ -164,6 +178,7 @@ export function useChartDataLoad({
     period,
     reloadId,
     symbol,
+    suspended,
     totalRows,
     viewportScope,
     warmupRows,

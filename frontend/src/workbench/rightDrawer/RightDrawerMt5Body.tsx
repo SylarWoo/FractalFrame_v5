@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { Mt5M1CheckJobPayload, Mt5RealtimeTick, Mt5SymbolRow, StoreV6AggregateJobPayload, StoreV6CheckPayload, StoreV6PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
-import type { ChartPageTarget } from '../chart/ChartCoreHost'
+import type { ChartPageNavigation, ChartPageTarget } from '../chart/chartRuntimeTypes'
+import type { StoreV6HistoryPageWindow } from '../chart/historyPageWindowV2'
 import { millisecondsUntilNextMarketSessionCheck, readMarketStatusTitleSnapshot, saveMarketStatusTitleSnapshotFromSymbolSession } from '../mt5DataCenter/marketStatusTitleState'
 import { PagePartitionManager } from '../mt5DataCenter/PagePartitionManager'
 import { StoreV6Panel } from '../mt5DataCenter/StoreV6Panel'
@@ -23,8 +24,11 @@ const selectedPanelTabs: Array<{ key: SelectedPanelTab; label: string }> = [
 ]
 
 type OpenChartOptions = {
+  historyPageWindow?: StoreV6HistoryPageWindow | null
+  pageNavigation?: ChartPageNavigation | null
   symbol: string
   period: string
+  realtimeEnabled?: boolean
   totalRows?: number | null
   limit?: number
   reloadId?: number
@@ -52,7 +56,7 @@ type RightDrawerMt5BodyProps = {
   onDeleteSelectedAggregates: () => void
   onLoadSymbols: (refresh: boolean) => void
   onOpenChart?: (options: OpenChartOptions) => void
-  onPreparePagePartition?: () => Promise<StoreV6CheckPayload | null>
+  onPreparePagePartition?: (period?: string) => Promise<StoreV6CheckPayload | null>
   onOpenStoreTableRow: (row: StoreTableRow) => void
   onOpenWatchlistPeriod: (row: StoreTableRow) => void
   onPullStore: () => void

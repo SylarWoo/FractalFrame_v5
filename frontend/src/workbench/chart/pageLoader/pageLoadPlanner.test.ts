@@ -2,6 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { resolvePageLoadPlan } from './pageLoadPlanner'
 
 describe('pageLoadPlanner', () => {
+  it('keeps isolated page plans blank', () => {
+    const plan = resolvePageLoadPlan({
+      page: {
+        blank: true,
+        fromGlobalIndex: null,
+        index: 0,
+        limit: 0,
+        realtime: false,
+        rows: 0,
+        toGlobalIndex: null,
+      },
+    })
+
+    expect(plan.mode).toBe('blank')
+    expect(plan.requestedRows).toBe(0)
+    expect(plan.chartBehavior.acceptRealtimeTicks).toBe(false)
+  })
+
   it('uses StoreV6 live page defaults when no page is provided', () => {
     const plan = resolvePageLoadPlan({})
 

@@ -52,6 +52,6 @@ describe('isSessionBreakRow', () => {
       row(Date.UTC(2026, 0, 1, 21, 55)),
       row(Date.UTC(2026, 0, 1, 22, 0)),
       'BTCUSDm',
-    )).toBe(false)
+    )).toBe(true)
   })
 })
