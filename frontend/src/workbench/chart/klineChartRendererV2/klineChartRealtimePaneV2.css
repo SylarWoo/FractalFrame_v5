@@ -1,0 +1,121 @@
+.ff-kline-chart-realtime-pane-v2 {
+  position: absolute;
+  z-index: 4;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ff-kline-chart-realtime-pane-v2__boundary {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid rgba(73, 132, 214, 0.72);
+}
+
+.ff-kline-chart-realtime-pane-v2__page-label-root {
+  position: absolute;
+  right: 0;
+  bottom: 54px;
+  left: 0;
+  height: 18px;
+  pointer-events: none;
+}
+
+.ff-kline-chart-realtime-pane-v2__page-label {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #0f172a;
+  font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, Arial, sans-serif;
+  font-size: 12px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.ff-kline-chart-realtime-pane-v2__page-label-inner {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.86);
+  overflow: hidden;
+}
+
+.ff-kline-chart-realtime-pane-v2__page-label span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.ff-kline-chart-realtime-pane-v2__page-label--end {
+  justify-content: flex-end;
+}
+
+.ff-kline-chart-realtime-pane-v2__page-label--end .ff-kline-chart-realtime-pane-v2__page-label-inner {
+  justify-content: flex-end;
+}
+
+.ff-kline-chart-realtime-pane-v2__page-label--end span {
+  text-align: right;
+}
+
+.ff-kline-chart-realtime-pane-v2__page-arrow {
+  flex: 0 0 auto;
+  align-self: center;
+  transform: translateY(-1px);
+  height: 14px;
+  min-width: 14px;
+  margin: 0 3px 0 0;
+  padding: 0 2px;
+  border: 1px solid #94a3b8;
+  background: #ffffff;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 12px;
+  pointer-events: auto;
+}
+
+.ff-kline-chart-realtime-pane-v2__page-arrow:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.ff-kline-chart-realtime-pane-v2__label-root {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ff-kline-chart-realtime-pane-v2__crosshair-label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 23px;
+  padding: 0 9px;
+  border: 1px solid #131722;
+  border-radius: 0;
+  background: #131722;
+  color: #ffffff;
+  font: 400 12px/14px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, Arial, sans-serif;
+  white-space: nowrap;
+}
+
+.ff-kline-chart-realtime-pane-v2__crosshair-label-text {
+  display: inline-block;
+  transform: translateY(1px);
+}

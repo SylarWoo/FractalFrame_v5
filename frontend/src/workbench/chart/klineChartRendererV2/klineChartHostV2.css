@@ -1,0 +1,133 @@
+.ff-kline-chart-host-v2 {
+  position: relative;
+  grid-column: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.ff-kline-chart-host-v2__main-pane {
+  position: absolute;
+  inset: 8px 0 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ff-kline-chart-host-v2__main-pane[data-restoring="true"] {
+  visibility: hidden;
+}
+
+.ff-kline-chart-host-v2__sub-pane-stack {
+  display: none;
+}
+
+.ff-kline-chart-host-v2__overlay-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ff-kline-chart-host-v2__page-boundaries {
+  position: absolute;
+  right: 78px;
+  bottom: 74px;
+  left: 0;
+  z-index: 9;
+  height: 18px;
+  pointer-events: none;
+}
+
+.ff-kline-chart-host-v2__page-boundary-label {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  min-width: 0;
+  max-width: 220px;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+  color: #0f172a;
+  font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, Arial, sans-serif;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.ff-kline-chart-host-v2__page-boundary-label[data-placement="boundary-left"] {
+  transform: translateX(-100%);
+}
+
+.ff-kline-chart-host-v2__page-boundary-label[data-placement="boundary-right"] {
+  max-width: 240px;
+}
+
+.ff-kline-chart-host-v2__page-boundary-label[data-placement="boundary-left"] span {
+  text-align: right;
+}
+
+.ff-kline-chart-host-v2__page-boundary-label span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.ff-kline-chart-host-v2__page-boundary-arrow {
+  flex: 0 0 auto;
+  height: 16px;
+  min-width: 16px;
+  margin: 0 3px 0 0;
+  padding: 0 3px;
+  border: 1px solid #94a3b8;
+  background: #ffffff;
+  color: #1d4ed8;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 14px;
+  pointer-events: auto;
+}
+
+.ff-kline-chart-host-v2__page-boundary-arrow:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.ff-kline-chart-host-v2__current-candle-countdown {
+  position: absolute;
+  left: calc(100% - var(--ff-current-candle-y-axis-width, 70px) + 1px);
+  z-index: 8;
+  display: flex;
+  width: 70px;
+  height: 32px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 3px 6px 5px;
+  border-radius: 0;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 12px;
+  pointer-events: none;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.ff-kline-chart-host-v2__current-candle-countdown span {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: clip;
+}
+
+.ff-kline-chart-host-v2__current-candle-countdown span + span {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 12px;
+}
