@@ -96,10 +96,16 @@ function translateMorganRangeSegments(
     const sourceStartTimestamp = Number(frame.alignment.dataIndexToTimestamp[sourceStartIndex] ?? segment.startTimestamp)
     const finalStartIndex = finalTimestampToDataIndex.get(sourceStartTimestamp)
     if (finalStartIndex == null) return null
+    const sourceEndTimestamp = typeof segment.endTimestamp === 'number' && Number.isFinite(segment.endTimestamp)
+      ? segment.endTimestamp
+      : null
+    const finalEndIndex = sourceEndTimestamp == null
+      ? null
+      : finalTimestampToDataIndex.get(sourceEndTimestamp)
     const width = Math.max(0, Math.round(Number(segment.endIndex)) - sourceStartIndex)
     return {
       ...segment,
-      endIndex: finalStartIndex + width,
+      endIndex: finalEndIndex ?? finalStartIndex + width,
       startIndex: finalStartIndex,
       startTimestamp: sourceStartTimestamp,
     }

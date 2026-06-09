@@ -133,7 +133,7 @@ export function resolvePartitionKind(pages: RealtimePageRow[] | null | undefined
 }
 
 export function resolvePartitionCacheKind(partition: Pick<StoreV6PagePartition, 'partitionMode'>) {
-  return partition.partitionMode === 'm5-time' ? 'time' : 'rows'
+  return partition.partitionMode === 'm5-time' || partition.partitionMode === 'm30-time' ? 'time' : 'rows'
 }
 
 export function formatPageRange(page: RealtimePageRow) {
@@ -273,7 +273,7 @@ export function isCurrentCache(
   if (value.profileVersion !== expectedPartition.profileVersion) return false
   const expectedKind = resolvePartitionCacheKind(expectedPartition)
   const actualKind = value.partitionKind ?? resolvePartitionKind(value.pages)
-  const actualPageKind = expectedKind === 'time' && value.partitionMode === 'm5-time'
+  const actualPageKind = expectedKind === 'time' && (value.partitionMode === 'm5-time' || value.partitionMode === 'm30-time')
     ? 'time'
     : resolvePartitionKind(value.pages)
   return actualKind === expectedKind && actualKind === actualPageKind

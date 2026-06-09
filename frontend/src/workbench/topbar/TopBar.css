@@ -137,6 +137,17 @@
   background: #f3f4f6;
 }
 
+.ff-shortcut-periods button:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.ff-shortcut-periods button:disabled:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
 .ff-shortcut-periods button[data-active='true'] {
   border-color: #e5e7eb;
   background: #e5e7eb;

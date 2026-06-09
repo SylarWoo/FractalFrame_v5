@@ -4,6 +4,7 @@ import './RightDrawer.css'
 import '../mt5DataCenter/Mt5DataCenterPanel.css'
 import type { SettingsPanelTab } from '../settings/SettingsPanel'
 import { resolveStoreV6PagePartitionMode } from '../chart/pagePartition/pagePartitionBuilder'
+import { hasStoreV6PeriodPageSystemV2 } from '../chart/pagePartition/periodPageSystemV2'
 import { formatSymbolStatus, normalizeStoredStatus, periodFromStoreTableKey, storeTableKeyForPeriod } from '../mt5DataCenter/storeV6StatusFormat'
 import type { StoreTableRow } from '../mt5DataCenter/storeV6StatusFormat'
 import { clearStorePanelPersistence, getInitialSymbolSnapshot, mergeSymbolRowsWithSnapshot, publishSharedSelection, readImportCenterQuery, readImportCenterSelectedTab, readPersistedM1CheckResult, readPersistedStoreTableSelection, readPersistedStoreV6Status, readSharedSelection, readShortcutMenuEnabled, readStorePanelPersistenceEnabled, readWatchlistSymbols, saveImportCenterQuery, saveImportCenterSelectedTab, savePersistedStoreTableSelection, saveShortcutMenuEnabled, saveShortcutMenuPeriods, saveStorePanelPersistenceEnabled, saveSymbolSnapshot, saveWatchlistSymbols } from '../mt5DataCenter/storeV6Persistence'
@@ -35,7 +36,7 @@ function hasLoadedSymbolSessions(row: Mt5SymbolRow | undefined) {
 }
 
 function shouldSkipChartOpen(period: string | null | undefined) {
-  return resolveStoreV6PagePartitionMode(period) === 'm5-time'
+  return resolveStoreV6PagePartitionMode(period) === 'm5-time' || !hasStoreV6PeriodPageSystemV2(period)
 }
 
 export function RightDrawer({

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type PointerEvent as ReactPointerE
 import type { Mt5M1CheckJobPayload, Mt5RealtimeTick, Mt5SymbolRow, StoreV6AggregateJobPayload, StoreV6CheckPayload, StoreV6PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
 import type { ChartPageNavigation, ChartPageTarget } from '../chart/chartRuntimeTypes'
 import type { StoreV6HistoryPageWindow } from '../chart/historyPageWindowV2'
+import { hasStoreV6PeriodPageSystemV2 } from '../chart/pagePartition/periodPageSystemV2'
 import { millisecondsUntilNextMarketSessionCheck, readMarketStatusTitleSnapshot, saveMarketStatusTitleSnapshotFromSymbolSession } from '../mt5DataCenter/marketStatusTitleState'
 import { PagePartitionManager } from '../mt5DataCenter/PagePartitionManager'
 import { StoreV6Panel } from '../mt5DataCenter/StoreV6Panel'
@@ -340,9 +341,12 @@ function SelectedSymbolPeriodSelector({
         {rows.map((row) => (
           <button
             data-active={activeKind === row.kind && activePeriod === row.period}
+            disabled={!hasStoreV6PeriodPageSystemV2(row.period)}
             key={`${row.kind}-${row.period}`}
             onClick={() => onOpenPeriod(row)}
-            title={`${row.period} · ${row.count} rows · ${row.updated}`}
+            title={hasStoreV6PeriodPageSystemV2(row.period)
+              ? `${row.period} · ${row.count} rows · ${row.updated}`
+              : `${row.period} 暂未接入周期分页系统`}
             type="button"
           >
             {row.period}

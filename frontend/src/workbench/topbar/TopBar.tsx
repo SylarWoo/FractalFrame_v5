@@ -81,6 +81,7 @@ export function TopBar({
   const {
     activePeriod,
     enabled,
+    isPeriodSupported,
     open,
     openPeriod,
     periods,
@@ -223,8 +224,10 @@ export function TopBar({
             {periods.map((option) => (
               <button
                 data-active={activePeriod === option.period}
+                disabled={!isPeriodSupported(option.period)}
                 key={option.period}
                 onClick={() => openPeriod(option)}
+                title={isPeriodSupported(option.period) ? option.period : `${option.period} 暂未接入周期分页系统`}
                 type="button"
               >
                 {option.period}

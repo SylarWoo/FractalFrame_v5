@@ -3,6 +3,14 @@ import type { StoreV6RealtimePageWindow } from '../realtimePageWindowV2'
 import type { StoreV6WindowKLine } from '../pageSliceV2'
 import { createStoreV6IndicatorRegistryV2 } from './indicatorRegistryV2'
 import { clearRealtimeIndicatorStableCacheV2, refreshRealtimeWindowIndicatorsWithStableCacheV2 } from './realtimeIndicatorStableCacheV2'
+import {
+  storeV6MorganRangeM5IndicatorDefinitionV2,
+  storeV6MorganRangeM5IndicatorIdV2,
+  storeV6MorganRangeM5RequestIdV2,
+  storeV6MorganRangeM30IndicatorDefinitionV2,
+  storeV6MorganRangeM30IndicatorIdV2,
+  storeV6MorganRangeM30RequestIdV2,
+} from './morganRangeIndicatorV2'
 
 function kline(time: number, close: number): StoreV6WindowKLine {
   return {
@@ -19,6 +27,30 @@ function kline(time: number, close: number): StoreV6WindowKLine {
     timestamp: time * 1000,
     volume: close,
   }
+}
+
+function shanghaiSeconds(year: number, month: number, day: number, hour: number, minute: number) {
+  return Date.UTC(year, month - 1, day, hour - 8, minute) / 1000
+}
+
+function m5RowsBetween(from: number, to: number) {
+  return rowsBetweenStep(from, to, 5 * 60, 'M5')
+}
+
+function m30RowsBetween(from: number, to: number) {
+  return rowsBetweenStep(from, to, 30 * 60, 'M30')
+}
+
+function rowsBetweenStep(from: number, to: number, stepSeconds: number, period: string) {
+  const rows: StoreV6WindowKLine[] = []
+  for (let time = from, index = 0; time <= to; time += stepSeconds, index += 1) {
+    rows.push({
+      ...kline(time, 4300 + index * 0.1 + Math.sin(index / 5)),
+      barKey: `XAUUSDm|${period}|${time}`,
+      period,
+    })
+  }
+  return rows
 }
 
 function windowFromRows(rows: StoreV6WindowKLine[]): StoreV6RealtimePageWindow {
@@ -91,7 +123,7 @@ describe('refreshRealtimeWindowIndicatorsWithStableCacheV2', () => {
     ])
   })
 
-  it('merges Morgan Range segment rows by shifting tail segment indices into the active window', async () => {
+  it('recalculates Morgan Range against the full active window when the tail is a bucket boundary', async () => {
     const registry = createStoreV6IndicatorRegistryV2()
     registry.register({
       calculateRealtime: (context) => {
@@ -138,8 +170,7 @@ describe('refreshRealtimeWindowIndicatorsWithStableCacheV2', () => {
     })
 
     expect(next.indicators.MR_M5.displayRows).toEqual([
-      expect.objectContaining({ endIndex: 1, startIndex: 0, startTimestamp: 21_000_000 }),
-      expect.objectContaining({ endIndex: 2, startIndex: 2, startTimestamp: 21_600_000 }),
+      expect.objectContaining({ endIndex: 2, startIndex: 0, startTimestamp: 21_000_000 }),
     ])
   })
 
@@ -247,5 +278,102 @@ describe('refreshRealtimeWindowIndicatorsWithStableCacheV2', () => {
     })
 
     expect(historyLengths).toEqual([0, 2])
+  })
+
+  it('keeps the next MR-M5 H4 segment visible after the boundary row moves into stable realtime rows', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6MorganRangeM5IndicatorDefinitionV2)
+    const from = shanghaiSeconds(2026, 6, 8, 2, 0)
+    const realtimeStart = shanghaiSeconds(2026, 6, 9, 6, 0)
+    const nextBucketStart = shanghaiSeconds(2026, 6, 9, 10, 0)
+    const tail = shanghaiSeconds(2026, 6, 9, 10, 5)
+    const allRows = m5RowsBetween(from, tail)
+    const historyRows = allRows.filter((row) => row.time < realtimeStart)
+    const activeRows = allRows.filter((row) => row.time >= realtimeStart)
+
+    const next = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: [{ id: storeV6MorganRangeM5RequestIdV2 }],
+      window: {
+        ...windowFromRows(activeRows),
+        indicatorRequests: [{ id: storeV6MorganRangeM5RequestIdV2 }],
+        sessionTimeFrom: realtimeStart,
+      },
+    })
+
+    const segmentRows = next.indicators[storeV6MorganRangeM5IndicatorIdV2].displayRows ?? []
+    const nextSegmentIndex = segmentRows.findIndex((segment) => (
+      Number((segment as { startTimestamp?: number }).startTimestamp) === nextBucketStart * 1000
+    ))
+    expect(nextSegmentIndex).toBeGreaterThanOrEqual(0)
+    const nextSegment = segmentRows[nextSegmentIndex] as { startIndex: number }
+    const previous = segmentRows[nextSegmentIndex - 1] as { endIndex: number } | undefined
+    expect(previous?.endIndex).toBeLessThan(nextSegment.startIndex)
+  })
+
+  it('keeps the next MR-M30 D1 segment visible after the daily boundary row moves into stable realtime rows', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6MorganRangeM30IndicatorDefinitionV2)
+    const from = shanghaiSeconds(2026, 5, 25, 6, 0)
+    const realtimeStart = shanghaiSeconds(2026, 6, 8, 6, 0)
+    const nextDayStart = shanghaiSeconds(2026, 6, 9, 6, 0)
+    const tail = shanghaiSeconds(2026, 6, 9, 6, 30)
+    const allRows = m30RowsBetween(from, tail)
+    const historyRows = allRows.filter((row) => row.time < realtimeStart)
+    const activeRows = allRows.filter((row) => row.time >= realtimeStart)
+
+    const next = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: [{ id: storeV6MorganRangeM30RequestIdV2 }],
+      window: {
+        ...windowFromRows(activeRows),
+        indicatorRequests: [{ id: storeV6MorganRangeM30RequestIdV2 }],
+        period: 'M30',
+        sessionTimeFrom: realtimeStart,
+      },
+    })
+
+    const segmentRows = next.indicators[storeV6MorganRangeM30IndicatorIdV2].displayRows ?? []
+    const nextSegmentIndex = segmentRows.findIndex((segment) => (
+      Number((segment as { startTimestamp?: number }).startTimestamp) === nextDayStart * 1000
+    ))
+    expect(nextSegmentIndex).toBeGreaterThanOrEqual(0)
+    const nextSegment = segmentRows[nextSegmentIndex] as { startIndex: number }
+    const previous = segmentRows[nextSegmentIndex - 1] as { endIndex: number } | undefined
+    expect(previous?.endIndex).toBeLessThan(nextSegment.startIndex)
+  })
+
+  it('creates the current MR-M30 D1 segment when the daily boundary row is the realtime tail', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6MorganRangeM30IndicatorDefinitionV2)
+    const from = shanghaiSeconds(2026, 5, 25, 6, 0)
+    const realtimeStart = shanghaiSeconds(2026, 6, 8, 6, 0)
+    const currentDayStart = shanghaiSeconds(2026, 6, 10, 6, 0)
+    const allRows = m30RowsBetween(from, currentDayStart)
+    const historyRows = allRows.filter((row) => row.time < realtimeStart)
+    const activeRows = allRows.filter((row) => row.time >= realtimeStart)
+
+    const next = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: [{ id: storeV6MorganRangeM30RequestIdV2 }],
+      window: {
+        ...windowFromRows(activeRows),
+        indicatorRequests: [{ id: storeV6MorganRangeM30RequestIdV2 }],
+        period: 'M30',
+        sessionTimeFrom: realtimeStart,
+      },
+    })
+
+    const segmentRows = next.indicators[storeV6MorganRangeM30IndicatorIdV2].displayRows ?? []
+    const currentSegmentIndex = segmentRows.findIndex((segment) => (
+      Number((segment as { startTimestamp?: number }).startTimestamp) === currentDayStart * 1000
+    ))
+    expect(currentSegmentIndex).toBeGreaterThanOrEqual(0)
+    const currentSegment = segmentRows[currentSegmentIndex] as { startIndex: number }
+    const previous = segmentRows[currentSegmentIndex - 1] as { endIndex: number } | undefined
+    expect(previous?.endIndex).toBeLessThan(currentSegment.startIndex)
   })
 })

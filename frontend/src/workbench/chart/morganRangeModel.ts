@@ -9,6 +9,7 @@ export type MorganRangeMode = 'H4_M5' | 'D1_M30'
 
 export type MorganRangeCandle = {
   close: number
+  endIndex: number
   high: number
   low: number
   startIndex: number
@@ -26,6 +27,7 @@ export type MorganRangeSegment = {
   atr7: number
   center: number
   endIndex: number
+  endTimestamp?: number
   index: number
   levels: MorganRangeLevel[]
   lower: number
@@ -107,11 +109,12 @@ export function collectMorganRangeCandles(dataList: KLineData[], mode: MorganRan
 
     const key = resolveMorganRangeBucketKey(timestamp, mode)
     if (activeKey !== key || !active) {
-      active = { close, high, low, startIndex: index, startTimestamp: Number(row.timestamp) }
+      active = { close, endIndex: index, high, low, startIndex: index, startTimestamp: Number(row.timestamp) }
       candles.push(active)
       activeKey = key
       return
     }
+    active.endIndex = index
     active.high = Math.max(active.high, high)
     active.low = Math.min(active.low, low)
     active.close = close
@@ -179,11 +182,14 @@ export function calculateMorganRangeSegmentsForMode(dataList: KLineData[], mode:
     const next = candles[index + 1]
     const endIndex = next
       ? Math.max(anchor.startIndex, next.startIndex - 1)
-      : anchor.startIndex + safeFutureBars
+      : safeFutureBars > 0
+        ? Math.max(anchor.endIndex, anchor.startIndex + safeFutureBars - 1)
+        : anchor.endIndex
     segments.push({
       atr7,
       center,
       endIndex,
+      endTimestamp: Number(realRowsTimestamp(dataList, endIndex)),
       index,
       levels: calculateMorganRangeLevels(center, range),
       lower: center - range,
@@ -237,6 +243,12 @@ export function calculateMorganRangeSegmentsForModeCached(dataList: KLineData[],
   return segments
 }
 
+function realRowsTimestamp(dataList: KLineData[], index: number) {
+  const rows = stripFuturePlaceholders(dataList)
+  const row = rows[Math.max(0, Math.min(Math.round(index), rows.length - 1))]
+  return row ? resolveKLineTimestampMs(row) : Number.NaN
+}
+
 export function alignMorganRangeSegmentsToDisplayRows({
   calculationRows,
   displayRows,
@@ -260,7 +272,7 @@ export function alignMorganRangeSegmentsToDisplayRows({
   const aligned: MorganRangeSegment[] = []
   segments.forEach((segment) => {
     const startTimestamp = Number(realCalculationRows[segment.startIndex]?.timestamp ?? segment.startTimestamp)
-    const endTimestamp = Number(realCalculationRows[Math.min(segment.endIndex, realCalculationRows.length - 1)]?.timestamp)
+    const endTimestamp = Number(segment.endTimestamp ?? realCalculationRows[Math.min(segment.endIndex, realCalculationRows.length - 1)]?.timestamp)
     if (!Number.isFinite(startTimestamp) || !Number.isFinite(endTimestamp)) return
 
     let startIndex: number | null = null

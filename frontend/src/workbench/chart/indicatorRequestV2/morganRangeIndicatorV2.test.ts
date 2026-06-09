@@ -7,9 +7,14 @@ import {
   storeV6MorganRangeM5IndicatorIdV2,
   storeV6MorganRangeM5PaneIdV2,
   storeV6MorganRangeM5RequestIdV2,
+  storeV6MorganRangeM30IndicatorDefinitionV2,
+  storeV6MorganRangeM30IndicatorIdV2,
+  storeV6MorganRangeM30PaneIdV2,
+  storeV6MorganRangeM30RequestIdV2,
 } from './morganRangeIndicatorV2'
 
 const fiveMinutes = 5 * 60
+const thirtyMinutes = 30 * 60
 
 function shanghaiSeconds(year: number, month: number, day: number, hour: number, minute: number) {
   return Date.UTC(year, month - 1, day, hour - 8, minute) / 1000
@@ -40,9 +45,17 @@ function rows(count: number) {
 }
 
 function rowsBetween(from: number, to: number) {
+  return rowsBetweenStep(from, to, fiveMinutes, 'M5')
+}
+
+function rowsBetweenStep(from: number, to: number, stepSeconds: number, period: string) {
   const rows: StoreV6WindowKLine[] = []
-  for (let time = from, index = 0; time <= to; time += fiveMinutes, index += 1) {
-    rows.push(kline(time, index))
+  for (let time = from, index = 0; time <= to; time += stepSeconds, index += 1) {
+    rows.push({
+      ...kline(time, index),
+      barKey: `XAUUSDm|${period}|${time}`,
+      period,
+    })
   }
   return rows
 }
@@ -252,6 +265,127 @@ describe('storeV6MorganRangeM5IndicatorDefinitionV2', () => {
     })
 
     const segmentRows = indicators[storeV6MorganRangeM5IndicatorIdV2].displayRows ?? []
-    expect(segmentRows.some((segment) => Number((segment as { startTimestamp?: number }).startTimestamp) === nextBucketStart * 1000)).toBe(true)
+    const next = segmentRows.find((segment) => Number((segment as { startTimestamp?: number }).startTimestamp) === nextBucketStart * 1000) as { endIndex?: number; endTimestamp?: number; startIndex?: number } | undefined
+    expect(next).toEqual(expect.objectContaining({
+      endIndex: 95,
+      startIndex: 48,
+    }))
+    expect(next?.endTimestamp).toBeUndefined()
+  })
+
+  it('calculates MR-M30 from D1 buckets and exposes a separate main overlay pane', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6MorganRangeM30IndicatorDefinitionV2)
+    const from = shanghaiSeconds(2026, 5, 25, 6, 0)
+    const to = shanghaiSeconds(2026, 6, 10, 5, 30)
+    const calculationRows = rowsBetweenStep(from, to, thirtyMinutes, 'M30')
+    const displayFrom = shanghaiSeconds(2026, 6, 8, 6, 0)
+    const displayRows = calculationRows.filter((row) => row.time >= displayFrom)
+
+    const indicators = await requestHistoryWindowIndicatorsV2({
+      boundary: {
+        actualFromGlobalIndex: displayRows[0].globalIndex,
+        actualTimeFrom: displayRows[0].time,
+        actualTimeTo: displayRows[displayRows.length - 1].time,
+        actualToGlobalIndex: displayRows[displayRows.length - 1].globalIndex,
+        requestedFromGlobalIndex: null,
+        requestedTimeFrom: displayRows[0].time,
+        requestedTimeTo: displayRows[displayRows.length - 1].time,
+        requestedToGlobalIndex: null,
+      },
+      calculationRows,
+      displayOffset: calculationRows.length - displayRows.length,
+      displayRows,
+      pageIndex: 1,
+      period: 'M30',
+      registry,
+      requests: [{ id: storeV6MorganRangeM30RequestIdV2 }],
+      symbol: 'XAUUSDm',
+      warmupRows: calculationRows.slice(0, calculationRows.length - displayRows.length),
+    })
+
+    const pane = indicators[storeV6MorganRangeM30IndicatorIdV2]
+    expect(pane).toMatchObject({
+      id: storeV6MorganRangeM30RequestIdV2,
+      paneId: storeV6MorganRangeM30PaneIdV2,
+      paneRole: 'main',
+      renderRole: 'main-overlay',
+    })
+    const segmentRows = pane.displayRows ?? []
+    expect(segmentRows.some((segment) => (
+      Number((segment as { startTimestamp?: number }).startTimestamp) === shanghaiSeconds(2026, 6, 8, 6, 0) * 1000
+    ))).toBe(true)
+    expect(segmentRows.some((segment) => (
+      Number((segment as { startTimestamp?: number }).startTimestamp) === shanghaiSeconds(2026, 6, 8, 10, 0) * 1000
+    ))).toBe(false)
+  })
+
+  it('extends the realtime MR-M30 segment to the full D1 window', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6MorganRangeM30IndicatorDefinitionV2)
+    const from = shanghaiSeconds(2026, 5, 25, 6, 0)
+    const realtimeStart = shanghaiSeconds(2026, 6, 8, 6, 0)
+    const nextDayStart = shanghaiSeconds(2026, 6, 9, 6, 0)
+    const allRows = rowsBetweenStep(from, nextDayStart, thirtyMinutes, 'M30')
+    const historyRows = allRows.filter((row) => row.time < realtimeStart)
+    const activeRows = allRows.filter((row) => row.time >= realtimeStart)
+
+    const indicators = await requestRealtimeWindowIndicatorsV2({
+      activeRows,
+      historyRows,
+      period: 'M30',
+      registry,
+      requests: [{ id: storeV6MorganRangeM30RequestIdV2 }],
+      sessionTimeFrom: realtimeStart,
+      sessionTimeTo: null,
+      symbol: 'XAUUSDm',
+    })
+
+    const segmentRows = indicators[storeV6MorganRangeM30IndicatorIdV2].displayRows ?? []
+    const next = segmentRows.find((segment) => Number((segment as { startTimestamp?: number }).startTimestamp) === nextDayStart * 1000) as { endIndex?: number; endTimestamp?: number; startIndex?: number } | undefined
+    expect(next).toEqual(expect.objectContaining({
+      endIndex: 95,
+      startIndex: 48,
+    }))
+    expect(next?.endTimestamp).toBeUndefined()
+  })
+
+  it('does not extend the last MR-M30 history segment beyond available D1 rows', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6MorganRangeM30IndicatorDefinitionV2)
+    const from = shanghaiSeconds(2026, 5, 25, 6, 0)
+    const to = shanghaiSeconds(2026, 6, 6, 4, 30)
+    const calculationRows = rowsBetweenStep(from, to, thirtyMinutes, 'M30')
+    const displayFrom = shanghaiSeconds(2026, 6, 5, 6, 0)
+    const displayRows = calculationRows.filter((row) => row.time >= displayFrom)
+
+    const indicators = await requestHistoryWindowIndicatorsV2({
+      boundary: {
+        actualFromGlobalIndex: displayRows[0].globalIndex,
+        actualTimeFrom: displayRows[0].time,
+        actualTimeTo: displayRows[displayRows.length - 1].time,
+        actualToGlobalIndex: displayRows[displayRows.length - 1].globalIndex,
+        requestedFromGlobalIndex: null,
+        requestedTimeFrom: displayRows[0].time,
+        requestedTimeTo: displayRows[displayRows.length - 1].time,
+        requestedToGlobalIndex: null,
+      },
+      calculationRows,
+      displayOffset: calculationRows.length - displayRows.length,
+      displayRows,
+      pageIndex: 1,
+      period: 'M30',
+      registry,
+      requests: [{ id: storeV6MorganRangeM30RequestIdV2 }],
+      symbol: 'XAUUSDm',
+      warmupRows: calculationRows.slice(0, calculationRows.length - displayRows.length),
+    })
+
+    const segmentRows = indicators[storeV6MorganRangeM30IndicatorIdV2].displayRows ?? []
+    const lastSegment = segmentRows[segmentRows.length - 1] as { endIndex: number; startTimestamp: number } | undefined
+    expect(lastSegment).toEqual(expect.objectContaining({
+      endIndex: displayRows.length - 1,
+      startTimestamp: displayFrom * 1000,
+    }))
   })
 })

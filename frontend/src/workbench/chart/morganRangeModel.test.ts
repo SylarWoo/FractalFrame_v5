@@ -102,7 +102,7 @@ describe('morganRangeModel', () => {
     expect(segment.center).toBe(100)
     expect(segment.range).toBe(6)
     expect(segment.startTimestamp).toBe(utc('2026-05-31T22:00:00.000Z'))
-    expect(segment.endIndex).toBe(segment.startIndex + 48)
+    expect(segment.endIndex).toBe(segment.startIndex + 47)
   })
 
   it('keeps D1-M30 to one Morgan range per day when source rows are M30', () => {

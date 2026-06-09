@@ -1,7 +1,8 @@
 param(
   [string]$HostAddress = "127.0.0.1",
   [int]$BackendPort = 8765,
-  [int]$FrontendPort = 5185,
+  [int]$FrontendPort = 0,
+  [int[]]$FrontendPorts = @(5185, 5186),
   [switch]$OpenBrowser
 )
 
@@ -52,12 +53,25 @@ function Wait-RepoProcessExit {
 
 Stop-RepoBackendProcess
 Stop-RepoPortProcess -TargetPort $BackendPort
-Stop-RepoPortProcess -TargetPort $FrontendPort
+$targetFrontendPorts = if ($FrontendPort -gt 0 -and -not $PSBoundParameters.ContainsKey("FrontendPorts")) {
+  @($FrontendPort)
+} else {
+  $FrontendPorts
+}
+$targetFrontendPorts = @($targetFrontendPorts | Where-Object { $_ -gt 0 } | Select-Object -Unique)
+if (-not $targetFrontendPorts -or $targetFrontendPorts.Count -eq 0) {
+  throw "At least one frontend port is required."
+}
+foreach ($port in $targetFrontendPorts) {
+  Stop-RepoPortProcess -TargetPort $port
+}
 Wait-RepoProcessExit
 $backendBusy = Get-NetTCPConnection -LocalPort $BackendPort -State Listen -ErrorAction SilentlyContinue
-$frontendBusy = Get-NetTCPConnection -LocalPort $FrontendPort -State Listen -ErrorAction SilentlyContinue
 if ($backendBusy) { throw "Backend port $BackendPort is already in use." }
-if ($frontendBusy) { throw "Frontend port $FrontendPort is already in use." }
+foreach ($port in $targetFrontendPorts) {
+  $frontendBusy = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+  if ($frontendBusy) { throw "Frontend port $port is already in use." }
+}
 
 $backend = Start-Process `
   -FilePath $pythonExe `
@@ -68,15 +82,30 @@ $backend = Start-Process `
 
 try {
   if ($OpenBrowser) {
-    Start-Process "http://$HostAddress`:$FrontendPort"
+    foreach ($port in $targetFrontendPorts) {
+      Start-Process "http://$HostAddress`:$port"
+    }
   }
-  Push-Location (Join-Path $repoRoot "frontend")
+  $frontendRoot = Join-Path $repoRoot "frontend"
+  $foregroundPort = $targetFrontendPorts[0]
+  $backgroundPorts = @($targetFrontendPorts | Where-Object { $_ -ne $foregroundPort })
+  foreach ($port in $backgroundPorts) {
+    Start-Process `
+      -FilePath "npm.cmd" `
+      -ArgumentList @("run", "dev", "--", "--host", $HostAddress, "--port", [string]$port) `
+      -WorkingDirectory $frontendRoot `
+      -WindowStyle Hidden
+  }
+  Push-Location $frontendRoot
   try {
-    npm run dev -- --host $HostAddress --port $FrontendPort
+    npm run dev -- --host $HostAddress --port $foregroundPort
   } finally {
     Pop-Location
   }
 } finally {
   Stop-RepoBackendProcess
   Stop-RepoPortProcess -TargetPort $BackendPort
+  foreach ($port in $targetFrontendPorts) {
+    Stop-RepoPortProcess -TargetPort $port
+  }
 }

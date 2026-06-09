@@ -31,6 +31,7 @@ export const defaultYAxisAutoScalePaneIds = [candlePaneId]
 export const chartManualYAxisPaneIds = [...indicatorYAxisAutoScalePaneIds]
 export const chartManualYAxisRangeChangeEvent = 'ff:chart-manual-y-axis-range-change'
 const manualYAxisDragSpeed = 2.8
+const kLineChartV2HostSelector = '.ff-kline-chart-host-v2'
 
 export function unlockYAxisManualDrag(chart: Chart, paneIds: string[] = chartYAxisUnlockPaneIds) {
   const chartWithDrawPaneAccess = chart as ChartWithDrawPaneAccess
@@ -70,6 +71,8 @@ export function scheduleResetYAxisAutoScaleFlags(chart: Chart, paneIds?: string[
 export function installYAxisDragOptimization(chart: Chart) {
   const chartRoot = chart.getDom()
   if (!chartRoot) return () => {}
+  // Legacy chart only. KLineChart v2 owns axis drag/restore in klineChartYAxisLifecycleCoreV2.
+  if (chartRoot.closest?.(kLineChartV2HostSelector)) return () => {}
   const chartWithDrawPaneAccess = chart as ChartWithDrawPaneAccess
   const rootElement = chartRoot.ownerDocument.documentElement
   let activeYAxisDrag: {

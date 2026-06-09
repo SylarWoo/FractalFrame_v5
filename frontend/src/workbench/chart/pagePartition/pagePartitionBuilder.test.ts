@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildStoreV6PagePartition } from './pagePartitionBuilder'
+import { buildStoreV6PagePartition, resolveStoreV6PagePartitionMode } from './pagePartitionBuilder'
+import { unsupportedStoreV6PeriodPageSystemTextV2 } from './periodPageSystemV2'
 
 describe('buildStoreV6PagePartition', () => {
   function shanghaiSeconds(year: number, month: number, day: number, hour: number, minute: number) {
@@ -97,5 +98,15 @@ describe('buildStoreV6PagePartition', () => {
     expect(typeof partition.pages[0]?.timeFrom).toBe('number')
     expect(typeof partition.pages[1]?.timeFrom).toBe('number')
     expect(typeof partition.pages[1]?.timeTo).toBe('number')
+  })
+
+  it('routes only registered periods to the independent period page systems', () => {
+    expect(resolveStoreV6PagePartitionMode('M5')).toBe('m5-time')
+    expect(resolveStoreV6PagePartitionMode('M30')).toBe('m30-time')
+    expect(resolveStoreV6PagePartitionMode('H1')).toBe('rows')
+  })
+
+  it('keeps unsupported period page-system text readable', () => {
+    expect(unsupportedStoreV6PeriodPageSystemTextV2('H1')).toContain('H1 暂未接入独立周期分页系统')
   })
 })

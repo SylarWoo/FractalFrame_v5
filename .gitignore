@@ -21,3 +21,5 @@ runtime_data/
 
 # FractalFrame local dev runtime state
 frontend/.fractalframe-dev/
+frontend/.dev-logs/
+drag-*.json
