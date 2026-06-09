@@ -5,6 +5,12 @@ import { kLineChartConfigV2 } from './klineChartConfigV2'
 const candlePaneId = 'candle_pane'
 const storagePrefix = 'fractalframe:klinechart-v2:viewport'
 
+declare global {
+  interface Window {
+    __ffKLineChartV2ViewportRestoreDebug?: unknown
+  }
+}
+
 type ViewportSnapshotV2 = {
   barSpace: number
   dataLength: number
@@ -14,12 +20,25 @@ type ViewportSnapshotV2 = {
   visibleTo: number
 }
 
+export type KLineChartViewportContextV2 = {
+  period: string
+  symbol: string
+  viewportScope?: string | null
+}
+
 function finiteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
-function storageKey(symbol: string, period: string) {
-  return `${storagePrefix}:${symbol.trim().toUpperCase()}:${period.trim().toUpperCase()}`
+function normalizeViewportScope(scope: string | null | undefined) {
+  const value = String(scope ?? 'default').trim()
+  return value ? value.replace(/[^A-Za-z0-9:_-]/g, '_') : 'default'
+}
+
+function storageKey(symbol: string, period: string, viewportScope?: string | null) {
+  const base = `${storagePrefix}:${symbol.trim().toUpperCase()}:${period.trim().toUpperCase()}`
+  const scope = normalizeViewportScope(viewportScope)
+  return scope === 'default' ? base : `${base}:${scope}`
 }
 
 function normalizeBarSpace(value: unknown) {
@@ -54,6 +73,12 @@ function readRightVisibleTimestamp(chart: Chart) {
   return Number.isFinite(timestamp) ? timestamp : null
 }
 
+function readLatestTimestamp(chart: Chart) {
+  const dataList = chart.getDataList?.() ?? []
+  const timestamp = Number(dataList[dataList.length - 1]?.timestamp)
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
 function captureViewport(chart: Chart): ViewportSnapshotV2 | null {
   const visibleRange = chart.getVisibleRange?.()
   const visibleTo = Number(visibleRange?.to)
@@ -69,9 +94,9 @@ function captureViewport(chart: Chart): ViewportSnapshotV2 | null {
   }
 }
 
-function readSnapshot(symbol: string, period: string): ViewportSnapshotV2 | null {
+function readSnapshot(symbol: string, period: string, viewportScope?: string | null): ViewportSnapshotV2 | null {
   try {
-    const raw = window.localStorage.getItem(storageKey(symbol, period))
+    const raw = window.localStorage.getItem(storageKey(symbol, period, viewportScope))
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<ViewportSnapshotV2>
     const barSpace = normalizeBarSpace(parsed.barSpace)
@@ -90,29 +115,74 @@ function readSnapshot(symbol: string, period: string): ViewportSnapshotV2 | null
   }
 }
 
-function writeSnapshot(symbol: string, period: string, snapshot: ViewportSnapshotV2) {
+function writeSnapshot(symbol: string, period: string, snapshot: ViewportSnapshotV2, viewportScope?: string | null) {
   try {
-    window.localStorage.setItem(storageKey(symbol, period), JSON.stringify(snapshot))
+    window.localStorage.setItem(storageKey(symbol, period, viewportScope), JSON.stringify(snapshot))
   } catch {
     // Storage can be unavailable in restricted browser modes.
   }
 }
 
-export function restoreKLineChartViewportStateV2(chart: Chart, symbol: string, period: string) {
-  const snapshot = readSnapshot(symbol, period)
+function scrollToTimestampAfterFrame(chart: Chart, timestamp: number) {
+  chart.scrollToTimestamp?.(timestamp, 0)
+  if (typeof window.requestAnimationFrame !== 'function') return
+  window.requestAnimationFrame(() => {
+    chart.scrollToTimestamp?.(timestamp, 0)
+  })
+}
+
+export function restoreKLineChartViewportStateV2(
+  chart: Chart,
+  symbol: string,
+  period: string,
+  options: { allowOffsetRightDistance?: boolean; viewportScope?: string | null } = {},
+) {
+  const snapshot = readSnapshot(symbol, period, options.viewportScope)
   if (!snapshot) return false
   chart.setBarSpace?.(snapshot.barSpace)
   const restoreScroll = () => {
     const dataLength = chart.getDataList?.().length ?? 0
     if (dataLength === 0) return
     const offsetRightDistance = normalizeOffsetRightDistance(chart, snapshot.offsetRightDistance)
-    if (offsetRightDistance !== null) {
+    const latestTimestamp = readLatestTimestamp(chart)
+    const snapshotAtLatest = snapshot.rightTimestamp !== null &&
+      latestTimestamp !== null &&
+      snapshot.rightTimestamp === latestTimestamp
+    if (options.allowOffsetRightDistance !== false && offsetRightDistance !== null && (snapshot.rightTimestamp === null || snapshotAtLatest)) {
+      if (import.meta.env.DEV) {
+        window.__ffKLineChartV2ViewportRestoreDebug = {
+          latestTimestamp,
+          method: 'offsetRightDistance',
+          offsetRightDistance,
+          options,
+          snapshot,
+          snapshotAtLatest,
+        }
+      }
       chart.setOffsetRightDistance?.(offsetRightDistance)
       return
     }
     if (snapshot.rightTimestamp !== null) {
-      chart.scrollToTimestamp?.(snapshot.rightTimestamp, 0)
+      if (import.meta.env.DEV) {
+        window.__ffKLineChartV2ViewportRestoreDebug = {
+          latestTimestamp,
+          method: 'rightTimestamp',
+          options,
+          snapshot,
+          snapshotAtLatest,
+        }
+      }
+      scrollToTimestampAfterFrame(chart, snapshot.rightTimestamp)
       return
+    }
+    if (import.meta.env.DEV) {
+      window.__ffKLineChartV2ViewportRestoreDebug = {
+        latestTimestamp,
+        method: 'visibleTo',
+        options,
+        snapshot,
+        snapshotAtLatest,
+      }
     }
     chart.scrollToDataIndex?.(Math.max(0, Math.min(dataLength - 1, Math.round(snapshot.visibleTo))), 0)
   }
@@ -122,12 +192,17 @@ export function restoreKLineChartViewportStateV2(chart: Chart, symbol: string, p
 
 export function installKLineChartViewportStateV2(
   chart: Chart,
-  getContext: () => { period: string; symbol: string },
+  getContext: () => KLineChartViewportContextV2,
 ) {
   let timer = 0
   let readyFrame = 0
   let readyTimer = 0
   let ready = false
+  let pointerDragging = false
+  let pendingPointerDragSave = false
+  let hasUserViewportMutation = false
+  let lastUserViewportInputAt = 0
+  let lastPointerFinishAt = 0
 
   const clearPendingReady = () => {
     if (readyFrame !== 0) {
@@ -150,14 +225,23 @@ export function installKLineChartViewportStateV2(
   const saveNow = () => {
     if (!ready) return
     clearPendingSave()
+    pendingPointerDragSave = false
+    if (!hasUserViewportMutation) return
     const context = getContext()
     if (!context.symbol || !context.period) return
     const snapshot = captureViewport(chart)
-    if (snapshot) writeSnapshot(context.symbol, context.period, snapshot)
+    if (snapshot) writeSnapshot(context.symbol, context.period, snapshot, context.viewportScope)
   }
 
   const scheduleSave = () => {
     if (!ready) return
+    const fromUserInput = pointerDragging || Date.now() - lastUserViewportInputAt < 1200
+    if (!fromUserInput) return
+    hasUserViewportMutation = true
+    if (pointerDragging) {
+      pendingPointerDragSave = true
+      return
+    }
     if (timer !== 0) window.clearTimeout(timer)
     timer = window.setTimeout(saveNow, kLineChartConfigV2.viewport.saveDelayMs)
   }
@@ -165,11 +249,36 @@ export function installKLineChartViewportStateV2(
   const actions = [ActionType.OnScroll, ActionType.OnVisibleRangeChange, ActionType.OnZoom]
   actions.forEach((action) => chart.subscribeAction(action, scheduleSave))
   const root = chart.getDom(candlePaneId, DomPosition.Root) ?? chart.getDom()
-  root?.addEventListener('mouseup', scheduleSave, true)
-  root?.addEventListener('pointerup', saveNow, true)
-  window.addEventListener('mouseup', scheduleSave, true)
-  window.addEventListener('pointerup', scheduleSave, true)
-  window.addEventListener('wheel', scheduleSave, true)
+  const markPointerDragging = () => {
+    if (!ready) return
+    pointerDragging = true
+    pendingPointerDragSave = false
+    lastUserViewportInputAt = Date.now()
+    clearPendingSave()
+  }
+  const finishPointerDragging = () => {
+    if (!pointerDragging) return
+    pointerDragging = false
+    lastPointerFinishAt = Date.now()
+    if (pendingPointerDragSave) saveNow()
+  }
+  const scheduleMouseSave = () => {
+    if (Date.now() - lastPointerFinishAt < 250) return
+    scheduleSave()
+  }
+  const handleWheel = () => {
+    lastUserViewportInputAt = Date.now()
+    scheduleSave()
+  }
+  root?.addEventListener('pointerdown', markPointerDragging, true)
+  root?.addEventListener('mouseup', scheduleMouseSave, true)
+  root?.addEventListener('pointerup', finishPointerDragging, true)
+  root?.addEventListener('pointercancel', finishPointerDragging, true)
+  window.addEventListener('pointerdown', markPointerDragging, true)
+  window.addEventListener('mouseup', scheduleMouseSave, true)
+  window.addEventListener('pointerup', finishPointerDragging, true)
+  window.addEventListener('pointercancel', finishPointerDragging, true)
+  window.addEventListener('wheel', handleWheel, true)
   window.addEventListener('beforeunload', saveNow)
   window.addEventListener('pagehide', saveNow)
 
@@ -177,17 +286,25 @@ export function installKLineChartViewportStateV2(
     destroy() {
       clearPendingSave()
       clearPendingReady()
+      pointerDragging = false
+      pendingPointerDragSave = false
+      hasUserViewportMutation = false
       actions.forEach((action) => chart.unsubscribeAction(action, scheduleSave))
-      root?.removeEventListener('mouseup', scheduleSave, true)
-      root?.removeEventListener('pointerup', saveNow, true)
-      window.removeEventListener('mouseup', scheduleSave, true)
-      window.removeEventListener('pointerup', scheduleSave, true)
-      window.removeEventListener('wheel', scheduleSave, true)
+      root?.removeEventListener('pointerdown', markPointerDragging, true)
+      root?.removeEventListener('mouseup', scheduleMouseSave, true)
+      root?.removeEventListener('pointerup', finishPointerDragging, true)
+      root?.removeEventListener('pointercancel', finishPointerDragging, true)
+      window.removeEventListener('pointerdown', markPointerDragging, true)
+      window.removeEventListener('mouseup', scheduleMouseSave, true)
+      window.removeEventListener('pointerup', finishPointerDragging, true)
+      window.removeEventListener('pointercancel', finishPointerDragging, true)
+      window.removeEventListener('wheel', handleWheel, true)
       window.removeEventListener('beforeunload', saveNow)
       window.removeEventListener('pagehide', saveNow)
     },
     markRestoring() {
       ready = false
+      hasUserViewportMutation = false
       clearPendingSave()
       clearPendingReady()
     },
@@ -196,6 +313,7 @@ export function installKLineChartViewportStateV2(
     },
     markReadyAfterRestore() {
       ready = false
+      hasUserViewportMutation = false
       clearPendingSave()
       clearPendingReady()
       readyFrame = window.requestAnimationFrame(() => {

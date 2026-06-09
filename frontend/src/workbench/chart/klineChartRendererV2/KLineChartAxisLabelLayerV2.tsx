@@ -11,6 +11,10 @@ import { formatCountdown, resolveCountdownEndTimestamp } from '../useCurrentCand
 import { settingsSymbolChangedEvent } from '../../settingsSymbolState'
 import { marketStatusTitleChangedEvent } from '../../mt5DataCenter/marketStatusTitleState'
 import { realtimeEnabledChangedEvent } from '../../mt5DataCenter/storeV6Persistence'
+import {
+  isKLineChartHorizontalDragInProgressV2,
+  kLineChartHorizontalDragEndEventV2,
+} from './klineChartInteractionStateV2'
 
 const candlePaneId = 'candle_pane'
 
@@ -105,6 +109,7 @@ export function installKLineChartAxisLabelLayerV2(
   }
 
   const scheduleRender = () => {
+    if (isKLineChartHorizontalDragInProgressV2()) return
     if (destroyed || frameId !== 0) return
     frameId = window.requestAnimationFrame(render)
   }
@@ -122,6 +127,7 @@ export function installKLineChartAxisLabelLayerV2(
   window.addEventListener(realtimeEnabledChangedEvent, scheduleRender)
   window.addEventListener('storage', scheduleRender)
   window.addEventListener('resize', scheduleRender)
+  window.addEventListener(kLineChartHorizontalDragEndEventV2, scheduleRender)
   countdownTimer = window.setInterval(scheduleRender, 1000)
   scheduleRender()
 
@@ -137,6 +143,7 @@ export function installKLineChartAxisLabelLayerV2(
       window.removeEventListener(realtimeEnabledChangedEvent, scheduleRender)
       window.removeEventListener('storage', scheduleRender)
       window.removeEventListener('resize', scheduleRender)
+      window.removeEventListener(kLineChartHorizontalDragEndEventV2, scheduleRender)
       root.remove()
     },
     scheduleRender,

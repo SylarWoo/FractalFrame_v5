@@ -18,13 +18,15 @@ import {
 import { requestStoreV6HistoryPage } from '../chart/historyPageRequestV2'
 import { buildStoreV6HistoryPageWindow, type StoreV6HistoryPageWindow } from '../chart/historyPageWindowV2'
 import { traceKLineChartPageV2 } from '../chart/klineChartRendererV2/klineChartPageDebugProbeV2'
-import { resolveKLineChartRefreshRestorePageIndexV2 } from '../chart/klineChartRendererV2/klineChartRefreshRestoreConfigV2'
-import { resolveM5RealtimeOpenFromHistoryClose } from '../chart/pagePartition/timeAligned/m5TradingAnchors'
-import { m5TradingDaySlidingWeekProfile } from '../chart/pagePartition/timeAligned/timeAlignedPageTypes'
+import { resolveTimeAlignedRealtimeOpenFromHistoryClose } from '../chart/pagePartition/timeAligned/timeAlignedRealtimeAnchors'
 import {
   buildStoreV6PagePartition,
   type StoreV6PagePartition,
 } from '../chart/pagePartition/pagePartitionBuilder'
+import {
+  hasStoreV6PeriodPageSystemV2,
+  unsupportedStoreV6PeriodPageSystemTextV2,
+} from '../chart/pagePartition/periodPageSystemV2'
 import { writeString } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
 import { workbenchEvents } from '../persistence/workbenchEvents'
@@ -61,6 +63,7 @@ import {
   type RealtimePageRow,
   type UpdateSummary,
 } from './pagePartitionManagerHelpers'
+import { pushRefreshAfterAutoPageV2 } from './refreshAfterAutoPusherV2'
 
 type PagePartitionManagerProps = {
   onOpenChart?: (options: { historyPageWindow?: StoreV6HistoryPageWindow | null; pageNavigation?: ChartPageNavigation | null; realtimeEnabled?: boolean; symbol: string; period: string; totalRows?: number | null; limit?: number; reloadId?: number; page?: ChartPageTarget | null }) => void
@@ -95,6 +98,7 @@ export function PagePartitionManager({
   const [lastResetInfo, setLastResetInfo] = useState<PersistedPageResetInfo | null>(null)
   const [pageTableHeight, setPageTableHeight] = useState(readPageTableHeight)
   const selectedPeriod = periodFromStoreTableKey(selectedStoreTableKey)
+  const selectedPeriodPageSystemReady = hasStoreV6PeriodPageSystemV2(selectedPeriod)
   const selectedStoreRow = storeRows.find((row) => `${row.kind}-${row.period}` === selectedStoreTableKey)
     ?? storeRows.find((row) => row.period.toUpperCase() === selectedPeriod)
   const totalRows = parseRowsCount(selectedStoreRow?.rowsCount ?? selectedStoreRow?.count)
@@ -138,9 +142,9 @@ export function PagePartitionManager({
   const resolveRealtimeStartFromPages = (sourcePages: RealtimePageRow[]) => {
     const latestHistoryPage = sourcePages[0]
     if (!latestHistoryPage || typeof latestHistoryPage.timeTo !== 'number' || !Number.isFinite(latestHistoryPage.timeTo)) return null
-    return resolveM5RealtimeOpenFromHistoryClose({
+    return resolveTimeAlignedRealtimeOpenFromHistoryClose({
       historyTo: latestHistoryPage.timeTo,
-      profile: m5TradingDaySlidingWeekProfile,
+      period: selectedPeriod,
       symbol: selectedSymbol,
     })
   }
@@ -187,7 +191,7 @@ export function PagePartitionManager({
     writePageIndexCache(cacheKey, {
       builtAt: new Date().toISOString(),
       livePageSize: realtimePageSize,
-      m5AnchorMeta: resolvePartitionCacheKind(partition) === 'time'
+      m5AnchorMeta: partition.partitionMode === 'm5-time'
         ? resolveM5AnchorRuntimeContextFromPagesV2({ pages: nextPages, symbol: selectedSymbol })
         : null,
       pageSize: historicalPageSize,
@@ -204,6 +208,10 @@ export function PagePartitionManager({
   const openPage = (page: RealtimePageRow, sourcePages = pages, reason = 'unknown') => {
     const period = selectedPeriod
     if (!period) return
+    if (!hasStoreV6PeriodPageSystemV2(period)) {
+      setPartitionStatus(unsupportedStoreV6PeriodPageSystemTextV2(period))
+      return
+    }
     traceKLineChartPageV2('PagePartitionManager.openPage.start', {
       cacheKey,
       pageIndex: page.index,
@@ -292,6 +300,12 @@ export function PagePartitionManager({
         setLastResetInfo(null)
         return
       }
+      if (!selectedPeriodPageSystemReady) {
+        setPages([])
+        setLastResetInfo(readLastResetCache()[cacheKey] ?? null)
+        setPartitionStatus(unsupportedStoreV6PeriodPageSystemTextV2(selectedPeriod))
+        return
+      }
       const cached = readPageIndexCache()[cacheKey]
       const currentPartition = buildCurrentPartition()
       const cachedM5AnchorMeta = cached?.m5AnchorMeta ?? resolveM5AnchorRuntimeContextFromPagesV2({
@@ -299,9 +313,9 @@ export function PagePartitionManager({
         symbol: selectedSymbol,
       })
       const cacheMissingM5AnchorMeta = Boolean(cached) &&
-        resolvePartitionCacheKind(currentPartition) === 'time' &&
+        currentPartition.partitionMode === 'm5-time' &&
         !cachedM5AnchorMeta
-      const cacheExpiredAfterDailyClose = resolvePartitionCacheKind(currentPartition) === 'time' &&
+      const cacheExpiredAfterDailyClose = currentPartition.partitionMode === 'm5-time' &&
         isHistoryPageIndexCacheStaleAfterDailyRollover({
           builtAt: cached?.builtAt,
           symbol: selectedSymbol,
@@ -342,28 +356,20 @@ export function PagePartitionManager({
         setPageTotalRows(cached.totalRows)
         setPartitionStatus(`已缓存 ${cached.pages.length.toLocaleString('en-US')} 页，点击更新可按当前 StoreV6 重新定位分页符。`)
         if (resolvePartitionCacheKind(currentPartition) === 'time' && cached.pages[0]) {
-          const restoredPageIndex = resolveKLineChartRefreshRestorePageIndexV2({
+          pushRefreshAfterAutoPageV2({
+            pages: cached.pages,
             period: selectedPeriod,
+            pushPage: openPage,
             symbol: selectedSymbol,
           })
-          const initialPage = restoredPageIndex == null
-            ? cached.pages[0]
-            : cached.pages.find((page) => page.index === restoredPageIndex) ?? cached.pages[0]
-          traceKLineChartPageV2('PagePartitionManager.cacheInitialPage', {
-            initialPageIndex: initialPage.index,
-            restoredPageIndex,
-            symbol: selectedSymbol,
-            period: selectedPeriod,
-          })
-          openPage(initialPage, cached.pages, 'cache-current')
         }
       }
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [cacheKey])
+  }, [cacheKey, selectedPeriod, selectedPeriodPageSystemReady])
 
   useEffect(() => {
-    if (!selectedSymbol || !selectedPeriod || resolvePartitionCacheKind(buildCurrentPartition()) !== 'time') {
+    if (!selectedSymbol || !selectedPeriod || !selectedPeriodPageSystemReady || resolvePartitionCacheKind(buildCurrentPartition()) !== 'time') {
       setRealtimePageMonitor(null)
       return
     }
@@ -381,7 +387,7 @@ export function PagePartitionManager({
       window.removeEventListener(workbenchEvents.realtimePageBufferChanged, syncRealtimeMonitor)
       window.removeEventListener(workbenchEvents.realtimePageSnapshotChanged, syncRealtimeMonitor)
     }
-  }, [cacheKey, pages, selectedPeriod, selectedSymbol])
+  }, [cacheKey, pages, selectedPeriod, selectedPeriodPageSystemReady, selectedSymbol])
 
   useEffect(() => {
     const handleDailyCloseRebuild = (event: Event) => {
@@ -390,13 +396,13 @@ export function PagePartitionManager({
       const eventPeriod = typeof detail?.period === 'string' ? detail.period.trim().toUpperCase() : ''
       if (eventSymbol && eventSymbol !== selectedSymbol.trim().toUpperCase()) return
       if (eventPeriod && eventPeriod !== selectedPeriod.trim().toUpperCase()) return
-      if (!cacheKey || resolvePartitionCacheKind(buildCurrentPartition()) !== 'time') return
+      if (!cacheKey || !selectedPeriodPageSystemReady || resolvePartitionCacheKind(buildCurrentPartition()) !== 'time') return
       setPartitionStatus('日收盘已触发，正在清缓存并重建分页...')
       buildPages('daily-close')
     }
     window.addEventListener(historyPageDailyRolloverRebuildEvent, handleDailyCloseRebuild)
     return () => window.removeEventListener(historyPageDailyRolloverRebuildEvent, handleDailyCloseRebuild)
-  }, [building, cacheKey, selectedPeriod, selectedSymbol])
+  }, [building, cacheKey, selectedPeriod, selectedPeriodPageSystemReady, selectedSymbol])
 
   useEffect(() => {
     let cancelled = false
@@ -428,6 +434,7 @@ export function PagePartitionManager({
             runId &&
             runId !== maintenanceRebuildRunIdRef.current &&
             cacheKey &&
+            selectedPeriodPageSystemReady &&
             resolvePartitionCacheKind(buildCurrentPartition()) === 'time' &&
             !building
           ) {
@@ -446,11 +453,16 @@ export function PagePartitionManager({
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [building, cacheKey, selectedSymbol])
+  }, [building, cacheKey, selectedPeriodPageSystemReady, selectedSymbol])
 
   function buildPages(reason: 'auto' | 'manual' | 'daily-close' = 'manual') {
     const period = selectedPeriod
     if (!selectedSymbol || !period || !cacheKey || building) return
+    if (!hasStoreV6PeriodPageSystemV2(period)) {
+      setPages([])
+      setPartitionStatus(unsupportedStoreV6PeriodPageSystemTextV2(period))
+      return
+    }
     reloadIdRef.current += 1
     clearHistoryPageCachesV2({
       reason: 'page-index-rebuild',
@@ -486,8 +498,14 @@ export function PagePartitionManager({
       setSelectedPage(1)
       setPages(pagesForUi)
       setPartitionStatus(partition.statusText)
-      const livePage = pagesForUi[0]
-      if (livePage) openPage(livePage, pagesForUi, 'build-pages-live-page')
+      const pushedTarget = pushRefreshAfterAutoPageV2({
+        pages: pagesForUi,
+        period,
+        pushPage: openPage,
+        symbol: selectedSymbol,
+      })
+      const livePage = pushedTarget?.page ?? pagesForUi[0]
+      if (livePage) setSelectedPage(livePage.index)
       const resetInfo: PersistedPageResetInfo = {
         period,
         reason,
@@ -588,13 +606,13 @@ export function PagePartitionManager({
     <div className="ff-import-selected-settings" role="tabpanel">
       <div className="ff-import-selected-settings__head">
         <div className="ff-import-selected-settings__title">历史分页</div>
-        <button disabled={building || !selectedPeriod} onClick={() => buildPages('manual')} type="button">
+        <button disabled={building || !selectedPeriod || !selectedPeriodPageSystemReady} onClick={() => buildPages('manual')} type="button">
           {building ? '更新中' : '更新'}
         </button>
       </div>
       <div className="ff-page-loader-row">
         <div className="ff-import-selected-settings__status">
-          {partitionStatus || '点击更新后，将按 StoreV6 全局索引重新定位分页符。'}
+          {partitionStatus || (selectedPeriodPageSystemReady ? '点击更新后，将按 StoreV6 全局索引重新定位分页符。' : unsupportedStoreV6PeriodPageSystemTextV2(selectedPeriod))}
           {updateSummary ? (
             <span className="ff-import-selected-settings__reset-time">
               {updateSummary.text}
@@ -642,9 +660,9 @@ export function PagePartitionManager({
         tabIndex={0}
       />
       <div className="ff-import-selected-settings__meta">
-        {cacheKind === 'time'
-          ? `M5 使用独立时间分页，日期边界已解析为 StoreV6 globalIndex；当前总数 ${pageTotalRowsText}。`
-          : `旧 rows 分页/加载链路已移除；该周期需要接入新的时间分页器后才能生成页面。当前总数 ${pageTotalRowsText}。`}
+        {selectedPeriodPageSystemReady && cacheKind === 'time'
+          ? `${selectedPeriod} 使用独立时间分页，日期边界已解析为 StoreV6 globalIndex；当前总数 ${pageTotalRowsText}。`
+          : `${unsupportedStoreV6PeriodPageSystemTextV2(selectedPeriod)} 当前总数 ${pageTotalRowsText}。`}
       </div>
     </div>
   )

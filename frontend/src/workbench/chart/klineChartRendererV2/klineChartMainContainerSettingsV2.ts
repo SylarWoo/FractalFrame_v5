@@ -12,6 +12,13 @@ export const kLineChartMainContainerSettingsV2 = {
 } as const
 
 export function applyKLineChartMainContainerSettingsV2(chart: Chart) {
+  applyKLineChartMainContainerSettingsWithContextV2(chart, { realtimeVisualOpen: true })
+}
+
+export function applyKLineChartMainContainerSettingsWithContextV2(
+  chart: Chart,
+  options: { realtimeVisualOpen?: boolean } = {},
+) {
   chart.setScrollEnabled?.(true)
   chart.setZoomEnabled?.(true)
   chart.setPaneOptions?.({
@@ -21,5 +28,12 @@ export function applyKLineChartMainContainerSettingsV2(chart: Chart) {
     id: candlePaneId,
   })
   chart.setMaxOffsetLeftDistance?.(kLineChartMainContainerSettingsV2.maxOffsetLeftDistance)
-  chart.setMaxOffsetRightDistance?.(kLineChartMainContainerSettingsV2.maxOffsetRightDistance)
+  chart.setMaxOffsetRightDistance?.(
+    options.realtimeVisualOpen === false
+      ? kLineChartMainContainerSettingsV2.maxOffsetLeftDistance
+      : kLineChartMainContainerSettingsV2.maxOffsetRightDistance,
+  )
+  if (options.realtimeVisualOpen === false) {
+    chart.setOffsetRightDistance?.(0)
+  }
 }

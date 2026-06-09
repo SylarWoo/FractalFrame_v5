@@ -1,6 +1,7 @@
 import { buildStoreV6HistoryPageWindow, type StoreV6HistoryPageWindow } from '../historyPageWindowV2'
 import { readStoreV6PageSlice } from '../pageSliceV2'
 import { maxIndicatorWarmupRowsV2 } from './indicatorWarmupPlannerV2'
+import { planCompositeIndicatorDependenciesV2 } from './compositeIndicatorDependencyOrchestratorV2'
 import type { StoreV6IndicatorRegistryV2, StoreV6IndicatorRequestSpecV2 } from './indicatorRequestTypes'
 
 function resolveRequestedDefinitions(options: {
@@ -21,9 +22,10 @@ export async function preheatHistoryWindowForIndicatorsV2(options: {
   requests: StoreV6IndicatorRequestSpecV2[]
   window: StoreV6HistoryPageWindow
 }): Promise<StoreV6HistoryPageWindow> {
+  const plan = planCompositeIndicatorDependenciesV2(options.requests)
   const definitions = resolveRequestedDefinitions({
     registry: options.registry,
-    requests: options.requests,
+    requests: plan.computeRequests,
   })
   const requiredWarmupRows = maxIndicatorWarmupRowsV2({
     definitions,
@@ -47,6 +49,6 @@ export async function preheatHistoryWindowForIndicatorsV2(options: {
       status: 'ready',
     },
     indicatorRegistry: options.registry,
-    indicatorRequests: options.requests,
+    indicatorRequests: plan.computeRequests,
   })
 }

@@ -117,6 +117,7 @@ export const storeV6MaIndicatorDefinitionV2: StoreV6IndicatorDefinitionV2<Partia
   id: storeV6MaIndicatorIdV2,
   paneId: storeV6MaPaneIdV2,
   paneRole: 'main',
+  realtimeUpdateMode: 'window',
   renderRole: 'main-overlay',
   warmup: {
     historyRows: requiredWarmupRows,

@@ -18,7 +18,7 @@ export function createKLineChartDisplayInitOptions() {
 }
 
 export function applyKLineChartDisplayControls(chart: Chart, context: KLineChartDisplayContext) {
-  applyKLineChartLayoutControlsV2(chart)
+  applyKLineChartLayoutControlsV2(chart, context)
   applyKLineChartAxisControlsV2(chart)
   applyKLineChartCandleControlsV2(chart, context)
   applyKLineChartEventOverlayControlsV2(chart, context)

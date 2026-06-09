@@ -10,6 +10,7 @@ import {
   resetKLineChartYAxisToAutoV2,
   restoreKLineChartYAxisAfterDataReadyV2,
 } from './klineChartYAxisRestoreV2'
+import type { KLineChartPageJumpMovementV2 } from './klineChartPageJumpMovementV2'
 
 type ViewportStateHandle = ReturnType<typeof installKLineChartViewportStateV2>
 
@@ -29,6 +30,10 @@ export function resolveRealtimeBoundaryAnchorKeyV2(frame: KLineChartRenderFrameV
     : ''
 }
 
+export function resolveKLineChartViewportScopeV2(frame: KLineChartRenderFrameV2) {
+  return `page:${frame.pageIndex}:${frame.segments.realtime ? 'visual-realtime' : 'history'}`
+}
+
 export function createKLineChartRenderStateControllerV2(
   chart: Chart,
   getViewportState: () => ViewportStateHandle | null,
@@ -38,7 +43,7 @@ export function createKLineChartRenderStateControllerV2(
   let viewportReady = false
 
   function resetViewportContextIfNeeded(frame: KLineChartRenderFrameV2) {
-    const nextKey = `${frame.symbol}:${frame.period}`
+    const nextKey = `${frame.symbol}:${frame.period}:${resolveKLineChartViewportScopeV2(frame)}`
     if (viewportContextKey === nextKey) return
     viewportContextKey = nextKey
     viewportReady = false
@@ -65,7 +70,10 @@ export function createKLineChartRenderStateControllerV2(
       return restoredYAxis
     }
     const restoredHorizontal = options.restoreHorizontal
-      ? restoreKLineChartViewportStateV2(chart, frame.symbol, frame.period)
+      ? restoreKLineChartViewportStateV2(chart, frame.symbol, frame.period, {
+        allowOffsetRightDistance: Boolean(frame.segments.realtime),
+        viewportScope: resolveKLineChartViewportScopeV2(frame),
+      })
       : false
     const restoredYAxis = kLineChartMainContainerSettingsV2.restoreYAxisOnRefresh
       ? restoreKLineChartYAxisAfterDataReadyV2(chart, frame.symbol, frame.period)
@@ -77,14 +85,17 @@ export function createKLineChartRenderStateControllerV2(
   }
 
   return {
-    beginFrameRestore(frame: KLineChartRenderFrameV2, options: { sameRenderWindow: boolean }): KLineChartFrameRestorePlanV2 {
+    beginFrameRestore(frame: KLineChartRenderFrameV2, options: {
+      pageJumpMovement?: KLineChartPageJumpMovementV2 | null
+      sameRenderWindow: boolean
+    }): KLineChartFrameRestorePlanV2 {
       resetViewportContextIfNeeded(frame)
       const anchorRealtimeBoundary = shouldAnchorRealtimeBoundary(frame)
       getViewportState()?.markRestoring()
-      const shouldRestoreViewport = kLineChartMainContainerSettingsV2.restoreHorizontalViewportOnRefresh
+      const shouldRestoreViewport = kLineChartMainContainerSettingsV2.restoreHorizontalViewportOnRefresh && !options.pageJumpMovement
       return {
         anchorRealtimeBoundary,
-        preserveVisibleRange: options.sameRenderWindow && !anchorRealtimeBoundary,
+        preserveVisibleRange: options.sameRenderWindow && !anchorRealtimeBoundary && !options.pageJumpMovement,
         restoreViewport: () => restoreDynamicState(frame, { restoreHorizontal: shouldRestoreViewport }),
       }
     },

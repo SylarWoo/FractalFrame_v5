@@ -1,10 +1,12 @@
 import type { StoreV6HistoryPageWindowIndicators } from '../historyPageWindowV2'
-import { resolveMorganRangeBucketKey, type MorganRangeSegment } from '../morganRangeModel'
+import { resolveMorganRangeBucketKey, type MorganRangeMode, type MorganRangeSegment } from '../morganRangeModel'
 import type { StoreV6RealtimePageWindow } from '../realtimePageWindowV2'
 import type { StoreV6WindowKLine } from '../pageSliceV2'
 import { resolvePeriodSeconds } from '../chartTimeFormatting'
 import { requestRealtimeWindowIndicatorsV2 } from './indicatorRequestControllerV2'
 import { maxIndicatorWarmupRowsV2 } from './indicatorWarmupPlannerV2'
+import { planCompositeIndicatorDependenciesV2 } from './compositeIndicatorDependencyOrchestratorV2'
+import { createStoreV6IndicatorRequestSignatureV2 } from './indicatorRequestSignatureV2'
 import type {
   StoreV6IndicatorRegistryV2,
   StoreV6IndicatorRequestRuntimeV2,
@@ -26,14 +28,6 @@ function rowsKey(rows: StoreV6WindowKLine[]) {
   return `${first?.barKey ?? first?.time ?? 'none'}:${last?.barKey ?? last?.time ?? 'none'}:${rows.length}`
 }
 
-function requestSignature(requests: StoreV6IndicatorRequestSpecV2[] | null | undefined) {
-  if (!requests || requests.length === 0) return 'no-indicators'
-  return requests
-    .filter((request) => request.enabled !== false)
-    .map((request) => `${request.id}:${request.paneId ?? ''}:${JSON.stringify(request.params ?? null)}`)
-    .join('|')
-}
-
 function historyKey(rows: StoreV6WindowKLine[] | null | undefined) {
   return rowsKey(rows ?? [])
 }
@@ -50,7 +44,7 @@ function cacheKey(options: {
     options.window.sessionTimeTo ?? 'open',
     historyKey(options.historyRows),
     rowsKey(options.window.stableRows),
-    requestSignature(options.requests ?? options.window.indicatorRequests),
+    createStoreV6IndicatorRequestSignatureV2(options.requests ?? options.window.indicatorRequests),
   ].join('|')
 }
 
@@ -92,16 +86,18 @@ function isMorganRangeSeriesName(name: string) {
   return name === 'MR_M5' || name === 'MR_M30'
 }
 
-function isMorganRangeM5Request(request: StoreV6IndicatorRequestSpecV2) {
+function resolveMorganRangeRequestMode(request: StoreV6IndicatorRequestSpecV2): MorganRangeMode | null {
   const id = request.id.trim().toUpperCase()
-  return id === 'MR-M5' || id === 'MR_M5'
+  if (id === 'MR-M30' || id === 'MR_M30') return 'D1_M30'
+  if (id === 'MR-M5' || id === 'MR_M5') return 'H4_M5'
+  return null
 }
 
 function isVwapRequest(request: StoreV6IndicatorRequestSpecV2) {
   return request.id.trim().toUpperCase() === 'VWAP'
 }
 
-function isMorganRangeM5BoundaryTail(row: StoreV6WindowKLine | null | undefined, period: string) {
+function isMorganRangeBoundaryTail(row: StoreV6WindowKLine | null | undefined, period: string, mode: MorganRangeMode) {
   if (!row) return false
   const timestamp = typeof row.timestamp === 'number' && Number.isFinite(row.timestamp)
     ? row.timestamp
@@ -111,7 +107,7 @@ function isMorganRangeM5BoundaryTail(row: StoreV6WindowKLine | null | undefined,
   const periodSeconds = resolvePeriodSeconds(period)
   if (timestamp == null || !Number.isFinite(periodSeconds) || periodSeconds <= 0) return false
   const previousTimestamp = timestamp - periodSeconds * 1000
-  return resolveMorganRangeBucketKey(timestamp, 'H4_M5') !== resolveMorganRangeBucketKey(previousTimestamp, 'H4_M5')
+  return resolveMorganRangeBucketKey(timestamp, mode) !== resolveMorganRangeBucketKey(previousTimestamp, mode)
 }
 
 function filterTailIndicatorRequests(options: {
@@ -120,10 +116,21 @@ function filterTailIndicatorRequests(options: {
   tailRow: StoreV6WindowKLine | null
 }) {
   const requests = options.requests ?? []
-  return requests.filter((request) => (
-    !isMorganRangeM5Request(request) ||
-    isMorganRangeM5BoundaryTail(options.tailRow, options.period)
-  ))
+  return requests.filter((request) => {
+    const mode = resolveMorganRangeRequestMode(request)
+    return !mode || isMorganRangeBoundaryTail(options.tailRow, options.period, mode)
+  })
+}
+
+function filterBoundaryMorganRangeRequests(options: {
+  period: string
+  requests?: StoreV6IndicatorRequestSpecV2[]
+  tailRow: StoreV6WindowKLine | null
+}) {
+  return (options.requests ?? []).filter((request) => {
+    const mode = resolveMorganRangeRequestMode(request)
+    return Boolean(mode && isMorganRangeBoundaryTail(options.tailRow, options.period, mode))
+  })
 }
 
 function resolveRequestedDefinitions(options: {
@@ -149,7 +156,7 @@ function sliceTailHistoryRows(options: {
   if (options.requests.some(isVwapRequest)) return rows
   const definitions = resolveRequestedDefinitions({
     registry: options.registry,
-    requests: options.requests,
+    requests: planCompositeIndicatorDependenciesV2(options.requests).computeRequests,
   })
   if (definitions.length === 0) return rows
   const requiredRows = maxIndicatorWarmupRowsV2({
@@ -171,14 +178,41 @@ function isMorganRangeSegment(row: unknown): row is MorganRangeSegment {
     Number.isFinite(segment.lower)
 }
 
-function offsetMorganRangeSegments(rows: unknown[] | undefined, offset: number) {
+function offsetMorganRangeSegments(rows: unknown[] | undefined, offset: number, maxEndIndex?: number) {
   return (rows ?? [])
     .filter(isMorganRangeSegment)
-    .map((segment) => ({
+    .map((segment) => {
+      const startIndex = segment.startIndex + offset
+      const rawEndIndex = segment.endIndex + offset
+      const endIndex = typeof maxEndIndex === 'number' && Number.isFinite(maxEndIndex)
+        ? Math.min(rawEndIndex, maxEndIndex)
+        : rawEndIndex
+      if (endIndex < startIndex) return null
+      return {
+        ...segment,
+        endIndex,
+        startIndex,
+      }
+    })
+    .filter((segment): segment is MorganRangeSegment => segment != null)
+}
+
+function clampMorganRangeSegmentOverlaps(rows: MorganRangeSegment[]) {
+  const sorted = [...rows].sort((left, right) => {
+    const startDiff = Number(left.startIndex) - Number(right.startIndex)
+    if (startDiff !== 0) return startDiff
+    return Number(left.endIndex) - Number(right.endIndex)
+  })
+  return sorted.map((segment, index) => {
+    const next = sorted[index + 1]
+    if (!next) return segment
+    const nextStart = Number(next.startIndex)
+    if (!Number.isFinite(nextStart)) return segment
+    return {
       ...segment,
-      endIndex: segment.endIndex + offset,
-      startIndex: segment.startIndex + offset,
-    }))
+      endIndex: Math.min(Number(segment.endIndex), nextStart - 1),
+    }
+  }).filter((segment) => Number(segment.endIndex) >= Number(segment.startIndex))
 }
 
 function mergeStableAndTailIndicators(options: {
@@ -196,10 +230,12 @@ function mergeStableAndTailIndicators(options: {
     const tail = options.tailIndicators[name]
     if (isMorganRangeSeriesName(name)) {
       const tailOffset = Math.max(0, options.activeRows.length - 1)
-      const rows = [
-        ...offsetMorganRangeSegments(stable?.displayRows ?? stable?.rows, 0),
-        ...offsetMorganRangeSegments(tail?.displayRows ?? tail?.rows, tailOffset),
-      ]
+      const tailSegments = offsetMorganRangeSegments(tail?.displayRows ?? tail?.rows, tailOffset)
+      const stableMaxEndIndex = tailSegments.length > 0 ? tailOffset - 1 : undefined
+      const rows = clampMorganRangeSegmentOverlaps([
+        ...offsetMorganRangeSegments(stable?.displayRows ?? stable?.rows, 0, stableMaxEndIndex),
+        ...tailSegments,
+      ])
       result[name] = {
         ...(stable ?? tail),
         displayRows: rows,
@@ -290,11 +326,38 @@ export async function refreshRealtimeWindowIndicatorsWithStableCacheV2(options: 
       symbol: options.window.symbol,
     })
     : {}
-  const indicators = mergeStableAndTailIndicators({
+  const mergedIndicators = mergeStableAndTailIndicators({
     activeRows: options.window.activeRows,
     stableIndicators: stableEntry.indicators,
     tailIndicators,
   })
+  const boundaryMorganRequests = filterBoundaryMorganRangeRequests({
+    period: options.window.period,
+    requests,
+    tailRow: options.window.tailRow,
+  })
+  const boundaryMorganIndicators = boundaryMorganRequests.length > 0
+    ? await requestRealtimeWindowIndicatorsV2({
+      activeRows: options.window.activeRows,
+      historyRows: sliceTailHistoryRows({
+        historyRows: options.historyRows,
+        registry: options.registry,
+        requests: boundaryMorganRequests,
+        stableRows: [],
+      }),
+      period: options.window.period,
+      registry: options.registry,
+      requests: boundaryMorganRequests,
+      runtime: options.runtime,
+      sessionTimeFrom: options.window.sessionTimeFrom,
+      sessionTimeTo: options.window.sessionTimeTo,
+      symbol: options.window.symbol,
+    })
+    : {}
+  const indicators = {
+    ...mergedIndicators,
+    ...boundaryMorganIndicators,
+  }
   return {
     ...options.window,
     indicators,

@@ -5,17 +5,22 @@ import { BottomWorkspace } from './bottomDrawer/BottomWorkspace'
 import { ChartWorkspaceV2 } from './chart/ChartWorkspaceV2'
 import {
   storeV6MaIndicatorIdV2,
+  storeV6MmfV3IndicatorIdV2,
   storeV6MorganRangeM5RequestIdV2,
+  storeV6MorganRangeM30RequestIdV2,
   storeV6StochIndicatorIdV2,
+  storeV6TsiIndicatorIdV2,
+  storeV6VdoIndicatorIdV2,
+  storeV6VmiIndicatorIdV2,
   storeV6VolIndicatorIdV2,
   storeV6VwapIndicatorIdV2,
   type StoreV6IndicatorRequestSpecV2,
 } from './chart/indicatorRequestV2'
 import {
-  readKLineChartRefreshRestoreConfigV2,
-  restoreKLineChartRefreshTargetV2,
-  writeKLineChartRefreshRestoreConfigV2,
-} from './chart/klineChartRendererV2/klineChartRefreshRestoreConfigV2'
+  readKLineChartRenderPageConfigV2,
+  writeKLineChartRenderPageConfigV2,
+} from './chart/klineChartRendererV2/klineChartRenderPageConfigV2'
+import { restoreRefreshAfterAutoPushTargetV2 } from './mt5DataCenter/refreshAfterAutoPusherV2'
 import { kLineChartConfigV2 } from './chart/klineChartRendererV2/klineChartConfigV2'
 import { traceKLineChartPageV2 } from './chart/klineChartRendererV2/klineChartPageDebugProbeV2'
 import type { ChartLoadState, ChartPageNavigation, ChartPageTarget } from './chart/chartRuntimeTypes'
@@ -28,6 +33,7 @@ import {
 } from './chart/pagePartition/historyPageDailyRolloverV2'
 import type { StoreV6HistoryPageWindow } from './chart/historyPageWindowV2'
 import { resolveStoreV6PagePartitionMode } from './chart/pagePartition/pagePartitionBuilder'
+import { hasStoreV6PeriodPageSystemV2 } from './chart/pagePartition/periodPageSystemV2'
 import {
   LEFT_RAIL_BRUSH_SVGREPO_ICON_48,
   LEFT_RAIL_CURSOR_ARROW_SVGREPO_ICON_48,
@@ -64,6 +70,21 @@ import { TopBar } from './topbar/TopBar'
 import { visibilityRangeChangedEvent } from './visibilityRange/visibilityRangeModel'
 import './openableControl.css'
 import './AppShell.css'
+
+const appShellRefreshRestoreFlights = new Map<string, ReturnType<typeof restoreRefreshAfterAutoPushTargetV2>>()
+
+function requestAppShellRefreshRestoreTargetV2(key: string) {
+  const existing = appShellRefreshRestoreFlights.get(key)
+  if (existing) return existing
+  const flight = restoreRefreshAfterAutoPushTargetV2()
+    .finally(() => {
+      if (appShellRefreshRestoreFlights.get(key) === flight) {
+        appShellRefreshRestoreFlights.delete(key)
+      }
+    })
+  appShellRefreshRestoreFlights.set(key, flight)
+  return flight
+}
 
 const leftToolbarItems = [
   { type: 'button', label: 'Cursor', svg: LEFT_RAIL_CURSOR_ARROW_SVGREPO_ICON_48 },
@@ -195,7 +216,8 @@ function periodToChartPeriod(period: string) {
 }
 
 function isIsolatedChartPeriod(period: string | null | undefined) {
-  return resolveStoreV6PagePartitionMode(period) === 'm5-time'
+  const mode = resolveStoreV6PagePartitionMode(period)
+  return mode === 'm5-time' || mode === 'm30-time' || !hasStoreV6PeriodPageSystemV2(period)
 }
 
 function createBlankChartTarget(symbol: string, period: string) {
@@ -217,7 +239,7 @@ function createBlankChartTarget(symbol: string, period: string) {
 
 function readInitialChartTarget(): ChartTarget {
   const restoreConfig = kLineChartConfigV2.refreshRestore.restoreLastPageOnRefresh
-    ? readKLineChartRefreshRestoreConfigV2()
+    ? readKLineChartRenderPageConfigV2()
     : null
   if (restoreConfig && isIsolatedChartPeriod(restoreConfig.period)) {
     return createBlankChartTarget(restoreConfig.symbol, restoreConfig.period)
@@ -323,15 +345,41 @@ export function AppShell() {
   const loadedIndicatorKeys = indicatorsController.loadedIndicatorKeys
   const chartIndicatorRequestsV2 = useMemo<StoreV6IndicatorRequestSpecV2[]>(() => {
     const requests: StoreV6IndicatorRequestSpecV2[] = []
+    const normalizedChartPeriod = chartTarget.period.trim().toUpperCase()
+    const currentPeriodMorganRangeRequestId = normalizedChartPeriod === 'M30'
+      ? storeV6MorganRangeM30RequestIdV2
+      : normalizedChartPeriod === 'M5'
+        ? storeV6MorganRangeM5RequestIdV2
+        : null
+    const currentPeriodMorganRangeLoaded = normalizedChartPeriod === 'M30'
+      ? loadedIndicatorKeys.includes('MR-M30')
+      : normalizedChartPeriod === 'M5'
+        ? loadedIndicatorKeys.includes('MR-M5')
+        : false
     if (loadedIndicatorKeys.includes('MA')) {
       requests.push({
         id: storeV6MaIndicatorIdV2,
         params: indicatorsController.settings.ma,
       })
     }
-    if (loadedIndicatorKeys.includes('MR-M5')) {
+    if (loadedIndicatorKeys.includes('MMF_V3')) {
       requests.push({
-        id: storeV6MorganRangeM5RequestIdV2,
+        id: storeV6MmfV3IndicatorIdV2,
+        params: {
+          maSettings: indicatorsController.settings.ma,
+          morganRangeMode: normalizedChartPeriod === 'M30' && loadedIndicatorKeys.includes('MR-M30') ? 'D1_M30' : 'H4_M5',
+          settings: indicatorsController.settings.mmfV3,
+          stochSettings: indicatorsController.settings.stoch,
+          tsiSettings: indicatorsController.settings.tsi,
+          vdoSettings: indicatorsController.settings.vdo,
+          vmiSettings: indicatorsController.settings.vmi,
+          vwapSettings: indicatorsController.settings.vwap,
+        },
+      })
+    }
+    if (currentPeriodMorganRangeLoaded && currentPeriodMorganRangeRequestId) {
+      requests.push({
+        id: currentPeriodMorganRangeRequestId,
         params: indicatorsController.settings.mr,
       })
     }
@@ -353,8 +401,26 @@ export function AppShell() {
         params: indicatorsController.settings.stoch,
       })
     }
+    if (loadedIndicatorKeys.includes('TSI')) {
+      requests.push({
+        id: storeV6TsiIndicatorIdV2,
+        params: indicatorsController.settings.tsi,
+      })
+    }
+    if (loadedIndicatorKeys.includes('VDO')) {
+      requests.push({
+        id: storeV6VdoIndicatorIdV2,
+        params: indicatorsController.settings.vdo,
+      })
+    }
+    if (loadedIndicatorKeys.includes('VMI')) {
+      requests.push({
+        id: storeV6VmiIndicatorIdV2,
+        params: indicatorsController.settings.vmi,
+      })
+    }
     return requests
-  }, [indicatorsController.settings.ma, indicatorsController.settings.mr, indicatorsController.settings.stoch, indicatorsController.settings.vol, indicatorsController.settings.vwap, loadedIndicatorKeys])
+  }, [chartTarget.period, indicatorsController.settings.ma, indicatorsController.settings.mmfV3, indicatorsController.settings.mr, indicatorsController.settings.stoch, indicatorsController.settings.tsi, indicatorsController.settings.vdo, indicatorsController.settings.vmi, indicatorsController.settings.vol, indicatorsController.settings.vwap, loadedIndicatorKeys])
   const chartWorkspaceTarget = useMemo(() => ({
     ...chartTarget,
     indicatorRequests: chartIndicatorRequestsV2,
@@ -446,6 +512,37 @@ export function AppShell() {
   useEffect(() => {
     activeRightDrawerRef.current = activeRightDrawer
   }, [activeRightDrawer])
+
+  useEffect(() => {
+    const period = periodToChartPeriod(chartTarget.period)
+    const historyPageWindow = chartTarget.historyPageWindow
+    if (!isIsolatedChartPeriod(period) || !historyPageWindow) return
+    writeKLineChartRenderPageConfigV2({
+      page: chartTarget.page ?? {
+        fromGlobalIndex: historyPageWindow.boundary.actualFromGlobalIndex,
+        index: historyPageWindow.pageIndex,
+        limit: historyPageWindow.historyRows.length,
+        realtime: false,
+        rows: historyPageWindow.historyRows.length,
+        timeFrom: historyPageWindow.boundary.actualTimeFrom,
+        timeTo: historyPageWindow.boundary.actualTimeTo,
+        toGlobalIndex: historyPageWindow.boundary.actualToGlobalIndex,
+      },
+      pageIndex: chartTarget.page?.index ?? historyPageWindow.pageIndex,
+      period,
+      realtimeEnabled: chartTarget.realtimeEnabled,
+      symbol: chartTarget.symbol,
+      totalRows: chartTarget.totalRows,
+    })
+  }, [
+    chartTarget.historyPageWindow?.key,
+    chartTarget.historyPageWindow?.pageIndex,
+    chartTarget.page?.index,
+    chartTarget.period,
+    chartTarget.realtimeEnabled,
+    chartTarget.symbol,
+    chartTarget.totalRows,
+  ])
 
   useEffect(() => {
     const handleObjectTreeDrawingsChanged = (event: Event) => {
@@ -591,11 +688,22 @@ export function AppShell() {
       symbol: nextTarget.symbol,
     })
     if (isIsolatedChartPeriod(period) && nextTarget.historyPageWindow) {
-      writeKLineChartRefreshRestoreConfigV2({
+      writeKLineChartRenderPageConfigV2({
+        page: nextTarget.page ?? {
+          fromGlobalIndex: nextTarget.historyPageWindow.boundary.actualFromGlobalIndex,
+          index: nextTarget.historyPageWindow.pageIndex,
+          limit: nextTarget.historyPageWindow.historyRows.length,
+          realtime: false,
+          rows: nextTarget.historyPageWindow.historyRows.length,
+          timeFrom: nextTarget.historyPageWindow.boundary.actualTimeFrom,
+          timeTo: nextTarget.historyPageWindow.boundary.actualTimeTo,
+          toGlobalIndex: nextTarget.historyPageWindow.boundary.actualToGlobalIndex,
+        },
         pageIndex: nextTarget.page?.index ?? nextTarget.historyPageWindow.pageIndex,
         period,
         realtimeEnabled: nextTarget.realtimeEnabled,
         symbol: nextTarget.symbol,
+        totalRows: nextTarget.totalRows,
       })
       setChartTarget({
         ...nextTarget,
@@ -609,6 +717,14 @@ export function AppShell() {
       return
     }
     if (isIsolatedChartPeriod(period) && nextTarget.page?.blank !== true) {
+      writeKLineChartRenderPageConfigV2({
+        page: nextTarget.page ?? null,
+        pageIndex: nextTarget.page?.index ?? 1,
+        period,
+        realtimeEnabled: nextTarget.realtimeEnabled,
+        symbol: nextTarget.symbol,
+        totalRows: nextTarget.totalRows,
+      })
       setChartTarget({
         ...createBlankChartTarget(nextTarget.symbol, period),
         reloadId: nextTarget.reloadId,
@@ -635,17 +751,24 @@ export function AppShell() {
     let cancelled = false
     if (!kLineChartConfigV2.refreshRestore.restoreLastPageOnRefresh) return
     if (!isIsolatedChartPeriod(chartTarget.period) || chartTarget.historyPageWindow || chartTarget.page?.blank !== true) return
+    const restoreKey = [
+      chartTarget.symbol.trim().toUpperCase(),
+      chartTarget.period.trim().toUpperCase(),
+      chartTarget.page?.index ?? 'blank',
+    ].join(':')
     traceKLineChartPageV2('AppShell.restoreEffect.start', {
       currentPageIndex: chartTarget.page?.index ?? null,
       period: chartTarget.period,
+      restoreKey,
       symbol: chartTarget.symbol,
     })
-    void restoreKLineChartRefreshTargetV2()
+    void requestAppShellRefreshRestoreTargetV2(restoreKey)
       .then((target) => {
         traceKLineChartPageV2('AppShell.restoreEffect.result', {
           cancelled,
           pageIndex: target?.page.index ?? null,
           period: target?.period ?? null,
+          restoreKey,
           symbol: target?.symbol ?? null,
         })
         if (cancelled || !target) return
@@ -660,13 +783,19 @@ export function AppShell() {
           totalRows: target.totalRows,
         })
       })
-      .catch(() => {
+      .catch((err) => {
+        traceKLineChartPageV2('AppShell.restoreEffect.error', {
+          error: err instanceof Error ? err.message : String(err),
+          period: chartTarget.period,
+          restoreKey,
+          symbol: chartTarget.symbol,
+        })
         // A missing or stale local restore cache should leave the clean blank chart.
       })
     return () => {
       cancelled = true
     }
-  }, [chartTarget.historyPageWindow, chartTarget.page?.blank, chartTarget.period])
+  }, [chartTarget.historyPageWindow, chartTarget.page?.blank, chartTarget.page?.index, chartTarget.period, chartTarget.symbol])
 
   return (
     <div className="ff-app-shell">

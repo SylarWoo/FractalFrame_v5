@@ -187,4 +187,181 @@ describe('chartRenderCacheV2', () => {
     expect(loaded.panes.MR_M5).toBeDefined()
     expect(unloaded.panes.MR_M5).toBeUndefined()
   })
+
+  it('passes VDO indicator rows from the history window into the final frame pane', () => {
+    clearChartRenderCacheV2()
+    const rows = [
+      row(1_000, 2290, 'store-v6-page-slice-v2'),
+      row(1_300, 2295, 'store-v6-page-slice-v2'),
+    ]
+    const history = {
+      ...historyWindow(rows),
+      indicators: {
+        VDO: {
+          displayRows: [
+            { barKey: rows[0].barKey, time: rows[0].time, timestamp: rows[0].timestamp, vdo: 0.1, vdoMa: 0.05 },
+            { barKey: rows[1].barKey, time: rows[1].time, timestamp: rows[1].timestamp, vdo: 0.2, vdoMa: 0.1 },
+          ],
+          key: 'VDO:history:XAUUSDm:M5:1',
+          paneId: 'vdo_pane',
+          paneRole: 'sub',
+          renderRole: 'sub-pane',
+          rows: [],
+          settings: { length: 5 },
+          source: 'store-v6-vdo-indicator-v2',
+        },
+      },
+      renderData: {
+        indicators: {
+          VDO: {
+            displayRows: [
+              { barKey: rows[0].barKey, time: rows[0].time, timestamp: rows[0].timestamp, vdo: 0.1, vdoMa: 0.05 },
+              { barKey: rows[1].barKey, time: rows[1].time, timestamp: rows[1].timestamp, vdo: 0.2, vdoMa: 0.1 },
+            ],
+            key: 'VDO:history:XAUUSDm:M5:1',
+            paneId: 'vdo_pane',
+            paneRole: 'sub',
+            renderRole: 'sub-pane',
+            rows: [],
+            settings: { length: 5 },
+            source: 'store-v6-vdo-indicator-v2',
+          },
+        },
+        klineRows: rows,
+      },
+    } satisfies StoreV6HistoryPageWindow
+
+    const frame = buildCachedKLineChartRenderFrameV2({
+      historyWindow: history,
+      realtimeWindow: null,
+    }).frame
+
+    expect(frame.panes.VDO).toMatchObject({
+      paneId: 'vdo_pane',
+      paneRole: 'sub',
+      renderRole: 'sub-pane',
+      rows: [
+        expect.objectContaining({ barKey: rows[0].barKey, vdo: 0.1, vdoMa: 0.05 }),
+        expect.objectContaining({ barKey: rows[1].barKey, vdo: 0.2, vdoMa: 0.1 }),
+      ],
+    })
+  })
+
+  it('passes VMI indicator rows from the history window into the final frame pane', () => {
+    clearChartRenderCacheV2()
+    const rows = [
+      row(1_000, 2290, 'store-v6-page-slice-v2'),
+      row(1_300, 2295, 'store-v6-page-slice-v2'),
+    ]
+    const history = {
+      ...historyWindow(rows),
+      indicators: {
+        VMI: {
+          displayRows: [
+            { barKey: rows[0].barKey, histogram: 0.1, time: rows[0].time, timestamp: rows[0].timestamp },
+            { barKey: rows[1].barKey, histogram: -0.2, time: rows[1].time, timestamp: rows[1].timestamp },
+          ],
+          key: 'VMI:history:XAUUSDm:M5:1',
+          paneId: 'vmi_pane',
+          paneRole: 'sub',
+          renderRole: 'sub-pane',
+          rows: [],
+          settings: { fastLength: 5, slowLength: 8 },
+          source: 'store-v6-vmi-indicator-v2',
+        },
+      },
+      renderData: {
+        indicators: {
+          VMI: {
+            displayRows: [
+              { barKey: rows[0].barKey, histogram: 0.1, time: rows[0].time, timestamp: rows[0].timestamp },
+              { barKey: rows[1].barKey, histogram: -0.2, time: rows[1].time, timestamp: rows[1].timestamp },
+            ],
+            key: 'VMI:history:XAUUSDm:M5:1',
+            paneId: 'vmi_pane',
+            paneRole: 'sub',
+            renderRole: 'sub-pane',
+            rows: [],
+            settings: { fastLength: 5, slowLength: 8 },
+            source: 'store-v6-vmi-indicator-v2',
+          },
+        },
+        klineRows: rows,
+      },
+    } satisfies StoreV6HistoryPageWindow
+
+    const frame = buildCachedKLineChartRenderFrameV2({
+      historyWindow: history,
+      realtimeWindow: null,
+    }).frame
+
+    expect(frame.panes.VMI).toMatchObject({
+      paneId: 'vmi_pane',
+      paneRole: 'sub',
+      renderRole: 'sub-pane',
+      rows: [
+        expect.objectContaining({ barKey: rows[0].barKey, histogram: 0.1 }),
+        expect.objectContaining({ barKey: rows[1].barKey, histogram: -0.2 }),
+      ],
+    })
+  })
+
+  it('passes MMF_V3 indicator rows from the history window into the final frame pane', () => {
+    clearChartRenderCacheV2()
+    const rows = [
+      row(1_000, 2290, 'store-v6-page-slice-v2'),
+      row(1_300, 2295, 'store-v6-page-slice-v2'),
+    ]
+    const history = {
+      ...historyWindow(rows),
+      indicators: {
+        MMF_V3: {
+          displayRows: [
+            { barKey: rows[0].barKey, highMarker: 2300, time: rows[0].time, timestamp: rows[0].timestamp },
+            { barKey: rows[1].barKey, lowMarker: 2280, time: rows[1].time, timestamp: rows[1].timestamp },
+          ],
+          key: 'MMF_V3:history:XAUUSDm:M5:1',
+          paneId: 'candle_pane',
+          paneRole: 'main',
+          renderRole: 'main-overlay',
+          rows: [],
+          settings: { settings: { showHigh: true, showLow: true } },
+          source: 'store-v6-mmf-v3-indicator-v2',
+        },
+      },
+      renderData: {
+        indicators: {
+          MMF_V3: {
+            displayRows: [
+              { barKey: rows[0].barKey, highMarker: 2300, time: rows[0].time, timestamp: rows[0].timestamp },
+              { barKey: rows[1].barKey, lowMarker: 2280, time: rows[1].time, timestamp: rows[1].timestamp },
+            ],
+            key: 'MMF_V3:history:XAUUSDm:M5:1',
+            paneId: 'candle_pane',
+            paneRole: 'main',
+            renderRole: 'main-overlay',
+            rows: [],
+            settings: { settings: { showHigh: true, showLow: true } },
+            source: 'store-v6-mmf-v3-indicator-v2',
+          },
+        },
+        klineRows: rows,
+      },
+    } satisfies StoreV6HistoryPageWindow
+
+    const frame = buildCachedKLineChartRenderFrameV2({
+      historyWindow: history,
+      realtimeWindow: null,
+    }).frame
+
+    expect(frame.panes.MMF_V3).toMatchObject({
+      paneId: 'candle_pane',
+      paneRole: 'main',
+      renderRole: 'main-overlay',
+      rows: [
+        expect.objectContaining({ barKey: rows[0].barKey, highMarker: 2300 }),
+        expect.objectContaining({ barKey: rows[1].barKey, lowMarker: 2280 }),
+      ],
+    })
+  })
 })

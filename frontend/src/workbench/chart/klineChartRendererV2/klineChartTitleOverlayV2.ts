@@ -8,6 +8,10 @@ import {
   titlePaneSpecs,
 } from '../paneTitleOverlayContent'
 import type { PaneTitleContext, PaneTitleLine, PaneTitlePart, PaneTitlePart as PaneTitlePartType } from '../paneTitleOverlayContent'
+import {
+  isKLineChartHorizontalDragInProgressV2,
+  kLineChartHorizontalDragEndEventV2,
+} from './klineChartInteractionStateV2'
 import './klineChartTitleOverlayV2.css'
 
 function renderPart(part: PaneTitlePartType) {
@@ -106,6 +110,11 @@ export function installKLineChartTitleOverlayV2(chart: Chart, container: HTMLEle
     })
   }
 
+  function scheduleRenderAfterHorizontalDrag() {
+    if (isKLineChartHorizontalDragInProgressV2()) return
+    scheduleRender()
+  }
+
   const handleCrosshairChange = (payload: unknown) => {
     const nextIndex = readCrosshairDataIndex(payload)
     if (nextIndex === crosshairIndex) return
@@ -116,10 +125,9 @@ export function installKLineChartTitleOverlayV2(chart: Chart, container: HTMLEle
 
   chart.subscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
   chart.subscribeAction(ActionType.OnDataReady, handleChartChange)
-  chart.subscribeAction(ActionType.OnPaneDrag, handleChartChange)
-  chart.subscribeAction(ActionType.OnScroll, handleChartChange)
-  chart.subscribeAction(ActionType.OnVisibleRangeChange, handleChartChange)
+  chart.subscribeAction(ActionType.OnPaneDrag, scheduleRenderAfterHorizontalDrag)
   chart.subscribeAction(ActionType.OnZoom, handleChartChange)
+  window.addEventListener(kLineChartHorizontalDragEndEventV2, handleChartChange)
   window.addEventListener('resize', handleChartChange)
   window.addEventListener(chartManualYAxisRangeChangeEvent, handleChartChange)
   scheduleRender()
@@ -129,10 +137,9 @@ export function installKLineChartTitleOverlayV2(chart: Chart, container: HTMLEle
       if (frameId !== 0) window.cancelAnimationFrame(frameId)
       chart.unsubscribeAction(ActionType.OnCrosshairChange, handleCrosshairChange)
       chart.unsubscribeAction(ActionType.OnDataReady, handleChartChange)
-      chart.unsubscribeAction(ActionType.OnPaneDrag, handleChartChange)
-      chart.unsubscribeAction(ActionType.OnScroll, handleChartChange)
-      chart.unsubscribeAction(ActionType.OnVisibleRangeChange, handleChartChange)
+      chart.unsubscribeAction(ActionType.OnPaneDrag, scheduleRenderAfterHorizontalDrag)
       chart.unsubscribeAction(ActionType.OnZoom, handleChartChange)
+      window.removeEventListener(kLineChartHorizontalDragEndEventV2, handleChartChange)
       window.removeEventListener('resize', handleChartChange)
       window.removeEventListener(chartManualYAxisRangeChangeEvent, handleChartChange)
       root.remove()

@@ -13,33 +13,24 @@ import { KLineChartOverlayLayerV2 } from './KLineChartOverlayLayerV2'
 import {
   applyKLineChartPreDataRenderConfigV2,
   createKLineChartRenderStateControllerV2,
+  resolveKLineChartViewportScopeV2,
 } from './klineChartRenderStateControllerV2'
 import { installKLineChartMainYAxisInteractionV2 } from './klineChartMainYAxisInteractionV2'
-import { installKLineChartRealtimePaneV2 } from './KLineChartRealtimePaneV2'
 import { setKLineChartRealtimeXAxisFrameV2 } from './klineChartRealtimeXAxisV2'
 import { KLineChartSubPaneStackV2 } from './KLineChartSubPaneStackV2'
 import { installKLineChartViewportStateV2 } from './klineChartViewportStateV2'
 import { installKLineChartYAxisRestorePersistenceV2 } from './klineChartYAxisRestoreV2'
-import { installKLineChartMainVolumeOverlayV2 } from './klineChartMainVolumeOverlayV2'
-import { installKLineChartMainMaOverlayV2 } from './klineChartMainMaOverlayV2'
-import { installKLineChartMainMorganRangeOverlayV2 } from './klineChartMainMorganRangeOverlayV2'
-import { installKLineChartMainVwapOverlayV2 } from './klineChartMainVwapOverlayV2'
-import { installKLineChartSubPaneStochV2 } from './klineChartSubPaneStochV2'
-import { installKLineChartAxisLabelLayerV2 } from './KLineChartAxisLabelLayerV2'
-import {
-  buildKLineChartRenderWindowKeyV2,
-  canApplyKLineChartPaneOnlyUpdateV2,
-  canApplyKLineChartTailUpdateV2,
-} from './klineChartFrameLifecycleV2'
-import { recordKLineChartProbeEventV2 } from './klineChartProbeV2'
-import { traceKLineChartPageV2 } from './klineChartPageDebugProbeV2'
-import { applyKLineChartFrameTailUpdate, applyKLineChartFrameToChart } from './klineChartRenderer'
+import { installKLineChartOverlayControllerV2 } from './klineChartOverlayControllerV2'
+import { applyKLineChartFrameUpdateV2 } from './klineChartFrameApplyControllerV2'
+import { ensureKLineChartInteractionStateV2, kLineChartHorizontalDragEndEventV2 } from './klineChartInteractionStateV2'
+import { installKLineChartBenchmarkV2 } from './klineChartBenchmarkV2'
 import './klineChartHostV2.css'
 
 declare global {
   interface Window {
     __ffKLineChartV2?: Chart | null
     __ffKLineChartV2FrameDebug?: unknown
+    __ffKLineChartV2RestorePlanDebug?: unknown
   }
 }
 
@@ -61,13 +52,7 @@ export function KLineChartHostV2({
   const chartRef = useRef<HTMLDivElement | null>(null)
   const chartInstanceRef = useRef<Chart | null>(null)
   const displayControllerRef = useRef<ReturnType<typeof installKLineChartDisplayController> | null>(null)
-  const realtimePaneRef = useRef<ReturnType<typeof installKLineChartRealtimePaneV2> | null>(null)
-  const mainMaOverlayRef = useRef<ReturnType<typeof installKLineChartMainMaOverlayV2> | null>(null)
-  const mainMorganRangeOverlayRef = useRef<ReturnType<typeof installKLineChartMainMorganRangeOverlayV2> | null>(null)
-  const mainVwapOverlayRef = useRef<ReturnType<typeof installKLineChartMainVwapOverlayV2> | null>(null)
-  const mainVolumeOverlayRef = useRef<ReturnType<typeof installKLineChartMainVolumeOverlayV2> | null>(null)
-  const subPaneStochRef = useRef<ReturnType<typeof installKLineChartSubPaneStochV2> | null>(null)
-  const axisLabelLayerRef = useRef<ReturnType<typeof installKLineChartAxisLabelLayerV2> | null>(null)
+  const overlayControllerRef = useRef<ReturnType<typeof installKLineChartOverlayControllerV2> | null>(null)
   const yAxisInteractionRef = useRef<ReturnType<typeof installKLineChartMainYAxisInteractionV2> | null>(null)
   const yAxisStateRef = useRef<ReturnType<typeof installKLineChartYAxisRestorePersistenceV2> | null>(null)
   const appliedFrameKeyRef = useRef('')
@@ -75,21 +60,43 @@ export function KLineChartHostV2({
   const previousFrameRef = useRef<KLineChartRenderFrameV2 | null>(null)
   const renderStateControllerRef = useRef<ReturnType<typeof createKLineChartRenderStateControllerV2> | null>(null)
   const viewportStateRef = useRef<ReturnType<typeof installKLineChartViewportStateV2> | null>(null)
-  const displayContextRef = useRef({ displayName, period: frame.period, realtimeStart: pageNavigation?.realtimeStart ?? null, symbol: frame.symbol })
+  const benchmarkRef = useRef<ReturnType<typeof installKLineChartBenchmarkV2> | null>(null)
+  const chartDragInProgressRef = useRef(false)
+  const realtimeVisualOpen = Boolean(frame.segments.realtime)
+  const displayContextRef = useRef({
+    displayName,
+    period: frame.period,
+    realtimeStart: pageNavigation?.realtimeStart ?? null,
+    realtimeVisualOpen,
+    symbol: frame.symbol,
+    viewportScope: resolveKLineChartViewportScopeV2(frame),
+  })
 
-  displayContextRef.current = { displayName, period: frame.period, realtimeStart: pageNavigation?.realtimeStart ?? null, symbol: frame.symbol }
+  displayContextRef.current = {
+    displayName,
+    period: frame.period,
+    realtimeStart: pageNavigation?.realtimeStart ?? null,
+    realtimeVisualOpen,
+    symbol: frame.symbol,
+    viewportScope: resolveKLineChartViewportScopeV2(frame),
+  }
   if (import.meta.env.DEV) {
     window.__ffKLineChartV2FrameDebug = {
       frameKey: frame.key,
       mainRows: frame.mainRows.length,
       realtimeSegment: frame.segments.realtime ?? null,
       symbol: frame.symbol,
+      viewportScope: resolveKLineChartViewportScopeV2(frame),
     }
   }
+  ensureKLineChartInteractionStateV2()
 
   useEffect(() => {
     if (!chartRef.current) return
     const container = chartRef.current
+    appliedFrameKeyRef.current = ''
+    appliedRenderWindowKeyRef.current = ''
+    previousFrameRef.current = null
     setKLineChartRealtimeXAxisFrameV2(frame)
     const chart = init(container, createKLineChartDisplayInitOptions())
     chartInstanceRef.current = chart ?? null
@@ -101,27 +108,30 @@ export function KLineChartHostV2({
         symbol: displayContextRef.current.symbol,
       }))
       yAxisInteractionRef.current = installKLineChartMainYAxisInteractionV2(chart, {
-        onRangeChange: () => yAxisStateRef.current?.saveNow(),
+        onRangeChange: () => {
+          yAxisStateRef.current?.saveNow()
+          overlayControllerRef.current?.scheduleMainPriceScaleRender()
+        },
       })
       displayControllerRef.current = installKLineChartDisplayController(chart, container, displayContextRef.current)
-      realtimePaneRef.current = installKLineChartRealtimePaneV2(chart, container, frame, pageNavigation)
-      axisLabelLayerRef.current = installKLineChartAxisLabelLayerV2(chart, container, () => ({
-        period: displayContextRef.current.period,
-        symbol: displayContextRef.current.symbol,
-      }))
-      mainMaOverlayRef.current = installKLineChartMainMaOverlayV2(chart, frame)
-      mainMorganRangeOverlayRef.current = installKLineChartMainMorganRangeOverlayV2(chart, frame)
-      mainVwapOverlayRef.current = installKLineChartMainVwapOverlayV2(chart, frame)
-      mainVolumeOverlayRef.current = installKLineChartMainVolumeOverlayV2(chart, frame)
-      subPaneStochRef.current = installKLineChartSubPaneStochV2(chart, frame)
+      overlayControllerRef.current = installKLineChartOverlayControllerV2({
+        chart,
+        container,
+        displayContext: () => displayContextRef.current,
+        frame,
+        pageNavigation,
+      })
       viewportStateRef.current = installKLineChartViewportStateV2(chart, () => ({
         period: displayContextRef.current.period,
         symbol: displayContextRef.current.symbol,
+        viewportScope: displayContextRef.current.viewportScope,
       }))
       renderStateControllerRef.current = createKLineChartRenderStateControllerV2(chart, () => viewportStateRef.current)
+      benchmarkRef.current = installKLineChartBenchmarkV2(chart, () => previousFrameRef.current ?? frame)
     }
 
     let resizeFrameId = 0
+    let dragStart: { x: number; y: number } | null = null
     const resize = () => {
       resizeFrameId = 0
       chart?.resize()
@@ -131,36 +141,62 @@ export function KLineChartHostV2({
       resizeFrameId = window.requestAnimationFrame(resize)
     }
     const resizeObserver = new ResizeObserver(scheduleResize)
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0) return
+      dragStart = { x: event.clientX, y: event.clientY }
+    }
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!dragStart) return
+      const distanceX = Math.abs(event.clientX - dragStart.x)
+      const distanceY = Math.abs(event.clientY - dragStart.y)
+      if (distanceX >= 4 && distanceX > distanceY) {
+        chartDragInProgressRef.current = true
+        if (window.__ffKLineChartV2Interaction) {
+          window.__ffKLineChartV2Interaction.horizontalDragInProgress = true
+        }
+      }
+    }
+    const handleMouseUp = () => {
+      const wasDragging = chartDragInProgressRef.current
+      dragStart = null
+      chartDragInProgressRef.current = false
+      if (window.__ffKLineChartV2Interaction) {
+        window.__ffKLineChartV2Interaction.horizontalDragInProgress = false
+      }
+      if (wasDragging) window.dispatchEvent(new Event(kLineChartHorizontalDragEndEventV2))
+    }
     resizeObserver.observe(container)
     window.addEventListener('resize', scheduleResize)
+    container.addEventListener('mousedown', handleMouseDown)
+    window.addEventListener('mousemove', handleMouseMove, true)
+    window.addEventListener('mouseup', handleMouseUp, true)
+    window.addEventListener('mouseleave', handleMouseUp, true)
     scheduleResize()
 
     return () => {
       if (resizeFrameId !== 0) window.cancelAnimationFrame(resizeFrameId)
       resizeObserver.disconnect()
       window.removeEventListener('resize', scheduleResize)
+      container.removeEventListener('mousedown', handleMouseDown)
+      window.removeEventListener('mousemove', handleMouseMove, true)
+      window.removeEventListener('mouseup', handleMouseUp, true)
+      window.removeEventListener('mouseleave', handleMouseUp, true)
+      chartDragInProgressRef.current = false
+      if (window.__ffKLineChartV2Interaction) {
+        window.__ffKLineChartV2Interaction.horizontalDragInProgress = false
+      }
       displayControllerRef.current?.destroy()
       displayControllerRef.current = null
       yAxisInteractionRef.current?.destroy()
       yAxisInteractionRef.current = null
       yAxisStateRef.current?.destroy()
       yAxisStateRef.current = null
-      realtimePaneRef.current?.destroy()
-      realtimePaneRef.current = null
-      axisLabelLayerRef.current?.destroy()
-      axisLabelLayerRef.current = null
-      mainMaOverlayRef.current?.destroy()
-      mainMaOverlayRef.current = null
-      mainMorganRangeOverlayRef.current?.destroy()
-      mainMorganRangeOverlayRef.current = null
-      mainVwapOverlayRef.current?.destroy()
-      mainVwapOverlayRef.current = null
-      mainVolumeOverlayRef.current?.destroy()
-      mainVolumeOverlayRef.current = null
-      subPaneStochRef.current?.destroy()
-      subPaneStochRef.current = null
+      overlayControllerRef.current?.destroy()
+      overlayControllerRef.current = null
       viewportStateRef.current?.destroy()
       viewportStateRef.current = null
+      benchmarkRef.current?.destroy()
+      benchmarkRef.current = null
       renderStateControllerRef.current = null
       chartInstanceRef.current = null
       if (import.meta.env.DEV) window.__ffKLineChartV2 = null
@@ -172,188 +208,38 @@ export function KLineChartHostV2({
     const chart = chartInstanceRef.current
     if (!chart) return
     displayControllerRef.current?.updateContext(displayContextRef.current)
-    axisLabelLayerRef.current?.updateContext()
-  }, [displayName, frame.period, frame.symbol, pageNavigation?.realtimeStart])
+    overlayControllerRef.current?.updateDisplayContext()
+  }, [displayName, frame.period, frame.symbol, pageNavigation?.realtimeStart, realtimeVisualOpen])
 
   useEffect(() => {
     const chart = chartInstanceRef.current
     const renderStateController = renderStateControllerRef.current
     if (!chart || !renderStateController) return
-    const renderWindowKey = buildKLineChartRenderWindowKeyV2(frame)
-    const sameRenderWindow = appliedRenderWindowKeyRef.current === renderWindowKey
-    traceKLineChartPageV2('KLineChartHost.frame.received', {
-      frameKey: frame.key,
-      historyKey: frame.segments.history.key,
-      mainRows: frame.mainRows.length,
-      pageIndex: frame.pageIndex,
-      realtimeRows: frame.segments.realtime?.rows ?? 0,
-      renderWindowKey,
-      sameRenderWindow,
-    })
-    if (appliedFrameKeyRef.current === frame.key) {
-      recordKLineChartProbeEventV2({
-        frame,
-        reason: 'same-frame-key',
-        renderWindowKey,
-        sameRenderWindow,
-        type: 'skipped',
-      })
-      return
-    }
-    setKLineChartRealtimeXAxisFrameV2(frame)
-    if (import.meta.env.DEV) {
-      window.__ffKLineChartV2FrameDebug = {
-        applied: true,
-        frameKey: frame.key,
-        mainRows: frame.mainRows.length,
-        realtimeSegment: frame.segments.realtime ?? null,
-        symbol: frame.symbol,
-      }
-    }
-    const previousFrame = previousFrameRef.current
-    const canPaneOnlyUpdate = canApplyKLineChartPaneOnlyUpdateV2({
-      current: frame,
-      previous: previousFrame,
-      sameRenderWindow,
-    })
-    if (canPaneOnlyUpdate) {
-      recordKLineChartProbeEventV2({
-        frame,
-        renderWindowKey,
-        sameRenderWindow,
-        type: 'pane-only',
-      })
-      appliedFrameKeyRef.current = frame.key
-      previousFrameRef.current = frame
-      setKLineChartRealtimeXAxisFrameV2(frame)
-      realtimePaneRef.current?.updateFrame(frame)
-      realtimePaneRef.current?.updatePageNavigation(pageNavigation)
-      axisLabelLayerRef.current?.scheduleRender()
-      mainMaOverlayRef.current?.updateFrame(frame)
-      mainMorganRangeOverlayRef.current?.updateFrame(frame)
-      mainVwapOverlayRef.current?.updateFrame(frame)
-      mainVolumeOverlayRef.current?.updateFrame(frame)
-      subPaneStochRef.current?.updateFrame(frame)
-      displayControllerRef.current?.scheduleApply()
-      onLoadStateChange?.({
-        error: false,
-        loadedPeriod: frame.period,
-        loadedSymbol: frame.symbol,
-        loading: false,
-        loadingMore: false,
-        period: frame.period,
-        requestedRows: frame.mainRows.length,
-        rows: frame.mainRows.length,
-        symbol: frame.symbol,
-        totalRows,
-      })
-      return
-    }
-    const canTailUpdate = canApplyKLineChartTailUpdateV2({
-      current: frame,
-      previous: previousFrame,
-      sameRenderWindow,
-    })
-    if (canTailUpdate) {
-      recordKLineChartProbeEventV2({
-        frame,
-        renderWindowKey,
-        sameRenderWindow,
-        type: 'tail-update',
-      })
-      appliedFrameKeyRef.current = frame.key
-      previousFrameRef.current = frame
-      const result = applyKLineChartFrameTailUpdate(chart, frame)
-      setKLineChartRealtimeXAxisFrameV2(frame)
-      realtimePaneRef.current?.updateFrame(frame)
-      realtimePaneRef.current?.updatePageNavigation(pageNavigation)
-      axisLabelLayerRef.current?.scheduleRender()
-      mainMaOverlayRef.current?.updateFrame(frame)
-      mainMorganRangeOverlayRef.current?.updateFrame(frame)
-      mainVwapOverlayRef.current?.updateFrame(frame)
-      mainVolumeOverlayRef.current?.updateFrame(frame)
-      subPaneStochRef.current?.updateFrame(frame)
-      onLoadStateChange?.({
-        error: false,
-        loadedPeriod: result.period,
-        loadedSymbol: result.symbol,
-        loading: false,
-        loadingMore: false,
-        period: result.period,
-        requestedRows: result.rows,
-        rows: result.rows,
-        symbol: result.symbol,
-        totalRows,
-      })
-      return
-    }
-    recordKLineChartProbeEventV2({
+    applyKLineChartFrameUpdateV2({
+      appliedFrameKey: appliedFrameKeyRef.current,
+      appliedRenderWindowKey: appliedRenderWindowKeyRef.current,
+      chart,
+      chartRoot: chartRef.current,
+      dragInProgress: chartDragInProgressRef.current,
+      displayController: displayControllerRef.current,
       frame,
-      renderWindowKey,
-      sameRenderWindow,
-      type: 'full-frame',
-    })
-    appliedFrameKeyRef.current = frame.key
-    appliedRenderWindowKeyRef.current = renderWindowKey
-    chartRef.current?.setAttribute('data-restoring', 'true')
-    const restorePlan = renderStateController.beginFrameRestore(frame, { sameRenderWindow })
-    const restoreViewport = () => {
-      const restored = restorePlan.restoreViewport?.() === true
-      window.requestAnimationFrame(() => {
-        chartRef.current?.removeAttribute('data-restoring')
-      })
-      return restored
-    }
-    const result = applyKLineChartFrameToChart(chart, frame, () => {
-      setKLineChartRealtimeXAxisFrameV2(frame)
-      renderStateController.handleDataReady()
-      realtimePaneRef.current?.updateFrame(frame)
-      realtimePaneRef.current?.updatePageNavigation(pageNavigation)
-      axisLabelLayerRef.current?.scheduleRender()
-      mainMaOverlayRef.current?.updateFrame(frame)
-      mainMorganRangeOverlayRef.current?.updateFrame(frame)
-      mainVwapOverlayRef.current?.updateFrame(frame)
-      mainVolumeOverlayRef.current?.updateFrame(frame)
-      subPaneStochRef.current?.updateFrame(frame)
-    }, {
-      anchorRealtimeBoundary: restorePlan.anchorRealtimeBoundary,
-      preserveVisibleRange: restorePlan.preserveVisibleRange,
-      restoreViewport,
-    })
-    previousFrameRef.current = frame
-    realtimePaneRef.current?.updateFrame(frame)
-    realtimePaneRef.current?.updatePageNavigation(pageNavigation)
-    displayControllerRef.current?.scheduleApply()
-    mainMaOverlayRef.current?.updateFrame(frame)
-    mainMorganRangeOverlayRef.current?.updateFrame(frame)
-    mainVwapOverlayRef.current?.updateFrame(frame)
-    mainVolumeOverlayRef.current?.updateFrame(frame)
-    subPaneStochRef.current?.updateFrame(frame)
-    onLoadStateChange?.({
-      error: false,
-      loadedPeriod: result.period,
-      loadedSymbol: result.symbol,
-      loading: false,
-      loadingMore: false,
-      period: result.period,
-      requestedRows: result.rows,
-      rows: result.rows,
-      symbol: result.symbol,
+      onAppliedFrameKeyChange: (key) => {
+        appliedFrameKeyRef.current = key
+      },
+      onAppliedRenderWindowKeyChange: (key) => {
+        appliedRenderWindowKeyRef.current = key
+      },
+      onLoadStateChange,
+      onPreviousFrameChange: (nextFrame) => {
+        previousFrameRef.current = nextFrame
+      },
+      overlayController: overlayControllerRef.current,
+      pageNavigation,
+      previousFrame: previousFrameRef.current,
+      renderStateController,
       totalRows,
     })
   }, [frame, frame.key, onLoadStateChange, totalRows])
-
-  useEffect(() => {
-    setKLineChartRealtimeXAxisFrameV2(frame)
-    realtimePaneRef.current?.updateFrame(frame)
-    realtimePaneRef.current?.updatePageNavigation(pageNavigation)
-    axisLabelLayerRef.current?.scheduleRender()
-    mainMaOverlayRef.current?.updateFrame(frame)
-    mainMorganRangeOverlayRef.current?.updateFrame(frame)
-    mainVwapOverlayRef.current?.updateFrame(frame)
-    mainVolumeOverlayRef.current?.updateFrame(frame)
-    subPaneStochRef.current?.updateFrame(frame)
-  }, [frame, pageNavigation])
 
   return (
     <section className="ff-kline-chart-host-v2" data-loading={false} aria-label={`${frame.symbol} ${frame.period} chart`}>

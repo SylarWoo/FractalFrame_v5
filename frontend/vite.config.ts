@@ -7,12 +7,17 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-function createJsonStateStore(stateFile: string) {
+function createJsonStateStore(stateFile: string, fallbackStateFile?: string) {
   function readState(): Record<string, unknown> {
     try {
       return JSON.parse(fs.readFileSync(stateFile, 'utf8')) as Record<string, unknown>
     } catch {
-      return {}
+      if (!fallbackStateFile) return {}
+      try {
+        return JSON.parse(fs.readFileSync(fallbackStateFile, 'utf8')) as Record<string, unknown>
+      } catch {
+        return {}
+      }
     }
   }
 
@@ -24,9 +29,42 @@ function createJsonStateStore(stateFile: string) {
   return { readState, writeState }
 }
 
+function sanitizeProfileId(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'default'
+}
+
+function resolveRequestPort(req: IncomingMessage, server: ViteDevServer) {
+  const host = typeof req.headers.host === 'string' ? req.headers.host : ''
+  const hostPort = host.includes(':') ? host.split(':').pop() : ''
+  if (hostPort && /^\d+$/.test(hostPort)) return hostPort
+  const configuredPort = server.config.server.port
+  return typeof configuredPort === 'number' && Number.isFinite(configuredPort) ? String(configuredPort) : 'default'
+}
+
+function resolveWorkbenchProfileId(req: IncomingMessage, server: ViteDevServer) {
+  return sanitizeProfileId(`port-${resolveRequestPort(req, server)}`)
+}
+
+function createWorkbenchProfileStoreResolver(options: {
+  fallbackStateFile?: string
+  stateFileName: string
+}) {
+  const stores = new Map<string, ReturnType<typeof createJsonStateStore>>()
+  return (profileId: string) => {
+    const cached = stores.get(profileId)
+    if (cached) return cached
+    const stateFile = path.resolve(__dirname, '.fractalframe-dev', 'profiles', profileId, options.stateFileName)
+    const store = createJsonStateStore(stateFile, options.fallbackStateFile)
+    stores.set(profileId, store)
+    return store
+  }
+}
+
 function persistentDevStatePlugin(): Plugin {
-  const stateFile = path.resolve(__dirname, '.fractalframe-dev', 'persistent-state.json')
-  const { readState, writeState } = createJsonStateStore(stateFile)
+  const resolveStore = createWorkbenchProfileStoreResolver({
+    fallbackStateFile: path.resolve(__dirname, '.fractalframe-dev', 'persistent-state.json'),
+    stateFileName: 'workbench-profile.json',
+  })
 
   return {
     name: 'fractalframe-persistent-dev-state',
@@ -38,6 +76,8 @@ function persistentDevStatePlugin(): Plugin {
           return
         }
         const requestUrl = new URL(req.url, 'http://127.0.0.1')
+        const profileId = resolveWorkbenchProfileId(req, server)
+        const { readState, writeState } = resolveStore(profileId)
         if (req.method === 'GET') {
           const key = requestUrl.searchParams.get('key')
           const state = readState()
@@ -86,8 +126,10 @@ function persistentDevStatePlugin(): Plugin {
 
 function chartViewportDevStatePlugin(): Plugin {
   const viewportStateKeyPrefixes = ['fractalframe:chartViewport:v4', 'fractalframe:chartViewport:v3']
-  const stateFile = path.resolve(__dirname, '.fractalframe-dev', 'chart-viewport-state-v4.json')
-  const { readState, writeState } = createJsonStateStore(stateFile)
+  const resolveStore = createWorkbenchProfileStoreResolver({
+    fallbackStateFile: path.resolve(__dirname, '.fractalframe-dev', 'chart-viewport-state-v4.json'),
+    stateFileName: 'chart-viewport-state-v4.json',
+  })
   const isSupportedViewportStateKey = (key: string) => viewportStateKeyPrefixes.some((prefix) => key.startsWith(prefix))
 
   return {
@@ -100,6 +142,8 @@ function chartViewportDevStatePlugin(): Plugin {
           return
         }
         const requestUrl = new URL(req.url, 'http://127.0.0.1')
+        const profileId = resolveWorkbenchProfileId(req, server)
+        const { readState, writeState } = resolveStore(profileId)
         if (req.method === 'GET') {
           const key = requestUrl.searchParams.get('key')
           if (key && !isSupportedViewportStateKey(key)) {

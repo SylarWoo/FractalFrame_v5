@@ -92,6 +92,7 @@ export const storeV6VolIndicatorDefinitionV2: StoreV6IndicatorDefinitionV2<Parti
   id: storeV6VolIndicatorIdV2,
   paneId: storeV6VolPaneIdV2,
   paneRole: 'main',
+  realtimeUpdateMode: 'tail',
   renderRole: 'main-overlay',
   warmup: {
     historyRows: (request) => normalizeRequestSettings(request).maChecked ? normalizeRequestSettings(request).maLength : 0,

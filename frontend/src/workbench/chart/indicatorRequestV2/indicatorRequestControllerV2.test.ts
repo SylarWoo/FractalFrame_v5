@@ -112,7 +112,7 @@ describe('indicatorRequestControllerV2', () => {
       paneRole: 'main',
       params: { length: 5 },
       renderRole: 'main-overlay',
-      request: { id: 'TEST', params: { length: 5 } },
+      request: expect.objectContaining({ id: 'TEST', params: { length: 5 } }),
       warmupPlan: {
         availableRows: 1,
         missingRows: 2,
@@ -160,7 +160,7 @@ describe('indicatorRequestControllerV2', () => {
     expect(calculateRealtime).toHaveBeenCalledWith(expect.objectContaining({
       activeRows,
       historyRows: [],
-      request: { id: 'TEST' },
+      request: expect.objectContaining({ id: 'TEST' }),
       sessionTimeFrom: 300,
       sessionTimeTo: null,
       windowKind: 'realtime',

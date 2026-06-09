@@ -127,13 +127,39 @@ describe('applyKLineChartFrameToChart', () => {
   })
 
   it('updates only the latest kline for tail updates', () => {
+    const frame = frameData()
     const chart = {
+      getDataList: vi.fn(() => frame.mainRows),
       updateData: vi.fn(),
     }
-    const frame = frameData()
 
     applyKLineChartFrameTailUpdate(chart as never, frame)
 
     expect(chart.updateData).toHaveBeenCalledWith(frame.mainRows[frame.mainRows.length - 1])
+  })
+
+  it('patches the previous tail before appending a new tail row', () => {
+    const previousRows = [
+      { close: 1, high: 1, low: 1, open: 1, timestamp: 100_000, volume: 10 },
+      { close: 2, high: 2, low: 2, open: 2, timestamp: 200_000, volume: 20 },
+    ]
+    const nextRows = [
+      previousRows[0],
+      { close: 3, high: 4, low: 1, open: 2, timestamp: 200_000, volume: 25 },
+      { close: 5, high: 5, low: 5, open: 5, timestamp: 300_000, volume: 1 },
+    ]
+    const chart = {
+      getDataList: vi.fn(() => previousRows),
+      updateData: vi.fn(),
+    }
+    const frame = {
+      ...frameData(),
+      mainRows: nextRows,
+    }
+
+    applyKLineChartFrameTailUpdate(chart as never, frame)
+
+    expect(chart.updateData).toHaveBeenNthCalledWith(1, nextRows[1])
+    expect(chart.updateData).toHaveBeenNthCalledWith(2, nextRows[2])
   })
 })

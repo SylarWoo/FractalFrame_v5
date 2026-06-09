@@ -138,7 +138,7 @@ describe('buildStoreV6HistoryPageWindow', () => {
       calculationRows: source.slice.calculationRows,
       displayRows: source.slice.displayRows,
       pageIndex: 1,
-      request: { id: 'TEST' },
+      request: expect.objectContaining({ id: 'TEST' }),
       warmupRows: source.slice.warmupRows,
       windowKind: 'history',
     }))

@@ -4,37 +4,39 @@ import type { StoreV6WindowKLine } from '../pageSliceV2'
 import { readStoreV6PageSlice } from '../pageSliceV2'
 import type { StoreV6PagePartitionItem } from '../pagePartition/pagePartitionBuilder'
 import { maxIndicatorWarmupRowsV2 } from '../indicatorRequestV2'
+import { planCompositeIndicatorDependenciesV2 } from '../indicatorRequestV2/compositeIndicatorDependencyOrchestratorV2'
+import { createStoreV6IndicatorRequestSignatureV2 } from '../indicatorRequestV2/indicatorRequestSignatureV2'
 import { refreshRealtimeWindowIndicatorsWithStableCacheV2 } from '../indicatorRequestV2/realtimeIndicatorStableCacheV2'
 import {
   floorToTradingDayBoundarySeconds,
 } from '../pagePartition/timeAligned/tradingDayBoundary'
 import { queryMt5Rates } from '../../../services/mt5/mt5SymbolsApi'
 import type { StoreV6QueryRow } from '../../../services/mt5/mt5SymbolsApi'
+import {
+  combineRealtimeRowsV2,
+  mergeRealtimeRowsV2,
+  splitRealtimeRowsV2,
+  stableRowsKeyV2,
+  tailRowKeyV2,
+} from './realtimePageWindowRowsV2'
+import {
+  readCachedRealtimeRowsV2,
+  writeCachedRealtimeRowsV2,
+} from './realtimeStableWindowCacheV2'
+
+export {
+  clearRealtimeStableWindowCacheV2,
+  readRealtimeStableWindowSnapshotV2,
+} from './realtimeStableWindowCacheV2'
 
 const shanghaiOffsetSeconds = 8 * 60 * 60
 const daySeconds = 24 * 60 * 60
 const m5Seconds = 5 * 60
 const sessionOpenSeconds = 6 * 60 * 60
 const boundaryOffsetSeconds = sessionOpenSeconds - shanghaiOffsetSeconds
-const realtimeStableCacheStorageKey = 'fractalframe:klinechart-v2:realtimeStableWindow:v1'
-const maxCachedRealtimeRows = 10_000
-
-type PersistedRealtimeStableWindow = {
-  period: string
-  savedAt: string
-  sessionTimeFrom: number
-  sessionTimeTo: number | null
-  stableRows: StoreV6WindowKLine[]
-  symbol: string
-  tailRow: StoreV6WindowKLine | null
-}
 
 function finiteNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-function realtimeCacheKey(symbol: string, period: string, sessionTimeFrom: number | null, sessionTimeTo: number | null) {
-  return `${symbol.trim().toUpperCase()}:${period.trim().toUpperCase()}:${sessionTimeFrom ?? 'none'}:${sessionTimeTo ?? 'open'}`
 }
 
 function resolvePeriodSeconds(period: string) {
@@ -52,6 +54,10 @@ function normalizeTimeframe(period: string) {
   if (/^\d+M$/.test(value)) return `M${value.slice(0, -1)}`
   if (/^\d+H$/.test(value)) return `H${value.slice(0, -1)}`
   return value
+}
+
+function normalizeSymbol(value: string | null | undefined) {
+  return String(value ?? '').trim().toUpperCase()
 }
 
 function estimateTurnover(high: number, low: number, close: number, volume: number) {
@@ -101,124 +107,6 @@ function normalizeMt5RateRows(rows: StoreV6QueryRow[] | null | undefined, reques
   return [...byTime.values()].sort((left, right) => Number(left.timestamp) - Number(right.timestamp))
 }
 
-function normalizeSymbol(value: string | null | undefined) {
-  return String(value ?? '').trim().toUpperCase()
-}
-
-function splitRealtimeRows(rows: StoreV6WindowKLine[]) {
-  const normalized = mergeRealtimeRows([], rows).slice(-maxCachedRealtimeRows)
-  const tailRow = normalized[normalized.length - 1] ?? null
-  const stableRows = tailRow ? normalized.slice(0, -1) : normalized
-  return { stableRows, tailRow }
-}
-
-function combineRealtimeRows(stableRows: StoreV6WindowKLine[], tailRow: StoreV6WindowKLine | null) {
-  return tailRow ? [...stableRows, tailRow] : stableRows
-}
-
-function stableRowsKey(rows: StoreV6WindowKLine[]) {
-  if (!rows.length) return 'stable-empty'
-  return `stable:${rows[0]?.time ?? 'none'}:${rows[rows.length - 1]?.time ?? 'none'}:${rows.length}`
-}
-
-function tailRowKey(row: StoreV6WindowKLine | null) {
-  if (!row) return 'tail-empty'
-  return `tail:${row.time}:${row.open}:${row.high}:${row.low}:${row.close}:${row.volume ?? 0}`
-}
-
-function readRealtimeStableCache() {
-  if (typeof window === 'undefined') return {}
-  try {
-    return JSON.parse(window.localStorage.getItem(realtimeStableCacheStorageKey) || '{}') as Record<string, PersistedRealtimeStableWindow>
-  } catch {
-    return {}
-  }
-}
-
-export function readRealtimeStableWindowSnapshotV2(options: {
-  period: string
-  sessionTimeFrom: number | null
-  sessionTimeTo?: number | null
-  symbol: string
-}) {
-  if (options.sessionTimeFrom == null) return null
-  const cached = readRealtimeStableCache()[realtimeCacheKey(
-    options.symbol,
-    options.period,
-    options.sessionTimeFrom,
-    options.sessionTimeTo ?? null,
-  )]
-  if (!cached) return null
-  if (
-    normalizeSymbol(cached.symbol) !== normalizeSymbol(options.symbol) ||
-    cached.period.trim().toUpperCase() !== options.period.trim().toUpperCase() ||
-    cached.sessionTimeFrom !== options.sessionTimeFrom ||
-    cached.sessionTimeTo !== (options.sessionTimeTo ?? null)
-  ) {
-    return null
-  }
-  return {
-    savedAt: cached.savedAt,
-    sessionTimeFrom: cached.sessionTimeFrom,
-    sessionTimeTo: cached.sessionTimeTo,
-    stableRows: cached.stableRows ?? [],
-    tailRow: cached.tailRow ?? null,
-  }
-}
-
-function writeRealtimeStableCache(cache: Record<string, PersistedRealtimeStableWindow>) {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(realtimeStableCacheStorageKey, JSON.stringify(cache))
-  } catch {
-    // Local realtime cache is an optimization only.
-  }
-}
-
-export function clearRealtimeStableWindowCacheV2() {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.removeItem(realtimeStableCacheStorageKey)
-  } catch {
-    // Local realtime cache is an optimization only.
-  }
-}
-
-function readCachedRealtimeRows(options: {
-  period: string
-  sessionTimeFrom: number | null
-  sessionTimeTo: number | null
-  symbol: string
-}) {
-  if (options.sessionTimeFrom == null) return { stableRows: [], tailRow: null }
-  const cached = readRealtimeStableCache()[realtimeCacheKey(options.symbol, options.period, options.sessionTimeFrom, options.sessionTimeTo)]
-  if (!cached) return { stableRows: [], tailRow: null }
-  if (
-    normalizeSymbol(cached.symbol) !== normalizeSymbol(options.symbol) ||
-    cached.period.trim().toUpperCase() !== options.period.trim().toUpperCase() ||
-    cached.sessionTimeFrom !== options.sessionTimeFrom ||
-    cached.sessionTimeTo !== options.sessionTimeTo
-  ) {
-    return { stableRows: [], tailRow: null }
-  }
-  return splitRealtimeRows(combineRealtimeRows(cached.stableRows ?? [], cached.tailRow ?? null))
-}
-
-function writeCachedRealtimeRows(window: StoreV6RealtimePageWindow) {
-  if (window.sessionTimeFrom == null) return
-  const cache = readRealtimeStableCache()
-  cache[realtimeCacheKey(window.symbol, window.period, window.sessionTimeFrom, window.sessionTimeTo)] = {
-    period: window.period,
-    savedAt: new Date().toISOString(),
-    sessionTimeFrom: window.sessionTimeFrom,
-    sessionTimeTo: window.sessionTimeTo,
-    stableRows: window.stableRows,
-    symbol: window.symbol,
-    tailRow: window.tailRow,
-  }
-  writeRealtimeStableCache(cache)
-}
-
 function resolveTickLast(tick: Mt5RealtimeWindowTick) {
   if (typeof tick.bid === 'number' && Number.isFinite(tick.bid)) return tick.bid
   if (typeof tick.last === 'number' && Number.isFinite(tick.last)) return tick.last
@@ -241,17 +129,6 @@ function resolvePeriodStartSeconds(timestampMs: number, periodSeconds: number) {
   return Math.floor(timestampMs / periodMs) * periodSeconds
 }
 
-function mergeRealtimeRows(rows: StoreV6WindowKLine[], next: StoreV6WindowKLine[]) {
-  const byTime = new Map<number, StoreV6WindowKLine>()
-  rows.forEach((row) => {
-    if (Number.isFinite(row.time)) byTime.set(Number(row.time), row)
-  })
-  next.forEach((row) => {
-    if (Number.isFinite(row.time)) byTime.set(Number(row.time), row)
-  })
-  return [...byTime.values()].sort((left, right) => Number(left.timestamp) - Number(right.timestamp))
-}
-
 function mergeRealtimeTickRow(rows: StoreV6WindowKLine[], row: StoreV6WindowKLine) {
   const latest = rows[rows.length - 1]
   if (!latest) return [row]
@@ -265,7 +142,7 @@ function mergeRealtimeTickRow(rows: StoreV6WindowKLine[], row: StoreV6WindowKLin
     }
     if (rowTime > latestTime) return [...rows, row]
   }
-  return mergeRealtimeRows(rows, [row])
+  return mergeRealtimeRowsV2(rows, [row])
 }
 
 function sameRealtimeRow(left: StoreV6WindowKLine | undefined, right: StoreV6WindowKLine) {
@@ -280,13 +157,6 @@ function sameRealtimeRow(left: StoreV6WindowKLine | undefined, right: StoreV6Win
 
 function realtimeWindowBaseKey(key: string) {
   return key.split(':tick:')[0].split(':mt5:')[0]
-}
-
-function createIndicatorRequestSignature(requests: StoreV6RealtimePageWindowRequest['indicatorRequests']) {
-  if (!requests || requests.length === 0) return 'no-indicators'
-  return requests
-    .map((request) => `${request.id}:${request.enabled === false ? 'off' : 'on'}:${request.paneId ?? ''}:${JSON.stringify(request.params ?? null)}`)
-    .join('|')
 }
 
 function shanghaiWeekday(seconds: number) {
@@ -372,10 +242,12 @@ export function resolveActiveM5RealtimeSessionStartSeconds(latestTime: number | 
 }
 
 function resolveRealtimeSessionStart(request: StoreV6RealtimePageWindowRequest) {
+  const normalizedPeriod = request.period.trim().toUpperCase()
   const latest = finiteNumber(request.latestTime)
-  if (request.period.trim().toUpperCase() === 'M5' && latest != null) return resolveActiveM5RealtimeSessionStartSeconds(latest, request.symbol)
+  if (normalizedPeriod === 'M5' && latest != null) return resolveActiveM5RealtimeSessionStartSeconds(latest, request.symbol)
   const requested = finiteNumber(request.sessionTimeFrom)
-  if (request.period.trim().toUpperCase() === 'M5') return resolveM5RealtimeSessionStartSeconds(requested, request.symbol)
+  if (normalizedPeriod === 'M5') return resolveM5RealtimeSessionStartSeconds(requested, request.symbol)
+  if (normalizedPeriod === 'M30') return requested == null ? null : Math.floor(requested)
   const periodSeconds = resolvePeriodSeconds(request.period)
   return requested == null ? null : Math.floor(requested) + periodSeconds
 }
@@ -419,7 +291,8 @@ function resolveRequestedIndicatorDefinitions(request: StoreV6RealtimePageWindow
   const registry = request.indicatorRegistry
   const requests = request.indicatorRequests ?? request.indicatorRuntime?.list() ?? []
   if (!registry || requests.length === 0) return []
-  return requests
+  const plan = planCompositeIndicatorDependenciesV2(requests)
+  return plan.computeRequests
     .filter((item) => item.enabled !== false)
     .map((item) => {
       const definition = registry.get(item.id)
@@ -464,7 +337,7 @@ export function buildStoreV6RealtimePageWindow(
   if (!request.enabled) return null
   const sessionTimeFrom = resolveRealtimeSessionStart(request)
   const sessionTimeTo = finiteNumber(request.sessionTimeTo)
-  const cachedRows = readCachedRealtimeRows({
+  const cachedRows = readCachedRealtimeRowsV2({
     period: request.period,
     sessionTimeFrom,
     sessionTimeTo,
@@ -472,15 +345,15 @@ export function buildStoreV6RealtimePageWindow(
   })
   const stableRows = cachedRows.stableRows
   const tailRow = cachedRows.tailRow
-  const activeRows = combineRealtimeRows(stableRows, tailRow)
+  const activeRows = combineRealtimeRowsV2(stableRows, tailRow)
   const indicators = {}
   const indicatorRequests = request.indicatorRequests ?? request.indicatorRuntime?.list() ?? []
-  const indicatorSignature = createIndicatorRequestSignature(indicatorRequests)
+  const indicatorSignature = createStoreV6IndicatorRequestSignatureV2(indicatorRequests)
   return {
     activeRows,
     indicatorRequests,
     indicators,
-    key: `realtime-window-v2:${request.symbol}:${request.period}:${sessionTimeFrom ?? 'none'}:${sessionTimeTo ?? 'none'}:${indicatorSignature}:${stableRowsKey(stableRows)}:${tailRowKey(tailRow)}`,
+    key: `realtime-window-v2:${request.symbol}:${request.period}:${sessionTimeFrom ?? 'none'}:${sessionTimeTo ?? 'none'}:${indicatorSignature}:${stableRowsKeyV2(stableRows)}:${tailRowKeyV2(tailRow)}`,
     period: request.period,
     renderData: {
       indicators,
@@ -518,13 +391,13 @@ export async function requestStoreV6RealtimePageWindow(
     sessionTimeTo: empty.sessionTimeTo,
     symbol: request.symbol,
   })
-  const { stableRows, tailRow } = splitRealtimeRows(activeRows)
-  const composedRows = combineRealtimeRows(stableRows, tailRow)
+  const { stableRows, tailRow } = splitRealtimeRowsV2(activeRows)
+  const composedRows = combineRealtimeRowsV2(stableRows, tailRow)
   const nextWindowWithoutIndicators: StoreV6RealtimePageWindow = {
     ...empty,
     activeRows: composedRows,
     indicatorHistoryRows: request.historyRows ?? [],
-    key: `${realtimeWindowBaseKey(empty.key)}:mt5:${stableRowsKey(stableRows)}:${tailRowKey(tailRow)}`,
+    key: `${realtimeWindowBaseKey(empty.key)}:mt5:${stableRowsKeyV2(stableRows)}:${tailRowKeyV2(tailRow)}`,
     renderData: {
       indicators: {},
       klineRows: composedRows,
@@ -547,7 +420,7 @@ export async function requestStoreV6RealtimePageWindow(
       indicatorHistoryRows,
     },
   })
-  writeCachedRealtimeRows(nextWindow)
+  writeCachedRealtimeRowsV2(nextWindow)
   return nextWindow
 }
 
@@ -565,11 +438,11 @@ export function mergeMt5RealtimeTickIntoWindow(
   if (window.sessionTimeTo != null && tickTime > window.sessionTimeTo) return window
   const latest = window.activeRows[window.activeRows.length - 1]
   const sameBar = latest && Number(latest.time) === tickTime
-  const volume = typeof tick.volume === 'number' && Number.isFinite(tick.volume)
+  const volume = typeof tick.volume === 'number' && Number.isFinite(tick.volume) && tick.volume > 0
     ? Math.max(0, tick.volume)
     : sameBar
-      ? Number(latest.volume ?? 0)
-      : 0
+      ? Math.max(1, Number(latest.volume ?? 0) + 1)
+      : 1
   const open = sameBar ? Number(latest.open) : Number(latest?.close ?? last)
   const high = sameBar ? Math.max(Number(latest.high), last) : Math.max(open, last)
   const low = sameBar ? Math.min(Number(latest.low), last) : Math.min(open, last)
@@ -590,12 +463,12 @@ export function mergeMt5RealtimeTickIntoWindow(
   }
   if (sameRealtimeRow(latest, row)) return window
   const activeRows = mergeRealtimeTickRow(window.activeRows, row)
-  const { stableRows, tailRow } = splitRealtimeRows(activeRows)
-  const composedRows = combineRealtimeRows(stableRows, tailRow)
+  const { stableRows, tailRow } = splitRealtimeRowsV2(activeRows)
+  const composedRows = combineRealtimeRowsV2(stableRows, tailRow)
   const nextWindow: StoreV6RealtimePageWindow = {
     ...window,
     activeRows: composedRows,
-    key: `${realtimeWindowBaseKey(window.key)}:tick:${stableRowsKey(stableRows)}:${tailRowKey(tailRow)}`,
+    key: `${realtimeWindowBaseKey(window.key)}:tick:${stableRowsKeyV2(stableRows)}:${tailRowKeyV2(tailRow)}`,
     renderData: {
       indicators: window.indicators,
       klineRows: composedRows,
@@ -604,6 +477,6 @@ export function mergeMt5RealtimeTickIntoWindow(
     status: composedRows.length ? 'ready' : window.status,
     tailRow,
   }
-  writeCachedRealtimeRows(nextWindow)
+  if (!sameBar) writeCachedRealtimeRowsV2(nextWindow)
   return nextWindow
 }

@@ -3,6 +3,7 @@ import type { StoreV6HistoryPageWindowIndicatorSeries, StoreV6HistoryPageWindowI
 import type { StoreV6RealtimePageWindow } from '../realtimePageWindowV2'
 import type { StoreV6WindowKLine } from '../pageSliceV2'
 import type { ChartRenderWindowRowV2, ChartRenderWindowSegmentV2, ChartRenderWindowV2 } from './chartRenderWindowTypes'
+import type { MorganRangeSegment } from '../morganRangeModel'
 
 function finiteNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -128,13 +129,85 @@ function mergeIndicatorSeries(
   }
 }
 
+function isMorganRangeSeriesName(name: string) {
+  return name === 'MR_M5' || name === 'MR_M30'
+}
+
+function isMorganRangeSegment(row: unknown): row is MorganRangeSegment {
+  if (!row || typeof row !== 'object') return false
+  const segment = row as Partial<MorganRangeSegment>
+  return Number.isFinite(segment.startIndex) &&
+    Number.isFinite(segment.endIndex) &&
+    Number.isFinite(segment.startTimestamp) &&
+    Number.isFinite(segment.center) &&
+    Number.isFinite(segment.upper) &&
+    Number.isFinite(segment.lower)
+}
+
+function createFinalTimestampToDataIndex(rows: ChartRenderWindowRowV2[]) {
+  const result = new Map<number, number>()
+  rows.forEach((row, index) => {
+    const timestamp = finiteNumber(row.timestamp)
+    if (timestamp != null) result.set(timestamp, index)
+  })
+  return result
+}
+
+function translateMorganRangeRowsToRenderWindow(
+  series: StoreV6HistoryPageWindowIndicatorSeries | undefined,
+  sourceRows: StoreV6WindowKLine[],
+  finalTimestampToDataIndex: Map<number, number>,
+) {
+  return ((series?.displayRows ?? series?.rows ?? []) as unknown[])
+    .filter(isMorganRangeSegment)
+    .map((segment) => {
+      const sourceStartIndex = Math.max(0, Math.round(Number(segment.startIndex)))
+      const sourceStartTimestamp = finiteNumber(sourceRows[sourceStartIndex]?.timestamp) ?? Number(segment.startTimestamp)
+      const finalStartIndex = finalTimestampToDataIndex.get(sourceStartTimestamp)
+      if (finalStartIndex == null) return null
+      const sourceEndTimestamp = finiteNumber(segment.endTimestamp)
+      const finalEndIndex = sourceEndTimestamp == null
+        ? null
+        : finalTimestampToDataIndex.get(sourceEndTimestamp)
+      const width = Math.max(0, Math.round(Number(segment.endIndex)) - sourceStartIndex)
+      return {
+        ...segment,
+        endIndex: finalEndIndex ?? finalStartIndex + width,
+        startIndex: finalStartIndex,
+        startTimestamp: sourceStartTimestamp,
+      }
+    })
+    .filter((segment): segment is MorganRangeSegment => segment != null)
+}
+
 function mergeIndicators(
   historyIndicators: StoreV6HistoryPageWindowIndicators,
   realtimeIndicators: StoreV6HistoryPageWindowIndicators | null | undefined,
+  options: {
+    finalRows: ChartRenderWindowRowV2[]
+    historyRows: StoreV6WindowKLine[]
+    realtimeRows: StoreV6WindowKLine[]
+  },
 ) {
   if (!realtimeIndicators || Object.keys(realtimeIndicators).length === 0) return historyIndicators
   const indicators: StoreV6HistoryPageWindowIndicators = { ...historyIndicators }
+  const finalTimestampToDataIndex = createFinalTimestampToDataIndex(options.finalRows)
   Object.entries(realtimeIndicators).forEach(([name, series]) => {
+    if (isMorganRangeSeriesName(name)) {
+      const historySeries = indicators[name]
+      const rows = [
+        ...translateMorganRangeRowsToRenderWindow(historySeries, options.historyRows, finalTimestampToDataIndex),
+        ...translateMorganRangeRowsToRenderWindow(series, options.realtimeRows, finalTimestampToDataIndex),
+      ]
+      indicators[name] = {
+        ...(historySeries ?? series),
+        displayRows: rows,
+        key: `${historySeries?.key ?? 'no-history'}+${series.key}`,
+        rows,
+        settings: series.settings ?? historySeries?.settings,
+      }
+      return
+    }
     indicators[name] = indicators[name] ? mergeIndicatorSeries(indicators[name], series) : series
   })
   return indicators
@@ -153,7 +226,11 @@ export function buildChartRenderWindowV2(options: {
     : undefined
 
   return {
-    indicators: mergeIndicators(historyWindow.renderData.indicators, realtimeWindow?.renderData.indicators),
+    indicators: mergeIndicators(historyWindow.renderData.indicators, realtimeWindow?.renderData.indicators, {
+      finalRows: rows,
+      historyRows: historyWindow.renderData.klineRows,
+      realtimeRows,
+    }),
     key: `chart-render-window-v2:${historyWindow.key}:${realtimeSegment?.key ?? 'no-realtime'}`,
     pageIndex: historyWindow.pageIndex,
     period: historyWindow.period,

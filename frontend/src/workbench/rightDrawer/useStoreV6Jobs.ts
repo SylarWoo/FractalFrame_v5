@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import type { ChartPageTarget } from '../chart/chartRuntimeTypes'
 import { resolveStoreV6PagePartitionMode } from '../chart/pagePartition/pagePartitionBuilder'
+import { hasStoreV6PeriodPageSystemV2 } from '../chart/pagePartition/periodPageSystemV2'
 import {
   cancelStoreV6AggregateJob,
   cancelStoreV6AggregateJobsForSymbol,
@@ -107,7 +108,7 @@ export function useStoreV6Jobs({
 
   function openChartForStatus(symbol: string, payload: StoreV6CheckPayload) {
     const period = periodFromStoreTableKey(selectedStoreTableKey) || readSharedSelection().period || 'M1'
-    if (resolveStoreV6PagePartitionMode(period) === 'm5-time') return
+    if (resolveStoreV6PagePartitionMode(period) === 'm5-time' || !hasStoreV6PeriodPageSystemV2(period)) return
     const count = rowsForStorePeriod(payload, period)
     onOpenChart?.({
       symbol,

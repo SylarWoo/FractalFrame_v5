@@ -1,10 +1,12 @@
 import type { Chart } from 'klinecharts'
 import type { KLineChartPaneFrame } from '../historyPageKLineChartFrameV2'
-import { createIndicatorPageKey, createIndicatorSettingsHash, createIndicatorSnapshotRows, writeIndicatorPageSnapshot } from '../indicatorPageSnapshotStore'
+import { createIndicatorSnapshotRows, writeIndicatorPageSnapshot } from '../indicatorPageSnapshotStore'
 import { storeV6MaIndicatorIdV2 } from '../indicatorRequestV2'
 import type { KLineChartRenderFrameV2 } from '../klineChartRenderFrameV2'
 import { ensureTradingViewMaShiftIndicator } from '../tradingViewMaShiftIndicator'
 import type { MaShiftRow } from '../tradingViewMaShiftIndicator'
+import { createKLineChartIndicatorSnapshotContextV2, createKLineChartRuntimeCalcParamsV2 } from './klineChartIndicatorSnapshotBridgeV2'
+import { createKLineChartIndicatorMountAdapterV2 } from './klineChartIndicatorMountAdapterV2'
 
 const candlePaneId = 'candle_pane'
 const disconnectedRealtimeGapMs = 6 * 60 * 60 * 1000
@@ -40,26 +42,12 @@ export function markMainMaRowsBreakBeforeRealtimeGapV2(frame: KLineChartRenderFr
   return rows
 }
 
-function createSnapshotContext(frame: KLineChartRenderFrameV2, pane: KLineChartPaneFrame) {
-  const pageKey = createIndicatorPageKey({
-    pageIdentity: `${frame.key}:${pane.key}:${storeV6MaIndicatorIdV2}`,
-    pageIndex: frame.pageIndex,
-    period: frame.period,
-    realtime: Boolean(frame.segments.realtime),
-    rows: frame.mainRows,
-    symbol: frame.symbol,
-  })
-  const settingsHash = createIndicatorSettingsHash({
-    indicator: storeV6MaIndicatorIdV2,
-    period: frame.period,
-    settings: pane.settings ?? null,
-    symbol: frame.symbol,
-  })
-  return { pageKey, settingsHash }
-}
-
 function writeMaSnapshot(frame: KLineChartRenderFrameV2, pane: KLineChartPaneFrame) {
-  const { pageKey, settingsHash } = createSnapshotContext(frame, pane)
+  const { pageKey, settingsHash } = createKLineChartIndicatorSnapshotContextV2({
+    frame,
+    indicatorId: storeV6MaIndicatorIdV2,
+    pane,
+  })
   const maRows = markMainMaRowsBreakBeforeRealtimeGapV2(frame, pane)
   writeIndicatorPageSnapshot({
     pageKey,
@@ -74,45 +62,37 @@ function writeMaSnapshot(frame: KLineChartRenderFrameV2, pane: KLineChartPaneFra
     settingsHashKey: storeV6MaIndicatorIdV2,
     symbol: frame.symbol,
   })
-  return {
-    ...(pane.settings && typeof pane.settings === 'object' ? pane.settings : {}),
+  return createKLineChartRuntimeCalcParamsV2({
+    frame,
     pageKey,
-    period: frame.period,
-    runtimeOnly: true,
+    pane,
     settingsHash,
-    symbol: frame.symbol,
-  }
+  })
 }
 
 export function installKLineChartMainMaOverlayV2(chart: Chart, frame: KLineChartRenderFrameV2) {
-  let enabled = false
   ensureTradingViewMaShiftIndicator()
+  const mount = createKLineChartIndicatorMountAdapterV2({
+    chart,
+    createStack: true,
+    indicatorName: storeV6MaIndicatorIdV2,
+    paneId: candlePaneId,
+  })
 
   const apply = (nextFrame: KLineChartRenderFrameV2) => {
     const pane = findMaPane(nextFrame)
     if (!pane || pane.renderRole !== 'main-overlay') {
-      if (enabled) {
-        chart.removeIndicator(candlePaneId, storeV6MaIndicatorIdV2)
-        enabled = false
-      }
+      mount.remove()
       return
     }
     const calcParams = [writeMaSnapshot(nextFrame, pane)]
-    if (chart.getIndicatorByPaneId(candlePaneId, storeV6MaIndicatorIdV2)) {
-      chart.overrideIndicator({ name: storeV6MaIndicatorIdV2, calcParams }, candlePaneId)
-    } else {
-      chart.createIndicator({ name: storeV6MaIndicatorIdV2, calcParams }, true, { id: candlePaneId })
-    }
-    enabled = true
+    mount.apply({ name: storeV6MaIndicatorIdV2, calcParams })
   }
 
   apply(frame)
 
   return {
-    destroy: () => {
-      if (enabled) chart.removeIndicator(candlePaneId, storeV6MaIndicatorIdV2)
-      enabled = false
-    },
+    destroy: mount.destroy,
     updateFrame: apply,
   }
 }

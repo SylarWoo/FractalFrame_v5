@@ -128,6 +128,18 @@ describe('buildStoreV6RealtimePageWindow', () => {
     expect(window?.sessionTimeFrom).toBe(sessionStart)
   })
 
+  it('keeps an explicit M30 weekly realtime open boundary without adding another bar', () => {
+    const sessionStart = shanghaiSeconds(2026, 6, 8, 6, 0)
+    const window = buildStoreV6RealtimePageWindow({
+      enabled: true,
+      period: 'M30',
+      sessionTimeFrom: sessionStart,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(window?.sessionTimeFrom).toBe(sessionStart)
+  })
+
   it('updates the active realtime tail row from a same-bar tick', () => {
     const sessionStart = shanghaiSeconds(2026, 6, 8, 6, 0)
     const barTime = shanghaiSeconds(2026, 6, 8, 18, 40)
@@ -160,6 +172,38 @@ describe('buildStoreV6RealtimePageWindow', () => {
     expect(second.tailRow?.low).toBe(2300)
     expect(second.tailRow?.close).toBe(2301)
     expect(second.tailRow?.volume).toBe(11)
+  })
+
+  it('increments realtime tick volume when MT5 ticks do not provide volume', () => {
+    const sessionStart = shanghaiSeconds(2026, 6, 8, 6, 0)
+    const barTime = shanghaiSeconds(2026, 6, 8, 18, 40)
+    const window = buildStoreV6RealtimePageWindow({
+      enabled: true,
+      period: 'M5',
+      sessionTimeFrom: sessionStart - 300,
+      symbol: 'XAUUSDm',
+    })
+    expect(window).not.toBeNull()
+
+    const first = mergeMt5RealtimeTickIntoWindow(window!, {
+      bid: 2300,
+      symbol: 'XAUUSDm',
+      time: barTime,
+      volume: 0,
+    })
+    const second = mergeMt5RealtimeTickIntoWindow(first, {
+      bid: 2301,
+      symbol: 'XAUUSDm',
+      time: barTime + 60,
+    })
+    const nextBar = mergeMt5RealtimeTickIntoWindow(second, {
+      bid: 2302,
+      symbol: 'XAUUSDm',
+      time: barTime + 300,
+    })
+
+    expect(second.tailRow?.volume).toBe(2)
+    expect(nextBar.tailRow?.volume).toBe(1)
   })
 
   it('loads realtime indicator warmup from StoreV6 before the first active row', async () => {

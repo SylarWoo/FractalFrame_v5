@@ -119,4 +119,85 @@ describe('buildChartRenderWindowV2', () => {
       [300, 'realtime'],
     ])
   })
+
+  it('translates Morgan Range realtime segment indices into render window index space', () => {
+    const historyRows = [kline(100, 'store-v6-page-slice-v2'), kline(200, 'store-v6-page-slice-v2')]
+    const realtimeRows = [kline(300, 'mt5-realtime-window-v2'), kline(400, 'mt5-realtime-window-v2')]
+    const historyWindow = {
+      boundary: {
+        actualFromGlobalIndex: 100,
+        actualTimeFrom: 100,
+        actualTimeTo: 200,
+        actualToGlobalIndex: 200,
+        requestedFromGlobalIndex: null,
+        requestedTimeFrom: 100,
+        requestedTimeTo: 200,
+        requestedToGlobalIndex: null,
+      },
+      calculationRows: historyRows,
+      displayOffset: 0,
+      historyRows,
+      indicators: {},
+      key: 'history',
+      page: {
+        fromGlobalIndex: 100,
+        index: 1,
+        limit: historyRows.length,
+        pageType: 'history',
+        realtime: false,
+        rows: historyRows.length,
+        timeFrom: 100,
+        timeTo: 200,
+        toGlobalIndex: 200,
+      },
+      pageIndex: 1,
+      period: 'M5',
+      renderData: {
+        indicators: {
+          MR_M5: {
+            key: 'history-mr',
+            rows: [{ center: 10, endIndex: 1, lower: 8, startIndex: 0, startTimestamp: 100_000, upper: 12 }],
+            source: 'history-test',
+          },
+        },
+        klineRows: historyRows,
+      },
+      source: 'store-v6-history-page-window-v2',
+      status: 'ready',
+      symbol: 'XAUUSDm',
+      warmupRows: [],
+    } satisfies StoreV6HistoryPageWindow
+    const realtimeWindow = {
+      activeRows: realtimeRows,
+      indicatorRequests: [],
+      indicators: {},
+      key: 'realtime',
+      period: 'M5',
+      renderData: {
+        indicators: {
+          MR_M5: {
+            key: 'realtime-mr',
+            rows: [{ center: 20, endIndex: 1, lower: 18, startIndex: 0, startTimestamp: 300_000, upper: 22 }],
+            source: 'realtime-test',
+          },
+        },
+        klineRows: realtimeRows,
+      },
+      sessionTimeFrom: 300,
+      sessionTimeTo: null,
+      source: 'store-v6-realtime-page-window-v2',
+      stableRows: realtimeRows.slice(0, -1),
+      status: 'ready',
+      symbol: 'XAUUSDm',
+      tailRow: realtimeRows[realtimeRows.length - 1],
+    } satisfies StoreV6RealtimePageWindow
+
+    const renderWindow = buildChartRenderWindowV2({ historyWindow, realtimeWindow })
+
+    expect(renderWindow.rows.map((row) => row.timestamp)).toEqual([100_000, 200_000, 300_000, 400_000])
+    expect(renderWindow.indicators.MR_M5.rows).toEqual([
+      expect.objectContaining({ endIndex: 1, startIndex: 0, startTimestamp: 100_000 }),
+      expect.objectContaining({ endIndex: 3, startIndex: 2, startTimestamp: 300_000 }),
+    ])
+  })
 })

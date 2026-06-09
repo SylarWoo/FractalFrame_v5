@@ -5,13 +5,17 @@ export type StoreV6IndicatorWindowKindV2 = 'history' | 'realtime'
 export type StoreV6IndicatorPaneRoleV2 = 'main' | 'sub'
 export type StoreV6IndicatorRenderRoleV2 = 'main-overlay' | 'sub-pane'
 export type StoreV6IndicatorCalculationModeV2 = 'computed' | 'mixed' | 'passthrough'
+export type StoreV6IndicatorRealtimeUpdateModeV2 = 'deferred' | 'tail' | 'window'
 export type StoreV6IndicatorWarmupModeV2 = 'currentWindowOnly' | 'dynamicRows' | 'fixedRows' | 'none'
 
 export type StoreV6IndicatorRequestSpecV2<Params = unknown> = {
+  dependencyOf?: string[]
   enabled?: boolean
   id: string
   paneId?: string
   params?: Params
+  requestedBy?: string[]
+  visible?: boolean
 }
 
 export type StoreV6IndicatorWarmupSpecV2<Params = unknown> = {
@@ -39,6 +43,8 @@ export type StoreV6HistoryIndicatorRequestContextV2<Params = unknown> = {
   paneRole: StoreV6IndicatorPaneRoleV2
   params?: Params
   period: string
+  computedDependencies?: StoreV6HistoryPageWindowIndicators
+  computedDependenciesByKey?: StoreV6HistoryPageWindowIndicators
   renderRole: StoreV6IndicatorRenderRoleV2
   request: StoreV6IndicatorRequestSpecV2<Params>
   symbol: string
@@ -55,6 +61,8 @@ export type StoreV6RealtimeIndicatorRequestContextV2<Params = unknown> = {
   paneRole: StoreV6IndicatorPaneRoleV2
   params?: Params
   period: string
+  computedDependencies?: StoreV6HistoryPageWindowIndicators
+  computedDependenciesByKey?: StoreV6HistoryPageWindowIndicators
   renderRole: StoreV6IndicatorRenderRoleV2
   request: StoreV6IndicatorRequestSpecV2<Params>
   sessionTimeFrom: number | null
@@ -75,6 +83,7 @@ export type StoreV6IndicatorDefinitionV2<Params = unknown> = {
   id: string
   paneId?: string
   paneRole?: StoreV6IndicatorPaneRoleV2
+  realtimeUpdateMode?: StoreV6IndicatorRealtimeUpdateModeV2
   renderRole?: StoreV6IndicatorRenderRoleV2
   warmup?: StoreV6IndicatorWarmupSpecV2<Params>
   warmupRows?: number | ((request: StoreV6IndicatorRequestSpecV2<Params>) => number)

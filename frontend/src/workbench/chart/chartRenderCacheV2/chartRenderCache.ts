@@ -1,13 +1,13 @@
 import { buildChartRenderWindowV2 } from '../chartRenderWindowV2'
-import type { ChartRenderWindowRowV2, ChartRenderWindowV2 } from '../chartRenderWindowV2'
+import type { ChartRenderWindowV2 } from '../chartRenderWindowV2'
 import type { StoreV6HistoryPageWindow } from '../historyPageWindowV2'
-import type { KLineChartFrameAlignment, KLineChartPaneFrame } from '../historyPageKLineChartFrameV2'
-import type { KLineChartRenderFrameSegment, KLineChartRenderFrameV2 } from '../klineChartRenderFrameV2'
+import type { KLineChartRenderFrameV2 } from '../klineChartRenderFrameV2'
 import { translateChartRenderWindowToKLineChartFrameV2 } from '../klineChartTranslatorV2'
 import type { StoreV6RealtimePageWindow } from '../realtimePageWindowV2'
-import type { StoreV6WindowKLine } from '../pageSliceV2'
 import type { CachedChartRenderFrameV2, ChartRenderCacheV2Debug, ChartRenderCacheV2PerfEntry } from './chartRenderCacheTypes'
 import { traceKLineChartPageV2 } from '../klineChartRendererV2/klineChartPageDebugProbeV2'
+import { createStoreV6IndicatorRequestSignatureV2 } from '../indicatorRequestV2/indicatorRequestSignatureV2'
+import { attachCurrentPaneFramesV2, patchTailRowIntoCachedFrameV2 } from './chartRenderFrameTailPatchV2'
 
 declare global {
   interface Window {
@@ -31,10 +31,6 @@ const stats = {
   historyWindow: { hits: 0, misses: 0 },
   realtimeWindow: { hits: 0, misses: 0 },
   renderWindow: { hits: 0, misses: 0 },
-}
-
-function finiteNumber(value: unknown) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function touchCacheEntry<K, V>(cache: Map<K, V>, key: K, value: V, maxEntries: number) {
@@ -61,11 +57,7 @@ function realtimeStableKey(realtimeWindow: StoreV6RealtimePageWindow | null) {
   const stablePart = rows.length
     ? `stable:${rows[0]?.time ?? 'none'}:${rows[rows.length - 1]?.time ?? 'none'}:${rows.length}`
     : 'stable-empty'
-  const indicatorPart = realtimeWindow.indicatorRequests.length
-    ? realtimeWindow.indicatorRequests
-        .map((request) => `${request.id}:${request.enabled === false ? 'off' : 'on'}:${request.paneId ?? ''}:${JSON.stringify(request.params ?? null)}`)
-        .join('|')
-    : 'no-indicators'
+  const indicatorPart = createStoreV6IndicatorRequestSignatureV2(realtimeWindow.indicatorRequests)
   return [
     realtimeWindow.symbol,
     realtimeWindow.period,
@@ -112,26 +104,6 @@ function resolveMainFrameCacheKey(renderWindow: ChartRenderWindowV2) {
   ].join(':')
 }
 
-function createPaneFrames(renderWindow: ChartRenderWindowV2): Record<string, KLineChartPaneFrame> {
-  return Object.fromEntries(Object.entries(renderWindow.indicators).map(([name, series]) => [name, {
-    key: series.key,
-    paneId: series.paneId,
-    paneRole: series.paneRole,
-    renderRole: series.renderRole,
-    rows: series.displayRows ?? series.rows,
-    settings: series.settings,
-    source: 'history-page-kline-chart-pane-frame-v2' as const,
-  }]))
-}
-
-function attachCurrentPaneFrames(frame: KLineChartRenderFrameV2, renderWindow: ChartRenderWindowV2): KLineChartRenderFrameV2 {
-  return {
-    ...frame,
-    key: `kline-chart-render-frame-v2:${renderWindow.key}`,
-    panes: createPaneFrames(renderWindow),
-  }
-}
-
 function buildStableRealtimeWindow(realtimeWindow: StoreV6RealtimePageWindow | null): StoreV6RealtimePageWindow | null {
   if (!realtimeWindow) return null
   const stableKey = realtimeStableKey(realtimeWindow)
@@ -144,181 +116,6 @@ function buildStableRealtimeWindow(realtimeWindow: StoreV6RealtimePageWindow | n
       klineRows: realtimeWindow.stableRows,
     },
     tailRow: null,
-  }
-}
-
-function realtimeTailRowToKLineData(row: StoreV6WindowKLine | null | undefined) {
-  if (!row) return null
-  const timestamp = finiteNumber(row.timestamp)
-  const open = finiteNumber(row.open)
-  const high = finiteNumber(row.high)
-  const low = finiteNumber(row.low)
-  const close = finiteNumber(row.close)
-  const volume = finiteNumber(row.volume ?? 0)
-  if (timestamp == null || open == null || high == null || low == null || close == null || volume == null) return null
-  return {
-    close,
-    high,
-    low,
-    open,
-    timestamp,
-    turnover: finiteNumber(row.turnover) ?? undefined,
-    volume,
-  }
-}
-
-function realtimeTailRowToRenderWindowRow(row: StoreV6WindowKLine | null | undefined): ChartRenderWindowRowV2 | null {
-  if (!row || finiteNumber(row.timestamp) == null) return null
-  return {
-    ...row,
-    timestamp: Number(row.timestamp),
-    windowSource: 'realtime',
-  }
-}
-
-function cloneAlignment(alignment: KLineChartFrameAlignment): KLineChartFrameAlignment {
-  return {
-    barKeyToDataIndex: new Map(alignment.barKeyToDataIndex),
-    dataIndexToBarKey: [...alignment.dataIndexToBarKey],
-    dataIndexToGlobalIndex: [...alignment.dataIndexToGlobalIndex],
-    dataIndexToTimestamp: [...alignment.dataIndexToTimestamp],
-    globalIndexToDataIndex: new Map(alignment.globalIndexToDataIndex),
-    timestampToDataIndex: new Map(alignment.timestampToDataIndex),
-  }
-}
-
-function patchAlignmentForTail(
-  alignment: KLineChartFrameAlignment,
-  row: StoreV6WindowKLine,
-  dataIndex: number,
-  append: boolean,
-) {
-  const next = cloneAlignment(alignment)
-  const timestamp = Number(row.timestamp)
-  if (!append) {
-    const previousBarKey = next.dataIndexToBarKey[dataIndex]
-    if (previousBarKey) next.barKeyToDataIndex.delete(previousBarKey)
-    const previousGlobalIndex = next.dataIndexToGlobalIndex[dataIndex]
-    if (previousGlobalIndex != null) next.globalIndexToDataIndex.delete(previousGlobalIndex)
-  }
-  next.barKeyToDataIndex.set(row.barKey, dataIndex)
-  next.dataIndexToBarKey[dataIndex] = row.barKey
-  next.dataIndexToGlobalIndex[dataIndex] = row.globalIndex
-  next.dataIndexToTimestamp[dataIndex] = timestamp
-  next.timestampToDataIndex.set(timestamp, dataIndex)
-  if (row.globalIndex != null) next.globalIndexToDataIndex.set(row.globalIndex, dataIndex)
-  return next
-}
-
-function patchRealtimeSegmentForTail(
-  frame: KLineChartRenderFrameV2,
-  realtimeWindow: StoreV6RealtimePageWindow,
-  dataIndex: number,
-  append: boolean,
-): KLineChartRenderFrameSegment {
-  const existing = frame.segments.realtime
-  if (existing) {
-    return {
-      ...existing,
-      key: realtimeWindow.key,
-      rows: append ? existing.rows + 1 : existing.rows,
-      timeTo: realtimeWindow.tailRow?.timestamp ?? existing.timeTo,
-      toIndex: append ? dataIndex : Math.max(existing.toIndex, dataIndex),
-    }
-  }
-  const timestamp = realtimeWindow.tailRow?.timestamp ?? null
-  return {
-    fromIndex: dataIndex,
-    key: realtimeWindow.key,
-    rows: 1,
-    source: 'realtime',
-    timeFrom: timestamp,
-    timeTo: timestamp,
-    toIndex: dataIndex,
-  }
-}
-
-function patchTailRowIntoFrame(
-  frame: KLineChartRenderFrameV2,
-  renderWindow: ChartRenderWindowV2,
-  realtimeWindow: StoreV6RealtimePageWindow | null,
-) {
-  const tailRow = realtimeWindow?.tailRow ?? null
-  const tail = realtimeTailRowToKLineData(tailRow)
-  if (!realtimeWindow || !tailRow || !tail) {
-    return {
-      frame: attachCurrentPaneFrames(frame, renderWindow),
-      renderWindow,
-      tailPatched: false,
-    }
-  }
-  const timestamp = Number(tail.timestamp)
-  const existingIndex = frame.alignment.timestampToDataIndex.get(timestamp)
-  const lastTimestamp = finiteNumber(frame.mainRows[frame.mainRows.length - 1]?.timestamp)
-  const append = existingIndex == null
-  if (append && lastTimestamp != null && timestamp < lastTimestamp) {
-    return null
-  }
-  const dataIndex = append ? frame.mainRows.length : existingIndex
-  const mainRows = append ? [...frame.mainRows, tail] : [...frame.mainRows]
-  mainRows[dataIndex] = tail
-  const alignment = patchAlignmentForTail(frame.alignment, tailRow, dataIndex, append)
-  const realtimeSegment = patchRealtimeSegmentForTail(frame, realtimeWindow, dataIndex, append)
-  const patchedFrame: KLineChartRenderFrameV2 = {
-    ...attachCurrentPaneFrames(frame, renderWindow),
-    alignment,
-    key: `kline-chart-render-frame-v2:${renderWindow.key}:tail:${tailRow.time}:${tailRow.open}:${tailRow.high}:${tailRow.low}:${tailRow.close}:${tailRow.volume ?? 0}`,
-    mainRows,
-    segments: {
-      ...frame.segments,
-      realtime: realtimeSegment,
-    },
-  }
-  const patchedRenderWindow = patchTailRowIntoRenderWindow(renderWindow, realtimeWindow, append, dataIndex)
-  return {
-    frame: patchedFrame,
-    renderWindow: patchedRenderWindow,
-    tailPatched: true,
-  }
-}
-
-function patchTailRowIntoRenderWindow(
-  renderWindow: ChartRenderWindowV2,
-  realtimeWindow: StoreV6RealtimePageWindow,
-  append: boolean,
-  dataIndex: number,
-): ChartRenderWindowV2 {
-  const tailRow = realtimeTailRowToRenderWindowRow(realtimeWindow.tailRow)
-  if (!tailRow) return renderWindow
-  const rows = append ? [...renderWindow.rows, tailRow] : [...renderWindow.rows]
-  rows[dataIndex] = tailRow
-  const existing = renderWindow.segments.realtime
-  const tailTimeSeconds = Math.floor(Number(tailRow.timestamp) / 1000)
-  const realtimeSegment = existing
-    ? {
-        ...existing,
-        key: realtimeWindow.key,
-        rows: append ? existing.rows + 1 : existing.rows,
-        timeTo: tailTimeSeconds,
-        toIndex: append ? dataIndex : Math.max(existing.toIndex, dataIndex),
-      }
-    : {
-        fromIndex: dataIndex,
-        key: realtimeWindow.key,
-        rows: 1,
-        source: 'realtime' as const,
-        timeFrom: tailTimeSeconds,
-        timeTo: tailTimeSeconds,
-        toIndex: dataIndex,
-      }
-  return {
-    ...renderWindow,
-    key: `${renderWindow.key}:tail:${tailRow.time}:${tailRow.open}:${tailRow.high}:${tailRow.low}:${tailRow.close}:${tailRow.volume ?? 0}`,
-    rows,
-    segments: {
-      ...renderWindow.segments,
-      realtime: realtimeSegment,
-    },
   }
 }
 
@@ -371,7 +168,7 @@ function readOrTranslateFrame(renderWindow: ChartRenderWindowV2) {
   const cached = readCacheEntry(finalFrameCache, key, maxFrameEntries)
   if (cached) {
     stats.finalFrame.hits += 1
-    return { hit: true, value: attachCurrentPaneFrames(cached, renderWindow) }
+    return { hit: true, value: attachCurrentPaneFramesV2(cached, renderWindow) }
   }
   stats.finalFrame.misses += 1
   const frame = translateChartRenderWindowToKLineChartFrameV2(renderWindow)
@@ -409,7 +206,7 @@ export function buildCachedKLineChartRenderFrameV2(options: {
   const renderWindow = readOrBuildRenderWindow(history.value, realtime.value)
   const translateStart = performance.now()
   const frame = readOrTranslateFrame(renderWindow.value)
-  const patched = patchTailRowIntoFrame(frame.value, renderWindow.value, options.realtimeWindow ?? null)
+  const patched = patchTailRowIntoCachedFrameV2(frame.value, renderWindow.value, options.realtimeWindow ?? null)
   if (!patched) {
     const fallbackWindow = buildChartRenderWindowV2({ historyWindow: history.value, realtimeWindow: options.realtimeWindow ?? null })
     const fallbackFrame = translateChartRenderWindowToKLineChartFrameV2(fallbackWindow)

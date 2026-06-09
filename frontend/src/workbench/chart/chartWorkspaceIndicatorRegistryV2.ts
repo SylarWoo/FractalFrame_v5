@@ -1,0 +1,26 @@
+import {
+  createStoreV6IndicatorRegistryV2,
+  storeV6MaIndicatorDefinitionV2,
+  storeV6MmfV3IndicatorDefinitionV2,
+  storeV6MorganRangeM5IndicatorDefinitionV2,
+  storeV6MorganRangeM30IndicatorDefinitionV2,
+  storeV6StochIndicatorDefinitionV2,
+  storeV6TsiIndicatorDefinitionV2,
+  storeV6VdoIndicatorDefinitionV2,
+  storeV6VmiIndicatorDefinitionV2,
+  storeV6VolIndicatorDefinitionV2,
+  storeV6VwapIndicatorDefinitionV2,
+} from './indicatorRequestV2'
+
+export const chartWorkspaceIndicatorRegistryV2 = createStoreV6IndicatorRegistryV2()
+
+chartWorkspaceIndicatorRegistryV2.register(storeV6MaIndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6MmfV3IndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6MorganRangeM5IndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6MorganRangeM30IndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6VolIndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6VwapIndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6StochIndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6TsiIndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6VdoIndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6VmiIndicatorDefinitionV2)

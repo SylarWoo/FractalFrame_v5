@@ -118,6 +118,7 @@ export const storeV6VwapIndicatorDefinitionV2: StoreV6IndicatorDefinitionV2<Part
   id: storeV6VwapIndicatorIdV2,
   paneId: storeV6VwapPaneIdV2,
   paneRole: 'main',
+  realtimeUpdateMode: 'window',
   renderRole: 'main-overlay',
   warmup: {
     historyRows: 0,

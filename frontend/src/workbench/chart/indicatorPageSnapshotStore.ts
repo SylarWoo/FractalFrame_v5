@@ -115,6 +115,7 @@ export type IndicatorPageSnapshot = {
 
 const snapshots = new Map<string, IndicatorPageSnapshot>()
 const maxSnapshots = 24
+const writeIdentities = new Map<string, string>()
 
 function stableStringify(value: unknown): string {
   if (value == null || typeof value !== 'object') return JSON.stringify(value)
@@ -130,6 +131,25 @@ export function createIndicatorSettingsHash(value: unknown) {
     hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0
   }
   return `v1:${Math.abs(hash).toString(36)}:${text.length}`
+}
+
+function createSnapshotRowsIdentity(rows: IndicatorPageSnapshotRow[]) {
+  const first = rows[0]
+  const last = rows[rows.length - 1]
+  const rowToken = (row: IndicatorPageSnapshotRow | undefined) => {
+    if (!row) return 'none'
+    return [
+      row.barKey,
+      row.sourceIndex,
+      row.time,
+      createIndicatorSettingsHash(row),
+    ].join(',')
+  }
+  return [
+    rows.length,
+    rowToken(first),
+    rowToken(last),
+  ].join(':')
 }
 
 export function createIndicatorPageKey({
@@ -223,6 +243,16 @@ export function createIndicatorSnapshotRows({
 
 export function writeIndicatorPageSnapshot(snapshot: Omit<IndicatorPageSnapshot, 'byBarKey' | 'calculatedAt'> & { calculatedAt?: string; settingsHashKey?: string }) {
   const existing = snapshots.get(snapshot.pageKey)
+  const writeIdentity = [
+    snapshot.pageKey,
+    snapshot.settingsHash,
+    snapshot.settingsHashKey ?? '',
+    createSnapshotRowsIdentity(snapshot.rows),
+    createIndicatorSettingsHash(snapshot.morganRange ?? null),
+  ].join('|')
+  if (existing && writeIdentities.get(snapshot.pageKey) === writeIdentity) {
+    return existing
+  }
   const byBarKey: Record<string, IndicatorPageSnapshotRow> = {}
   existing?.rows.forEach((row) => {
     byBarKey[row.barKey] = { ...row }
@@ -265,10 +295,12 @@ export function writeIndicatorPageSnapshot(snapshot: Omit<IndicatorPageSnapshot,
     symbol: snapshot.symbol,
   }
   snapshots.set(snapshot.pageKey, next)
+  writeIdentities.set(snapshot.pageKey, writeIdentity)
   while (snapshots.size > maxSnapshots) {
     const oldest = snapshots.keys().next().value
     if (oldest == null) break
     snapshots.delete(oldest)
+    writeIdentities.delete(oldest)
   }
   return next
 }
@@ -285,4 +317,5 @@ export function readIndicatorPageSnapshot(pageKey: string | null | undefined) {
 export function clearIndicatorPageSnapshot(pageKey: string | null | undefined) {
   if (!pageKey) return
   snapshots.delete(pageKey)
+  writeIdentities.delete(pageKey)
 }

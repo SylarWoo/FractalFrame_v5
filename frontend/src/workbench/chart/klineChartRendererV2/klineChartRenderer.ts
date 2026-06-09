@@ -92,9 +92,15 @@ export function applyKLineChartFrameTailUpdate(
   chart: Chart,
   frame: KLineChartRenderFrameV2,
 ): KLineChartRenderResult {
-  const latest = frame.mainRows[frame.mainRows.length - 1]
-  if (latest) {
-    chart.updateData?.(latest)
+  const currentLength = chart.getDataList?.().length ?? frame.mainRows.length
+  const fromIndex = Math.max(0, Math.min(currentLength - 1, frame.mainRows.length - 1))
+  const rows = frame.mainRows.slice(fromIndex)
+  rows.forEach((row) => {
+    chart.updateData?.(row)
+  })
+  if (rows.length === 0) {
+    const latest = frame.mainRows[frame.mainRows.length - 1]
+    if (latest) chart.updateData?.(latest)
   }
   return {
     key: frame.key,

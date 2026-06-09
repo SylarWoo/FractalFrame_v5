@@ -10,6 +10,7 @@ declare global {
   interface Window {
     __ffPageProbe?: {
       events: PageProbeEvent[]
+      logToConsole?: boolean
       clear: () => void
     }
   }
@@ -44,6 +45,5 @@ export function traceKLineChartPageV2(event: string, payload: PageProbePayload =
   }
   probe.events.push(entry)
   if (probe.events.length > maxEvents) probe.events.splice(0, probe.events.length - maxEvents)
-  console.debug(`[ff-page] ${event}`, payload)
+  if (probe.logToConsole === true) console.debug(`[ff-page] ${event}`, payload)
 }
-

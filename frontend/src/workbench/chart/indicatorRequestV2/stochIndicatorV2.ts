@@ -110,6 +110,7 @@ export const storeV6StochIndicatorDefinitionV2: StoreV6IndicatorDefinitionV2<Par
   id: storeV6StochIndicatorIdV2,
   paneId: storeV6StochPaneIdV2,
   paneRole: 'sub',
+  realtimeUpdateMode: 'window',
   renderRole: 'sub-pane',
   warmup: {
     historyRows: requiredWarmupRows,
