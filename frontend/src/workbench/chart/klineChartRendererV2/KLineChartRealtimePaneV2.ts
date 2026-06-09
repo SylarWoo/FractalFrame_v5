@@ -2,6 +2,8 @@ import { ActionType, DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
 import type { ChartPageNavigation } from '../chartRuntimeTypes'
 import type { KLineChartRenderFrameV2 } from '../klineChartRenderFrameV2'
+import { readSettingsBooleanValue, readSettingsSymbolState, settingsSymbolChangedEvent } from '../../settingsSymbolState'
+import { chartSettingDefaults, chartSettingKeys } from '../../settings/chartSettingsSchema'
 import { kLineChartConfigV2 } from './klineChartConfigV2'
 import './klineChartRealtimePaneV2.css'
 
@@ -11,6 +13,13 @@ type VisibleRangeLike = {
 }
 
 const candlePaneId = 'candle_pane'
+
+type SettingsLineSwatchValue = {
+  hex?: string
+  lineStyle?: string
+  opacity?: number
+  thickness?: number
+}
 
 function finiteNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -28,14 +37,61 @@ function indexToX(index: number, realFrom: number, realTo: number, width: number
   return ((index - realFrom) / Math.max(1, realTo - realFrom)) * width
 }
 
+export function resolveRealtimeBoundaryIndex(frame: KLineChartRenderFrameV2, navigation?: ChartPageNavigation | null) {
+  const realtime = frame.segments.realtime
+  if (realtime && realtime.rows > 0) return Math.max(0, realtime.fromIndex)
+  if (!navigation) return null
+  const history = frame.segments.history
+  if (!history || history.rows <= 0) return null
+  return Math.max(0, history.toIndex)
+}
+
+function resolveSwatchColor(value: unknown, fallback: string) {
+  if (!value || typeof value !== 'object' || !('hex' in value)) return fallback
+  const swatch = value as SettingsLineSwatchValue
+  const hex = typeof swatch.hex === 'string' ? swatch.hex : fallback
+  const opacity = typeof swatch.opacity === 'number' && Number.isFinite(swatch.opacity)
+    ? Math.max(0, Math.min(swatch.opacity, 1))
+    : 1
+  if (opacity >= 0.999) return hex
+  return `${hex}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`
+}
+
+function resolveLineStyle(value: unknown) {
+  const swatch = value && typeof value === 'object' ? value as SettingsLineSwatchValue : null
+  if (swatch?.lineStyle === 'dashed') return 'dashed'
+  if (swatch?.lineStyle === 'dotted') return 'dotted'
+  return 'solid'
+}
+
+function resolveLineThickness(value: unknown) {
+  const swatch = value && typeof value === 'object' ? value as SettingsLineSwatchValue : null
+  const thickness = typeof swatch?.thickness === 'number' && Number.isFinite(swatch.thickness) ? swatch.thickness : 1
+  return Math.max(1, Math.min(Math.round(thickness), 4))
+}
+
+function readRealtimeWindowSeparatorStyle() {
+  const visible = readSettingsBooleanValue(
+    chartSettingKeys.realtimeWindowSeparatorVisible,
+    chartSettingDefaults.realtimeWindowSeparatorVisible,
+  )
+  const swatch = readSettingsSymbolState()['events.realtimeWindowSeparator.color']
+  return {
+    color: resolveSwatchColor(swatch, '#4984d6'),
+    lineStyle: resolveLineStyle(swatch),
+    thickness: resolveLineThickness(swatch),
+    visible,
+  }
+}
+
 function resolveRealtimeBoundaryX(options: {
   frame: KLineChartRenderFrameV2
   mainRect: DOMRect
+  navigation?: ChartPageNavigation | null
   visibleRange: { realFrom: number; realTo: number }
 }) {
-  const realtime = options.frame.segments.realtime
-  if (!realtime || realtime.rows <= 0) return null
-  const boundaryIndex = Math.max(0, realtime.fromIndex - 0.5)
+  const boundaryIndex = resolveRealtimeBoundaryIndex(options.frame, options.navigation)
+  if (boundaryIndex == null) return null
   if (options.visibleRange.realTo < boundaryIndex || options.visibleRange.realFrom > boundaryIndex) return null
   return Math.max(0, Math.min(options.mainRect.width, indexToX(
     boundaryIndex,
@@ -47,13 +103,17 @@ function resolveRealtimeBoundaryX(options: {
 
 function renderMainOverlay(root: HTMLElement, boundaryX: number | null) {
   root.style.display = 'block'
+  const separator = readRealtimeWindowSeparatorStyle()
 
   const boundary = document.createElement('div')
   boundary.className = 'ff-kline-chart-realtime-pane-v2__boundary'
-  if (boundaryX == null) {
+  if (boundaryX == null || !separator.visible) {
     boundary.style.display = 'none'
   } else {
     boundary.style.left = `${boundaryX}px`
+    boundary.style.borderLeftColor = separator.color
+    boundary.style.borderLeftStyle = separator.lineStyle
+    boundary.style.borderLeftWidth = `${separator.thickness}px`
   }
   root.appendChild(boundary)
 }
@@ -213,10 +273,11 @@ export function installKLineChartRealtimePaneV2(
 
     mainRoot.replaceChildren()
     const realtime = frame.segments.realtime
-    const boundaryRawX = realtime && realtime.rows > 0
-      ? indexToX(Math.max(0, realtime.fromIndex - 0.5), visibleRange.realFrom, visibleRange.realTo, paneRect.width)
+    const boundaryIndex = resolveRealtimeBoundaryIndex(frame, pageNavigation)
+    const boundaryRawX = boundaryIndex != null
+      ? indexToX(boundaryIndex, visibleRange.realFrom, visibleRange.realTo, paneRect.width)
       : paneRect.width + 1
-    const boundaryX = resolveRealtimeBoundaryX({ frame, mainRect: paneRect, visibleRange })
+    const boundaryX = resolveRealtimeBoundaryX({ frame, mainRect: paneRect, navigation: pageNavigation, visibleRange })
     renderMainOverlay(mainRoot, boundaryX)
     renderPageLabels(mainRoot, {
       boundaryRawX,
@@ -237,6 +298,7 @@ export function installKLineChartRealtimePaneV2(
   chart.subscribeAction(ActionType.OnScroll, handleChartChange)
   chart.subscribeAction(ActionType.OnVisibleRangeChange, handleChartChange)
   chart.subscribeAction(ActionType.OnZoom, handleChartChange)
+  window.addEventListener(settingsSymbolChangedEvent, handleChartChange)
   window.addEventListener('resize', handleChartChange)
   scheduleRender()
 
@@ -248,6 +310,7 @@ export function installKLineChartRealtimePaneV2(
       chart.unsubscribeAction(ActionType.OnScroll, handleChartChange)
       chart.unsubscribeAction(ActionType.OnVisibleRangeChange, handleChartChange)
       chart.unsubscribeAction(ActionType.OnZoom, handleChartChange)
+      window.removeEventListener(settingsSymbolChangedEvent, handleChartChange)
       window.removeEventListener('resize', handleChartChange)
       mainRoot.remove()
     },

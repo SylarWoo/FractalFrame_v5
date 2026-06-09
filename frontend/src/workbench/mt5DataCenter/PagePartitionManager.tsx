@@ -1,13 +1,33 @@
 ﻿import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ChartPageNavigation, ChartPageNavigationTarget, ChartPageTarget } from '../chart/chartRuntimeTypes'
+import {
+  clearHistoryPageCachesV2,
+} from '../chart/historyPageCacheCleanupV2'
+import {
+  historyPageDailyRolloverRebuildEvent,
+  isHistoryPageIndexCacheStaleAfterDailyRollover,
+  type HistoryPageDailyRolloverRebuildDetail,
+} from '../chart/pagePartition/historyPageDailyRolloverV2'
+import {
+  resolveM5AnchorRuntimeContextFromPagesV2,
+} from '../chart/pagePartition/m5AnchorRuntimeContextV2'
+import {
+  readRealtimePageMonitorSnapshotV2,
+  type RealtimePageMonitorSnapshotV2,
+} from '../chart/realtimePageWindowV2/realtimePageMonitorV2'
 import { requestStoreV6HistoryPage } from '../chart/historyPageRequestV2'
 import { buildStoreV6HistoryPageWindow, type StoreV6HistoryPageWindow } from '../chart/historyPageWindowV2'
+import { traceKLineChartPageV2 } from '../chart/klineChartRendererV2/klineChartPageDebugProbeV2'
+import { resolveKLineChartRefreshRestorePageIndexV2 } from '../chart/klineChartRendererV2/klineChartRefreshRestoreConfigV2'
+import { resolveM5RealtimeOpenFromHistoryClose } from '../chart/pagePartition/timeAligned/m5TradingAnchors'
+import { m5TradingDaySlidingWeekProfile } from '../chart/pagePartition/timeAligned/timeAlignedPageTypes'
 import {
   buildStoreV6PagePartition,
   type StoreV6PagePartition,
 } from '../chart/pagePartition/pagePartitionBuilder'
 import { writeString } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
+import { workbenchEvents } from '../persistence/workbenchEvents'
 import { periodFromStoreTableKey } from './storeV6StatusFormat'
 import type { StoreTableRow } from './storeV6StatusFormat'
 import { fetchStoreV6DailyMaintenanceEvents } from '../../services/mt5/mt5SymbolsApi'
@@ -64,6 +84,9 @@ export function PagePartitionManager({
   watchlistRealtimeReady,
 }: PagePartitionManagerProps) {
   const reloadIdRef = useRef(0)
+  const autoBuildCacheKeyRef = useRef('')
+  const maintenanceRebuildRunIdRef = useRef('')
+  const maintenanceRebuildInitializedRef = useRef(false)
   const [selectedPage, setSelectedPage] = useState(1)
   const [pages, setPages] = useState<RealtimePageRow[]>([])
   const [building, setBuilding] = useState(false)
@@ -76,6 +99,7 @@ export function PagePartitionManager({
     ?? storeRows.find((row) => row.period.toUpperCase() === selectedPeriod)
   const totalRows = parseRowsCount(selectedStoreRow?.rowsCount ?? selectedStoreRow?.count)
   const [pageTotalRows, setPageTotalRows] = useState<number | null>(totalRows)
+  const [realtimePageMonitor, setRealtimePageMonitor] = useState<RealtimePageMonitorSnapshotV2 | null>(null)
   const partitionForCacheKey = buildStoreV6PagePartition({
     historyPageSize: historicalPageSize,
     livePageSize: realtimePageSize,
@@ -111,22 +135,17 @@ export function PagePartitionManager({
     }
     : null
 
-  const resolveRealtimeStartFromPage = (page: RealtimePageRow) => {
-    if (typeof page.timeTo !== 'number' || !Number.isFinite(page.timeTo)) return null
-    const date = new Date(page.timeTo * 1000)
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      day: '2-digit',
-      month: '2-digit',
-      timeZone: 'Asia/Shanghai',
-      year: 'numeric',
-    }).formatToParts(date)
-    const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value
-    const year = Number(get('year'))
-    const month = Number(get('month'))
-    const day = Number(get('day'))
-    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null
-    return Math.floor(Date.UTC(year, month - 1, day - 1, 22, 0, 0) / 1000)
+  const resolveRealtimeStartFromPages = (sourcePages: RealtimePageRow[]) => {
+    const latestHistoryPage = sourcePages[0]
+    if (!latestHistoryPage || typeof latestHistoryPage.timeTo !== 'number' || !Number.isFinite(latestHistoryPage.timeTo)) return null
+    return resolveM5RealtimeOpenFromHistoryClose({
+      historyTo: latestHistoryPage.timeTo,
+      profile: m5TradingDaySlidingWeekProfile,
+      symbol: selectedSymbol,
+    })
   }
+
+  const resolveRealtimeMonitorSessionStart = (sourcePages = pages) => resolveRealtimeStartFromPages(sourcePages)
 
   const buildPageNavigation = (
     page: RealtimePageRow,
@@ -135,7 +154,7 @@ export function PagePartitionManager({
   ): ChartPageNavigation => {
     const actualTimeFrom = historyPageWindow.boundary.actualTimeFrom ?? page.timeFrom ?? null
     const actualTimeTo = historyPageWindow.boundary.actualTimeTo ?? page.timeTo ?? null
-    const realtimeStart = resolveRealtimeStartFromPage(page)
+    const realtimeStart = resolveRealtimeStartFromPages(sourcePages)
     const older = toPageNavigationTarget(sourcePages.find((item) => item.index === page.index + 1))
     const newer = page.index > 1
       ? toPageNavigationTarget(sourcePages.find((item) => item.index === page.index - 1))
@@ -151,7 +170,7 @@ export function PagePartitionManager({
       newer,
       onSelectPage: (pageIndex: number) => {
         const nextPage = sourcePages.find((item) => item.index === pageIndex)
-        if (nextPage) openPage(nextPage, sourcePages)
+        if (nextPage) openPage(nextPage, sourcePages, 'chart-navigation')
       },
       older,
       realtimeStart,
@@ -168,6 +187,9 @@ export function PagePartitionManager({
     writePageIndexCache(cacheKey, {
       builtAt: new Date().toISOString(),
       livePageSize: realtimePageSize,
+      m5AnchorMeta: resolvePartitionCacheKind(partition) === 'time'
+        ? resolveM5AnchorRuntimeContextFromPagesV2({ pages: nextPages, symbol: selectedSymbol })
+        : null,
       pageSize: historicalPageSize,
       pages: nextPages,
       partitionKind: resolvePartitionCacheKind(partition),
@@ -179,14 +201,28 @@ export function PagePartitionManager({
     })
   }
 
-  const openPage = (page: RealtimePageRow, sourcePages = pages) => {
+  const openPage = (page: RealtimePageRow, sourcePages = pages, reason = 'unknown') => {
     const period = selectedPeriod
     if (!period) return
+    traceKLineChartPageV2('PagePartitionManager.openPage.start', {
+      cacheKey,
+      pageIndex: page.index,
+      reason,
+      sourcePages: sourcePages.map((item) => item.index).slice(0, 8),
+      symbol: selectedSymbol,
+      period,
+    })
     const currentPartition = buildCurrentPartition()
     if (resolvePartitionCacheKind(currentPartition) !== 'time') {
       setPartitionStatus('旧 rows 分页/加载链路已移除；该周期需要接入新的时间分页器后才能打开页面。')
       return
     }
+    clearHistoryPageCachesV2({
+      pageIndex: page.index,
+      reason: 'history-page-switch',
+      symbol: selectedSymbol,
+      period,
+    })
     setSelectedPage(page.index)
     const reloadId = reloadIdRef.current + 1
     reloadIdRef.current = reloadId
@@ -199,7 +235,21 @@ export function PagePartitionManager({
     })
       .then((historyPage) => buildStoreV6HistoryPageWindow({ historyPage }))
       .then((historyPageWindow) => {
-        if (reloadIdRef.current !== reloadId) return
+        if (reloadIdRef.current !== reloadId) {
+          traceKLineChartPageV2('PagePartitionManager.openPage.staleResult', {
+            pageIndex: page.index,
+            reason,
+            reloadId,
+            currentReloadId: reloadIdRef.current,
+          })
+          return
+        }
+        traceKLineChartPageV2('PagePartitionManager.openPage.ready', {
+          historyWindowPageIndex: historyPageWindow.pageIndex,
+          pageIndex: page.index,
+          reason,
+          rows: historyPageWindow.historyRows.length,
+        })
         onOpenChart?.({
           historyPageWindow,
           pageNavigation: buildPageNavigation(page, sourcePages, historyPageWindow),
@@ -224,16 +274,14 @@ export function PagePartitionManager({
       })
       .catch((err) => {
         if (reloadIdRef.current !== reloadId) return
+        traceKLineChartPageV2('PagePartitionManager.openPage.error', {
+          error: err instanceof Error ? err.message : String(err),
+          pageIndex: page.index,
+          reason,
+        })
         setPartitionStatus(`第 ${page.index} 页历史窗口加载失败：${err instanceof Error ? err.message : String(err)}`)
       })
   }
-
-  useEffect(() => {
-    if (!pages.length || building) return
-    const page = pages.find((item) => item.index === selectedPage) ?? pages[0]
-    if (!page) return
-    openPage(page, pages)
-  }, [watchlistRealtimeEnabled])
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -246,8 +294,44 @@ export function PagePartitionManager({
       }
       const cached = readPageIndexCache()[cacheKey]
       const currentPartition = buildCurrentPartition()
-      const cacheCurrent = isCurrentCache(cached, currentPartition)
-      if (cached && !cacheCurrent) deletePageIndexCache(cacheKey)
+      const cachedM5AnchorMeta = cached?.m5AnchorMeta ?? resolveM5AnchorRuntimeContextFromPagesV2({
+        pages: cached?.pages,
+        symbol: selectedSymbol,
+      })
+      const cacheMissingM5AnchorMeta = Boolean(cached) &&
+        resolvePartitionCacheKind(currentPartition) === 'time' &&
+        !cachedM5AnchorMeta
+      const cacheExpiredAfterDailyClose = resolvePartitionCacheKind(currentPartition) === 'time' &&
+        isHistoryPageIndexCacheStaleAfterDailyRollover({
+          builtAt: cached?.builtAt,
+          symbol: selectedSymbol,
+        })
+      const cacheCurrent = isCurrentCache(cached, currentPartition) && !cacheExpiredAfterDailyClose && !cacheMissingM5AnchorMeta
+      if (cached && !cacheCurrent) {
+        clearHistoryPageCachesV2({
+          reason: 'stale-page-index-cache',
+          symbol: selectedSymbol,
+          period: selectedPeriod,
+        })
+        deletePageIndexCache(cacheKey)
+        setLastResetInfo(readLastResetCache()[cacheKey] ?? null)
+        setPages([])
+        setPartitionStatus(cacheExpiredAfterDailyClose
+          ? '分页缓存已跨过日收盘，正在自动重建...'
+          : cacheMissingM5AnchorMeta
+          ? '分页缓存缺少 M5 锚点信息，正在自动重建...'
+          : '分页缓存版本已更新，正在自动重建...')
+        window.setTimeout(() => buildPages('auto'), 0)
+        return
+      }
+      if (!cached && resolvePartitionCacheKind(currentPartition) === 'time' && autoBuildCacheKeyRef.current !== cacheKey) {
+        autoBuildCacheKeyRef.current = cacheKey
+        setLastResetInfo(readLastResetCache()[cacheKey] ?? null)
+        setPages([])
+        setPartitionStatus('暂无分页缓存，正在自动整理...')
+        window.setTimeout(() => buildPages('auto'), 0)
+        return
+      }
       setLastResetInfo(readLastResetCache()[cacheKey] ?? null)
       setPages(cacheCurrent && selectedPeriod
         ? resolvePartitionCacheKind(currentPartition) === 'time'
@@ -258,12 +342,61 @@ export function PagePartitionManager({
         setPageTotalRows(cached.totalRows)
         setPartitionStatus(`已缓存 ${cached.pages.length.toLocaleString('en-US')} 页，点击更新可按当前 StoreV6 重新定位分页符。`)
         if (resolvePartitionCacheKind(currentPartition) === 'time' && cached.pages[0]) {
-          openPage(cached.pages[0], cached.pages)
+          const restoredPageIndex = resolveKLineChartRefreshRestorePageIndexV2({
+            period: selectedPeriod,
+            symbol: selectedSymbol,
+          })
+          const initialPage = restoredPageIndex == null
+            ? cached.pages[0]
+            : cached.pages.find((page) => page.index === restoredPageIndex) ?? cached.pages[0]
+          traceKLineChartPageV2('PagePartitionManager.cacheInitialPage', {
+            initialPageIndex: initialPage.index,
+            restoredPageIndex,
+            symbol: selectedSymbol,
+            period: selectedPeriod,
+          })
+          openPage(initialPage, cached.pages, 'cache-current')
         }
       }
     })
     return () => window.cancelAnimationFrame(frame)
   }, [cacheKey])
+
+  useEffect(() => {
+    if (!selectedSymbol || !selectedPeriod || resolvePartitionCacheKind(buildCurrentPartition()) !== 'time') {
+      setRealtimePageMonitor(null)
+      return
+    }
+    const syncRealtimeMonitor = () => {
+      setRealtimePageMonitor(readRealtimePageMonitorSnapshotV2({
+        period: selectedPeriod,
+        sessionTimeFrom: resolveRealtimeMonitorSessionStart(),
+        symbol: selectedSymbol,
+      }))
+    }
+    syncRealtimeMonitor()
+    window.addEventListener(workbenchEvents.realtimePageBufferChanged, syncRealtimeMonitor)
+    window.addEventListener(workbenchEvents.realtimePageSnapshotChanged, syncRealtimeMonitor)
+    return () => {
+      window.removeEventListener(workbenchEvents.realtimePageBufferChanged, syncRealtimeMonitor)
+      window.removeEventListener(workbenchEvents.realtimePageSnapshotChanged, syncRealtimeMonitor)
+    }
+  }, [cacheKey, pages, selectedPeriod, selectedSymbol])
+
+  useEffect(() => {
+    const handleDailyCloseRebuild = (event: Event) => {
+      const detail = (event as CustomEvent<HistoryPageDailyRolloverRebuildDetail>).detail
+      const eventSymbol = typeof detail?.symbol === 'string' ? detail.symbol.trim().toUpperCase() : ''
+      const eventPeriod = typeof detail?.period === 'string' ? detail.period.trim().toUpperCase() : ''
+      if (eventSymbol && eventSymbol !== selectedSymbol.trim().toUpperCase()) return
+      if (eventPeriod && eventPeriod !== selectedPeriod.trim().toUpperCase()) return
+      if (!cacheKey || resolvePartitionCacheKind(buildCurrentPartition()) !== 'time') return
+      setPartitionStatus('日收盘已触发，正在清缓存并重建分页...')
+      buildPages('daily-close')
+    }
+    window.addEventListener(historyPageDailyRolloverRebuildEvent, handleDailyCloseRebuild)
+    return () => window.removeEventListener(historyPageDailyRolloverRebuildEvent, handleDailyCloseRebuild)
+  }, [building, cacheKey, selectedPeriod, selectedSymbol])
 
   useEffect(() => {
     let cancelled = false
@@ -274,7 +407,34 @@ export function PagePartitionManager({
     const loadEvents = () => {
       fetchStoreV6DailyMaintenanceEvents(selectedSymbol, 12)
         .then((payload) => {
-          if (!cancelled) setMaintenanceSummary(formatMaintenanceSummary(payload.events))
+          if (cancelled) return
+          setMaintenanceSummary(formatMaintenanceSummary(payload.events))
+          const completed = [...payload.events].reverse().find((event) =>
+            (event.step === 'page_plan_rebuild_requested' || event.step === 'audit_completed') &&
+            event.status === 'completed' &&
+            typeof event.runId === 'string' &&
+            event.runId,
+          )
+          const runId = completed?.runId
+          if (runId && !maintenanceRebuildInitializedRef.current) {
+            maintenanceRebuildInitializedRef.current = true
+            maintenanceRebuildRunIdRef.current = runId
+            return
+          }
+          if (!maintenanceRebuildInitializedRef.current) {
+            maintenanceRebuildInitializedRef.current = true
+          }
+          if (
+            runId &&
+            runId !== maintenanceRebuildRunIdRef.current &&
+            cacheKey &&
+            resolvePartitionCacheKind(buildCurrentPartition()) === 'time' &&
+            !building
+          ) {
+            maintenanceRebuildRunIdRef.current = runId
+            setPartitionStatus('后台维护已完成，正在重建历史分页...')
+            buildPages('daily-close')
+          }
         })
         .catch(() => {
           if (!cancelled) setMaintenanceSummary(null)
@@ -286,11 +446,20 @@ export function PagePartitionManager({
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [selectedSymbol])
+  }, [building, cacheKey, selectedSymbol])
 
-  function buildPages(reason: 'auto' | 'manual' = 'manual') {
+  function buildPages(reason: 'auto' | 'manual' | 'daily-close' = 'manual') {
     const period = selectedPeriod
     if (!selectedSymbol || !period || !cacheKey || building) return
+    reloadIdRef.current += 1
+    clearHistoryPageCachesV2({
+      reason: 'page-index-rebuild',
+      symbol: selectedSymbol,
+      period,
+    })
+    deletePageIndexCache(cacheKey)
+    setSelectedPage(1)
+    setPages([])
     setBuilding(true)
     void (async () => {
       let latestTime: number | null = null
@@ -318,7 +487,7 @@ export function PagePartitionManager({
       setPages(pagesForUi)
       setPartitionStatus(partition.statusText)
       const livePage = pagesForUi[0]
-      if (livePage) openPage(livePage, pagesForUi)
+      if (livePage) openPage(livePage, pagesForUi, 'build-pages-live-page')
       const resetInfo: PersistedPageResetInfo = {
         period,
         reason,
@@ -373,23 +542,47 @@ export function PagePartitionManager({
     rangeText: formatPageRange(page),
     rowsText: formatPageRows(page.rows),
   })), [pages])
+  const realtimePageMonitorRow = useMemo(() => {
+    if (!realtimePageMonitor) return null
+    const fromText = typeof realtimePageMonitor.rangeTimeFrom === 'number'
+      ? formatPageTradingDateTime(realtimePageMonitor.rangeTimeFrom, '开盘')
+      : '-'
+    const toText = typeof realtimePageMonitor.rangeTimeTo === 'number'
+      ? formatPageTradingDateTime(realtimePageMonitor.rangeTimeTo, '收盘')
+      : '等待首根收盘'
+    return {
+      rangeText: `${fromText} ~ ${toText}`,
+      rowsText: formatPageRows(realtimePageMonitor.rows),
+    }
+  }, [realtimePageMonitor])
   const pageTotalRowsText = useMemo(() => formatPageRows(pageTotalRows), [pageTotalRows])
-  const pageTableBody = useMemo(() => pageRowsForUi.length ? pageRowsForUi.map(({ page, rangeText, rowsText }) => (
-    <tr
-      data-selected={selectedPage === page.index}
-      key={page.index}
-      onClick={() => openPage(page)}
-      tabIndex={0}
-    >
-      <td>第 {page.index} 页</td>
-      <td>{rowsText}</td>
-      <td>{rangeText}</td>
-    </tr>
-  )) : (
-    <tr>
-      <td colSpan={3}>{selectedSymbol} {selectedPeriod || ''} 暂无分页缓存，点击更新生成。</td>
-    </tr>
-  ), [pageRowsForUi, selectedPage, selectedPeriod, selectedSymbol])
+  const pageTableBody = useMemo(() => {
+    const rows = pageRowsForUi.length ? pageRowsForUi.map(({ page, rangeText, rowsText }) => (
+      <tr
+        data-selected={selectedPage === page.index}
+        key={page.index}
+        onClick={() => openPage(page, pages, 'user-click')}
+        tabIndex={0}
+      >
+        <td>第 {page.index} 页</td>
+        <td>{rowsText}</td>
+        <td>{rangeText}</td>
+      </tr>
+    )) : [(
+      <tr key="empty">
+        <td colSpan={3}>{selectedSymbol} {selectedPeriod || ''} 暂无分页缓存，点击更新生成。</td>
+      </tr>
+    )]
+    if (!realtimePageMonitorRow) return rows
+    return [
+      <tr className="ff-import-page-table__realtime-row" key="realtime-page-monitor">
+        <td>实时页</td>
+        <td>{realtimePageMonitorRow.rowsText}</td>
+        <td>{realtimePageMonitorRow.rangeText}</td>
+      </tr>,
+      ...rows,
+    ]
+  }, [pageRowsForUi, pages, realtimePageMonitorRow, selectedPage, selectedPeriod, selectedSymbol])
 
   return (
     <div className="ff-import-selected-settings" role="tabpanel">

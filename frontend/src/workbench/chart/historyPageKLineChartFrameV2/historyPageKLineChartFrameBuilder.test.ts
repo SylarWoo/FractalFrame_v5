@@ -45,6 +45,17 @@ function windowData(): StoreV6HistoryPageWindow {
       },
     },
     key: 'history-window-v2:XAUUSDm|M5|1|time|100|400',
+    page: {
+      fromGlobalIndex: 1,
+      index: 1,
+      limit: rows.length,
+      pageType: 'history',
+      realtime: false,
+      rows: rows.length,
+      timeFrom: 100,
+      timeTo: 400,
+      toGlobalIndex: 2,
+    },
     pageIndex: 1,
     period: 'M5',
     renderData: {
@@ -99,4 +110,3 @@ describe('buildKLineChartHistoryFrame', () => {
     expect(frame.panes.TEST.rows).toEqual([{ value: 1 }])
   })
 })
-

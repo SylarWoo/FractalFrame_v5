@@ -6,6 +6,7 @@ export type StoreV6RealtimePageWindow = {
   activeRows: StoreV6WindowKLine[]
   indicatorRequests: StoreV6IndicatorRequestSpecV2[]
   indicators: StoreV6HistoryPageWindowIndicators
+  indicatorHistoryRows?: StoreV6WindowKLine[]
   key: string
   period: string
   renderData: {

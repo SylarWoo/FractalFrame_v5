@@ -1,4 +1,9 @@
-export { buildCachedKLineChartRenderFrameV2, clearChartRenderCacheV2 } from './chartRenderCache'
+export {
+  buildCachedKLineChartRenderFrameV2,
+  clearChartRenderCacheV2,
+  clearChartRenderHistoryCacheV2,
+  clearChartRenderRealtimeCacheV2,
+} from './chartRenderCache'
 export type {
   CachedChartRenderFrameV2,
   ChartRenderCacheV2Debug,

@@ -14,6 +14,7 @@ export type DpoSnapshotRow = {
 }
 
 export type MaSnapshotRow = {
+  breakBefore?: boolean
   ma?: number
   maFadedColor1?: number
   maFadedColor2?: number
@@ -35,7 +36,11 @@ export type MacdSnapshotRow = {
 
 export type VwapSnapshotRow = {
   lowerBand1?: number
+  lowerBand2?: number
+  lowerBand3?: number
   upperBand1?: number
+  upperBand2?: number
+  upperBand3?: number
   vwap?: number
 }
 

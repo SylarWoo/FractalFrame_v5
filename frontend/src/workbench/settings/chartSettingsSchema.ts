@@ -15,6 +15,7 @@ export const chartSettingKeys = {
   statusIndicatorInputsVisible: 'status.indicatorInputs.visible',
   statusIndicatorValuesVisible: 'status.indicatorValues.visible',
   sessionBreakVisible: 'events.sessionBreak.visible',
+  realtimeWindowSeparatorVisible: 'events.realtimeWindowSeparator.visible',
 } as const
 
 export const chartSettingDefaults = {
@@ -34,4 +35,5 @@ export const chartSettingDefaults = {
   statusIndicatorInputsVisible: true,
   statusIndicatorValuesVisible: true,
   sessionBreakVisible: false,
+  realtimeWindowSeparatorVisible: false,
 } as const

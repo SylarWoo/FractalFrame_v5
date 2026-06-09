@@ -2,6 +2,8 @@ import type { ChartPageNavigation, ChartPageNavigationTarget, ChartPageTarget } 
 import { requestStoreV6HistoryPage } from '../historyPageRequestV2'
 import { buildStoreV6HistoryPageWindow, type StoreV6HistoryPageWindow } from '../historyPageWindowV2'
 import { buildStoreV6PagePartition } from '../pagePartition/pagePartitionBuilder'
+import { resolveM5RealtimeOpenFromHistoryClose } from '../pagePartition/timeAligned/m5TradingAnchors'
+import { m5TradingDaySlidingWeekProfile } from '../pagePartition/timeAligned/timeAlignedPageTypes'
 import { readWatchlistRealtimeEnabled } from '../../mt5DataCenter/storeV6Persistence'
 import {
   formatPageTradingDateTime,
@@ -14,6 +16,7 @@ import {
   type RealtimePageRow,
 } from '../../mt5DataCenter/pagePartitionManagerHelpers'
 import { kLineChartConfigV2 } from './klineChartConfigV2'
+import { traceKLineChartPageV2 } from './klineChartPageDebugProbeV2'
 
 const storageKey = 'fractalframe:klinechart-v2:refreshRestoreConfig:v1'
 
@@ -46,13 +49,15 @@ export function readKLineChartRefreshRestoreConfigV2(): KLineChartRefreshRestore
     const symbol = typeof parsed.symbol === 'string' ? parsed.symbol.trim() : ''
     const period = typeof parsed.period === 'string' ? parsed.period.trim().toUpperCase() : ''
     if (!symbol || !period) return null
-    return {
+    const value = {
       pageIndex: normalizePageIndex(parsed.pageIndex),
       period,
       realtimeEnabled: parsed.realtimeEnabled !== false,
       savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
       symbol,
     }
+    traceKLineChartPageV2('RefreshRestore.readConfig', value)
+    return value
   } catch {
     return null
   }
@@ -76,9 +81,23 @@ export function writeKLineChartRefreshRestoreConfigV2(options: {
       symbol,
     }
     window.localStorage.setItem(storageKey, JSON.stringify(value))
+    traceKLineChartPageV2('RefreshRestore.writeConfig', value)
   } catch {
     // Local restore is optional in restricted storage modes.
   }
+}
+
+export function resolveKLineChartRefreshRestorePageIndexV2(options: {
+  period: string | null | undefined
+  symbol: string | null | undefined
+}) {
+  if (!kLineChartConfigV2.refreshRestore.restoreLastPageOnRefresh) return null
+  const config = readKLineChartRefreshRestoreConfigV2()
+  const symbol = typeof options.symbol === 'string' ? options.symbol.trim() : ''
+  const period = typeof options.period === 'string' ? options.period.trim().toUpperCase() : ''
+  if (!config || !symbol || !period) return null
+  if (config.symbol !== symbol || config.period !== period) return null
+  return config.pageIndex
 }
 
 function toNavigationTarget(page: RealtimePageRow | null | undefined): ChartPageNavigationTarget | null {
@@ -92,21 +111,14 @@ function toNavigationTarget(page: RealtimePageRow | null | undefined): ChartPage
   }
 }
 
-function resolveRealtimeStartFromPage(page: RealtimePageRow) {
-  if (typeof page.timeTo !== 'number' || !Number.isFinite(page.timeTo)) return null
-  const date = new Date(page.timeTo * 1000)
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    day: '2-digit',
-    month: '2-digit',
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-  }).formatToParts(date)
-  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value
-  const year = Number(get('year'))
-  const month = Number(get('month'))
-  const day = Number(get('day'))
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null
-  return Math.floor(Date.UTC(year, month - 1, day - 1, 22, 0, 0) / 1000)
+function resolveRealtimeStartFromPages(pages: RealtimePageRow[], symbol: string) {
+  const latestHistoryPage = pages[0]
+  if (!latestHistoryPage || typeof latestHistoryPage.timeTo !== 'number' || !Number.isFinite(latestHistoryPage.timeTo)) return null
+  return resolveM5RealtimeOpenFromHistoryClose({
+    historyTo: latestHistoryPage.timeTo,
+    profile: m5TradingDaySlidingWeekProfile,
+    symbol,
+  })
 }
 
 function buildPageNavigation(
@@ -116,7 +128,7 @@ function buildPageNavigation(
 ): ChartPageNavigation {
   const actualTimeFrom = historyPageWindow.boundary.actualTimeFrom ?? page.timeFrom ?? null
   const actualTimeTo = historyPageWindow.boundary.actualTimeTo ?? page.timeTo ?? null
-  const realtimeStart = resolveRealtimeStartFromPage(page)
+  const realtimeStart = resolveRealtimeStartFromPages(pages, historyPageWindow.symbol)
   return {
     current: {
       index: page.index,
@@ -135,6 +147,11 @@ function buildPageNavigation(
 export async function restoreKLineChartRefreshTargetV2(): Promise<KLineChartRefreshRestoreTargetV2 | null> {
   const config = readKLineChartRefreshRestoreConfigV2()
   if (!config) return null
+  traceKLineChartPageV2('RefreshRestore.restoreTarget.start', {
+    configPageIndex: config.pageIndex,
+    period: config.period,
+    symbol: config.symbol,
+  })
   const partition = buildStoreV6PagePartition({
     historyPageSize: historicalPageSize,
     livePageSize: realtimePageSize,
@@ -145,6 +162,11 @@ export async function restoreKLineChartRefreshTargetV2(): Promise<KLineChartRefr
   const cache = readPageIndexCache()[pageCacheKey(config.symbol, config.period, 'time')]
   if (!isCurrentCache(cache, partition) || !cache.pages.length) return null
   const page = cache.pages.find((item) => item.index === config.pageIndex) ?? cache.pages[0]
+  traceKLineChartPageV2('RefreshRestore.restoreTarget.pageResolved', {
+    configPageIndex: config.pageIndex,
+    resolvedPageIndex: page.index,
+    cachePages: cache.pages.map((item) => item.index).slice(0, 8),
+  })
   const historyPageWindow = await requestStoreV6HistoryPage({
     pageIndex: page.index,
     pages: cache.pages,

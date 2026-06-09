@@ -23,6 +23,12 @@ export function applyKLineChartPreDataRenderConfigV2(chart: Chart) {
   applyKLineChartMainContainerSettingsV2(chart)
 }
 
+export function resolveRealtimeBoundaryAnchorKeyV2(frame: KLineChartRenderFrameV2) {
+  return frame.segments.realtime
+    ? `${frame.symbol}:${frame.period}:${frame.segments.realtime.timeFrom ?? 'none'}`
+    : ''
+}
+
 export function createKLineChartRenderStateControllerV2(
   chart: Chart,
   getViewportState: () => ViewportStateHandle | null,
@@ -39,9 +45,7 @@ export function createKLineChartRenderStateControllerV2(
   }
 
   function shouldAnchorRealtimeBoundary(frame: KLineChartRenderFrameV2) {
-    const realtimeBoundaryKey = frame.segments.realtime
-      ? `${frame.segments.history.key}:${frame.segments.realtime.timeFrom ?? 'none'}`
-      : ''
+    const realtimeBoundaryKey = resolveRealtimeBoundaryAnchorKeyV2(frame)
     const shouldAnchor = kLineChartMainContainerSettingsV2.anchorRealtimeBoundaryOnFrameLoad &&
       Boolean(realtimeBoundaryKey) &&
       (frame.segments.realtime?.rows ?? 0) > 0 &&

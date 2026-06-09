@@ -1,5 +1,5 @@
 import type { StoreV6RealtimePageWindow } from '../realtimePageWindowV2'
-import { requestRealtimeWindowIndicatorsV2 } from './indicatorRequestControllerV2'
+import { refreshRealtimeWindowIndicatorsWithStableCacheV2 } from './realtimeIndicatorStableCacheV2'
 import type {
   StoreV6IndicatorRegistryV2,
   StoreV6IndicatorRequestRuntimeV2,
@@ -14,23 +14,11 @@ export async function refreshRealtimeWindowIndicatorsV2(options: {
   runtime?: StoreV6IndicatorRequestRuntimeV2
   window: StoreV6RealtimePageWindow
 }): Promise<StoreV6RealtimePageWindow> {
-  const indicators = await requestRealtimeWindowIndicatorsV2({
-    activeRows: options.window.activeRows,
+  return refreshRealtimeWindowIndicatorsWithStableCacheV2({
     historyRows: options.historyRows,
-    period: options.window.period,
     registry: options.registry,
     requests: options.requests ?? options.window.indicatorRequests,
     runtime: options.runtime,
-    sessionTimeFrom: options.window.sessionTimeFrom,
-    sessionTimeTo: options.window.sessionTimeTo,
-    symbol: options.window.symbol,
+    window: options.window,
   })
-  return {
-    ...options.window,
-    indicators,
-    renderData: {
-      ...options.window.renderData,
-      indicators,
-    },
-  }
 }

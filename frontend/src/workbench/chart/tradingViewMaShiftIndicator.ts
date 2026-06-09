@@ -9,6 +9,7 @@ import { formatIndicatorValue } from './indicatorValueFormat'
 import { mapPageIndicatorSnapshotToDataList } from './pageIndicatorRuntime'
 
 export type MaShiftRow = {
+  breakBefore?: boolean
   ma?: number
   maFadedColor1?: number
   maFadedColor2?: number
@@ -313,6 +314,10 @@ function drawMaLayer(
   for (let index = from; index <= to; index += 1) {
     const prev = rows[index - 1]
     const current = rows[index]
+    if (current?.breakBefore === true) {
+      flushActivePath()
+      continue
+    }
     if (!Number.isFinite(prev?.ma) || !Number.isFinite(current?.ma)) {
       flushActivePath()
       continue

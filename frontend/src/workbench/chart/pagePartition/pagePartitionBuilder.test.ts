@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { buildStoreV6PagePartition } from './pagePartitionBuilder'
 
 describe('buildStoreV6PagePartition', () => {
+  function shanghaiSeconds(year: number, month: number, day: number, hour: number, minute: number) {
+    return Date.UTC(year, month - 1, day, hour - 8, minute) / 1000
+  }
+
   it('builds a live page from the newest 2000 rows and history pages from older rows', () => {
     const partition = buildStoreV6PagePartition({
       period: 'M15',
@@ -75,10 +79,11 @@ describe('buildStoreV6PagePartition', () => {
     expect(partition.pages[0]).toEqual(expect.objectContaining({
       fromGlobalIndex: null,
       index: 1,
-      pageType: 'live',
+      pageType: 'history',
       realtime: false,
       rows: null,
-      timeTo: Date.UTC(2026, 0, 14, 22, 0) / 1000 - 1,
+      timeFrom: shanghaiSeconds(2026, 1, 7, 6, 0),
+      timeTo: shanghaiSeconds(2026, 1, 15, 5, 0) - 1,
       toGlobalIndex: null,
     }))
     expect(partition.pages[1]).toEqual(expect.objectContaining({

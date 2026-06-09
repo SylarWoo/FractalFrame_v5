@@ -5,6 +5,7 @@ import {
   canApplyKLineChartPaneOnlyUpdateV2,
   canApplyKLineChartTailUpdateV2,
 } from './klineChartFrameLifecycleV2'
+import { resolveRealtimeBoundaryAnchorKeyV2 } from './klineChartRenderStateControllerV2'
 
 function frame(rows: number, realtimeTimeFrom: number | null = 1000): KLineChartRenderFrameV2 {
   return {
@@ -110,5 +111,15 @@ describe('klineChartFrameLifecycleV2', () => {
       previous,
       sameRenderWindow: true,
     })).toBe(false)
+  })
+
+  it('does not treat history page switches as new realtime boundary anchors', () => {
+    const firstPage = frame(3, 1000)
+    const secondPage = frame(3, 1000)
+    secondPage.pageIndex = 2
+    secondPage.segments.history.key = 'history-page-2'
+
+    expect(resolveRealtimeBoundaryAnchorKeyV2(firstPage)).toBe('XAUUSDm:M5:1000')
+    expect(resolveRealtimeBoundaryAnchorKeyV2(secondPage)).toBe('XAUUSDm:M5:1000')
   })
 })

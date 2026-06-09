@@ -71,7 +71,11 @@ function createAlignment(rows: NormalizedMainRow[]): KLineChartFrameAlignment {
 function createPaneFrames(window: StoreV6HistoryPageWindow): Record<string, KLineChartPaneFrame> {
   return Object.fromEntries(Object.entries(window.renderData.indicators).map(([name, series]) => [name, {
     key: series.key,
+    paneId: series.paneId,
+    paneRole: series.paneRole,
+    renderRole: series.renderRole,
     rows: series.displayRows ?? series.rows,
+    settings: series.settings,
     source: 'history-page-kline-chart-pane-frame-v2' as const,
   }]))
 }
@@ -89,4 +93,3 @@ export function buildKLineChartHistoryFrame(window: StoreV6HistoryPageWindow): K
     symbol: window.symbol,
   }
 }
-

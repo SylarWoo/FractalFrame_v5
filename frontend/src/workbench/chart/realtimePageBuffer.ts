@@ -1,5 +1,5 @@
 import type { KLineData } from 'klinecharts'
-import { readJson, writeJson } from '../persistence/jsonStorage'
+import { readJson, removeStorageItem, writeJson } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
 import { workbenchEvents } from '../persistence/workbenchEvents'
 import { normalizeRealtimeBars } from './realtimeBarIdentity'
@@ -82,4 +82,19 @@ export function upsertRealtimePageBufferRow(symbol: string, period: string, row:
     },
   }))
   return nextRows
+}
+
+export function clearRealtimePageBuffer() {
+  realtimePageBuffers.clear()
+  removeStorageItem(storageKeys.realtimePageBuffer)
+  window.dispatchEvent(new CustomEvent(workbenchEvents.realtimePageBufferChanged, {
+    detail: {
+      cleared: true,
+      period: null,
+      rows: 0,
+      symbol: null,
+      timeFrom: null,
+      timeTo: null,
+    },
+  }))
 }

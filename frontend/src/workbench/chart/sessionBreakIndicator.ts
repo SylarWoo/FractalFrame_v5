@@ -19,6 +19,7 @@ type SettingsSwatchValue = {
 
 type SessionBreakCoordinate = {
   index: number
+  timestampSeconds: number | null
   x: number
 }
 
@@ -60,6 +61,13 @@ function readSessionBreakVisible() {
   return readSettingsBooleanValue(chartSettingKeys.sessionBreakVisible, chartSettingDefaults.sessionBreakVisible)
 }
 
+function readRealtimeWindowSeparatorVisible() {
+  return readSettingsBooleanValue(
+    chartSettingKeys.realtimeWindowSeparatorVisible,
+    chartSettingDefaults.realtimeWindowSeparatorVisible,
+  )
+}
+
 function shouldShowSessionBreaksForPeriod(period: string) {
   const periodSeconds = resolvePeriodSeconds(period)
   return Number.isFinite(periodSeconds) && periodSeconds > 0 && periodSeconds < 24 * 60 * 60
@@ -90,6 +98,11 @@ function resolveRealTimestampMs(data: KLineData) {
         ? row.sourceTimestamp
         : data.timestamp
   return raw < 1_000_000_000_000 ? raw * 1000 : raw
+}
+
+function normalizeTimestampSeconds(value: number | null | undefined) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  return value > 10_000_000_000 ? Math.floor(value / 1000) : Math.floor(value)
 }
 
 function resolveExplicitSessionBreakKey(row: KLineData) {
@@ -130,7 +143,11 @@ function collectSessionBreakCoordinates(
     if (!previous || !current || !isSessionBreakRow(previous, current, symbol)) continue
     const rawX = typeof xAxis.convertToPixel === 'function' ? xAxis.convertToPixel(index) : Number.NaN
     if (!Number.isFinite(rawX)) continue
-    out.push({ index, x: Math.round(rawX) + 0.5 })
+    out.push({
+      index,
+      timestampSeconds: normalizeTimestampSeconds(resolveRealTimestampMs(current)),
+      x: Math.round(rawX) + 0.5,
+    })
   }
   out.sort((a, b) => a.x - b.x)
   return out
@@ -150,6 +167,17 @@ function filterCloseSessionBreakCoordinates(coords: SessionBreakCoordinate[]) {
   return out
 }
 
+export function filterSessionBreakCoordinatesForRealtimeSeparator(
+  coords: SessionBreakCoordinate[],
+  realtimeWindowSeparatorVisible: boolean,
+  realtimeStart?: number | null,
+) {
+  if (!realtimeWindowSeparatorVisible || coords.length === 0) return coords
+  const normalizedRealtimeStart = normalizeTimestampSeconds(realtimeStart)
+  if (normalizedRealtimeStart == null) return coords
+  return coords.filter((item) => item.timestampSeconds !== normalizedRealtimeStart)
+}
+
 function ensureSessionBreakIndicatorRegistered() {
   if (sessionBreakIndicatorRegistered) return
   registerIndicator({
@@ -160,6 +188,7 @@ function ensureSessionBreakIndicatorRegistered() {
       if (!readSessionBreakVisible() || kLineDataList.length < 2) return false
       const symbol = typeof indicator.extendData?.symbol === 'string' ? indicator.extendData.symbol : ''
       const period = typeof indicator.extendData?.period === 'string' ? indicator.extendData.period : ''
+      const realtimeStart = typeof indicator.extendData?.realtimeStart === 'number' ? indicator.extendData.realtimeStart : null
       if (!shouldShowSessionBreaksForPeriod(period)) return false
 
       const state = readSettingsSymbolState()
@@ -169,8 +198,12 @@ function ensureSessionBreakIndicatorRegistered() {
       const size = resolveLineThickness(swatch)
       const from = Math.max(1, Math.floor(visibleRange.from) - 2)
       const to = Math.min(kLineDataList.length - 1, Math.ceil(visibleRange.to) + 2)
-      const coords = filterCloseSessionBreakCoordinates(
-        collectSessionBreakCoordinates(kLineDataList, from, to, xAxis, symbol),
+      const coords = filterSessionBreakCoordinatesForRealtimeSeparator(
+        filterCloseSessionBreakCoordinates(
+          collectSessionBreakCoordinates(kLineDataList, from, to, xAxis, symbol),
+        ),
+        readRealtimeWindowSeparatorVisible(),
+        realtimeStart,
       )
       if (coords.length === 0) return false
 
@@ -195,14 +228,23 @@ function ensureSessionBreakIndicatorRegistered() {
   sessionBreakIndicatorRegistered = true
 }
 
-export function applySessionBreakIndicator(chart: Chart, symbol: string, period: string) {
+export function applySessionBreakIndicator(chart: Chart, symbol: string, period: string, options: {
+  realtimeStart?: number | null
+} = {}) {
   ensureSessionBreakIndicatorRegistered()
   const visible = readSessionBreakVisible()
-  const signature = `${symbol}:${period}:${visible ? 'visible' : 'hidden'}`
+  const realtimeWindowSeparatorVisible = readRealtimeWindowSeparatorVisible()
+  const normalizedRealtimeStart = normalizeTimestampSeconds(options.realtimeStart)
+  const signature = `${symbol}:${period}:${visible ? 'visible' : 'hidden'}:${realtimeWindowSeparatorVisible ? 'realtime-separator' : 'session-break-only'}:${normalizedRealtimeStart ?? 'no-realtime-start'}`
   if (appliedSessionBreakSignatures.get(chart) === signature) return
   appliedSessionBreakSignatures.set(chart, signature)
   chart.removeIndicator('candle_pane', sessionBreakIndicatorName)
   if (visible) {
-    chart.createIndicator({ name: sessionBreakIndicatorName, extendData: { period, symbol }, visible: true, zLevel: 0 }, true, { id: 'candle_pane' })
+    chart.createIndicator({
+      name: sessionBreakIndicatorName,
+      extendData: { period, realtimeStart: normalizedRealtimeStart, symbol },
+      visible: true,
+      zLevel: 0,
+    }, true, { id: 'candle_pane' })
   }
 }

@@ -95,7 +95,13 @@
   background: #eff6ff;
 }
 
-.ff-kline-chart-host-v2__current-candle-countdown {
+.ff-kline-chart-axis-label-layer-v2 {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.ff-kline-chart-axis-label-layer-v2__current-candle-countdown {
   position: absolute;
   left: calc(100% - var(--ff-current-candle-y-axis-width, 70px) + 1px);
   z-index: 8;
@@ -118,7 +124,7 @@
   white-space: nowrap;
 }
 
-.ff-kline-chart-host-v2__current-candle-countdown span {
+.ff-kline-chart-axis-label-layer-v2__current-candle-countdown span {
   display: block;
   width: 100%;
   overflow: hidden;
@@ -126,7 +132,7 @@
   text-overflow: clip;
 }
 
-.ff-kline-chart-host-v2__current-candle-countdown span + span {
+.ff-kline-chart-axis-label-layer-v2__current-candle-countdown span + span {
   margin-top: 3px;
   font-size: 12px;
   line-height: 12px;

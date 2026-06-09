@@ -6,11 +6,14 @@ import {
   m5TradingDaySlidingWeekProfile,
 } from './timeAlignedPageTypes'
 import {
-  floorToTradingDayBoundarySeconds,
   previousTradingDayBoundarySeconds,
   subtractCalendarDays,
 } from './tradingDayBoundary'
 import { resolveTimeAlignedTradingProfile } from './timeAlignedTradingProfile'
+import {
+  resolveM5SessionCloseBoundary,
+} from './m5TradingAnchors'
+import { resolveM5AnchorRuntimeContextV2 } from '../m5AnchorRuntimeContextV2'
 
 function createTimePage(options: {
   index: number
@@ -24,7 +27,7 @@ function createTimePage(options: {
     fromGlobalIndex: null,
     index: options.index,
     limit: options.limit,
-    pageType: options.index === 1 ? 'live' : 'history',
+    pageType: 'history',
     realtime: false,
     rows: null,
     timeFrom: options.timeFrom,
@@ -58,7 +61,7 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
       ...timeFallback,
       pages: [],
       status: 'empty',
-      statusText: 'M5 时间分页已启用，等待 StoreV6 最新 K 线时间后生成时间页表。',
+      statusText: 'M5 time pagination is enabled; waiting for the latest StoreV6 K-line time.',
     }
   }
 
@@ -69,66 +72,38 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
     boundaryMinuteShanghai: tradingProfile.boundaryMinuteShanghai,
   }
   const boundaryOptions = { skipWeekends: tradingProfile.weekendClosed }
-  const anchorBoundary = floorToTradingDayBoundarySeconds(latestTime, profile, boundaryOptions)
-  if (anchorBoundary == null) {
+  const anchors = resolveM5AnchorRuntimeContextV2({
+    latestTime,
+    symbol: fallback.symbol,
+  })
+  if (anchors == null) {
     return {
       ...timeFallback,
       pages: [],
       status: 'empty',
-      statusText: 'M5 时间分页已启用，但无法识别交易日边界。',
+      statusText: 'M5 time pagination is enabled, but the trading-day boundary cannot be resolved.',
     }
   }
 
   const limit = estimateM5TimePageLimit(profile)
-  const liveTimeFrom = subtractCalendarDays(anchorBoundary, profile.windowDays)
-  if (!tradingProfile.weekendClosed) {
-    const windowSeconds = profile.windowDays * 24 * 60 * 60
-    const pages: StoreV6PagePartitionItem[] = []
-    let pageTimeFrom = liveTimeFrom
-    while (pages.length < fallback.pages.length) {
-      pages.push(createTimePage({
-        index: pages.length + 1,
-        limit,
-        period: fallback.period,
-        symbol: fallback.symbol,
-        timeFrom: pageTimeFrom,
-        timeTo: pageTimeFrom + windowSeconds - 1,
-      }))
-      pageTimeFrom = previousTradingDayBoundarySeconds(pageTimeFrom, profile, boundaryOptions)
-    }
+  const pages: StoreV6PagePartitionItem[] = []
+  let completedBoundary = anchors.completedTradingDayOpen
 
-    return {
-      ...timeFallback,
-      historyPageSize: limit,
-      livePageSize: limit,
-      pages,
-      statusText: 'M5 时间分页已启用，时间边界将解析为 StoreV6 globalIndex 后显示。',
-    }
-  }
-
-  const pages: StoreV6PagePartitionItem[] = [
-    createTimePage({
-      index: 1,
-      limit,
-      period: fallback.period,
-      symbol: fallback.symbol,
-      timeFrom: liveTimeFrom,
-      timeTo: anchorBoundary - 1,
-    }),
-  ]
-
-  let newerPageStart = liveTimeFrom
   while (pages.length < fallback.pages.length) {
-    const historyTimeFrom = subtractCalendarDays(previousTradingDayBoundarySeconds(newerPageStart, profile, boundaryOptions), profile.windowDays)
+    const timeFrom = subtractCalendarDays(completedBoundary, profile.windowDays)
+
     pages.push(createTimePage({
       index: pages.length + 1,
       limit,
       period: fallback.period,
       symbol: fallback.symbol,
-      timeFrom: historyTimeFrom,
-      timeTo: newerPageStart - 1,
+      timeFrom,
+      timeTo: resolveM5SessionCloseBoundary({
+        anchorBoundary: completedBoundary,
+        profile: tradingProfile,
+      }) - 1,
     }))
-    newerPageStart = historyTimeFrom
+    completedBoundary = previousTradingDayBoundarySeconds(timeFrom, profile, boundaryOptions)
   }
 
   return {
@@ -136,6 +111,6 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
     historyPageSize: limit,
     livePageSize: limit,
     pages,
-    statusText: 'M5 时间分页已启用，时间边界将解析为 StoreV6 globalIndex 后显示。',
+    statusText: 'M5 time pagination is enabled; each history page maps to one completed Shanghai trading week.',
   }
 }

@@ -1,4 +1,4 @@
-export const m5TimeAlignedPartitionProfileVersion = 1
+export const m5TimeAlignedPartitionProfileVersion = 4
 
 export type TimeAlignedPageProfile = {
   boundaryHourShanghai: number

@@ -478,6 +478,16 @@
   color: #64748b;
 }
 
+.ff-import-page-table__realtime-row td {
+  background: #f8fbff;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.ff-import-page-table__realtime-row td:first-child {
+  color: #0b55d9;
+}
+
 .ff-import-page-list__head,
 .ff-import-page-list__row {
   display: grid;

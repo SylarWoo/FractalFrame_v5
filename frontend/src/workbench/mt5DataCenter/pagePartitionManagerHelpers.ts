@@ -1,4 +1,5 @@
 import type { StoreV6PagePartition, StoreV6PagePartitionItem } from '../chart/pagePartition/pagePartitionBuilder'
+import type { M5AnchorRuntimeCacheMetaV2 } from '../chart/pagePartition/m5AnchorRuntimeContextV2'
 import {
   storeV6HistoryPageSize,
   storeV6LivePageSize,
@@ -21,13 +22,14 @@ export type PersistedPageIndex = {
   partitionMode?: StoreV6PagePartitionMode
   period: string
   profileVersion?: number
+  m5AnchorMeta?: M5AnchorRuntimeCacheMetaV2 | null
   symbol: string
   totalRows: number | null
 }
 
 export type PersistedPageResetInfo = {
   period: string
-  reason: 'auto' | 'manual'
+  reason: 'auto' | 'manual' | 'daily-close'
   resetAt: string
   rows: number
   symbol: string

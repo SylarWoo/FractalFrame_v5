@@ -7,6 +7,7 @@ import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
 import { formatIndicatorValue } from './indicatorValueFormat'
+import { mapPageIndicatorSnapshotToDataList } from './pageIndicatorRuntime'
 
 export type VwapIndicatorRow = {
   barKey?: string
@@ -20,10 +21,13 @@ export type VwapIndicatorRow = {
 }
 
 type VwapCalcSettings = Partial<VwapIndicatorSettings> & {
+  pageKey?: string
   period?: string
   realtimeBarKeyFrom?: string | null
   realtimeBarKeyTo?: string | null
   realtimeIndicatorPageKey?: string | null
+  runtimeOnly?: boolean
+  settingsHash?: string
   symbol?: string
 }
 
@@ -48,6 +52,19 @@ let registered = false
 
 function normalizeVwapSettings(input?: VwapCalcSettings): VwapIndicatorSettings {
   return normalizePersistedVwapSettings({ ...defaultVwapIndicatorSettings, ...(input ?? {}) })
+}
+
+function readVwapSnapshotContext(input: unknown) {
+  const context = input && typeof input === 'object'
+    ? input as VwapCalcSettings
+    : {}
+  return {
+    pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
+    period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    runtimeOnly: context.runtimeOnly === true,
+    settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
+    symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
+  }
 }
 
 function clampOpacity(value: unknown, fallback = 1) {
@@ -301,6 +318,31 @@ export function calculateTradingViewVwapRows(dataList: KLineData[], inputSetting
   return applyOffset(rows, dataList, settings.offset)
 }
 
+export function calculateVwapRowsForKLineChart(dataList: KLineData[], inputContext: unknown): VwapIndicatorRow[] {
+  const context = readVwapSnapshotContext(inputContext)
+  if (context.pageKey && context.symbol && context.period) {
+    const rows = mapPageIndicatorSnapshotToDataList<VwapIndicatorRow>({
+      dataList,
+      indicator: 'vwap',
+      pageKey: context.pageKey,
+      period: context.period,
+      settingsHashKey: 'VWAP',
+      settingsHash: context.settingsHash,
+      symbol: context.symbol,
+    })
+    if (rows) {
+      return calculateWithoutFuturePlaceholders(dataList, () => rows)
+    }
+    if (context.runtimeOnly) {
+      return calculateWithoutFuturePlaceholders(dataList, (realRows) => realRows.map((row) => ({ barKey: readBarKey(row) })))
+    }
+  }
+  return calculateWithoutFuturePlaceholders(
+    dataList,
+    (realRows) => calculateTradingViewVwapRows(realRows, inputContext as VwapCalcSettings | undefined),
+  )
+}
+
 function convertIndicatorPoint(
   xAxis: { convertToPixel: (value: number) => number },
   yAxis: { convertToPixel: (value: number) => number },
@@ -463,9 +505,6 @@ export function ensureTradingViewVwapIndicator() {
       drawTradingViewVwapIndicator(params)
       return true
     },
-    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
-      dataList,
-      (realRows) => calculateTradingViewVwapRows(realRows, indicator.calcParams[0] as VwapCalcSettings | undefined),
-    ),
+    calc: (dataList, indicator) => calculateVwapRowsForKLineChart(dataList, indicator.calcParams[0]),
   })
 }

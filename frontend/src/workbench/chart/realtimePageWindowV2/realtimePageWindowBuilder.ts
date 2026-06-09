@@ -1,8 +1,10 @@
 import type { Mt5RealtimeWindowTick, StoreV6RealtimePageWindow, StoreV6RealtimePageWindowRequest } from './realtimePageWindowTypes'
 import { resolveTimeAlignedTradingProfile } from '../pagePartition/timeAligned/timeAlignedTradingProfile'
 import type { StoreV6WindowKLine } from '../pageSliceV2'
+import { readStoreV6PageSlice } from '../pageSliceV2'
 import type { StoreV6PagePartitionItem } from '../pagePartition/pagePartitionBuilder'
-import { requestRealtimeWindowIndicatorsV2 } from '../indicatorRequestV2'
+import { maxIndicatorWarmupRowsV2 } from '../indicatorRequestV2'
+import { refreshRealtimeWindowIndicatorsWithStableCacheV2 } from '../indicatorRequestV2/realtimeIndicatorStableCacheV2'
 import {
   floorToTradingDayBoundarySeconds,
 } from '../pagePartition/timeAligned/tradingDayBoundary'
@@ -133,10 +135,50 @@ function readRealtimeStableCache() {
   }
 }
 
+export function readRealtimeStableWindowSnapshotV2(options: {
+  period: string
+  sessionTimeFrom: number | null
+  sessionTimeTo?: number | null
+  symbol: string
+}) {
+  if (options.sessionTimeFrom == null) return null
+  const cached = readRealtimeStableCache()[realtimeCacheKey(
+    options.symbol,
+    options.period,
+    options.sessionTimeFrom,
+    options.sessionTimeTo ?? null,
+  )]
+  if (!cached) return null
+  if (
+    normalizeSymbol(cached.symbol) !== normalizeSymbol(options.symbol) ||
+    cached.period.trim().toUpperCase() !== options.period.trim().toUpperCase() ||
+    cached.sessionTimeFrom !== options.sessionTimeFrom ||
+    cached.sessionTimeTo !== (options.sessionTimeTo ?? null)
+  ) {
+    return null
+  }
+  return {
+    savedAt: cached.savedAt,
+    sessionTimeFrom: cached.sessionTimeFrom,
+    sessionTimeTo: cached.sessionTimeTo,
+    stableRows: cached.stableRows ?? [],
+    tailRow: cached.tailRow ?? null,
+  }
+}
+
 function writeRealtimeStableCache(cache: Record<string, PersistedRealtimeStableWindow>) {
   if (typeof window === 'undefined') return
   try {
     window.localStorage.setItem(realtimeStableCacheStorageKey, JSON.stringify(cache))
+  } catch {
+    // Local realtime cache is an optimization only.
+  }
+}
+
+export function clearRealtimeStableWindowCacheV2() {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(realtimeStableCacheStorageKey)
   } catch {
     // Local realtime cache is an optimization only.
   }
@@ -291,21 +333,49 @@ export function resolveNextM5RealtimeSessionStartSeconds(lastTime: number | null
   return next
 }
 
+export function resolveM5RealtimeSessionStartSeconds(anchorTime: number | null, symbol?: string | null) {
+  if (anchorTime == null) return null
+  const tradingProfile = resolveTimeAlignedTradingProfile(symbol)
+  const anchor = Math.floor(anchorTime)
+  const boundary = tradingBoundaryFromDayNumber(tradingBoundaryDayNumber(anchor))
+  if (anchor === boundary) {
+    if (tradingProfile.weekendClosed && isWeekendTradingBoundary(boundary)) {
+      return nextOpenBoundaryAfter(boundary, { skipWeekends: true })
+    }
+    return boundary
+  }
+  return resolveNextM5RealtimeSessionStartSeconds(anchor, symbol)
+}
+
 export function resolveActiveM5RealtimeSessionStartSeconds(latestTime: number | null, symbol?: string | null) {
   if (latestTime == null) return null
   const tradingProfile = resolveTimeAlignedTradingProfile(symbol)
-  return floorToTradingDayBoundarySeconds(Math.floor(latestTime), {
+  const latest = Math.floor(latestTime)
+  const boundary = floorToTradingDayBoundarySeconds(latest, {
     boundaryHourShanghai: tradingProfile.boundaryHourShanghai,
     boundaryMinuteShanghai: tradingProfile.boundaryMinuteShanghai,
     windowDays: 1,
   }, { skipWeekends: tradingProfile.weekendClosed })
+  if (boundary == null) return null
+  const maintenance = tradingProfile.dailyMaintenance
+  if (maintenance) {
+    const closeSeconds = maintenance.closeHourShanghai * 60 * 60 + maintenance.closeMinuteShanghai * 60
+    const openSeconds = tradingProfile.boundaryHourShanghai * 60 * 60 + tradingProfile.boundaryMinuteShanghai * 60
+    const closeOffset = closeSeconds - openSeconds
+    const normalizedCloseOffset = closeOffset <= 0 ? closeOffset + daySeconds : closeOffset
+    const sessionClose = boundary + normalizedCloseOffset
+    if (latest + resolvePeriodSeconds('M5') >= sessionClose) {
+      return nextOpenBoundaryAfter(boundary, { skipWeekends: tradingProfile.weekendClosed })
+    }
+  }
+  return boundary
 }
 
 function resolveRealtimeSessionStart(request: StoreV6RealtimePageWindowRequest) {
   const latest = finiteNumber(request.latestTime)
   if (request.period.trim().toUpperCase() === 'M5' && latest != null) return resolveActiveM5RealtimeSessionStartSeconds(latest, request.symbol)
   const requested = finiteNumber(request.sessionTimeFrom)
-  if (request.period.trim().toUpperCase() === 'M5') return resolveNextM5RealtimeSessionStartSeconds(requested, request.symbol)
+  if (request.period.trim().toUpperCase() === 'M5') return resolveM5RealtimeSessionStartSeconds(requested, request.symbol)
   const periodSeconds = resolvePeriodSeconds(request.period)
   return requested == null ? null : Math.floor(requested) + periodSeconds
 }
@@ -325,6 +395,66 @@ function createRealtimePage(options: {
     timeFrom: options.sessionTimeFrom,
     timeTo: options.sessionTimeTo,
     toGlobalIndex: null,
+  }
+}
+
+function createRealtimeIndicatorWarmupPage(options: {
+  period: string
+  timeFrom: number
+}): StoreV6PagePartitionItem {
+  return {
+    fromGlobalIndex: null,
+    index: 0,
+    limit: 1,
+    pageType: 'live',
+    realtime: true,
+    rows: 1,
+    timeFrom: options.timeFrom,
+    timeTo: options.timeFrom,
+    toGlobalIndex: null,
+  }
+}
+
+function resolveRequestedIndicatorDefinitions(request: StoreV6RealtimePageWindowRequest) {
+  const registry = request.indicatorRegistry
+  const requests = request.indicatorRequests ?? request.indicatorRuntime?.list() ?? []
+  if (!registry || requests.length === 0) return []
+  return requests
+    .filter((item) => item.enabled !== false)
+    .map((item) => {
+      const definition = registry.get(item.id)
+      return definition ? { definition, request: item } : null
+    })
+    .filter((item): item is NonNullable<typeof item> => item != null)
+}
+
+export async function resolveRealtimeIndicatorHistoryRowsV2(options: {
+  activeRows: StoreV6WindowKLine[]
+  request: StoreV6RealtimePageWindowRequest
+}) {
+  const fallbackRows = options.request.historyRows ?? []
+  const firstActiveRow = options.activeRows[0]
+  const firstActiveTime = finiteNumber(firstActiveRow?.time)
+  const definitions = resolveRequestedIndicatorDefinitions(options.request)
+  const requiredWarmupRows = maxIndicatorWarmupRowsV2({
+    definitions,
+    windowKind: 'realtime',
+  })
+  if (requiredWarmupRows <= 0 || firstActiveTime == null) return fallbackRows
+  try {
+    const slice = await readStoreV6PageSlice({
+      mode: 'realtime-window',
+      page: createRealtimeIndicatorWarmupPage({
+        period: options.request.period,
+        timeFrom: firstActiveTime,
+      }),
+      period: options.request.period,
+      symbol: options.request.symbol,
+      warmupRows: requiredWarmupRows,
+    })
+    return slice.warmupRows.length > 0 ? slice.warmupRows : fallbackRows
+  } catch {
+    return fallbackRows
   }
 }
 
@@ -390,30 +520,33 @@ export async function requestStoreV6RealtimePageWindow(
   })
   const { stableRows, tailRow } = splitRealtimeRows(activeRows)
   const composedRows = combineRealtimeRows(stableRows, tailRow)
-  const indicators = await requestRealtimeWindowIndicatorsV2({
-    activeRows: composedRows,
-    historyRows: request.historyRows,
-    period: request.period,
-    registry: request.indicatorRegistry,
-    requests: empty.indicatorRequests,
-    runtime: request.indicatorRuntime,
-    sessionTimeFrom: empty.sessionTimeFrom,
-    sessionTimeTo: empty.sessionTimeTo,
-    symbol: request.symbol,
-  })
-  const nextWindow: StoreV6RealtimePageWindow = {
+  const nextWindowWithoutIndicators: StoreV6RealtimePageWindow = {
     ...empty,
     activeRows: composedRows,
-    indicators,
+    indicatorHistoryRows: request.historyRows ?? [],
     key: `${realtimeWindowBaseKey(empty.key)}:mt5:${stableRowsKey(stableRows)}:${tailRowKey(tailRow)}`,
     renderData: {
-      indicators,
+      indicators: {},
       klineRows: composedRows,
     },
     stableRows,
     status: composedRows.length ? 'ready' : 'closed-empty',
     tailRow,
   }
+  const indicatorHistoryRows = await resolveRealtimeIndicatorHistoryRowsV2({
+    activeRows: composedRows,
+    request,
+  })
+  const nextWindow = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+    historyRows: indicatorHistoryRows,
+    registry: request.indicatorRegistry,
+    requests: empty.indicatorRequests,
+    runtime: request.indicatorRuntime,
+    window: {
+      ...nextWindowWithoutIndicators,
+      indicatorHistoryRows,
+    },
+  })
   writeCachedRealtimeRows(nextWindow)
   return nextWindow
 }

@@ -5,6 +5,7 @@ import type {
   StoreV6HistoryPageWindowRequest,
 } from './historyPageWindowTypes'
 import { requestHistoryWindowIndicatorsV2 } from '../indicatorRequestV2'
+import { traceKLineChartPageV2 } from '../klineChartRendererV2/klineChartPageDebugProbeV2'
 
 function createIndicatorContext(request: StoreV6HistoryPageWindowRequest): StoreV6HistoryPageWindowIndicatorPreloadContext {
   const { historyPage } = request
@@ -58,6 +59,15 @@ export async function buildStoreV6HistoryPageWindow(
     request.indicatorPreloader ? await request.indicatorPreloader(indicatorContext) : {},
   )
   const indicators = mergeIndicators(controllerIndicators, preloadIndicators)
+  traceKLineChartPageV2('HistoryPageWindow.build.ready', {
+    actualTimeFrom: slice.boundary.actualTimeFrom,
+    actualTimeTo: slice.boundary.actualTimeTo,
+    displayRows: slice.displayRows.length,
+    key: slice.key,
+    pageIndex: historyPage.pageIndex,
+    period: slice.period,
+    symbol: slice.symbol,
+  })
 
   return {
     boundary: slice.boundary,
@@ -66,6 +76,7 @@ export async function buildStoreV6HistoryPageWindow(
     historyRows: slice.displayRows,
     indicators,
     key: `history-window-v2:${slice.key}`,
+    page: historyPage.page,
     pageIndex: historyPage.pageIndex,
     period: slice.period,
     renderData: {

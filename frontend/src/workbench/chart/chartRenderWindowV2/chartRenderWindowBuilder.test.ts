@@ -47,6 +47,17 @@ describe('buildChartRenderWindowV2', () => {
         },
       },
       key: 'history',
+      page: {
+        fromGlobalIndex: 100,
+        index: 1,
+        limit: historyRows.length,
+        pageType: 'history',
+        realtime: false,
+        rows: historyRows.length,
+        timeFrom: 100,
+        timeTo: 200,
+        toGlobalIndex: 200,
+      },
       pageIndex: 1,
       period: 'M5',
       renderData: {

@@ -8,6 +8,7 @@ import './SettingsEventsPanel.css'
 
 export function SettingsEventsPanel() {
   const [sessionBreakVisible, setSessionBreakVisible] = useState(() => readSettingsBooleanValue(chartSettingKeys.sessionBreakVisible, chartSettingDefaults.sessionBreakVisible))
+  const [realtimeWindowSeparatorVisible, setRealtimeWindowSeparatorVisible] = useState(() => readSettingsBooleanValue(chartSettingKeys.realtimeWindowSeparatorVisible, chartSettingDefaults.realtimeWindowSeparatorVisible))
 
   return (
     <div className="ff-settings-events-panel">
@@ -34,6 +35,19 @@ export function SettingsEventsPanel() {
         />
         <span>交易日间隔</span>
         <SettingsLineSwatch color="#93b7f4" storageKey="events.sessionBreak.color" />
+      </div>
+      <div className="ff-settings-events-row">
+        <input
+          checked={realtimeWindowSeparatorVisible}
+          onChange={(event) => {
+            const next = event.currentTarget.checked
+            setRealtimeWindowSeparatorVisible(next)
+            writeSettingsSymbolStateValue(chartSettingKeys.realtimeWindowSeparatorVisible, next)
+          }}
+          type="checkbox"
+        />
+        <span>实时窗口分隔</span>
+        <SettingsLineSwatch color="#4984d6" storageKey="events.realtimeWindowSeparator.color" />
       </div>
       <div className="ff-settings-events-row">
         <SettingsCheckboxInput storageKey="events.economic.visible" />

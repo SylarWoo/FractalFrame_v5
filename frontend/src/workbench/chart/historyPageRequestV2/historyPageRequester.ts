@@ -1,4 +1,5 @@
 import { readStoreV6PageSlice } from '../pageSliceV2'
+import { traceKLineChartPageV2 } from '../klineChartRendererV2/klineChartPageDebugProbeV2'
 import type {
   StoreV6HistoryPageRequest,
   StoreV6HistoryPageResult,
@@ -41,6 +42,14 @@ export async function requestStoreV6HistoryPage(
 ): Promise<StoreV6HistoryPageResult> {
   assertSelection(request)
   const { page, pageIndex } = resolveRequestedPage(request)
+  traceKLineChartPageV2('HistoryPageRequester.resolveRequestedPage', {
+    requestedPageIndex: request.pageIndex ?? null,
+    normalizedPageIndex: pageIndex,
+    resolvedPageIndex: page?.index ?? null,
+    pages: request.pages.map((item) => item.index).slice(0, 8),
+    period: request.period,
+    symbol: request.symbol,
+  })
   if (!page) {
     throw new StoreV6HistoryPageRequestError(`history_page_not_found:${pageIndex}`, 'missing_page')
   }

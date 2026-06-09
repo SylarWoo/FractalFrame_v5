@@ -1,5 +1,6 @@
 import { DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
+import { chartManualYAxisRangeChangeEvent } from '../chartAxisInteraction'
 
 const candlePaneId = 'candle_pane'
 const dragSpeed = 2.8
@@ -90,6 +91,7 @@ export function installKLineChartMainYAxisInteractionV2(
       realRange: realTo - realFrom,
     })
     chartWithYAxisAccess.adjustPaneViewport?.(false, true, true, true)
+    window.dispatchEvent(new Event(chartManualYAxisRangeChangeEvent))
     options.onRangeChange?.()
   }
 
@@ -113,6 +115,7 @@ export function installKLineChartMainYAxisInteractionV2(
     event.preventDefault()
     event.stopImmediatePropagation()
     resetAutoScale(chartWithYAxisAccess)
+    window.dispatchEvent(new Event(chartManualYAxisRangeChangeEvent))
     options.onRangeChange?.()
   }
 

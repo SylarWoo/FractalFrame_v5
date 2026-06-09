@@ -1,6 +1,7 @@
 import type { KLineData } from 'klinecharts'
-import type { KLineChartFrameAlignment, KLineChartHistoryFrame } from '../historyPageKLineChartFrameV2'
+import type { KLineChartFrameAlignment, KLineChartHistoryFrame, KLineChartPaneFrame } from '../historyPageKLineChartFrameV2'
 import type { KLineChartRealtimeFrame } from '../klineChartRealtimeFrameV2'
+import type { MorganRangeSegment } from '../morganRangeModel'
 import type { KLineChartRenderFrameSegment, KLineChartRenderFrameV2 } from './klineChartRenderFrameTypes'
 
 type SourceRow = {
@@ -70,6 +71,95 @@ function mergeSourceRows(historyRows: SourceRow[], realtimeRows: SourceRow[]) {
   return [...byTimestamp.values()].sort((left, right) => Number(left.row.timestamp) - Number(right.row.timestamp))
 }
 
+function createPaneRowsByTimestamp(frame: KLineChartHistoryFrame | KLineChartRealtimeFrame, pane: KLineChartPaneFrame | undefined) {
+  const byTimestamp = new Map<number, unknown>()
+  if (!pane) return byTimestamp
+  pane.rows.forEach((row, index) => {
+    const timestamp = frame.alignment.dataIndexToTimestamp[index]
+    if (Number.isFinite(timestamp)) byTimestamp.set(Number(timestamp), row)
+  })
+  return byTimestamp
+}
+
+function isMorganRangePane(name: string) {
+  return name === 'MR_M5' || name === 'MR_M30'
+}
+
+function translateMorganRangeSegments(
+  frame: KLineChartHistoryFrame | KLineChartRealtimeFrame,
+  pane: KLineChartPaneFrame | undefined,
+  finalTimestampToDataIndex: Map<number, number>,
+) {
+  if (!pane) return []
+  return (pane.rows as MorganRangeSegment[]).map((segment) => {
+    const sourceStartIndex = Math.max(0, Math.round(Number(segment.startIndex)))
+    const sourceStartTimestamp = Number(frame.alignment.dataIndexToTimestamp[sourceStartIndex] ?? segment.startTimestamp)
+    const finalStartIndex = finalTimestampToDataIndex.get(sourceStartTimestamp)
+    if (finalStartIndex == null) return null
+    const width = Math.max(0, Math.round(Number(segment.endIndex)) - sourceStartIndex)
+    return {
+      ...segment,
+      endIndex: finalStartIndex + width,
+      startIndex: finalStartIndex,
+      startTimestamp: sourceStartTimestamp,
+    }
+  }).filter((segment): segment is MorganRangeSegment => segment != null)
+}
+
+function mergePanes(
+  historyFrame: KLineChartHistoryFrame,
+  realtimeFrame: KLineChartRealtimeFrame | null | undefined,
+  sourceRows: SourceRow[],
+) {
+  const names = new Set([
+    ...Object.keys(historyFrame.panes),
+    ...Object.keys(realtimeFrame?.panes ?? {}),
+  ])
+  const panes: Record<string, KLineChartPaneFrame> = {}
+  const finalTimestampToDataIndex = new Map<number, number>()
+  sourceRows.forEach((item, index) => {
+    const timestamp = Number(item.row.timestamp)
+    if (Number.isFinite(timestamp)) finalTimestampToDataIndex.set(timestamp, index)
+  })
+  names.forEach((name) => {
+    const historyPane = historyFrame.panes[name]
+    const realtimePane = realtimeFrame?.panes[name]
+    if (isMorganRangePane(name)) {
+      panes[name] = {
+        key: `${historyPane?.key ?? 'no-history'}:${realtimePane?.key ?? 'no-realtime'}`,
+        paneId: realtimePane?.paneId ?? historyPane?.paneId,
+        paneRole: realtimePane?.paneRole ?? historyPane?.paneRole,
+        renderRole: realtimePane?.renderRole ?? historyPane?.renderRole,
+        rows: [
+          ...translateMorganRangeSegments(historyFrame, historyPane, finalTimestampToDataIndex),
+          ...(realtimeFrame ? translateMorganRangeSegments(realtimeFrame, realtimePane, finalTimestampToDataIndex) : []),
+        ],
+        settings: realtimePane?.settings ?? historyPane?.settings,
+        source: 'kline-chart-render-pane-frame-v2',
+      }
+      return
+    }
+    const historyRowsByTimestamp = createPaneRowsByTimestamp(historyFrame, historyPane)
+    const realtimeRowsByTimestamp = realtimeFrame ? createPaneRowsByTimestamp(realtimeFrame, realtimePane) : new Map<number, unknown>()
+    const rows = sourceRows.map((item) => {
+      const timestamp = Number(item.row.timestamp)
+      return item.source === 'realtime'
+        ? realtimeRowsByTimestamp.get(timestamp) ?? {}
+        : historyRowsByTimestamp.get(timestamp) ?? {}
+    })
+    panes[name] = {
+      key: `${historyPane?.key ?? 'no-history'}:${realtimePane?.key ?? 'no-realtime'}`,
+      paneId: realtimePane?.paneId ?? historyPane?.paneId,
+      paneRole: realtimePane?.paneRole ?? historyPane?.paneRole,
+      renderRole: realtimePane?.renderRole ?? historyPane?.renderRole,
+      rows,
+      settings: realtimePane?.settings ?? historyPane?.settings,
+      source: 'kline-chart-render-pane-frame-v2',
+    }
+  })
+  return panes
+}
+
 function createSegmentFromUnifiedRows(
   source: 'history' | 'realtime',
   key: string,
@@ -113,7 +203,7 @@ export function buildKLineChartRenderFrameV2(
     key: `kline-chart-render-frame-v2:${historyFrame.key}:${realtimeFrame?.key ?? 'no-realtime'}`,
     mainRows,
     pageIndex: historyFrame.pageIndex,
-    panes: historyFrame.panes,
+    panes: mergePanes(historyFrame, realtimeFrame, sourceRows),
     period: historyFrame.period,
     segments: {
       history: historySegment,

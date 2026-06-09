@@ -16,7 +16,7 @@ export type KLineChartPaneFrame<Row = unknown> = {
   renderRole?: 'main-overlay' | 'sub-pane'
   rows: Row[]
   settings?: unknown
-  source: 'history-page-kline-chart-pane-frame-v2'
+  source: 'history-page-kline-chart-pane-frame-v2' | 'kline-chart-render-pane-frame-v2' | 'realtime-page-kline-chart-pane-frame-v2'
 }
 
 export type KLineChartHistoryFrame = {

@@ -1,4 +1,10 @@
-export { buildStoreV6RealtimePageWindow, mergeMt5RealtimeTickIntoWindow, requestStoreV6RealtimePageWindow } from './realtimePageWindowBuilder'
+export {
+  buildStoreV6RealtimePageWindow,
+  clearRealtimeStableWindowCacheV2,
+  mergeMt5RealtimeTickIntoWindow,
+  requestStoreV6RealtimePageWindow,
+  resolveM5RealtimeSessionStartSeconds,
+} from './realtimePageWindowBuilder'
 export type {
   Mt5RealtimeWindowTick,
   StoreV6RealtimePageWindow,

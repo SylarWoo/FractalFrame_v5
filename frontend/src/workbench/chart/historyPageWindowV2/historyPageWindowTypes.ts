@@ -1,5 +1,6 @@
 import type { StoreV6HistoryPageResult } from '../historyPageRequestV2'
 import type { StoreV6IndicatorRegistryV2, StoreV6IndicatorRequestRuntimeV2, StoreV6IndicatorRequestSpecV2 } from '../indicatorRequestV2'
+import type { StoreV6PagePartitionItem } from '../pagePartition/pagePartitionBuilder'
 import type { StoreV6PageSliceBoundary, StoreV6WindowKLine } from '../pageSliceV2'
 
 export type StoreV6HistoryPageWindowIndicatorSeries<Row = unknown> = {
@@ -47,6 +48,7 @@ export type StoreV6HistoryPageWindow = {
   historyRows: StoreV6WindowKLine[]
   indicators: StoreV6HistoryPageWindowIndicators
   key: string
+  page: StoreV6PagePartitionItem
   pageIndex: number
   period: string
   renderData: {

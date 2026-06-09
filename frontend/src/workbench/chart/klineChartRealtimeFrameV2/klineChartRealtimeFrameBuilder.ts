@@ -57,13 +57,25 @@ function createAlignment(rows: NormalizedRealtimeRow[]): KLineChartFrameAlignmen
   return { barKeyToDataIndex, dataIndexToBarKey, dataIndexToGlobalIndex, dataIndexToTimestamp, globalIndexToDataIndex, timestampToDataIndex }
 }
 
+function createPaneFrames(window: StoreV6RealtimePageWindow): Record<string, KLineChartPaneFrame> {
+  return Object.fromEntries(Object.entries(window.renderData.indicators).map(([name, series]) => [name, {
+    key: series.key,
+    paneId: series.paneId,
+    paneRole: series.paneRole,
+    renderRole: series.renderRole,
+    rows: series.displayRows ?? series.rows,
+    settings: series.settings,
+    source: 'realtime-page-kline-chart-pane-frame-v2' as const,
+  }]))
+}
+
 export function buildKLineChartRealtimeFrame(window: StoreV6RealtimePageWindow): KLineChartRealtimeFrame {
   const rows = normalizeRealtimeRows(window.renderData.klineRows)
   return {
     alignment: createAlignment(rows),
     key: `kline-chart-realtime-frame-v2:${window.key}`,
     mainRows: rows.map((item) => item.row),
-    panes: {} satisfies Record<string, KLineChartPaneFrame>,
+    panes: createPaneFrames(window),
     period: window.period,
     sessionTimeFrom: toKLineChartTimestamp(window.sessionTimeFrom),
     sessionTimeTo: toKLineChartTimestamp(window.sessionTimeTo),

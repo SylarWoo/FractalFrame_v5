@@ -4,12 +4,19 @@ import { buildCachedKLineChartRenderFrameV2 } from './chartRenderCacheV2'
 import type { StoreV6HistoryPageWindow } from './historyPageWindowV2'
 import {
   createStoreV6IndicatorRegistryV2,
+  preheatHistoryWindowForIndicatorsV2,
+  refreshRealtimeWindowIndicatorsV2,
   requestHistoryWindowIndicatorsV2,
+  storeV6MaIndicatorDefinitionV2,
+  storeV6MorganRangeM5IndicatorDefinitionV2,
+  storeV6StochIndicatorDefinitionV2,
   storeV6VolIndicatorDefinitionV2,
+  storeV6VwapIndicatorDefinitionV2,
   type StoreV6IndicatorRequestSpecV2,
 } from './indicatorRequestV2'
 import type { KLineChartRenderFrameV2 } from './klineChartRenderFrameV2'
 import { BlankKLineChartHostV2, KLineChartHostV2 } from './klineChartRendererV2'
+import { traceKLineChartPageV2 } from './klineChartRendererV2/klineChartPageDebugProbeV2'
 import {
   buildStoreV6RealtimePageWindow,
   mergeMt5RealtimeTickIntoWindow,
@@ -35,7 +42,11 @@ type ChartWorkspaceV2Props = {
 }
 
 const chartWorkspaceIndicatorRegistryV2 = createStoreV6IndicatorRegistryV2()
+chartWorkspaceIndicatorRegistryV2.register(storeV6MaIndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6MorganRangeM5IndicatorDefinitionV2)
 chartWorkspaceIndicatorRegistryV2.register(storeV6VolIndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6VwapIndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6StochIndicatorDefinitionV2)
 
 function createIndicatorRequestSignature(requests: StoreV6IndicatorRequestSpecV2[] | null | undefined) {
   if (!requests || requests.length === 0) return 'no-indicators'
@@ -44,11 +55,19 @@ function createIndicatorRequestSignature(requests: StoreV6IndicatorRequestSpecV2
     .join('|')
 }
 
-function createIndicatorMountSignature(requests: StoreV6IndicatorRequestSpecV2[] | null | undefined) {
-  if (!requests || requests.length === 0) return 'no-indicators'
-  return requests
-    .map((request) => `${request.id}:${request.enabled === false ? 'off' : 'on'}:${request.paneId ?? ''}`)
-    .join('|')
+function createHistoryWindowRealtimeSignature(historyWindow: StoreV6HistoryPageWindow | null, realtimeStart?: number | null) {
+  if (!historyWindow) return 'no-history-window'
+  const boundary = historyWindow.boundary
+  return [
+    historyWindow.key,
+    historyWindow.symbol,
+    historyWindow.period,
+    historyWindow.pageIndex,
+    realtimeStart ?? boundary.actualTimeTo ?? 'none',
+    boundary.actualTimeFrom ?? 'none',
+    boundary.actualTimeTo ?? 'none',
+    historyWindow.historyRows.length,
+  ].join(':')
 }
 
 function attachIndicatorsToHistoryWindow(
@@ -75,9 +94,22 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
     target.historyPageWindow?.period === target.period
   const activeHistoryPageWindow = historyPageWindowMatchesTarget ? target.historyPageWindow ?? null : null
   const indicatorSignature = createIndicatorRequestSignature(target.indicatorRequests)
-  const indicatorMountSignature = createIndicatorMountSignature(target.indicatorRequests)
   const preparedHistoryPageWindow = historyPageWindowWithIndicators
   const hasHistoryPageWindow = Boolean(preparedHistoryPageWindow)
+  const realtimeStart = target.pageNavigation?.realtimeStart ?? preparedHistoryPageWindow?.boundary.actualTimeTo ?? null
+  const historyWindowRealtimeSignature = createHistoryWindowRealtimeSignature(preparedHistoryPageWindow, realtimeStart)
+
+  useEffect(() => {
+    traceKLineChartPageV2('ChartWorkspace.target.received', {
+      hasHistoryPageWindow,
+      historyPageIndex: preparedHistoryPageWindow?.pageIndex ?? null,
+      historyWindowKey: preparedHistoryPageWindow?.key ?? null,
+      pageNavigationIndex: target.pageNavigation?.current.index ?? null,
+      realtimeStart,
+      symbol: target.symbol,
+      period: target.period,
+    })
+  }, [hasHistoryPageWindow, preparedHistoryPageWindow?.key, preparedHistoryPageWindow?.pageIndex, realtimeStart, target.pageNavigation?.current.index, target.period, target.symbol])
 
   useEffect(() => {
     let disposed = false
@@ -95,20 +127,35 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
         disposed = true
       }
     }
-    void requestHistoryWindowIndicatorsV2({
-      boundary: historyPageWindow.boundary,
-      calculationRows: historyPageWindow.calculationRows,
-      displayOffset: historyPageWindow.displayOffset,
-      displayRows: historyPageWindow.historyRows,
-      pageIndex: historyPageWindow.pageIndex,
-      period: historyPageWindow.period,
+    void preheatHistoryWindowForIndicatorsV2({
       registry: chartWorkspaceIndicatorRegistryV2,
       requests: indicatorRequests,
-      symbol: historyPageWindow.symbol,
-      warmupRows: historyPageWindow.warmupRows,
+      window: historyPageWindow,
     })
-      .then((indicators) => {
+      .then((preheatedWindow) => {
         if (disposed) return
+        if (preheatedWindow !== historyPageWindow) {
+          setHistoryPageWindowWithIndicators({
+            ...preheatedWindow,
+            key: `${preheatedWindow.key}:indicators:${indicatorSignature}`,
+          })
+          return
+        }
+        return requestHistoryWindowIndicatorsV2({
+          boundary: historyPageWindow.boundary,
+          calculationRows: historyPageWindow.calculationRows,
+          displayOffset: historyPageWindow.displayOffset,
+          displayRows: historyPageWindow.historyRows,
+          pageIndex: historyPageWindow.pageIndex,
+          period: historyPageWindow.period,
+          registry: chartWorkspaceIndicatorRegistryV2,
+          requests: indicatorRequests,
+          symbol: historyPageWindow.symbol,
+          warmupRows: historyPageWindow.warmupRows,
+        })
+      })
+      .then((indicators) => {
+        if (disposed || !indicators) return
         setHistoryPageWindowWithIndicators(attachIndicatorsToHistoryWindow(historyPageWindow, indicators, indicatorSignature))
       })
       .catch(() => {
@@ -125,10 +172,11 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
       setFrame(null)
       return
     }
-    setFrame(buildCachedKLineChartRenderFrameV2({
+    const nextFrame = buildCachedKLineChartRenderFrameV2({
       historyWindow: historyPageWindow,
       realtimeWindow,
-    }).frame)
+    }).frame
+    setFrame(nextFrame)
   }, [preparedHistoryPageWindow, realtimeWindow])
 
   useEffect(() => {
@@ -142,16 +190,22 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
     }
     const emptyRealtimeWindow = buildStoreV6RealtimePageWindow({
       enabled: target.realtimeEnabled === true,
-      historyRows: historyPageWindow.historyRows,
+      historyRows: historyPageWindow.calculationRows,
       indicatorRegistry: chartWorkspaceIndicatorRegistryV2,
       indicatorRequests: target.indicatorRequests ?? [],
       period: target.period,
-      sessionTimeFrom: target.pageNavigation?.realtimeStart ?? historyPageWindow.boundary.actualTimeTo,
+      sessionTimeFrom: realtimeStart,
       sessionTimeTo: null,
       symbol: target.symbol,
     })
-    setRealtimeWindow(emptyRealtimeWindow)
+    const shouldRefreshRecoveredRealtimeIndicators = emptyRealtimeWindow &&
+      emptyRealtimeWindow.activeRows.length > 0 &&
+      (target.indicatorRequests ?? []).length > 0
+    if (!shouldRefreshRecoveredRealtimeIndicators) {
+      setRealtimeWindow(emptyRealtimeWindow)
+    }
     let realtimeWindowState = emptyRealtimeWindow
+    let realtimeIndicatorRefreshId = 0
     let pendingFrameId = 0
     let pendingRealtimeWindow: StoreV6RealtimePageWindow | null = null
     const scheduleRealtimeFrame = (realtimeWindow: StoreV6RealtimePageWindow) => {
@@ -166,13 +220,29 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
     if (target.realtimeEnabled !== true) {
       setRealtimeWindow(null)
     } else {
+      if (shouldRefreshRecoveredRealtimeIndicators) {
+        const refreshId = realtimeIndicatorRefreshId + 1
+        realtimeIndicatorRefreshId = refreshId
+        void refreshRealtimeWindowIndicatorsV2({
+          historyRows: emptyRealtimeWindow.indicatorHistoryRows ?? historyPageWindow.calculationRows,
+          registry: chartWorkspaceIndicatorRegistryV2,
+          requests: target.indicatorRequests ?? [],
+          window: emptyRealtimeWindow,
+        }).then((restoredRealtimeWindow) => {
+          if (disposed || refreshId !== realtimeIndicatorRefreshId) return
+          realtimeWindowState = restoredRealtimeWindow
+          setRealtimeWindow(restoredRealtimeWindow)
+        }).catch(() => {
+          if (!disposed && refreshId === realtimeIndicatorRefreshId) setRealtimeWindow(emptyRealtimeWindow)
+        })
+      }
       void requestStoreV6RealtimePageWindow({
         enabled: true,
-        historyRows: historyPageWindow.historyRows,
+        historyRows: historyPageWindow.calculationRows,
         indicatorRegistry: chartWorkspaceIndicatorRegistryV2,
         indicatorRequests: target.indicatorRequests ?? [],
         period: target.period,
-        sessionTimeFrom: target.pageNavigation?.realtimeStart ?? historyPageWindow.boundary.actualTimeTo,
+        sessionTimeFrom: realtimeStart,
         sessionTimeTo: null,
         symbol: target.symbol,
       })
@@ -182,7 +252,7 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
           setRealtimeWindow(realtimeWindow)
         })
         .catch(() => {
-          if (!disposed) setRealtimeWindow(emptyRealtimeWindow)
+          if (!disposed) setRealtimeWindow(realtimeWindowState)
         })
     }
 
@@ -193,7 +263,25 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
       const nextRealtimeWindow = mergeMt5RealtimeTickIntoWindow(realtimeWindowState, tick)
       if (nextRealtimeWindow === realtimeWindowState) return
       realtimeWindowState = nextRealtimeWindow
-      scheduleRealtimeFrame(realtimeWindowState)
+      const indicatorRequests = target.indicatorRequests ?? []
+      if (indicatorRequests.length === 0) {
+        scheduleRealtimeFrame(nextRealtimeWindow)
+        return
+      }
+      const refreshId = realtimeIndicatorRefreshId + 1
+      realtimeIndicatorRefreshId = refreshId
+      void refreshRealtimeWindowIndicatorsV2({
+        historyRows: nextRealtimeWindow.indicatorHistoryRows ?? historyPageWindow.calculationRows,
+        registry: chartWorkspaceIndicatorRegistryV2,
+        requests: indicatorRequests,
+        window: nextRealtimeWindow,
+      }).then((refreshedWindow) => {
+        if (disposed || refreshId !== realtimeIndicatorRefreshId) return
+        realtimeWindowState = refreshedWindow
+        scheduleRealtimeFrame(refreshedWindow)
+      }).catch(() => {
+        if (!disposed && refreshId === realtimeIndicatorRefreshId) scheduleRealtimeFrame(nextRealtimeWindow)
+      })
     }
     window.addEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
     return () => {
@@ -201,7 +289,7 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
       if (pendingFrameId !== 0) window.cancelAnimationFrame(pendingFrameId)
       window.removeEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
     }
-  }, [hasHistoryPageWindow, indicatorMountSignature, target.period, target.realtimeEnabled, target.symbol])
+  }, [hasHistoryPageWindow, historyWindowRealtimeSignature, indicatorSignature, realtimeStart, target.period, target.realtimeEnabled, target.symbol])
 
   if (!frame) {
     return (
