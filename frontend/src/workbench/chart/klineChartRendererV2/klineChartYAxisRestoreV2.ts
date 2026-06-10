@@ -1,4 +1,5 @@
 import type { Chart } from 'klinecharts'
+import { readJson, writeJson } from '../../persistence/jsonStorage'
 
 const candlePaneId = 'candle_pane'
 const storagePrefix = 'fractalframe:klinechart-v2:yAxisRestore'
@@ -83,9 +84,8 @@ export function isKLineChartYAxisRangeUsableV2(range: KLineChartYAxisRangeV2 | n
 
 export function readKLineChartYAxisSnapshotV2(symbol: string, period: string): KLineChartYAxisSnapshotV2 | null {
   try {
-    const raw = window.localStorage.getItem(storageKey(symbol, period))
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<KLineChartYAxisSnapshotV2>
+    const parsed = readJson<Partial<KLineChartYAxisSnapshotV2> | null>(storageKey(symbol, period), null)
+    if (!parsed) return null
     const mode = parsed.mode === 'manual' ? 'manual' : 'auto'
     return {
       mode,
@@ -98,11 +98,7 @@ export function readKLineChartYAxisSnapshotV2(symbol: string, period: string): K
 }
 
 export function writeKLineChartYAxisSnapshotV2(symbol: string, period: string, snapshot: KLineChartYAxisSnapshotV2) {
-  try {
-    window.localStorage.setItem(storageKey(symbol, period), JSON.stringify(snapshot))
-  } catch {
-    // Render state persistence is optional.
-  }
+  writeJson(storageKey(symbol, period), snapshot)
 }
 
 export function captureKLineChartYAxisStateV2(chart: Chart): KLineChartYAxisSnapshotV2 | null {

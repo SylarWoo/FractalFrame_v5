@@ -56,6 +56,42 @@ describe('klineChartYAxisRestoreV2', () => {
     expect(chart.adjustPaneViewport).toHaveBeenCalledWith(false, true, true, true)
   })
 
+  it('restores the saved manual y-axis range from the profile endpoint when localStorage is empty', () => {
+    vi.stubGlobal('XMLHttpRequest', class {
+      responseText = JSON.stringify({
+        value: {
+          mode: 'manual',
+          range: manualRange,
+          savedAt: '2026-06-09T00:00:00.000Z',
+        },
+      })
+      status = 200
+      open = vi.fn()
+      send = vi.fn()
+    })
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: vi.fn(() => null),
+        setItem: vi.fn(),
+      },
+    })
+    const yAxis = {
+      setAutoCalcTickFlag: vi.fn(),
+      setRange: vi.fn(),
+    }
+    const chart = {
+      adjustPaneViewport: vi.fn(),
+      getDrawPaneById: vi.fn(() => ({
+        getAxisComponent: () => yAxis,
+      })),
+    }
+
+    expect(restoreKLineChartYAxisAfterDataReadyV2(chart as never, 'XAUUSDm', 'M30')).toBe(true)
+
+    expect(yAxis.setAutoCalcTickFlag).toHaveBeenCalledWith(false)
+    expect(yAxis.setRange).toHaveBeenCalledWith(manualRange)
+  })
+
   it('saves the current y-axis range when a chart drag ends', () => {
     vi.useFakeTimers()
     const storage = new Map<string, string>()

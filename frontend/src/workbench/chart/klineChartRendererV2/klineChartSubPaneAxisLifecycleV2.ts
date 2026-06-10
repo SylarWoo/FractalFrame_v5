@@ -1,5 +1,6 @@
 import type { Chart } from 'klinecharts'
 import type { KLineChartRenderFrameV2 } from '../klineChartRenderFrameV2'
+import { readJson, writeJson } from '../../persistence/jsonStorage'
 import { kLineChartSubPaneAxisConfigV2 } from './klineChartSubPaneAxisConfigV2'
 import {
   installKLineChartYAxisInteractionCoreV2,
@@ -57,9 +58,8 @@ export function readKLineChartSubPaneYAxisSnapshotV2(
   paneId: string,
 ): KLineChartSubPaneYAxisSnapshotV2 | null {
   try {
-    const raw = window.localStorage.getItem(storageKey(symbol, period, paneId))
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<KLineChartSubPaneYAxisSnapshotV2>
+    const parsed = readJson<Partial<KLineChartSubPaneYAxisSnapshotV2> | null>(storageKey(symbol, period, paneId), null)
+    if (!parsed) return null
     const mode = parsed.mode === 'manual' ? 'manual' : 'auto'
     return {
       mode,
@@ -78,11 +78,7 @@ export function writeKLineChartSubPaneYAxisSnapshotV2(
   paneId: string,
   snapshot: KLineChartSubPaneYAxisSnapshotV2,
 ) {
-  try {
-    window.localStorage.setItem(storageKey(symbol, period, paneId), JSON.stringify(snapshot))
-  } catch {
-    // Axis persistence is optional and must not block rendering.
-  }
+  writeJson(storageKey(symbol, period, paneId), snapshot)
 }
 
 export function captureKLineChartSubPaneYAxisStateV2(

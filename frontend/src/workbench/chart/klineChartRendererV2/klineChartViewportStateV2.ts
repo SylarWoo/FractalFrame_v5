@@ -1,5 +1,6 @@
 import { ActionType, DomPosition } from 'klinecharts'
 import type { Chart } from 'klinecharts'
+import { readJson, writeJson } from '../../persistence/jsonStorage'
 import { kLineChartConfigV2 } from './klineChartConfigV2'
 
 const candlePaneId = 'candle_pane'
@@ -96,9 +97,8 @@ function captureViewport(chart: Chart): ViewportSnapshotV2 | null {
 
 function readSnapshot(symbol: string, period: string, viewportScope?: string | null): ViewportSnapshotV2 | null {
   try {
-    const raw = window.localStorage.getItem(storageKey(symbol, period, viewportScope))
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<ViewportSnapshotV2>
+    const parsed = readJson<Partial<ViewportSnapshotV2> | null>(storageKey(symbol, period, viewportScope), null)
+    if (!parsed) return null
     const barSpace = normalizeBarSpace(parsed.barSpace)
     const visibleTo = Number(parsed.visibleTo)
     if (barSpace == null || !Number.isFinite(visibleTo)) return null
@@ -116,11 +116,7 @@ function readSnapshot(symbol: string, period: string, viewportScope?: string | n
 }
 
 function writeSnapshot(symbol: string, period: string, snapshot: ViewportSnapshotV2, viewportScope?: string | null) {
-  try {
-    window.localStorage.setItem(storageKey(symbol, period, viewportScope), JSON.stringify(snapshot))
-  } catch {
-    // Storage can be unavailable in restricted browser modes.
-  }
+  writeJson(storageKey(symbol, period, viewportScope), snapshot)
 }
 
 function scrollToTimestampAfterFrame(chart: Chart, timestamp: number) {

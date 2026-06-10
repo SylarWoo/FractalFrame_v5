@@ -90,7 +90,7 @@ describe('klineChartRefreshAxisRestoreV2', () => {
   })
 
   it('keeps axis snapshots isolated between periods on refresh', () => {
-    writeKLineChartYAxisSnapshotV2('XAUUSDm', 'M5', {
+    writeKLineChartYAxisSnapshotV2('PERIOD_ISOLATION', 'M5', {
       mode: 'manual',
       range: mainRange,
       savedAt: '2026-06-10T00:00:00.000Z',
@@ -106,7 +106,7 @@ describe('klineChartRefreshAxisRestoreV2', () => {
       })),
     }
 
-    expect(restoreKLineChartYAxisAfterDataReadyV2(chart as never, 'XAUUSDm', 'M30')).toBe(false)
+    expect(restoreKLineChartYAxisAfterDataReadyV2(chart as never, 'PERIOD_ISOLATION', 'M30')).toBe(false)
 
     expect(yAxis.setAutoCalcTickFlag).toHaveBeenCalledWith(true)
     expect(yAxis.setRange).not.toHaveBeenCalled()

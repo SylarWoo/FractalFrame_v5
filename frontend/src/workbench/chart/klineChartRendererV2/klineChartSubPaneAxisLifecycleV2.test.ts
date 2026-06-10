@@ -128,7 +128,7 @@ describe('klineChartSubPaneAxisLifecycleV2', () => {
       })),
     }
 
-    restoreKLineChartSubPaneYAxisV2(chart as never, 'XAUUSDm', 'M30', ['tsi_pane'])
+    restoreKLineChartSubPaneYAxisV2(chart as never, 'NO_SNAPSHOT_SYMBOL', 'M30', ['tsi_pane'])
 
     expect(tsiAxis.setAutoCalcTickFlag).toHaveBeenCalledWith(true)
     expect(tsiAxis.setRange).not.toHaveBeenCalled()
