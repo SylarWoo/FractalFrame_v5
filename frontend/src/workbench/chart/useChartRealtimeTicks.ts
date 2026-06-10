@@ -208,11 +208,14 @@ export function resolveRealtimeRateVolume(options: {
   appendNewBar: boolean
   latestVolume?: number | null
   mt5RateVolume?: number | null
+  tickVolume?: number | null
 }) {
   const mt5RateVolume = options.mt5RateVolume == null ? NaN : Number(options.mt5RateVolume)
   if (Number.isFinite(mt5RateVolume) && mt5RateVolume >= 0) return mt5RateVolume
+  const tickVolume = Number(options.tickVolume)
+  if (Number.isFinite(tickVolume) && tickVolume > 0) return Math.max(0, tickVolume)
   const latestVolume = Number(options.latestVolume ?? 0)
-  if (options.appendNewBar) return 0
+  if (options.appendNewBar) return 1
   return Number.isFinite(latestVolume) ? Math.max(0, latestVolume) : 0
 }
 
@@ -365,6 +368,7 @@ export function useChartRealtimeTicks({ chartInstanceRef, dataReady = true, peri
         appendNewBar: shouldAppendNewBar,
         latestVolume: Number(latest.volume ?? 0),
         mt5RateVolume,
+        tickVolume: detail.volume,
       })
       const rawNextRow = shouldAppendNewBar
         ? {

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { StoreV6RealtimePageWindow } from '../realtimePageWindowV2'
 import type { StoreV6WindowKLine } from '../pageSliceV2'
 import { createStoreV6IndicatorRegistryV2 } from './indicatorRegistryV2'
+import { requestRealtimeWindowIndicatorsV2 } from './indicatorRequestControllerV2'
 import { clearRealtimeIndicatorStableCacheV2, refreshRealtimeWindowIndicatorsWithStableCacheV2 } from './realtimeIndicatorStableCacheV2'
 import {
   storeV6MorganRangeM5IndicatorDefinitionV2,
@@ -11,6 +12,11 @@ import {
   storeV6MorganRangeM30IndicatorIdV2,
   storeV6MorganRangeM30RequestIdV2,
 } from './morganRangeIndicatorV2'
+import { storeV6MaIndicatorDefinitionV2, storeV6MaIndicatorIdV2 } from './maIndicatorV2'
+import { storeV6StochIndicatorDefinitionV2, storeV6StochIndicatorIdV2 } from './stochIndicatorV2'
+import { storeV6TsiIndicatorDefinitionV2, storeV6TsiIndicatorIdV2 } from './tsiIndicatorV2'
+import { storeV6VdoIndicatorDefinitionV2, storeV6VdoIndicatorIdV2 } from './vdoIndicatorV2'
+import { storeV6VmiIndicatorDefinitionV2, storeV6VmiIndicatorIdV2 } from './vmiIndicatorV2'
 
 function kline(time: number, close: number): StoreV6WindowKLine {
   return {
@@ -375,5 +381,270 @@ describe('refreshRealtimeWindowIndicatorsWithStableCacheV2', () => {
     const currentSegment = segmentRows[currentSegmentIndex] as { startIndex: number }
     const previous = segmentRows[currentSegmentIndex - 1] as { endIndex: number } | undefined
     expect(previous?.endIndex).toBeLessThan(currentSegment.startIndex)
+  })
+
+  it('matches direct realtime VDO results after the closing tail moves into stable realtime rows', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6VdoIndicatorDefinitionV2)
+    const settings = { emaSmoothing: 3, length: 5, vdoMa2Length: 4, vdoMaLength: 3 }
+    const historyRows = Array.from({ length: 12 }, (_, index) => kline((index + 1) * 300, 100 + index))
+    const firstActiveRows = [
+      kline(3_900, 113),
+      kline(4_200, 114),
+      kline(4_500, 115),
+    ]
+    const secondActiveRows = [
+      kline(3_900, 113),
+      kline(4_200, 114),
+      kline(4_500, 115),
+      kline(4_800, 116),
+    ]
+    const firstWindow = {
+      ...windowFromRows(firstActiveRows),
+      indicatorRequests: [{ id: 'VDO', params: settings }],
+      sessionTimeFrom: firstActiveRows[0].time,
+    } satisfies StoreV6RealtimePageWindow
+    const secondWindow = {
+      ...windowFromRows(secondActiveRows),
+      indicatorRequests: [{ id: 'VDO', params: settings }],
+      sessionTimeFrom: secondActiveRows[0].time,
+    } satisfies StoreV6RealtimePageWindow
+
+    await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: firstWindow.indicatorRequests,
+      window: firstWindow,
+    })
+    const settled = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: secondWindow.indicatorRequests,
+      window: secondWindow,
+    })
+    const direct = await requestRealtimeWindowIndicatorsV2({
+      activeRows: secondActiveRows,
+      historyRows,
+      period: 'M5',
+      registry,
+      requests: secondWindow.indicatorRequests,
+      sessionTimeFrom: secondWindow.sessionTimeFrom,
+      sessionTimeTo: null,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(settled.indicators[storeV6VdoIndicatorIdV2].displayRows).toEqual(direct[storeV6VdoIndicatorIdV2].displayRows)
+  })
+
+  it('matches direct realtime VMI results after the closing tail moves into stable realtime rows', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6VmiIndicatorDefinitionV2)
+    const settings = { fastLength: 5, slowLength: 8 }
+    const historyRows = Array.from({ length: 16 }, (_, index) => kline((index + 1) * 300, 120 + Math.sin(index)))
+    const firstActiveRows = [
+      kline(5_100, 131),
+      kline(5_400, 132),
+      kline(5_700, 130),
+    ]
+    const secondActiveRows = [
+      kline(5_100, 131),
+      kline(5_400, 132),
+      kline(5_700, 130),
+      kline(6_000, 133),
+    ]
+    const firstWindow = {
+      ...windowFromRows(firstActiveRows),
+      indicatorRequests: [{ id: 'VMI', params: settings }],
+      sessionTimeFrom: firstActiveRows[0].time,
+    } satisfies StoreV6RealtimePageWindow
+    const secondWindow = {
+      ...windowFromRows(secondActiveRows),
+      indicatorRequests: [{ id: 'VMI', params: settings }],
+      sessionTimeFrom: secondActiveRows[0].time,
+    } satisfies StoreV6RealtimePageWindow
+
+    await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: firstWindow.indicatorRequests,
+      window: firstWindow,
+    })
+    const settled = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: secondWindow.indicatorRequests,
+      window: secondWindow,
+    })
+    const direct = await requestRealtimeWindowIndicatorsV2({
+      activeRows: secondActiveRows,
+      historyRows,
+      period: 'M5',
+      registry,
+      requests: secondWindow.indicatorRequests,
+      sessionTimeFrom: secondWindow.sessionTimeFrom,
+      sessionTimeTo: null,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(settled.indicators[storeV6VmiIndicatorIdV2].displayRows).toEqual(direct[storeV6VmiIndicatorIdV2].displayRows)
+  })
+
+  it('matches direct realtime MA results after the closing tail moves into stable realtime rows', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6MaIndicatorDefinitionV2)
+    const settings = { length: 5, shiftLength: 2, type: 'sma' }
+    const historyRows = Array.from({ length: 12 }, (_, index) => kline((index + 1) * 300, 100 + index))
+    const firstActiveRows = [
+      kline(3_900, 113),
+      kline(4_200, 114),
+      kline(4_500, 115),
+    ]
+    const secondActiveRows = [
+      kline(3_900, 113),
+      kline(4_200, 114),
+      kline(4_500, 115),
+      kline(4_800, 116),
+    ]
+    const firstWindow = {
+      ...windowFromRows(firstActiveRows),
+      indicatorRequests: [{ id: 'MA', params: settings }],
+      sessionTimeFrom: firstActiveRows[0].time,
+    } satisfies StoreV6RealtimePageWindow
+    const secondWindow = {
+      ...windowFromRows(secondActiveRows),
+      indicatorRequests: [{ id: 'MA', params: settings }],
+      sessionTimeFrom: secondActiveRows[0].time,
+    } satisfies StoreV6RealtimePageWindow
+
+    await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: firstWindow.indicatorRequests,
+      window: firstWindow,
+    })
+    const settled = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: secondWindow.indicatorRequests,
+      window: secondWindow,
+    })
+    const direct = await requestRealtimeWindowIndicatorsV2({
+      activeRows: secondActiveRows,
+      historyRows,
+      period: 'M5',
+      registry,
+      requests: secondWindow.indicatorRequests,
+      sessionTimeFrom: secondWindow.sessionTimeFrom,
+      sessionTimeTo: null,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(settled.indicators[storeV6MaIndicatorIdV2].displayRows).toEqual(direct[storeV6MaIndicatorIdV2].displayRows)
+  })
+
+  it('matches direct realtime TSI results after the closing tail moves into stable realtime rows', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6TsiIndicatorDefinitionV2)
+    const settings = { longLength: 5, shortLength: 3, signalLength: 2 }
+    const historyRows = Array.from({ length: 12 }, (_, index) => kline((index + 1) * 300, 110 + index))
+    const firstActiveRows = [
+      kline(3_900, 123),
+      kline(4_200, 124),
+      kline(4_500, 125),
+    ]
+    const secondActiveRows = [
+      kline(3_900, 123),
+      kline(4_200, 124),
+      kline(4_500, 125),
+      kline(4_800, 126),
+    ]
+    const firstWindow = {
+      ...windowFromRows(firstActiveRows),
+      indicatorRequests: [{ id: 'TSI', params: settings }],
+      sessionTimeFrom: firstActiveRows[0].time,
+    } satisfies StoreV6RealtimePageWindow
+    const secondWindow = {
+      ...windowFromRows(secondActiveRows),
+      indicatorRequests: [{ id: 'TSI', params: settings }],
+      sessionTimeFrom: secondActiveRows[0].time,
+    } satisfies StoreV6RealtimePageWindow
+
+    await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: firstWindow.indicatorRequests,
+      window: firstWindow,
+    })
+    const settled = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: secondWindow.indicatorRequests,
+      window: secondWindow,
+    })
+    const direct = await requestRealtimeWindowIndicatorsV2({
+      activeRows: secondActiveRows,
+      historyRows,
+      period: 'M5',
+      registry,
+      requests: secondWindow.indicatorRequests,
+      sessionTimeFrom: secondWindow.sessionTimeFrom,
+      sessionTimeTo: null,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(settled.indicators[storeV6TsiIndicatorIdV2].displayRows).toEqual(direct[storeV6TsiIndicatorIdV2].displayRows)
+  })
+
+  it('matches direct realtime STOCH results after the closing tail moves into stable realtime rows', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6StochIndicatorDefinitionV2)
+    const settings = { dSmoothing: 3, kSmoothing: 2, length: 5 }
+    const historyRows = Array.from({ length: 12 }, (_, index) => kline((index + 1) * 300, 130 + index))
+    const firstActiveRows = [
+      kline(3_900, 143),
+      kline(4_200, 144),
+      kline(4_500, 145),
+    ]
+    const secondActiveRows = [
+      kline(3_900, 143),
+      kline(4_200, 144),
+      kline(4_500, 145),
+      kline(4_800, 146),
+    ]
+    const firstWindow = {
+      ...windowFromRows(firstActiveRows),
+      indicatorRequests: [{ id: 'STOCH', params: settings }],
+      sessionTimeFrom: firstActiveRows[0].time,
+    } satisfies StoreV6RealtimePageWindow
+    const secondWindow = {
+      ...windowFromRows(secondActiveRows),
+      indicatorRequests: [{ id: 'STOCH', params: settings }],
+      sessionTimeFrom: secondActiveRows[0].time,
+    } satisfies StoreV6RealtimePageWindow
+
+    await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: firstWindow.indicatorRequests,
+      window: firstWindow,
+    })
+    const settled = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: secondWindow.indicatorRequests,
+      window: secondWindow,
+    })
+    const direct = await requestRealtimeWindowIndicatorsV2({
+      activeRows: secondActiveRows,
+      historyRows,
+      period: 'M5',
+      registry,
+      requests: secondWindow.indicatorRequests,
+      sessionTimeFrom: secondWindow.sessionTimeFrom,
+      sessionTimeTo: null,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(settled.indicators[storeV6StochIndicatorIdV2].displayRows).toEqual(direct[storeV6StochIndicatorIdV2].displayRows)
   })
 })

@@ -1,10 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { queryStoreV6Ohlcv } from '../../../services/mt5/mt5SymbolsApi'
-import { createStoreV6IndicatorRegistryV2, storeV6MorganRangeM5IndicatorDefinitionV2, storeV6MorganRangeM5RequestIdV2 } from '../indicatorRequestV2'
+import { queryMt5Rates, queryStoreV6Ohlcv } from '../../../services/mt5/mt5SymbolsApi'
+import {
+  createStoreV6IndicatorRegistryV2,
+  requestRealtimeWindowIndicatorsV2,
+  storeV6MorganRangeM5IndicatorDefinitionV2,
+  storeV6MorganRangeM5RequestIdV2,
+  storeV6VdoIndicatorDefinitionV2,
+  storeV6VdoIndicatorIdV2,
+  storeV6VmiIndicatorDefinitionV2,
+  storeV6VmiIndicatorIdV2,
+} from '../indicatorRequestV2'
 import type { StoreV6WindowKLine } from '../pageSliceV2'
 import {
   buildStoreV6RealtimePageWindow,
   mergeMt5RealtimeTickIntoWindow,
+  rebuildStoreV6RealtimeStablePageWindow,
   resolveActiveM5RealtimeSessionStartSeconds,
   resolveRealtimeIndicatorHistoryRowsV2,
   resolveM5RealtimeSessionStartSeconds,
@@ -17,6 +27,7 @@ vi.mock('../../../services/mt5/mt5SymbolsApi', () => ({
 }))
 
 const queryStoreMock = vi.mocked(queryStoreV6Ohlcv)
+const queryMt5RatesMock = vi.mocked(queryMt5Rates)
 
 function shanghaiSeconds(year: number, month: number, day: number, hour: number, minute: number) {
   return Date.UTC(year, month - 1, day, hour - 8, minute) / 1000
@@ -42,6 +53,7 @@ function kline(time: number, globalIndex: number, source: StoreV6WindowKLine['so
 describe('buildStoreV6RealtimePageWindow', () => {
   beforeEach(() => {
     queryStoreMock.mockReset()
+    queryMt5RatesMock.mockReset()
   })
 
   it('creates an empty active session window without fake kline rows', () => {
@@ -172,6 +184,8 @@ describe('buildStoreV6RealtimePageWindow', () => {
     expect(second.tailRow?.low).toBe(2300)
     expect(second.tailRow?.close).toBe(2301)
     expect(second.tailRow?.volume).toBe(11)
+    expect(first.updateKind).toBe('realtime-tail-tick')
+    expect(second.updateKind).toBe('realtime-tail-tick')
   })
 
   it('increments realtime tick volume when MT5 ticks do not provide volume', () => {
@@ -204,6 +218,7 @@ describe('buildStoreV6RealtimePageWindow', () => {
 
     expect(second.tailRow?.volume).toBe(2)
     expect(nextBar.tailRow?.volume).toBe(1)
+    expect(nextBar.updateKind).toBe('realtime-bar-close-settlement')
   })
 
   it('loads realtime indicator warmup from StoreV6 before the first active row', async () => {
@@ -260,5 +275,205 @@ describe('buildStoreV6RealtimePageWindow', () => {
       timeTo: sessionStart - 1,
     }))
     expect(rows.map((row) => row.time)).toEqual(warmupRows.map((row) => row.time))
+  })
+
+  it('rebuilds only the current cycle stable realtime page from MT5 bars and keeps the current tail attached', async () => {
+    const sessionStart = shanghaiSeconds(2026, 6, 9, 6, 0)
+    const currentTail = kline(shanghaiSeconds(2026, 6, 9, 10, 10), 9, 'mt5-realtime-window-v2')
+    const window = {
+      ...buildStoreV6RealtimePageWindow({
+        enabled: true,
+        period: 'M5',
+        sessionTimeFrom: sessionStart,
+        symbol: 'XAUUSDm',
+      })!,
+      activeRows: [kline(shanghaiSeconds(2026, 6, 9, 10, 0), 7, 'mt5-realtime-window-v2'), currentTail],
+      indicatorHistoryRows: [kline(shanghaiSeconds(2026, 6, 9, 5, 55), 6)],
+      renderData: {
+        indicators: {},
+        klineRows: [kline(shanghaiSeconds(2026, 6, 9, 10, 0), 7, 'mt5-realtime-window-v2'), currentTail],
+      },
+      stableRows: [kline(shanghaiSeconds(2026, 6, 9, 10, 0), 7, 'mt5-realtime-window-v2')],
+      tailRow: currentTail,
+    }
+
+    queryMt5RatesMock.mockResolvedValueOnce({
+      rows: [
+        { close: 1, high: 1, low: 1, open: 1, time: shanghaiSeconds(2026, 6, 9, 6, 0), volume: 10 },
+        { close: 2, high: 2, low: 2, open: 2, time: shanghaiSeconds(2026, 6, 9, 6, 5), volume: 11 },
+        { close: 8, high: 8, low: 8, open: 8, time: shanghaiSeconds(2026, 6, 9, 10, 5), volume: 12 },
+      ],
+    } as never)
+
+    const rebuilt = await rebuildStoreV6RealtimeStablePageWindow({
+      enabled: true,
+      historyRows: [kline(shanghaiSeconds(2026, 6, 9, 5, 55), 6)],
+      indicatorRequests: [],
+      period: 'M5',
+      sessionTimeFrom: sessionStart,
+      symbol: 'XAUUSDm',
+    }, window)
+
+    expect(queryMt5RatesMock).toHaveBeenCalledWith(expect.objectContaining({
+      symbol: 'XAUUSDm',
+      timeframe: 'M5',
+      timeFrom: sessionStart,
+    }))
+    expect(rebuilt?.stableRows.map((row) => row.time)).toEqual([
+      shanghaiSeconds(2026, 6, 9, 6, 0),
+      shanghaiSeconds(2026, 6, 9, 6, 5),
+      shanghaiSeconds(2026, 6, 9, 10, 5),
+    ])
+    expect(rebuilt?.tailRow?.time).toBe(currentTail.time)
+    expect(rebuilt?.tailRow?.close).toBe(currentTail.close)
+    expect(rebuilt?.updateKind).toBe('stable-page-rebuild')
+  })
+
+  it('promotes the MT5 latest row to the rebuilt tail when no runtime tail is available', async () => {
+    const sessionStart = shanghaiSeconds(2026, 6, 9, 6, 0)
+    const window = buildStoreV6RealtimePageWindow({
+      enabled: true,
+      indicatorRequests: [],
+      period: 'M5',
+      sessionTimeFrom: sessionStart,
+      symbol: 'XAUUSDm',
+    })
+
+    queryMt5RatesMock.mockResolvedValueOnce({
+      rows: [
+        { close: 1, high: 1, low: 1, open: 1, time: shanghaiSeconds(2026, 6, 9, 6, 0), volume: 10 },
+        { close: 2, high: 2, low: 2, open: 2, time: shanghaiSeconds(2026, 6, 9, 6, 5), volume: 11 },
+      ],
+    } as never)
+
+    const rebuilt = await rebuildStoreV6RealtimeStablePageWindow({
+      enabled: true,
+      indicatorRequests: [],
+      period: 'M5',
+      sessionTimeFrom: sessionStart,
+      symbol: 'XAUUSDm',
+    }, window)
+
+    expect(rebuilt?.stableRows.map((row) => row.time)).toEqual([shanghaiSeconds(2026, 6, 9, 6, 0)])
+    expect(rebuilt?.tailRow?.time).toBe(shanghaiSeconds(2026, 6, 9, 6, 5))
+    expect(rebuilt?.updateKind).toBe('stable-page-rebuild')
+  })
+
+  it('rebuilds VDO indicator rows for the current cycle and keeps them aligned with direct realtime calculation', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6VdoIndicatorDefinitionV2)
+    const sessionStart = shanghaiSeconds(2026, 6, 9, 6, 0)
+    const settings = { emaSmoothing: 3, length: 5, vdoMa2Length: 4, vdoMaLength: 3 }
+    const historyRows = Array.from({ length: 12 }, (_, index) => kline(shanghaiSeconds(2026, 6, 9, 5, 0) + index * 300, 90 + index))
+    const runtimeTail = kline(shanghaiSeconds(2026, 6, 9, 10, 10), 109, 'mt5-realtime-window-v2')
+    const window = {
+      ...buildStoreV6RealtimePageWindow({
+        enabled: true,
+        historyRows,
+        indicatorRegistry: registry,
+        indicatorRequests: [{ id: 'VDO', params: settings }],
+        period: 'M5',
+        sessionTimeFrom: sessionStart,
+        symbol: 'XAUUSDm',
+      })!,
+      activeRows: [kline(shanghaiSeconds(2026, 6, 9, 10, 0), 107, 'mt5-realtime-window-v2'), runtimeTail],
+      indicatorHistoryRows: historyRows,
+      renderData: {
+        indicators: {},
+        klineRows: [kline(shanghaiSeconds(2026, 6, 9, 10, 0), 107, 'mt5-realtime-window-v2'), runtimeTail],
+      },
+      stableRows: [kline(shanghaiSeconds(2026, 6, 9, 10, 0), 107, 'mt5-realtime-window-v2')],
+      tailRow: runtimeTail,
+    }
+
+    queryMt5RatesMock.mockResolvedValueOnce({
+      rows: [
+        { close: 101, high: 101, low: 101, open: 101, time: shanghaiSeconds(2026, 6, 9, 6, 0), volume: 10 },
+        { close: 102, high: 102, low: 102, open: 102, time: shanghaiSeconds(2026, 6, 9, 6, 5), volume: 11 },
+        { close: 108, high: 108, low: 108, open: 108, time: shanghaiSeconds(2026, 6, 9, 10, 5), volume: 12 },
+      ],
+    } as never)
+
+    const rebuilt = await rebuildStoreV6RealtimeStablePageWindow({
+      enabled: true,
+      historyRows,
+      indicatorRegistry: registry,
+      indicatorRequests: [{ id: 'VDO', params: settings }],
+      period: 'M5',
+      sessionTimeFrom: sessionStart,
+      symbol: 'XAUUSDm',
+    }, window)
+
+    const direct = await requestRealtimeWindowIndicatorsV2({
+      activeRows: rebuilt?.activeRows ?? [],
+      historyRows,
+      period: 'M5',
+      registry,
+      requests: [{ id: 'VDO', params: settings }],
+      sessionTimeFrom: rebuilt?.sessionTimeFrom ?? sessionStart,
+      sessionTimeTo: null,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(rebuilt?.indicators[storeV6VdoIndicatorIdV2].displayRows).toEqual(direct[storeV6VdoIndicatorIdV2].displayRows)
+  })
+
+  it('rebuilds VMI indicator rows for the current cycle and keeps them aligned with direct realtime calculation', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6VmiIndicatorDefinitionV2)
+    const sessionStart = shanghaiSeconds(2026, 6, 9, 6, 0)
+    const settings = { fastLength: 5, slowLength: 8 }
+    const historyRows = Array.from({ length: 16 }, (_, index) => kline(shanghaiSeconds(2026, 6, 9, 4, 40) + index * 300, 120 + index))
+    const runtimeTail = kline(shanghaiSeconds(2026, 6, 9, 10, 10), 139, 'mt5-realtime-window-v2')
+    const window = {
+      ...buildStoreV6RealtimePageWindow({
+        enabled: true,
+        historyRows,
+        indicatorRegistry: registry,
+        indicatorRequests: [{ id: 'VMI', params: settings }],
+        period: 'M5',
+        sessionTimeFrom: sessionStart,
+        symbol: 'XAUUSDm',
+      })!,
+      activeRows: [kline(shanghaiSeconds(2026, 6, 9, 10, 0), 137, 'mt5-realtime-window-v2'), runtimeTail],
+      indicatorHistoryRows: historyRows,
+      renderData: {
+        indicators: {},
+        klineRows: [kline(shanghaiSeconds(2026, 6, 9, 10, 0), 137, 'mt5-realtime-window-v2'), runtimeTail],
+      },
+      stableRows: [kline(shanghaiSeconds(2026, 6, 9, 10, 0), 137, 'mt5-realtime-window-v2')],
+      tailRow: runtimeTail,
+    }
+
+    queryMt5RatesMock.mockResolvedValueOnce({
+      rows: [
+        { close: 131, high: 131, low: 131, open: 131, time: shanghaiSeconds(2026, 6, 9, 6, 0), volume: 10 },
+        { close: 132, high: 132, low: 132, open: 132, time: shanghaiSeconds(2026, 6, 9, 6, 5), volume: 11 },
+        { close: 138, high: 138, low: 138, open: 138, time: shanghaiSeconds(2026, 6, 9, 10, 5), volume: 12 },
+      ],
+    } as never)
+
+    const rebuilt = await rebuildStoreV6RealtimeStablePageWindow({
+      enabled: true,
+      historyRows,
+      indicatorRegistry: registry,
+      indicatorRequests: [{ id: 'VMI', params: settings }],
+      period: 'M5',
+      sessionTimeFrom: sessionStart,
+      symbol: 'XAUUSDm',
+    }, window)
+
+    const direct = await requestRealtimeWindowIndicatorsV2({
+      activeRows: rebuilt?.activeRows ?? [],
+      historyRows,
+      period: 'M5',
+      registry,
+      requests: [{ id: 'VMI', params: settings }],
+      sessionTimeFrom: rebuilt?.sessionTimeFrom ?? sessionStart,
+      sessionTimeTo: null,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(rebuilt?.indicators[storeV6VmiIndicatorIdV2].displayRows).toEqual(direct[storeV6VmiIndicatorIdV2].displayRows)
   })
 })

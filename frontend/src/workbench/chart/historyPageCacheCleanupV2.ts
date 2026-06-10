@@ -39,7 +39,10 @@ export function clearRealtimePageCachesV2(options: {
   symbol?: string | null
 }) {
   clearChartRenderRealtimeCacheV2()
-  clearRealtimeStableWindowCacheV2()
+  clearRealtimeStableWindowCacheV2({
+    period: options.period ?? null,
+    symbol: options.symbol ?? null,
+  })
   clearRealtimePageBuffer()
   removeStorageItem(storageKeys.realtimePageSnapshot)
   removeStorageItem(storageKeys.importCenterWatchlistRealtimeSnapshot)

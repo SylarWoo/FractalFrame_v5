@@ -6,12 +6,24 @@ describe('resolveRealtimeRateVolume', () => {
     expect(resolveRealtimeRateVolume({ appendNewBar: true, latestVolume: 1128, mt5RateVolume: 3 })).toBe(3)
   })
 
+  it('uses the realtime tick volume before the MT5 rate snapshot arrives', () => {
+    expect(resolveRealtimeRateVolume({ appendNewBar: true, latestVolume: 1128, mt5RateVolume: null, tickVolume: 7 })).toBe(7)
+  })
+
   it('uses the current timeframe MT5 rate volume for the open realtime candle', () => {
     expect(resolveRealtimeRateVolume({ appendNewBar: false, latestVolume: 1128, mt5RateVolume: 1131 })).toBe(1131)
   })
 
+  it('uses the open realtime tick volume when MT5 rates lag behind', () => {
+    expect(resolveRealtimeRateVolume({ appendNewBar: false, latestVolume: 1128, mt5RateVolume: null, tickVolume: 1130 })).toBe(1130)
+  })
+
   it('keeps the existing open candle volume until the MT5 rate snapshot arrives', () => {
     expect(resolveRealtimeRateVolume({ appendNewBar: false, latestVolume: 1128, mt5RateVolume: null })).toBe(1128)
+  })
+
+  it('seeds a new realtime candle with a minimum visible volume when no upstream volume is available yet', () => {
+    expect(resolveRealtimeRateVolume({ appendNewBar: true, latestVolume: 1128, mt5RateVolume: null })).toBe(1)
   })
 })
 

@@ -141,6 +141,72 @@ describe('chartRenderCacheV2', () => {
     vi.unstubAllGlobals()
   })
 
+  it('refreshes realtime indicator panes from the current tail window even when stable caches are reused', () => {
+    vi.stubGlobal('window', { __ffChartV2Perf: [] })
+    clearChartRenderCacheV2()
+    window.__ffChartV2Perf = []
+    const history = historyWindow([
+      row(1_000, 2290, 'store-v6-page-slice-v2'),
+      row(1_300, 2295, 'store-v6-page-slice-v2'),
+    ])
+    const stableRows = [row(1_600, 2300, 'mt5-realtime-window-v2')]
+    const tail = row(1_900, 2302, 'mt5-realtime-window-v2')
+    const indicatorRequests = [{ id: 'VDO' }]
+    const firstIndicatorRows = [
+      { barKey: stableRows[0].barKey, time: stableRows[0].time, timestamp: stableRows[0].timestamp, vdo: 0.1, vdoMa: 0.05 },
+      { barKey: tail.barKey, time: tail.time, timestamp: tail.timestamp, vdo: 0.3, vdoMa: 0.2 },
+    ]
+    const secondIndicatorRows = [
+      { barKey: stableRows[0].barKey, time: stableRows[0].time, timestamp: stableRows[0].timestamp, vdo: 0.1, vdoMa: 0.05 },
+      { barKey: tail.barKey, time: tail.time, timestamp: tail.timestamp, vdo: 0.9, vdoMa: 0.7 },
+    ]
+
+    const first = buildCachedKLineChartRenderFrameV2({
+      historyWindow: history,
+      realtimeWindow: realtimeWindow(tail, stableRows, {
+        indicatorRequests,
+        indicators: {
+          VDO: {
+            displayRows: firstIndicatorRows,
+            key: 'VDO:realtime:first',
+            paneId: 'vdo_pane',
+            paneRole: 'sub',
+            renderRole: 'sub-pane',
+            rows: [],
+            settings: { length: 5 },
+            source: 'store-v6-vdo-indicator-v2',
+          },
+        },
+      }),
+    })
+    const second = buildCachedKLineChartRenderFrameV2({
+      historyWindow: history,
+      realtimeWindow: realtimeWindow(tail, stableRows, {
+        indicatorRequests,
+        indicators: {
+          VDO: {
+            displayRows: secondIndicatorRows,
+            key: 'VDO:realtime:second',
+            paneId: 'vdo_pane',
+            paneRole: 'sub',
+            renderRole: 'sub-pane',
+            rows: [],
+            settings: { length: 5 },
+            source: 'store-v6-vdo-indicator-v2',
+          },
+        },
+      }),
+    })
+    const secondPerf = window.__ffChartV2Perf?.at(-1)
+
+    expect(first.frame.panes.VDO?.rows.at(-1)).toMatchObject({ barKey: tail.barKey, vdo: 0.3, vdoMa: 0.2 })
+    expect(second.frame.panes.VDO?.rows.at(-1)).toMatchObject({ barKey: tail.barKey, vdo: 0.9, vdoMa: 0.7 })
+    expect(second.renderWindow.indicators.VDO?.displayRows.at(-1)).toMatchObject({ barKey: tail.barKey, vdo: 0.9, vdoMa: 0.7 })
+    expect(secondPerf?.cache.renderWindowHit).toBe(true)
+    expect(secondPerf?.cache.finalFrameHit).toBe(true)
+    vi.unstubAllGlobals()
+  })
+
   it('does not reuse a realtime indicator pane after the indicator is unloaded', () => {
     clearChartRenderCacheV2()
     const history = historyWindow([

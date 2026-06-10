@@ -1,0 +1,263 @@
+﻿{
+    "startedAt":  "\/Date(1781098405701)\/",
+    "launcherPath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net Launcher.exe",
+    "launcherPid":  16976,
+    "durationSeconds":  60,
+    "beforeProcesses":  [
+                            {
+                                "ProcessId":  18652,
+                                "ParentProcessId":  6276,
+                                "Name":  "Battle.net.exe",
+                                "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                            },
+                            {
+                                "ProcessId":  13580,
+                                "ParentProcessId":  6988,
+                                "Name":  "Agent.exe",
+                                "ExecutablePath":  "C:\\ProgramData\\Battle.net\\Agent\\Agent.9464\\Agent.exe"
+                            },
+                            {
+                                "ProcessId":  6292,
+                                "ParentProcessId":  18652,
+                                "Name":  "Battle.net.exe",
+                                "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                            },
+                            {
+                                "ProcessId":  19684,
+                                "ParentProcessId":  18652,
+                                "Name":  "Battle.net.exe",
+                                "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                            },
+                            {
+                                "ProcessId":  14836,
+                                "ParentProcessId":  18652,
+                                "Name":  "Battle.net.exe",
+                                "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                            },
+                            {
+                                "ProcessId":  6616,
+                                "ParentProcessId":  18652,
+                                "Name":  "Battle.net.exe",
+                                "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                            },
+                            {
+                                "ProcessId":  9432,
+                                "ParentProcessId":  18652,
+                                "Name":  "Battle.net.exe",
+                                "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                            },
+                            {
+                                "ProcessId":  19572,
+                                "ParentProcessId":  18652,
+                                "Name":  "Battle.net.exe",
+                                "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                            }
+                        ],
+    "afterProcesses":  [
+                           {
+                               "ProcessId":  18652,
+                               "ParentProcessId":  6276,
+                               "Name":  "Battle.net.exe",
+                               "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                           },
+                           {
+                               "ProcessId":  13580,
+                               "ParentProcessId":  6988,
+                               "Name":  "Agent.exe",
+                               "ExecutablePath":  "C:\\ProgramData\\Battle.net\\Agent\\Agent.9464\\Agent.exe"
+                           },
+                           {
+                               "ProcessId":  6292,
+                               "ParentProcessId":  18652,
+                               "Name":  "Battle.net.exe",
+                               "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                           },
+                           {
+                               "ProcessId":  19684,
+                               "ParentProcessId":  18652,
+                               "Name":  "Battle.net.exe",
+                               "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                           },
+                           {
+                               "ProcessId":  14836,
+                               "ParentProcessId":  18652,
+                               "Name":  "Battle.net.exe",
+                               "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                           },
+                           {
+                               "ProcessId":  6616,
+                               "ParentProcessId":  18652,
+                               "Name":  "Battle.net.exe",
+                               "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                           },
+                           {
+                               "ProcessId":  9432,
+                               "ParentProcessId":  18652,
+                               "Name":  "Battle.net.exe",
+                               "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                           },
+                           {
+                               "ProcessId":  19572,
+                               "ParentProcessId":  18652,
+                               "Name":  "Battle.net.exe",
+                               "ExecutablePath":  "G:\\game\\暴雪游戏\\Battle.net\\Battle.net.exe"
+                           }
+                       ],
+    "summary":  {
+                    "sampleCount":  60,
+                    "maxProcessWriteBytesDeltaPerSample":  0,
+                    "maxGDiskWriteBytesPerSec":  1895666.0377594244
+                },
+    "topSamples":  [
+                       {
+                           "Timestamp":  {
+                                             "value":  "\/Date(1781098493380)\/",
+                                             "DisplayHint":  2,
+                                             "DateTime":  "2026年6月10日 下午 9:34:53"
+                                         },
+                           "BattleNetProcessCount":  8,
+                           "ProcessWriteBytesDelta":  0,
+                           "ProcessReadBytesDelta":  0,
+                           "GDiskWriteBytesSec":  863812.00063167536,
+                           "GDiskTransfersSec":  150.92242587310125,
+                           "GDiskQueueLength":  1
+                       },
+                       {
+                           "Timestamp":  {
+                                             "value":  "\/Date(1781098491252)\/",
+                                             "DisplayHint":  2,
+                                             "DateTime":  "2026年6月10日 下午 9:34:51"
+                                         },
+                           "BattleNetProcessCount":  8,
+                           "ProcessWriteBytesDelta":  0,
+                           "ProcessReadBytesDelta":  0,
+                           "GDiskWriteBytesSec":  0,
+                           "GDiskTransfersSec":  140.93431051786763,
+                           "GDiskQueueLength":  1
+                       },
+                       {
+                           "Timestamp":  {
+                                             "value":  "\/Date(1781098489128)\/",
+                                             "DisplayHint":  2,
+                                             "DateTime":  "2026年6月10日 下午 9:34:49"
+                                         },
+                           "BattleNetProcessCount":  8,
+                           "ProcessWriteBytesDelta":  0,
+                           "ProcessReadBytesDelta":  0,
+                           "GDiskWriteBytesSec":  1875385.8802227788,
+                           "GDiskTransfersSec":  147.95407505510289,
+                           "GDiskQueueLength":  1
+                       },
+                       {
+                           "Timestamp":  {
+                                             "value":  "\/Date(1781098495507)\/",
+                                             "DisplayHint":  2,
+                                             "DateTime":  "2026年6月10日 下午 9:34:55"
+                                         },
+                           "BattleNetProcessCount":  8,
+                           "ProcessWriteBytesDelta":  0,
+                           "ProcessReadBytesDelta":  0,
+                           "GDiskWriteBytesSec":  0,
+                           "GDiskTransfersSec":  126.9492456915725,
+                           "GDiskQueueLength":  1
+                       },
+                       {
+                           "Timestamp":  {
+                                             "value":  "\/Date(1781098501892)\/",
+                                             "DisplayHint":  2,
+                                             "DateTime":  "2026年6月10日 下午 9:35:01"
+                                         },
+                           "BattleNetProcessCount":  8,
+                           "ProcessWriteBytesDelta":  0,
+                           "ProcessReadBytesDelta":  0,
+                           "GDiskWriteBytesSec":  0,
+                           "GDiskTransfersSec":  159.94696158753757,
+                           "GDiskQueueLength":  1
+                       },
+                       {
+                           "Timestamp":  {
+                                             "value":  "\/Date(1781098499768)\/",
+                                             "DisplayHint":  2,
+                                             "DateTime":  "2026年6月10日 下午 9:34:59"
+                                         },
+                           "BattleNetProcessCount":  8,
+                           "ProcessWriteBytesDelta":  0,
+                           "ProcessReadBytesDelta":  0,
+                           "GDiskWriteBytesSec":  0,
+                           "GDiskTransfersSec":  146.96954790967311,
+                           "GDiskQueueLength":  1
+                       },
+                       {
+                           "Timestamp":  {
+                                             "value":  "\/Date(1781098497639)\/",
+                                             "DisplayHint":  2,
+                                             "DateTime":  "2026年6月10日 下午 9:34:57"
+                                         },
+                           "BattleNetProcessCount":  8,
+                           "ProcessWriteBytesDelta":  0,
+                           "ProcessReadBytesDelta":  0,
+                           "GDiskWriteBytesSec":  81921.4991634347,
+                           "GDiskTransfersSec":  135.00247054521097,
+                           "GDiskQueueLength":  0
+                       },
+                       {
+                           "Timestamp":  {
+                                             "value":  "\/Date(1781098487000)\/",
+                                             "DisplayHint":  2,
+                                             "DateTime":  "2026年6月10日 下午 9:34:47"
+                                         },
+                           "BattleNetProcessCount":  8,
+                           "ProcessWriteBytesDelta":  0,
+                           "ProcessReadBytesDelta":  0,
+                           "GDiskWriteBytesSec":  16383.21032926213,
+                           "GDiskTransfersSec":  146.99291494149983,
+                           "GDiskQueueLength":  1
+                       },
+                       {
+                           "Timestamp":  {
+                                             "value":  "\/Date(1781098476383)\/",
+                                             "DisplayHint":  2,
+                                             "DateTime":  "2026年6月10日 下午 9:34:36"
+                                         },
+                           "BattleNetProcessCount":  8,
+                           "ProcessWriteBytesDelta":  0,
+                           "ProcessReadBytesDelta":  0,
+                           "GDiskWriteBytesSec":  57346.276647182895,
+                           "GDiskTransfersSec":  131.00520090647598,
+                           "GDiskQueueLength":  1
+                       },
+                       {
+                           "Timestamp":  {
+                                             "value":  "\/Date(1781098474254)\/",
+                                             "DisplayHint":  2,
+                                             "DateTime":  "2026年6月10日 下午 9:34:34"
+                                         },
+                           "BattleNetProcessCount":  8,
+                           "ProcessWriteBytesDelta":  0,
+                           "ProcessReadBytesDelta":  0,
+                           "GDiskWriteBytesSec":  1011479.157497944,
+                           "GDiskTransfersSec":  159.96317647677503,
+                           "GDiskQueueLength":  1
+                       }
+                   ],
+    "recentFileChanges":  [
+                              {
+                                  "FullName":  "C:\\ProgramData\\Battle.net\\Agent\\Agent.9464\\Logs\\Agent-20260610T132820.log",
+                                  "DirectoryName":  "C:\\ProgramData\\Battle.net\\Agent\\Agent.9464\\Logs",
+                                  "Length":  57800,
+                                  "LastWriteTime":  "\/Date(1781098521370)\/"
+                              },
+                              {
+                                  "FullName":  "C:\\ProgramData\\Battle.net\\Agent\\data\\cache\\summary--3804611",
+                                  "DirectoryName":  "C:\\ProgramData\\Battle.net\\Agent\\data\\cache",
+                                  "Length":  24138,
+                                  "LastWriteTime":  "\/Date(1781098406858)\/"
+                              },
+                              {
+                                  "FullName":  "C:\\Users\\JesseBlunt\\AppData\\Local\\Battle.net\\Logs\\battle.net-20260610T133326.139619.log",
+                                  "DirectoryName":  "C:\\Users\\JesseBlunt\\AppData\\Local\\Battle.net\\Logs",
+                                  "Length":  1450,
+                                  "LastWriteTime":  "\/Date(1781098406144)\/"
+                              }
+                          ]
+}

@@ -204,12 +204,14 @@ export function buildCachedKLineChartRenderFrameV2(options: {
   const realtime = cacheRealtimeWindow(options.realtimeWindow ?? null)
   const renderStart = performance.now()
   const renderWindow = readOrBuildRenderWindow(history.value, realtime.value)
+  const currentRenderWindow = options.realtimeWindow
+    ? buildChartRenderWindowV2({ historyWindow: history.value, realtimeWindow: options.realtimeWindow })
+    : renderWindow.value
   const translateStart = performance.now()
   const frame = readOrTranslateFrame(renderWindow.value)
   const patched = patchTailRowIntoCachedFrameV2(frame.value, renderWindow.value, options.realtimeWindow ?? null)
   if (!patched) {
-    const fallbackWindow = buildChartRenderWindowV2({ historyWindow: history.value, realtimeWindow: options.realtimeWindow ?? null })
-    const fallbackFrame = translateChartRenderWindowToKLineChartFrameV2(fallbackWindow)
+    const fallbackFrame = translateChartRenderWindowToKLineChartFrameV2(currentRenderWindow)
     const end = performance.now()
     publishDebug()
     publishPerf({
@@ -233,21 +235,22 @@ export function buildCachedKLineChartRenderFrameV2(options: {
       frame: fallbackFrame,
       historyWindow: history.value,
       realtimeWindow: options.realtimeWindow ?? null,
-      renderWindow: fallbackWindow,
+      renderWindow: currentRenderWindow,
     }
   }
+  const currentFrame = attachCurrentPaneFramesV2(patched.frame, currentRenderWindow)
   const end = performance.now()
 
   traceKLineChartPageV2('ChartRenderCache.buildFrame.ready', {
     finalFrameHit: frame.hit,
-    frameKey: patched.frame.key,
+    frameKey: currentFrame.key,
     historyKey: history.value.key,
     historyWindowHit: history.hit,
-    pageIndex: patched.frame.pageIndex,
-    realtimeRows: patched.frame.segments.realtime?.rows ?? 0,
+    pageIndex: currentFrame.pageIndex,
+    realtimeRows: currentFrame.segments.realtime?.rows ?? 0,
     renderWindowHit: renderWindow.hit,
     renderWindowKey: renderWindow.value.key,
-    rows: patched.frame.mainRows.length,
+    rows: currentFrame.mainRows.length,
   })
 
   publishDebug()
@@ -262,18 +265,18 @@ export function buildCachedKLineChartRenderFrameV2(options: {
     },
     frameMs: Number((end - start).toFixed(3)),
     historyRows: history.value.renderData.klineRows.length,
-    key: patched.frame.key,
-    pageIndex: patched.frame.pageIndex,
+    key: currentFrame.key,
+    pageIndex: currentFrame.pageIndex,
     realtimeRows: realtime.value?.renderData.klineRows.length ?? 0,
-    totalRows: patched.frame.mainRows.length,
+    totalRows: currentFrame.mainRows.length,
     translateMs: Number((end - translateStart).toFixed(3)),
   })
 
   return {
-    frame: patched.frame,
+    frame: currentFrame,
     historyWindow: history.value,
     realtimeWindow: options.realtimeWindow ?? null,
-    renderWindow: patched.renderWindow,
+    renderWindow: currentRenderWindow,
   }
 }
 

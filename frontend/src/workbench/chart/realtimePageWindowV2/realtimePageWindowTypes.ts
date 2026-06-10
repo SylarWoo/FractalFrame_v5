@@ -9,6 +9,7 @@ export type StoreV6RealtimePageWindow = {
   indicatorHistoryRows?: StoreV6WindowKLine[]
   key: string
   period: string
+  updateKind?: 'hydrate' | 'realtime-tail-tick' | 'realtime-bar-close-settlement' | 'stable-page-rebuild'
   renderData: {
     indicators: StoreV6HistoryPageWindowIndicators
     klineRows: StoreV6WindowKLine[]

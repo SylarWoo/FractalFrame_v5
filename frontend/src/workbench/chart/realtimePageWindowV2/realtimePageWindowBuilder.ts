@@ -22,6 +22,8 @@ import {
 import {
   readCachedRealtimeRowsV2,
   writeCachedRealtimeRowsV2,
+  writeRealtimeStablePageSnapshotV2,
+  writeRealtimeTailRuntimeCacheV2,
 } from './realtimeStableWindowCacheV2'
 
 export {
@@ -287,6 +289,19 @@ function createRealtimeIndicatorWarmupPage(options: {
   }
 }
 
+function createRealtimeWindowKey(options: {
+  indicatorRequests: StoreV6RealtimePageWindow['indicatorRequests']
+  period: string
+  sessionTimeFrom: number | null
+  sessionTimeTo: number | null
+  stableRows: StoreV6WindowKLine[]
+  symbol: string
+  tailRow: StoreV6WindowKLine | null
+}) {
+  const indicatorSignature = createStoreV6IndicatorRequestSignatureV2(options.indicatorRequests)
+  return `realtime-window-v2:${options.symbol}:${options.period}:${options.sessionTimeFrom ?? 'none'}:${options.sessionTimeTo ?? 'none'}:${indicatorSignature}:${stableRowsKeyV2(options.stableRows)}:${tailRowKeyV2(options.tailRow)}`
+}
+
 function resolveRequestedIndicatorDefinitions(request: StoreV6RealtimePageWindowRequest) {
   const registry = request.indicatorRegistry
   const requests = request.indicatorRequests ?? request.indicatorRuntime?.list() ?? []
@@ -348,13 +363,21 @@ export function buildStoreV6RealtimePageWindow(
   const activeRows = combineRealtimeRowsV2(stableRows, tailRow)
   const indicators = {}
   const indicatorRequests = request.indicatorRequests ?? request.indicatorRuntime?.list() ?? []
-  const indicatorSignature = createStoreV6IndicatorRequestSignatureV2(indicatorRequests)
   return {
     activeRows,
     indicatorRequests,
     indicators,
-    key: `realtime-window-v2:${request.symbol}:${request.period}:${sessionTimeFrom ?? 'none'}:${sessionTimeTo ?? 'none'}:${indicatorSignature}:${stableRowsKeyV2(stableRows)}:${tailRowKeyV2(tailRow)}`,
+    key: createRealtimeWindowKey({
+      indicatorRequests,
+      period: request.period,
+      sessionTimeFrom,
+      sessionTimeTo,
+      stableRows,
+      symbol: request.symbol,
+      tailRow,
+    }),
     period: request.period,
+    updateKind: 'hydrate',
     renderData: {
       indicators,
       klineRows: activeRows,
@@ -367,6 +390,47 @@ export function buildStoreV6RealtimePageWindow(
     symbol: request.symbol,
     tailRow,
   }
+}
+
+async function buildRealtimeWindowWithIndicators(options: {
+  historyRows?: StoreV6WindowKLine[]
+  indicatorRegistry?: StoreV6RealtimePageWindowRequest['indicatorRegistry']
+  indicatorRuntime?: StoreV6RealtimePageWindowRequest['indicatorRuntime']
+  indicatorRequests: StoreV6RealtimePageWindow['indicatorRequests']
+  period: string
+  sessionTimeFrom: number
+  sessionTimeTo: number | null
+  sourceKey: string
+  sourceWindow: StoreV6RealtimePageWindow
+  symbol: string
+  updateKind: NonNullable<StoreV6RealtimePageWindow['updateKind']>
+}) {
+  const indicatorHistoryRows = await resolveRealtimeIndicatorHistoryRowsV2({
+    activeRows: options.sourceWindow.activeRows,
+    request: {
+      enabled: true,
+      historyRows: options.historyRows,
+      indicatorRegistry: options.indicatorRegistry,
+      indicatorRequests: options.indicatorRequests,
+      indicatorRuntime: options.indicatorRuntime,
+      period: options.period,
+      sessionTimeFrom: options.sessionTimeFrom,
+      sessionTimeTo: options.sessionTimeTo,
+      symbol: options.symbol,
+    },
+  })
+  return refreshRealtimeWindowIndicatorsWithStableCacheV2({
+    historyRows: indicatorHistoryRows,
+    registry: options.indicatorRegistry,
+    requests: options.indicatorRequests,
+    runtime: options.indicatorRuntime,
+    window: {
+      ...options.sourceWindow,
+      indicatorHistoryRows,
+      key: options.sourceKey,
+      updateKind: options.updateKind,
+    },
+  })
 }
 
 export async function requestStoreV6RealtimePageWindow(
@@ -393,35 +457,88 @@ export async function requestStoreV6RealtimePageWindow(
   })
   const { stableRows, tailRow } = splitRealtimeRowsV2(activeRows)
   const composedRows = combineRealtimeRowsV2(stableRows, tailRow)
-  const nextWindowWithoutIndicators: StoreV6RealtimePageWindow = {
-    ...empty,
-    activeRows: composedRows,
-    indicatorHistoryRows: request.historyRows ?? [],
-    key: `${realtimeWindowBaseKey(empty.key)}:mt5:${stableRowsKeyV2(stableRows)}:${tailRowKeyV2(tailRow)}`,
-    renderData: {
-      indicators: {},
-      klineRows: composedRows,
+  const nextWindow = await buildRealtimeWindowWithIndicators({
+    historyRows: request.historyRows,
+    indicatorRegistry: request.indicatorRegistry,
+    indicatorRequests: empty.indicatorRequests,
+    indicatorRuntime: request.indicatorRuntime,
+    period: request.period,
+    sessionTimeFrom: empty.sessionTimeFrom,
+    sessionTimeTo: empty.sessionTimeTo,
+    sourceKey: `${realtimeWindowBaseKey(empty.key)}:mt5:${stableRowsKeyV2(stableRows)}:${tailRowKeyV2(tailRow)}`,
+    sourceWindow: {
+      ...empty,
+      activeRows: composedRows,
+      indicatorHistoryRows: request.historyRows ?? [],
+      renderData: {
+        indicators: {},
+        klineRows: composedRows,
+      },
+      stableRows,
+      status: composedRows.length ? 'ready' : 'closed-empty',
+      tailRow,
     },
-    stableRows,
-    status: composedRows.length ? 'ready' : 'closed-empty',
-    tailRow,
-  }
-  const indicatorHistoryRows = await resolveRealtimeIndicatorHistoryRowsV2({
-    activeRows: composedRows,
-    request,
-  })
-  const nextWindow = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
-    historyRows: indicatorHistoryRows,
-    registry: request.indicatorRegistry,
-    requests: empty.indicatorRequests,
-    runtime: request.indicatorRuntime,
-    window: {
-      ...nextWindowWithoutIndicators,
-      indicatorHistoryRows,
-    },
+    symbol: request.symbol,
+    updateKind: 'hydrate',
   })
   writeCachedRealtimeRowsV2(nextWindow)
   return nextWindow
+}
+
+export async function rebuildStoreV6RealtimeStablePageWindow(
+  request: StoreV6RealtimePageWindowRequest,
+  window: StoreV6RealtimePageWindow | null,
+): Promise<StoreV6RealtimePageWindow | null> {
+  const baseWindow = window ?? buildStoreV6RealtimePageWindow(request)
+  if (!baseWindow || baseWindow.sessionTimeFrom == null) return baseWindow
+  const payload = await queryMt5Rates({
+    limit: createRealtimePage({
+      period: request.period,
+      sessionTimeFrom: baseWindow.sessionTimeFrom,
+      sessionTimeTo: baseWindow.sessionTimeTo,
+    }).limit,
+    symbol: request.symbol,
+    timeframe: normalizeTimeframe(request.period),
+    timeFrom: baseWindow.sessionTimeFrom,
+    timeTo: baseWindow.sessionTimeTo ?? undefined,
+  })
+  const mt5Rows = normalizeMt5RateRows(payload.rows, {
+    period: request.period,
+    sessionTimeFrom: baseWindow.sessionTimeFrom,
+    sessionTimeTo: baseWindow.sessionTimeTo,
+    symbol: request.symbol,
+  })
+  const activeRows = baseWindow.tailRow
+    ? mergeRealtimeRowsV2(mt5Rows, [baseWindow.tailRow])
+    : mt5Rows
+  const { stableRows, tailRow } = splitRealtimeRowsV2(activeRows)
+  const composedRows = combineRealtimeRowsV2(stableRows, tailRow)
+  const rebuiltWindow = await buildRealtimeWindowWithIndicators({
+    historyRows: request.historyRows,
+    indicatorRegistry: request.indicatorRegistry,
+    indicatorRequests: baseWindow.indicatorRequests,
+    indicatorRuntime: request.indicatorRuntime,
+    period: request.period,
+    sessionTimeFrom: baseWindow.sessionTimeFrom,
+    sessionTimeTo: baseWindow.sessionTimeTo,
+    sourceKey: `${realtimeWindowBaseKey(baseWindow.key)}:rebuild:${stableRowsKeyV2(stableRows)}:${tailRowKeyV2(tailRow)}`,
+    sourceWindow: {
+      ...baseWindow,
+      activeRows: composedRows,
+      indicatorHistoryRows: request.historyRows ?? baseWindow.indicatorHistoryRows ?? [],
+      renderData: {
+        indicators: {},
+        klineRows: composedRows,
+      },
+      stableRows,
+      status: composedRows.length ? 'ready' : 'closed-empty',
+      tailRow,
+    },
+    symbol: request.symbol,
+    updateKind: 'stable-page-rebuild',
+  })
+  writeCachedRealtimeRowsV2(rebuiltWindow)
+  return rebuiltWindow
 }
 
 export function mergeMt5RealtimeTickIntoWindow(
@@ -438,6 +555,7 @@ export function mergeMt5RealtimeTickIntoWindow(
   if (window.sessionTimeTo != null && tickTime > window.sessionTimeTo) return window
   const latest = window.activeRows[window.activeRows.length - 1]
   const sameBar = latest && Number(latest.time) === tickTime
+  const settledPreviousTail = Boolean(latest && !sameBar)
   const volume = typeof tick.volume === 'number' && Number.isFinite(tick.volume) && tick.volume > 0
     ? Math.max(0, tick.volume)
     : sameBar
@@ -469,6 +587,7 @@ export function mergeMt5RealtimeTickIntoWindow(
     ...window,
     activeRows: composedRows,
     key: `${realtimeWindowBaseKey(window.key)}:tick:${stableRowsKeyV2(stableRows)}:${tailRowKeyV2(tailRow)}`,
+    updateKind: settledPreviousTail ? 'realtime-bar-close-settlement' : 'realtime-tail-tick',
     renderData: {
       indicators: window.indicators,
       klineRows: composedRows,
@@ -477,6 +596,11 @@ export function mergeMt5RealtimeTickIntoWindow(
     status: composedRows.length ? 'ready' : window.status,
     tailRow,
   }
-  if (!sameBar) writeCachedRealtimeRowsV2(nextWindow)
+  if (sameBar) {
+    writeRealtimeTailRuntimeCacheV2(nextWindow)
+  } else {
+    writeRealtimeStablePageSnapshotV2(nextWindow)
+    writeRealtimeTailRuntimeCacheV2(nextWindow)
+  }
   return nextWindow
 }
