@@ -8,6 +8,7 @@ import {
   collectH4MorganCandles,
   getMorganRangeLevel,
   resolveD1MorganBucketKey,
+  resolveD5MorganBucketKey,
   resolveH4MorganBucketKey,
 } from './morganRangeModel'
 
@@ -57,6 +58,15 @@ describe('morganRangeModel', () => {
     expect(candles[1].close).toBe(102)
   })
 
+  it('starts a new D5-H2 bucket at the weekly Monday 06:00 Asia/Shanghai session', () => {
+    const before = utc('2026-05-31T21:30:00.000Z')
+    const boundary = utc('2026-05-31T22:00:00.000Z')
+    const after = utc('2026-06-01T00:00:00.000Z')
+
+    expect(resolveD5MorganBucketKey(boundary)).toBe(resolveD5MorganBucketKey(before) + 1)
+    expect(resolveD5MorganBucketKey(after)).toBe(resolveD5MorganBucketKey(boundary))
+  })
+
   it('calculates callable Morgan range levels with the red zone split into eighths', () => {
     const start = utc('2026-05-25T02:00:00.000Z')
     const rows = Array.from({ length: 9 }, (_, index) => row(start + index * 4 * 60 * 60 * 1000, 100))
@@ -103,6 +113,18 @@ describe('morganRangeModel', () => {
     expect(segment.range).toBe(6)
     expect(segment.startTimestamp).toBe(utc('2026-05-31T22:00:00.000Z'))
     expect(segment.endIndex).toBe(segment.startIndex + 47)
+  })
+
+  it('calculates D5-H2 Morgan range segments with weekly buckets', () => {
+    const start = utc('2026-05-31T22:00:00.000Z')
+    const rows = Array.from({ length: 8 }, (_, index) => row(start + index * 7 * 24 * 60 * 60 * 1000, 100))
+    const segments = calculateMorganRangeSegmentsForMode(rows, 'D5_H2', 60)
+    const segment = segments[0]
+
+    expect(segment.center).toBe(100)
+    expect(segment.range).toBe(6)
+    expect(segment.startTimestamp).toBe(utc('2026-07-19T22:00:00.000Z'))
+    expect(segment.endIndex).toBe(segment.startIndex + 59)
   })
 
   it('keeps D1-M30 to one Morgan range per day when source rows are M30', () => {

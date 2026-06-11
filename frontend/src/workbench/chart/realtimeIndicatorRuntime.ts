@@ -1,5 +1,5 @@
 import type { KLineData } from 'klinecharts'
-import type { ChartIndicatorCommand } from './ChartCoreHost'
+import type { ChartIndicatorCommand } from './chartRuntimeTypes'
 import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { createIndicatorSettingsHash } from './indicatorPageSnapshotStore'
 import type { RealtimeKLineData } from './realtimeBarIdentity'

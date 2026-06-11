@@ -4,6 +4,7 @@ import {
   storeV6MmfV3IndicatorDefinitionV2,
   storeV6MorganRangeM5IndicatorDefinitionV2,
   storeV6MorganRangeM30IndicatorDefinitionV2,
+  storeV6MorganRangeH2IndicatorDefinitionV2,
   storeV6StochIndicatorDefinitionV2,
   storeV6TsiIndicatorDefinitionV2,
   storeV6VdoIndicatorDefinitionV2,
@@ -18,6 +19,7 @@ chartWorkspaceIndicatorRegistryV2.register(storeV6MaIndicatorDefinitionV2)
 chartWorkspaceIndicatorRegistryV2.register(storeV6MmfV3IndicatorDefinitionV2)
 chartWorkspaceIndicatorRegistryV2.register(storeV6MorganRangeM5IndicatorDefinitionV2)
 chartWorkspaceIndicatorRegistryV2.register(storeV6MorganRangeM30IndicatorDefinitionV2)
+chartWorkspaceIndicatorRegistryV2.register(storeV6MorganRangeH2IndicatorDefinitionV2)
 chartWorkspaceIndicatorRegistryV2.register(storeV6VolIndicatorDefinitionV2)
 chartWorkspaceIndicatorRegistryV2.register(storeV6VwapIndicatorDefinitionV2)
 chartWorkspaceIndicatorRegistryV2.register(storeV6StochIndicatorDefinitionV2)

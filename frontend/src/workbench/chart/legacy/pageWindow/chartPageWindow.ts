@@ -1,6 +1,6 @@
 import type { KLineData } from 'klinecharts'
-import type { PageDataSlice } from '../pageData/pageDataSlice'
-import type { PageDataBarRow } from '../pageData/pageDataTypes'
+import type { PageDataSlice } from '../../pageData/pageDataSlice'
+import type { PageDataBarRow } from '../../pageData/pageDataTypes'
 
 export type ChartPageWindowMode = 'history' | 'realtime'
 

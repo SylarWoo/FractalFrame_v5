@@ -5,12 +5,12 @@ import {
   readLatestChartViewportSnapshot,
   writeGlobalChartViewportSnapshot,
   type ChartViewportSnapshot,
-} from './chartViewportGlobalStore'
-import { isAxisRangeUsableForVisiblePrices, readChartYAxisRange, restoreChartYAxisRange } from './chartViewportAxisRange'
-import { setChartBarSpace } from './chartBarSpaceCompression'
+} from '../chartViewportGlobalStore'
+import { isAxisRangeUsableForVisiblePrices, readChartYAxisRange, restoreChartYAxisRange } from '../chartViewportAxisRange'
+import { setChartBarSpace } from '../chartBarSpaceCompression'
 
-export type { ChartViewportSnapshot } from './chartViewportGlobalStore'
-export type { AxisRangeSnapshot } from './chartViewportAxisRange'
+export type { ChartViewportSnapshot } from '../chartViewportGlobalStore'
+export type { AxisRangeSnapshot } from '../chartViewportAxisRange'
 
 const candlePaneId = 'candle_pane'
 const saveDelayMs = 180

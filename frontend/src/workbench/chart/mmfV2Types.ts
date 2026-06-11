@@ -76,7 +76,7 @@ export type MmfV2IndicatorRow = {
 
 export type MmfV2CalcContext = {
   maSettings?: Partial<MaIndicatorSettings>
-  morganRangeMode?: 'D1_M30' | 'H4_M5'
+  morganRangeMode?: 'D1_M30' | 'D5_H2' | 'H4_M5'
   period?: string
   settings?: Partial<MmfIndicatorSettings>
   stochSettings?: Partial<StochIndicatorSettings>

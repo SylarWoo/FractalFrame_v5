@@ -60,11 +60,244 @@ function createWorkbenchProfileStoreResolver(options: {
   }
 }
 
+const sharedPersistentStateKeys = new Set([
+  'fractalframe.drawingsDrawer.fibRetracementStyle',
+])
+
+function sanitizeRealtimePathSegment(value: string) {
+  return value.trim().replace(/[^a-zA-Z0-9_.-]/g, '-').replace(/-+/g, '-') || 'unknown'
+}
+
+function resolveRealtimeStateFile(options: {
+  kind: string
+  period: string
+  profileId: string
+  sessionTimeFrom: string
+  sessionTimeTo: string
+  symbol: string
+}) {
+  const kind = options.kind === 'tail' ? 'tail' : 'stable'
+  const symbol = sanitizeRealtimePathSegment(options.symbol)
+  const period = sanitizeRealtimePathSegment(options.period.toUpperCase())
+  const from = sanitizeRealtimePathSegment(options.sessionTimeFrom)
+  const to = sanitizeRealtimePathSegment(options.sessionTimeTo || 'open')
+  return path.resolve(
+    __dirname,
+    '.fractalframe-dev',
+    'profiles',
+    options.profileId,
+    'realtime-pages',
+    symbol,
+    period,
+    `${kind}-${from}-${to}.json`,
+  )
+}
+
+function clearRealtimeStateFiles(options: {
+  kind?: string | null
+  period?: string | null
+  profileId: string
+  symbol?: string | null
+}) {
+  const root = path.resolve(__dirname, '.fractalframe-dev', 'profiles', options.profileId, 'realtime-pages')
+  const symbol = options.symbol ? sanitizeRealtimePathSegment(options.symbol) : null
+  const period = options.period ? sanitizeRealtimePathSegment(options.period.toUpperCase()) : null
+  const target = symbol && period
+    ? path.join(root, symbol, period)
+    : symbol
+      ? path.join(root, symbol)
+      : root
+  if (!target.startsWith(root)) return
+  const kind = options.kind === 'tail' ? 'tail' : options.kind === 'stable' ? 'stable' : null
+  if (kind && fs.existsSync(target)) {
+    for (const fileName of fs.readdirSync(target)) {
+      if (fileName.startsWith(`${kind}-`) && fileName.endsWith('.json')) {
+        fs.rmSync(path.join(target, fileName), { force: true })
+      }
+    }
+    return
+  }
+  fs.rmSync(target, { force: true, recursive: true })
+}
+
+function realtimePageStatePlugin(): Plugin {
+  return {
+    name: 'fractalframe-realtime-page-state',
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use('/__fractalframe_realtime_page_state', (req: IncomingMessage, res: ServerResponse) => {
+        if (!req.url) {
+          res.statusCode = 400
+          res.end()
+          return
+        }
+        const requestUrl = new URL(req.url, 'http://127.0.0.1')
+        const profileId = resolveWorkbenchProfileId(req, server)
+        if (req.method === 'GET') {
+          const kind = requestUrl.searchParams.get('kind') || ''
+          const symbol = requestUrl.searchParams.get('symbol') || ''
+          const period = requestUrl.searchParams.get('period') || ''
+          const sessionTimeFrom = requestUrl.searchParams.get('sessionTimeFrom') || ''
+          const sessionTimeTo = requestUrl.searchParams.get('sessionTimeTo') || 'open'
+          if (!kind || !symbol || !period || !sessionTimeFrom) {
+            res.statusCode = 400
+            res.end(JSON.stringify({ value: null }))
+            return
+          }
+          const stateFile = resolveRealtimeStateFile({ kind, period, profileId, sessionTimeFrom, sessionTimeTo, symbol })
+          try {
+            const value = JSON.parse(fs.readFileSync(stateFile, 'utf8')) as unknown
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ value }))
+          } catch {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ value: null }))
+          }
+          return
+        }
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', (chunk: Buffer) => {
+            body += String(chunk)
+          })
+          req.on('end', () => {
+            try {
+              const payload = JSON.parse(body) as {
+                kind?: string
+                period?: string
+                remove?: boolean
+                sessionTimeFrom?: number | string | null
+                sessionTimeTo?: number | string | null
+                symbol?: string
+                value?: unknown
+              }
+              if (payload.remove) {
+                clearRealtimeStateFiles({ kind: payload.kind ?? null, period: payload.period ?? null, profileId, symbol: payload.symbol ?? null })
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ ok: true }))
+                return
+              }
+              if (!payload.kind || !payload.symbol || !payload.period || payload.sessionTimeFrom == null) {
+                throw new Error('Missing realtime page identity')
+              }
+              clearRealtimeStateFiles({ kind: payload.kind, period: payload.period, profileId, symbol: payload.symbol })
+              const stateFile = resolveRealtimeStateFile({
+                kind: payload.kind,
+                period: payload.period,
+                profileId,
+                sessionTimeFrom: String(payload.sessionTimeFrom),
+                sessionTimeTo: payload.sessionTimeTo == null ? 'open' : String(payload.sessionTimeTo),
+                symbol: payload.symbol,
+              })
+              fs.mkdirSync(path.dirname(stateFile), { recursive: true })
+              fs.writeFileSync(stateFile, JSON.stringify(payload.value ?? null, null, 2), 'utf8')
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: true }))
+            } catch {
+              res.statusCode = 400
+              res.end(JSON.stringify({ ok: false }))
+            }
+          })
+          return
+        }
+        res.statusCode = 405
+        res.end()
+      })
+    },
+  }
+}
+
+function resolvePeriodUiStateFile(options: {
+  kind: string
+  period: string
+  profileId: string
+}) {
+  const kind = options.kind === 'settings' ? 'settings' : 'indicators'
+  const period = sanitizeRealtimePathSegment(options.period.toUpperCase())
+  return path.resolve(
+    __dirname,
+    '.fractalframe-dev',
+    'profiles',
+    options.profileId,
+    'period-state',
+    period,
+    `${kind}.json`,
+  )
+}
+
+function periodUiStatePlugin(): Plugin {
+  return {
+    name: 'fractalframe-period-ui-state',
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use('/__fractalframe_period_ui_state', (req: IncomingMessage, res: ServerResponse) => {
+        if (!req.url) {
+          res.statusCode = 400
+          res.end()
+          return
+        }
+        const requestUrl = new URL(req.url, 'http://127.0.0.1')
+        const profileId = resolveWorkbenchProfileId(req, server)
+        if (req.method === 'GET') {
+          const kind = requestUrl.searchParams.get('kind') || ''
+          const period = requestUrl.searchParams.get('period') || ''
+          if (!kind || !period) {
+            res.statusCode = 400
+            res.end(JSON.stringify({ value: null }))
+            return
+          }
+          const stateFile = resolvePeriodUiStateFile({ kind, period, profileId })
+          try {
+            const value = JSON.parse(fs.readFileSync(stateFile, 'utf8')) as unknown
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ value }))
+          } catch {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ value: null }))
+          }
+          return
+        }
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', (chunk: Buffer) => {
+            body += String(chunk)
+          })
+          req.on('end', () => {
+            try {
+              const payload = JSON.parse(body) as {
+                kind?: string
+                period?: string
+                remove?: boolean
+                value?: unknown
+              }
+              if (!payload.kind || !payload.period) throw new Error('Missing period UI state identity')
+              const stateFile = resolvePeriodUiStateFile({ kind: payload.kind, period: payload.period, profileId })
+              if (payload.remove) {
+                fs.rmSync(stateFile, { force: true })
+              } else {
+                fs.mkdirSync(path.dirname(stateFile), { recursive: true })
+                fs.writeFileSync(stateFile, JSON.stringify(payload.value ?? null, null, 2), 'utf8')
+              }
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: true }))
+            } catch {
+              res.statusCode = 400
+              res.end(JSON.stringify({ ok: false }))
+            }
+          })
+          return
+        }
+        res.statusCode = 405
+        res.end()
+      })
+    },
+  }
+}
+
 function persistentDevStatePlugin(): Plugin {
   const resolveStore = createWorkbenchProfileStoreResolver({
     fallbackStateFile: path.resolve(__dirname, '.fractalframe-dev', 'persistent-state.json'),
     stateFileName: 'workbench-profile.json',
   })
+  const sharedStore = createJsonStateStore(path.resolve(__dirname, '.fractalframe-dev', 'shared-workbench-profile.json'))
 
   return {
     name: 'fractalframe-persistent-dev-state',
@@ -77,9 +310,9 @@ function persistentDevStatePlugin(): Plugin {
         }
         const requestUrl = new URL(req.url, 'http://127.0.0.1')
         const profileId = resolveWorkbenchProfileId(req, server)
-        const { readState, writeState } = resolveStore(profileId)
         if (req.method === 'GET') {
           const key = requestUrl.searchParams.get('key')
+          const { readState } = key && sharedPersistentStateKeys.has(key) ? sharedStore : resolveStore(profileId)
           const state = readState()
           const value = key ? state[key] : null
           res.setHeader('Content-Type', 'application/json')
@@ -95,6 +328,7 @@ function persistentDevStatePlugin(): Plugin {
             try {
               const payload = JSON.parse(body) as { key?: string; merge?: Record<string, unknown>; remove?: boolean; value?: unknown }
               if (!payload.key) throw new Error('Missing key')
+              const { readState, writeState } = sharedPersistentStateKeys.has(payload.key) ? sharedStore : resolveStore(profileId)
               const state = readState()
               if (payload.remove) {
                 delete state[payload.key]
@@ -187,7 +421,7 @@ function chartViewportDevStatePlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), persistentDevStatePlugin(), chartViewportDevStatePlugin()],
+  plugins: [react(), persistentDevStatePlugin(), chartViewportDevStatePlugin(), realtimePageStatePlugin(), periodUiStatePlugin()],
   server: {
     strictPort: true,
   },

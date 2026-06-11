@@ -133,7 +133,7 @@ export function resolvePartitionKind(pages: RealtimePageRow[] | null | undefined
 }
 
 export function resolvePartitionCacheKind(partition: Pick<StoreV6PagePartition, 'partitionMode'>) {
-  return partition.partitionMode === 'm5-time' || partition.partitionMode === 'm30-time' ? 'time' : 'rows'
+  return partition.partitionMode === 'm5-time' || partition.partitionMode === 'm30-time' || partition.partitionMode === 'h2-time' ? 'time' : 'rows'
 }
 
 export function formatPageRange(page: RealtimePageRow) {
@@ -273,7 +273,7 @@ export function isCurrentCache(
   if (value.profileVersion !== expectedPartition.profileVersion) return false
   const expectedKind = resolvePartitionCacheKind(expectedPartition)
   const actualKind = value.partitionKind ?? resolvePartitionKind(value.pages)
-  const actualPageKind = expectedKind === 'time' && (value.partitionMode === 'm5-time' || value.partitionMode === 'm30-time')
+  const actualPageKind = expectedKind === 'time' && (value.partitionMode === 'm5-time' || value.partitionMode === 'm30-time' || value.partitionMode === 'h2-time')
     ? 'time'
     : resolvePartitionKind(value.pages)
   return actualKind === expectedKind && actualKind === actualPageKind
@@ -408,13 +408,18 @@ export async function materializeTimePageIndexRanges(options: {
         : fromGlobalIndex != null && toGlobalIndex != null
         ? Math.max(0, toGlobalIndex - fromGlobalIndex + 1)
         : 0
+      const keepPlannedTimeRange = timeframe === 'H2'
       return {
         ...page,
         fromGlobalIndex,
         limit: Math.max(1, rows || page.limit),
         rows,
-        timeFrom: typeof payload.metadata?.timeFromResult === 'number' ? payload.metadata.timeFromResult : page.timeFrom,
-        timeTo: typeof payload.metadata?.timeToResult === 'number' ? payload.metadata.timeToResult : page.timeTo,
+        timeFrom: keepPlannedTimeRange
+          ? page.timeFrom
+          : typeof payload.metadata?.timeFromResult === 'number' ? payload.metadata.timeFromResult : page.timeFrom,
+        timeTo: keepPlannedTimeRange
+          ? page.timeTo
+          : typeof payload.metadata?.timeToResult === 'number' ? payload.metadata.timeToResult : page.timeTo,
         toGlobalIndex,
       }
     } catch {

@@ -8,6 +8,7 @@ export type IndicatorWarmupName =
   | 'MMF_V3'
   | 'MR-M5'
   | 'MR-M30'
+  | 'MR-H2'
   | 'RSI'
   | 'SQZMOM'
   | 'Stoch'

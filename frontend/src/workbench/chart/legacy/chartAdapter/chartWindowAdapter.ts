@@ -1,5 +1,5 @@
 import type { Chart } from 'klinecharts'
-import { applyNewDataWithFuturePlaceholders, stripFuturePlaceholders } from '../chartFuturePlaceholders'
+import { applyNewDataWithFuturePlaceholders, stripFuturePlaceholders } from '../../chartFuturePlaceholders'
 import type { ChartPageWindow } from '../pageWindow/chartPageWindow'
 
 export type ChartWindowAdapterApplyResult = {

@@ -1,5 +1,5 @@
 import type { KLineData } from 'klinecharts'
-import { createPageDataSliceFromDisplayRows } from '../pageData/pageDataProvider'
+import { createPageDataSliceFromDisplayRows } from '../../pageData/pageDataProvider'
 import { createChartPageWindow } from './chartPageWindow'
 
 export function createRealtimePageWindow(options: {

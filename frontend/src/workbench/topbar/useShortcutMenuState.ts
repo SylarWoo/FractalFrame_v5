@@ -89,7 +89,8 @@ export function useShortcutMenuState({ onOpenChart }: UseShortcutMenuStateOption
     if (!fallback) return
     setActivePeriod(fallback.period)
     publishSharedSelection(symbol, fallback.period)
-    if (resolveStoreV6PagePartitionMode(fallback.period) === 'm5-time' || !hasStoreV6PeriodPageSystemV2(fallback.period)) return
+    if (!hasStoreV6PeriodPageSystemV2(fallback.period)) return
+    if (resolveStoreV6PagePartitionMode(fallback.period) === 'm5-time') return
     const symbolPeriods = readPeriodsForSymbol(symbol)
     const symbolPeriod = symbolPeriods.find((item) => item.period === fallback.period)
     onOpenChart?.({

@@ -33,7 +33,7 @@ describe('topbarPeriodUtils', () => {
   })
 
   it('keeps the expected shortcut period order', () => {
-    expect(periodOrder).toEqual(['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN'])
+    expect(periodOrder).toEqual(['M1', 'M5', 'M15', 'M30', 'H1', 'H2', 'H4', 'D1', 'W1', 'MN'])
     expect(periodToChartPeriod('M1')).toBe('M1')
     expect(periodToChartPeriod('H4')).toBe('H4')
     expect(periodToChartPeriod('MN')).toBe('MN1')
@@ -70,6 +70,7 @@ describe('topbarPeriodUtils', () => {
           directM1: { rowsCount: 100 },
           aggregated: [
             { timeframe: 'H4', rowsCount: 40 },
+            { timeframe: 'H2', rowsCount: 60 },
             { timeframe: 'MN1', rowsCount: 11 },
             { timeframe: 'M5', rowsCount: 80 },
             { timeframe: 'W1', rowsCount: 0 },
@@ -81,6 +82,7 @@ describe('topbarPeriodUtils', () => {
     expect(readPeriodsForSymbol('XAUUSDm')).toEqual([
       { period: 'M1', rowsCount: 100 },
       { period: 'M5', rowsCount: 80 },
+      { period: 'H2', rowsCount: 60 },
       { period: 'H4', rowsCount: 40 },
       { period: 'D1', rowsCount: 7 },
       { period: 'MN', rowsCount: 11 },

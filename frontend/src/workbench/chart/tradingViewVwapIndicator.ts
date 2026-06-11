@@ -46,7 +46,7 @@ type VwapKLineData = KLineData & {
   Volume?: number
 }
 
-export const vwapIndicatorAlgorithmVersion = 'vwap-tv-clean-v1'
+export const vwapIndicatorAlgorithmVersion = 'vwap-tv-clean-v3'
 export const tradingViewVwapIndicatorName = 'FF_TRADINGVIEW_VWAP'
 let registered = false
 
@@ -163,15 +163,34 @@ function resolveTimestampMs(row: KLineData) {
   return raw < 1_000_000_000_000 ? raw * 1000 : raw
 }
 
+function resolveWeekAlignedMonthAnchorKey(date: Date) {
+  let year = date.getUTCFullYear()
+  let month = date.getUTCMonth()
+  const firstDayWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay()
+  const firstMondayDate = 1 + ((1 - firstDayWeekday + 7) % 7)
+
+  if (date.getUTCDate() < firstMondayDate) {
+    month -= 1
+    if (month < 0) {
+      month = 11
+      year -= 1
+    }
+  }
+
+  return `month:${year * 12 + month}`
+}
+
 function resolveCalendarAnchorKey(timestampMs: number, anchorPeriod: VwapAnchorPeriod, symbol?: string) {
-  const anchorHourUtc = anchorPeriod === 'session' ? resolveSessionAnchorHourUtc(symbol) : 0
-  const anchoredTimestampMs = timestampMs - anchorHourUtc * 60 * 60 * 1000
+  const anchorHourUtc = resolveSessionAnchorHourUtc(symbol)
+  const anchorOffsetHours = anchorHourUtc === 0 ? 0 : 24 - anchorHourUtc
+  const anchoredTimestampMs = timestampMs + anchorOffsetHours * 60 * 60 * 1000
   const date = new Date(anchoredTimestampMs)
   const year = date.getUTCFullYear()
   const month = date.getUTCMonth()
   const day = Math.floor(anchoredTimestampMs / 86_400_000)
 
   if (anchorPeriod === 'week') return `week:${Math.floor((day + 4) / 7)}`
+  if (anchorPeriod === 'month' && anchorHourUtc !== 0) return resolveWeekAlignedMonthAnchorKey(date)
   if (anchorPeriod === 'month') return `month:${year * 12 + month}`
   if (anchorPeriod === 'quarter') return `quarter:${year * 4 + Math.floor(month / 3)}`
   if (anchorPeriod === 'year') return `year:${year}`

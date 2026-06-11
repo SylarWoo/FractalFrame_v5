@@ -1,6 +1,6 @@
-import type { ChartPageTarget } from '../ChartCoreHost'
-import { resolveInitialLimit } from '../chartCoreDataUtils'
-import { storeV6HistoryPageSize, storeV6LivePageSize } from '../pagePartition/pagePartitionBuilder'
+import type { ChartPageTarget } from '../../chartRuntimeTypes'
+import { resolveInitialLimit } from '../../chartCoreDataUtils'
+import { storeV6HistoryPageSize, storeV6LivePageSize } from '../../pagePartition/pagePartitionBuilder'
 
 export type PageLoadMode = 'blank' | 'realtime' | 'history' | 'jump'
 

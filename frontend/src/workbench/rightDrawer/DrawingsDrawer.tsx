@@ -44,6 +44,7 @@ import {
   sameLineSwatchList,
   type FibLevelState,
 } from './FibRetracementStylePanel'
+import './IndicatorSettingsShellLayout.css'
 import './drawings/styles/DrawingsDrawer.css'
 
 type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange' | 'emojiSticker' | 'cursor'

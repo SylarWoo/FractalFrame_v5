@@ -7,6 +7,7 @@ import {
 import {
   storeV6MorganRangeM5IndicatorIdV2,
   storeV6MorganRangeM30IndicatorIdV2,
+  storeV6MorganRangeH2IndicatorIdV2,
 } from '../indicatorRequestV2'
 import type { KLineChartRenderFrameV2 } from '../klineChartRenderFrameV2'
 import type { MorganRangeMode, MorganRangeSegment } from '../morganRangeModel'
@@ -14,6 +15,11 @@ import { ensureTradingViewMrIndicator } from '../tradingViewMrIndicator'
 import { createKLineChartIndicatorSnapshotContextV2 } from './klineChartIndicatorSnapshotBridgeV2'
 
 const candlePaneId = 'candle_pane'
+const morganRangeIndicatorIds = [
+  storeV6MorganRangeM5IndicatorIdV2,
+  storeV6MorganRangeM30IndicatorIdV2,
+  storeV6MorganRangeH2IndicatorIdV2,
+] as const
 
 declare global {
   interface Window {
@@ -36,6 +42,7 @@ type MorganRangePaneTarget = {
 
 function findMorganRangePane(frame: KLineChartRenderFrameV2): MorganRangePaneTarget | null {
   const normalizedPeriod = frame.period.trim().toUpperCase()
+  const h2Pane = frame.panes[storeV6MorganRangeH2IndicatorIdV2] ?? frame.panes['MR-H2'] ?? null
   const m30Pane = frame.panes[storeV6MorganRangeM30IndicatorIdV2] ?? frame.panes['MR-M30'] ?? null
   const m5Pane = frame.panes[storeV6MorganRangeM5IndicatorIdV2] ?? frame.panes['MR-M5'] ?? null
   if (normalizedPeriod === 'M5' && m5Pane) {
@@ -54,7 +61,23 @@ function findMorganRangePane(frame: KLineChartRenderFrameV2): MorganRangePaneTar
       settingsHashKey: storeV6MorganRangeM30IndicatorIdV2,
     }
   }
-  if (!m5Pane && !m30Pane) return null
+  if (normalizedPeriod === 'H2' && h2Pane) {
+    return {
+      indicatorId: storeV6MorganRangeH2IndicatorIdV2,
+      mode: 'D5_H2',
+      pane: h2Pane,
+      settingsHashKey: storeV6MorganRangeH2IndicatorIdV2,
+    }
+  }
+  if (!m5Pane && !m30Pane && !h2Pane) return null
+  if (h2Pane) {
+    return {
+      indicatorId: storeV6MorganRangeH2IndicatorIdV2,
+      mode: 'D5_H2',
+      pane: h2Pane,
+      settingsHashKey: storeV6MorganRangeH2IndicatorIdV2,
+    }
+  }
   if (m30Pane) {
     return {
       indicatorId: storeV6MorganRangeM30IndicatorIdV2,
@@ -130,24 +153,27 @@ function writeMorganRangeSnapshot(frame: KLineChartRenderFrameV2, target: Morgan
 }
 
 export function installKLineChartMainMorganRangeOverlayV2(chart: Chart, frame: KLineChartRenderFrameV2) {
-  let enabled = false
   let enabledIndicatorId: string | null = null
   ensureTradingViewMrIndicator(storeV6MorganRangeM5IndicatorIdV2)
   ensureTradingViewMrIndicator(storeV6MorganRangeM30IndicatorIdV2)
+  ensureTradingViewMrIndicator(storeV6MorganRangeH2IndicatorIdV2)
+
+  const removeInactiveMorganRangeIndicators = (activeIndicatorId: string | null = null) => {
+    morganRangeIndicatorIds.forEach((indicatorId) => {
+      if (indicatorId !== activeIndicatorId) chart.removeIndicator(candlePaneId, indicatorId)
+    })
+  }
 
   const apply = (nextFrame: KLineChartRenderFrameV2) => {
     const target = findMorganRangePane(nextFrame)
     if (!target || target.pane.renderRole !== 'main-overlay') {
-      if (enabled && enabledIndicatorId) {
-        chart.removeIndicator(candlePaneId, enabledIndicatorId)
-        enabled = false
-        enabledIndicatorId = null
-      }
+      removeInactiveMorganRangeIndicators(null)
+      enabledIndicatorId = null
       return
     }
+    removeInactiveMorganRangeIndicators(target.indicatorId)
     if (enabledIndicatorId && enabledIndicatorId !== target.indicatorId) {
       chart.removeIndicator(candlePaneId, enabledIndicatorId)
-      enabled = false
       enabledIndicatorId = null
     }
     const calcParams = [writeMorganRangeSnapshot(nextFrame, target)]
@@ -156,7 +182,6 @@ export function installKLineChartMainMorganRangeOverlayV2(chart: Chart, frame: K
     } else {
       chart.createIndicator({ name: target.indicatorId, calcParams }, true, { id: candlePaneId })
     }
-    enabled = true
     enabledIndicatorId = target.indicatorId
   }
 
@@ -164,8 +189,7 @@ export function installKLineChartMainMorganRangeOverlayV2(chart: Chart, frame: K
 
   return {
     destroy: () => {
-      if (enabled && enabledIndicatorId) chart.removeIndicator(candlePaneId, enabledIndicatorId)
-      enabled = false
+      removeInactiveMorganRangeIndicators(null)
       enabledIndicatorId = null
     },
     scheduleGeometryRefresh() {

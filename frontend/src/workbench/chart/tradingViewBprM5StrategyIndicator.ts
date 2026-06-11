@@ -12,7 +12,7 @@ export const bprM5StrategyIndicatorName = 'BPR_M5_STRATEGY'
 type BprM5StrategyContext = {
   maSettings?: Partial<MaIndicatorSettings>
   mmfSettings?: Partial<MmfIndicatorSettings>
-  morganRangeMode?: 'D1_M30' | 'H4_M5'
+  morganRangeMode?: 'D1_M30' | 'D5_H2' | 'H4_M5'
   period?: string
   stochSettings?: Partial<StochIndicatorSettings>
   symbol?: string
@@ -59,7 +59,7 @@ function normalizeContext(input: unknown) {
   return {
     maSettings: { ...defaultMaIndicatorSettings, ...(context.maSettings ?? {}) },
     mmfSettings: { ...defaultMmfIndicatorSettings, ...(context.mmfSettings ?? {}) },
-    morganRangeMode: context.morganRangeMode === 'D1_M30' ? 'D1_M30' : 'H4_M5',
+    morganRangeMode: context.morganRangeMode === 'D5_H2' ? 'D5_H2' : context.morganRangeMode === 'D1_M30' ? 'D1_M30' : 'H4_M5',
     period: normalizeStoreTimeframe(context.period),
     stochSettings: { ...defaultStochIndicatorSettings, ...(context.stochSettings ?? {}) },
     symbol: typeof context.symbol === 'string' && context.symbol.trim() ? context.symbol.trim() : '',
@@ -234,7 +234,7 @@ async function calculateBprM5Rows(dataList: KLineData[], inputContext?: unknown)
         type: context.maSettings.type,
       },
       morgan: {
-        anchor: context.morganRangeMode === 'D1_M30' ? 'd1' : 'h4',
+        anchor: context.morganRangeMode === 'D5_H2' ? 'd5' : context.morganRangeMode === 'D1_M30' ? 'd1' : 'h4',
         ratios: [-0.236, -0.118, 0.118, 0.236],
       },
       strategies: { bprM5: true },

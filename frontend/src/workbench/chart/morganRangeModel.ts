@@ -3,9 +3,13 @@ import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 
 export const h4MorganSeconds = 4 * 60 * 60
 export const d1MorganSeconds = 24 * 60 * 60
+export const d5MorganSeconds = 5 * d1MorganSeconds
+const weekMorganSeconds = 7 * d1MorganSeconds
 const xauSessionAnchorSeconds = 22 * 60 * 60
+const shanghaiSessionBoundaryUtcOffsetSeconds = -2 * 60 * 60
+const shanghaiOffsetSeconds = 8 * 60 * 60
 
-export type MorganRangeMode = 'H4_M5' | 'D1_M30'
+export type MorganRangeMode = 'H4_M5' | 'D1_M30' | 'D5_H2'
 
 export type MorganRangeCandle = {
   close: number
@@ -86,11 +90,24 @@ export function resolveD1MorganBucketKey(timestampMs: number) {
   return Math.floor((Math.floor(timestampMs / 1000) - xauSessionAnchorSeconds) / d1MorganSeconds)
 }
 
+export function resolveD5MorganBucketKey(timestampMs: number) {
+  const seconds = Math.floor(timestampMs / 1000)
+  const tradingDayNumber = Math.floor((seconds - shanghaiSessionBoundaryUtcOffsetSeconds) / d1MorganSeconds)
+  const tradingDayBoundary = tradingDayNumber * d1MorganSeconds + shanghaiSessionBoundaryUtcOffsetSeconds
+  const date = new Date((tradingDayBoundary + shanghaiOffsetSeconds) * 1000)
+  const weekday = date.getUTCDay()
+  const mondayOffset = (weekday + 6) % 7
+  const bucketStart = tradingDayBoundary - mondayOffset * d1MorganSeconds
+  return Math.floor(bucketStart / weekMorganSeconds)
+}
+
 export function resolveMorganRangeBucketSeconds(mode: MorganRangeMode) {
+  if (mode === 'D5_H2') return d5MorganSeconds
   return mode === 'D1_M30' ? d1MorganSeconds : h4MorganSeconds
 }
 
 export function resolveMorganRangeBucketKey(timestampMs: number, mode: MorganRangeMode) {
+  if (mode === 'D5_H2') return resolveD5MorganBucketKey(timestampMs)
   return mode === 'D1_M30' ? resolveD1MorganBucketKey(timestampMs) : resolveH4MorganBucketKey(timestampMs)
 }
 

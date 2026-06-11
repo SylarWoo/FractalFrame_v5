@@ -93,7 +93,7 @@ function normalizeMmfV2Context(input: unknown) {
   const vwapSettings = { ...defaultVwapIndicatorSettings, ...(context.vwapSettings ?? {}) }
   return {
     maSettings: { ...defaultMaIndicatorSettings, ...mmfV2InternalMaSettings, ...(context.maSettings ?? {}) },
-    morganRangeMode: context.morganRangeMode === 'D1_M30' ? 'D1_M30' : 'H4_M5',
+    morganRangeMode: context.morganRangeMode === 'D5_H2' ? 'D5_H2' : context.morganRangeMode === 'D1_M30' ? 'D1_M30' : 'H4_M5',
     period: normalizeStoreTimeframe(context.period),
     settings: normalizeMmfSettings(context.settings),
     stochSettings,
@@ -309,7 +309,7 @@ async function calculateRemoteMmfV2Rows(dataList: KLineData[], inputContext?: un
         type: context.maSettings.type,
       },
       morgan: {
-        anchor: context.morganRangeMode === 'D1_M30' ? 'd1' : 'h4',
+        anchor: context.morganRangeMode === 'D5_H2' ? 'd5' : context.morganRangeMode === 'D1_M30' ? 'd1' : 'h4',
         ratios: [-0.236, -0.118, 0.118, 0.236],
       },
       vwap: {

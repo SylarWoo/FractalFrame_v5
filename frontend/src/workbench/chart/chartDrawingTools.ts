@@ -5,8 +5,7 @@ import {
   fibRetracementOverlayName,
 } from '../drawing/drawingOverlayModel'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
-import { clearStoredFibRetracementDrawings } from '../rightDrawer/drawingObjectPersistence'
-import { publishDrawingToolState } from '../rightDrawer/drawingToolCommands'
+import { publishDrawingToolState, type DrawingToolCommand } from '../rightDrawer/drawingToolCommands'
 import { isObjectTreeDrawingCommandEvent, publishObjectTreeDrawings } from '../rightDrawer/objectTree/objectTreeModel'
 import {
   normalizeDrawingTextStyle,
@@ -26,8 +25,6 @@ import {
 import { createChartDrawingPersistenceController, readInitialStoredDrawingState } from './chartDrawingPersistenceController'
 import { createChartDrawingVisibilityController } from './chartDrawingVisibilityController'
 import { createChartDrawingPaneInteractionController } from './chartDrawingPaneInteractionController'
-import { createHorizontalLineToolCommandHandler } from './chartHorizontalLineToolCommands'
-import { createTrendLineToolCommandHandler } from './chartTrendLineToolCommands'
 import { createTrendLineSelectionController } from './trendLineSelectionController'
 import { createHorizontalLineSelectionStateController } from './horizontalLineSelectionStateController'
 import {
@@ -44,18 +41,20 @@ import { normalizeLineStyle } from './chartDrawingStyle'
 import { createHorizontalLineOverlayFactory } from './horizontalLineOverlayController'
 import { createTrendLineOverlayFactory } from './trendLineOverlayController'
 import { createRulerOverlayFactory, type PendingRulerOptions } from './rulerOverlayController'
-import { createRulerToolCommandHandler } from './chartRulerToolCommands'
 import { createQuickMeasureController } from './quickMeasureOverlay'
 import { createMorganRangeController } from './morganRangeOverlay'
-import { createStickerOverlayController } from './stickerOverlay'
 import { createChartSymbolMarkerController } from './chartSymbolMarkerOverlay'
-import { createStickerDrawingCommandHandler } from './stickerDrawingCommands'
 import { createChartDrawingHitTester } from './chartDrawingHitTesting'
 import { createTrendLinePendingStartHandleController } from './trendLinePendingStartHandle'
 import { installChartDrawingLifecycle } from './chartDrawingLifecycle'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingVisibilityEvents'
 import { ensureChartDrawingOverlays } from './chartDrawingOverlayRegistry'
 import { routeChartDrawingCommand } from './chartDrawingCommandRouter'
+import { installHorizontalLineDrawingTool } from './chartDrawingHorizontalInstaller'
+import { installTrendLineDrawingTool } from './chartDrawingTrendInstaller'
+import { installRulerDrawingTool } from './chartDrawingRulerInstaller'
+import { installFibRetracementDrawingTool } from './chartDrawingFibInstaller'
+import { installStickerDrawingTool } from './chartDrawingStickerInstaller'
 
 const candlePaneId = drawingMainPaneId
 const trendLineOverlayZLevel = -1
@@ -65,25 +64,6 @@ const trendLineEndpointDragThreshold = 3
 
 export function installChartDrawingTools(chart: Chart, getPeriod: () => string = () => '') {
   ensureChartDrawingOverlays()
-  let pendingOverlayId: string | null = null
-  let pendingTrendLineOverlayId: string | null = null
-  let pendingRulerOverlayId: string | null = null
-  let pendingFibOverlayId: string | null = null
-  let pendingOverlayOptions: {
-    lineStyle: SettingsLineSwatchValue
-    locked: boolean
-    showPriceLabel: boolean
-    textStyle?: DrawingTextStyle
-  } | null = null
-  let pendingTrendLineOptions: {
-    lineStyle: SettingsLineSwatchValue
-    locked: boolean
-    showPriceLabel: boolean
-    textStyle?: DrawingTextStyle
-    trendLineStyle: DrawingTrendLineStyle
-  } | null = null
-  let pendingRulerOptions: PendingRulerOptions | null = null
-  let pendingFibOptions: PendingRulerOptions | null = null
   let selectedOverlayId: string | null = null
   let selectedTrendLineOverlayId: string | null = null
   let selectedRulerOverlayId: string | null = null
@@ -97,11 +77,6 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   const rulerOverlayIds = new Set<string>()
   const fibOverlayIds = new Set<string>()
   const initialStoredDrawings = readInitialStoredDrawingState()
-  let emojiStickerPersistenceEnabled = initialStoredDrawings.emojiStickerPersistenceEnabled
-  let fibRetracementPersistenceEnabled = initialStoredDrawings.fibRetracementPersistenceEnabled
-  let persistenceEnabled = initialStoredDrawings.horizontalLinePersistenceEnabled
-  let rulerPersistenceEnabled = initialStoredDrawings.rulerPersistenceEnabled
-  let trendLinePersistenceEnabled = initialStoredDrawings.trendLinePersistenceEnabled
   let pressedMoveState: PressedHorizontalLineMoveState | null = null
   let mixedDrawingMoveState: MixedDrawingMoveState | null = null
   let pendingHorizontalLineHandlePress: { overlayId: string; x: number; y: number } | null = null
@@ -122,7 +97,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     const selectedExtendData = selectedOverlay?.extendData as HorizontalLineExtendData | null
     const selectedPrice = Number(selectedOverlay?.points[0]?.value)
     publishDrawingToolState({
-      armed: pendingOverlayId != null,
+      armed: horizontalLineTool?.getPendingOverlayId() != null,
       lineStyle: selectedExtendData?.lineStyle ? normalizeLineStyle(selectedExtendData.lineStyle) : undefined,
       locked: Boolean(selectedExtendData?.locked),
       objectId: selectedExtendData?.objectId,
@@ -177,7 +152,11 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   let paneInteractionController: ReturnType<typeof createChartDrawingPaneInteractionController> | null = null
   let quickMeasureController: ReturnType<typeof createQuickMeasureController> | null = null
   let morganRangeController: ReturnType<typeof createMorganRangeController> | null = null
-  let stickerController: ReturnType<typeof createStickerOverlayController> | null = null
+  let horizontalLineTool: ReturnType<typeof installHorizontalLineDrawingTool> | null = null
+  let trendLineTool: ReturnType<typeof installTrendLineDrawingTool> | null = null
+  let rulerTool: ReturnType<typeof installRulerDrawingTool> | null = null
+  let fibTool: ReturnType<typeof installFibRetracementDrawingTool> | null = null
+  let stickerTool: ReturnType<typeof installStickerDrawingTool> | null = null
   let symbolMarkerController: ReturnType<typeof createChartSymbolMarkerController> | null = null
   const applyDrawingVisibility = () => drawingVisibilityController?.applyDrawingVisibility()
   const applyHorizontalLineVisibility = () => drawingVisibilityController?.applyHorizontalLineVisibility()
@@ -244,17 +223,22 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
 
   const getSelectedHorizontalLineIds = () => getSelectedHorizontalLineIdsFromState(horizontalLineOverlayIds, selectedHorizontalLineOverlayIds)
 
-  const getSelectedTrendLineIds = () => getSelectedTrendLineIdsFromState({ chart, pendingTrendLineOverlayId, selectedTrendLineOverlayIds, trendLineOverlayIds })
+  const getSelectedTrendLineIds = () => getSelectedTrendLineIdsFromState({
+    chart,
+    pendingTrendLineOverlayId: trendLineTool?.getPendingTrendLineOverlayId() ?? null,
+    selectedTrendLineOverlayIds,
+    trendLineOverlayIds,
+  })
 
   const publishObjectTreeState = () => {
     const state = collectDrawingObjectTreeState({
       activeObjectTreeOverlayId,
       chart,
-      emojiStickerOverlayIds: stickerController?.getOverlayIds() ?? new Set(),
+      emojiStickerOverlayIds: stickerTool?.getOverlayIds() ?? new Set(),
       fibOverlayIds,
       fallbackPaneId: candlePaneId,
       horizontalLineOverlayIds,
-      pendingTrendLineOverlayId,
+      pendingTrendLineOverlayId: trendLineTool?.getPendingTrendLineOverlayId() ?? null,
       resolveHorizontalLineVisibility,
       resolveFibRetracementVisibility,
       resolveRulerVisibility,
@@ -265,7 +249,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       selectedRulerOverlayIds,
       selectedTrendLineOverlayIds,
       selectedTrendLineOverlayId,
-      selectedStickerOverlayId: stickerController?.getSelectedId?.() ?? null,
+      selectedStickerOverlayId: stickerTool?.getSelectedId() ?? null,
       trendLineOverlayIds,
     })
     publishObjectTreeDrawings(state.items, state.activeId)
@@ -298,9 +282,9 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     chart,
     fallbackPaneId: candlePaneId,
     fibOverlayIds,
-    getPendingFibOverlayId: () => pendingFibOverlayId,
-    getPendingRulerOverlayId: () => pendingRulerOverlayId,
-    getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
+    getPendingFibOverlayId: () => fibTool?.getPendingOverlayId() ?? null,
+    getPendingRulerOverlayId: () => rulerTool?.getPendingOverlayId() ?? null,
+    getPendingTrendLineOverlayId: () => trendLineTool?.getPendingTrendLineOverlayId() ?? null,
     horizontalLineOverlayIds,
     resolveHorizontalLineVisibility,
     resolveFibRetracementVisibility,
@@ -328,7 +312,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     clearHorizontalLineSelection,
     getLastSelectedTrendLineAt: () => lastSelectedTrendLineAt,
     getLastSelectedTrendLineOverlayId: () => lastSelectedTrendLineOverlayId,
-    getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
+    getPendingTrendLineOverlayId: () => trendLineTool?.getPendingTrendLineOverlayId() ?? null,
     getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
     publishObjectTreeState,
     setActiveTrendLine: (id) => {
@@ -389,7 +373,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     selectedRulerOverlayId = null
     if (activeObjectTreeOverlayId && rulerOverlayIds.has(activeObjectTreeOverlayId)) activeObjectTreeOverlayId = selectedOverlayId ?? selectedTrendLineOverlayId
     publishDrawingToolState({
-      armed: pendingRulerOverlayId != null,
+      armed: rulerTool?.getPendingOverlayId() != null,
       locked: false,
       selected: false,
       showPriceLabel: true,
@@ -427,7 +411,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     selectedFibOverlayId = null
     if (activeObjectTreeOverlayId && fibOverlayIds.has(activeObjectTreeOverlayId)) activeObjectTreeOverlayId = selectedOverlayId ?? selectedTrendLineOverlayId ?? selectedRulerOverlayId
     publishDrawingToolState({
-      armed: pendingFibOverlayId != null,
+      armed: fibTool?.getPendingOverlayId() != null,
       locked: false,
       selected: false,
       showPriceLabel: true,
@@ -498,8 +482,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       pendingHorizontalLineHandlePress = state
     },
     setPendingOverlayCleared: () => {
-      pendingOverlayId = null
-      pendingOverlayOptions = null
+      horizontalLineTool?.clearPending()
     },
     setPressedMoveState: (state) => {
       pressedMoveState = state
@@ -536,7 +519,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     getLastSelectedTrendLineOverlayId: () => lastSelectedTrendLineOverlayId,
     getMixedDrawingMoveState: () => mixedDrawingMoveState,
     getPendingTrendLineEndpointPress: () => pendingTrendLineEndpointPress,
-    getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
+    getPendingTrendLineOverlayId: () => trendLineTool?.getPendingTrendLineOverlayId() ?? null,
     getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
     hidePendingTrendStartHandle,
     moveMixedDrawings,
@@ -561,10 +544,10 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       pendingTrendLineEndpointPress = state
     },
     setPendingTrendLineOverlayId: (id) => {
-      pendingTrendLineOverlayId = id
+      trendLineTool?.setPendingTrendLineOverlayId(id)
     },
     setPendingTrendLineOptionsCleared: () => {
-      pendingTrendLineOptions = null
+      trendLineTool?.clearPendingOptions()
     },
     setSelectedTrendLineOverlayId: (id) => {
       selectedTrendLineOverlayId = id
@@ -612,10 +595,10 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       activeObjectTreeOverlayId = id
     },
     setPendingRulerOverlayId: (id) => {
-      pendingRulerOverlayId = id
+      rulerTool?.setPendingOverlayId(id)
     },
     setPendingRulerOptionsCleared: () => {
-      pendingRulerOptions = null
+      rulerTool?.clearPendingOptions()
     },
     rulerOverlayIds,
     rulerOverlayZLevel: trendLineOverlayZLevel,
@@ -654,10 +637,10 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
       activeObjectTreeOverlayId = id
     },
     setPendingRulerOverlayId: (id) => {
-      pendingFibOverlayId = id
+      fibTool?.setPendingOverlayId(id)
     },
     setPendingRulerOptionsCleared: () => {
-      pendingFibOptions = null
+      fibTool?.clearPendingOptions()
     },
     rulerOverlayIds: fibOverlayIds,
     rulerOverlayZLevel: trendLineOverlayZLevel,
@@ -697,14 +680,77 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     updateOverlayState,
   })
 
-  stickerController = createStickerOverlayController({
+  horizontalLineTool = installHorizontalLineDrawingTool({
+    applyHorizontalLineVisibility,
+    chart,
+    createHorizontalLineOverlay,
+    getLastPointerPaneId,
+    getLastSelectedOverlayId: () => lastSelectedOverlayId,
+    getSelectedOverlayId: () => selectedOverlayId,
+    initialPersistenceEnabled: initialStoredDrawings.horizontalLinePersistenceEnabled,
+    persistCurrentHorizontalLines,
+    publishObjectTreeState,
+    publishState,
+    resolveDeleteTargetOverlayId,
+    resolveEditableOverlayId,
+    setLastSelectedOverlayId: (id) => { lastSelectedOverlayId = id },
+    setSelectedHorizontalLine,
+    setSelectedOverlayId: (id) => { selectedOverlayId = id },
+    updateOverlayState,
+  })
+
+  trendLineTool = installTrendLineDrawingTool({
+    chart,
+    createTrendLineOverlay,
+    getLastPointerPaneId,
+    getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
+    hidePendingTrendStartHandle,
+    initialPersistenceEnabled: initialStoredDrawings.trendLinePersistenceEnabled,
+    persistCurrentTrendLines,
+    resolveDeletableTrendLineOverlayId,
+    resolveSelectedTrendLineOverlayId,
+    resolveTrendPointPrices,
+    setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
+    setLastSelectedTrendLineOverlayId: (id) => {
+      lastSelectedTrendLineOverlayId = id
+      if (id) lastSelectedTrendLineAt = Date.now()
+    },
+    setSelectedTrendLineOverlayId: (id) => { selectedTrendLineOverlayId = id },
+    trendLineOverlayIds,
+  })
+
+  rulerTool = installRulerDrawingTool({
+    chart,
+    createRulerOverlay,
+    getLastPointerPaneId,
+    getSelectedRulerOverlayId: () => selectedRulerOverlayId,
+    initialPersistenceEnabled: initialStoredDrawings.rulerPersistenceEnabled,
+    persistCurrentRulers,
+    resolveTrendPointPrices,
+    setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
+    setSelectedRulerOverlayId: (id) => { selectedRulerOverlayId = id },
+    rulerOverlayIds,
+  })
+
+  fibTool = installFibRetracementDrawingTool({
+    chart,
+    createRulerOverlay: createFibOverlay,
+    getLastPointerPaneId,
+    getSelectedRulerOverlayId: () => selectedFibOverlayId,
+    initialPersistenceEnabled: initialStoredDrawings.fibRetracementPersistenceEnabled,
+    persistCurrentRulers: persistCurrentFibRetracements,
+    resolveTrendPointPrices,
+    setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
+    setSelectedRulerOverlayId: (id) => { selectedFibOverlayId = id },
+    rulerOverlayIds: fibOverlayIds,
+  })
+
+  stickerTool = installStickerDrawingTool({
     chart,
     fallbackPaneId: candlePaneId,
-    onState: (state) => {
-      publishDrawingToolState(state)
-      persistCurrentEmojiStickers()
-      publishObjectTreeState()
-    },
+    initialPersistenceEnabled: initialStoredDrawings.emojiStickerPersistenceEnabled,
+    persist: persistCurrentEmojiStickers,
+    publishObjectTreeState,
   })
 
   drawingPersistenceController = createChartDrawingPersistenceController({
@@ -712,7 +758,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     chart,
     createFibRetracementOverlay: createFibOverlay,
     createHorizontalLineOverlay,
-    createEmojiStickerOverlay: (options) => stickerController?.restore(options.paneId ?? candlePaneId, options.point, {
+    createEmojiStickerOverlay: (options) => stickerTool?.createOverlayFromStored(options.paneId, options.point, {
       bold: options.bold,
       color: options.color,
       fontFamily: options.fontFamily,
@@ -728,15 +774,15 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     createTrendLineOverlay,
     fallbackPaneId: candlePaneId,
     getDestroyed: () => destroyed,
-    getEmojiStickerPersistenceEnabled: () => emojiStickerPersistenceEnabled,
-    getFibRetracementPersistenceEnabled: () => fibRetracementPersistenceEnabled,
-    getHorizontalLinePersistenceEnabled: () => persistenceEnabled,
-    getPendingFibRetracementOverlayId: () => pendingFibOverlayId,
-    getPendingRulerOverlayId: () => pendingRulerOverlayId,
-    getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
-    getRulerPersistenceEnabled: () => rulerPersistenceEnabled,
-    getTrendLinePersistenceEnabled: () => trendLinePersistenceEnabled,
-    emojiStickerOverlayIds: stickerController.getOverlayIds(),
+    getEmojiStickerPersistenceEnabled: () => stickerTool?.getPersistenceEnabled() ?? false,
+    getFibRetracementPersistenceEnabled: () => fibTool?.getPersistenceEnabled() ?? false,
+    getHorizontalLinePersistenceEnabled: () => horizontalLineTool?.getPersistenceEnabled() ?? false,
+    getPendingFibRetracementOverlayId: () => fibTool?.getPendingOverlayId() ?? null,
+    getPendingRulerOverlayId: () => rulerTool?.getPendingOverlayId() ?? null,
+    getPendingTrendLineOverlayId: () => trendLineTool?.getPendingTrendLineOverlayId() ?? null,
+    getRulerPersistenceEnabled: () => rulerTool?.getPersistenceEnabled() ?? false,
+    getTrendLinePersistenceEnabled: () => trendLineTool?.getPersistenceEnabled() ?? false,
+    emojiStickerOverlayIds: stickerTool.getOverlayIds(),
     fibRetracementOverlayIds: fibOverlayIds,
     horizontalLineOverlayIds,
     initialFibRetracementDrawings: initialStoredDrawings.pendingFibRetracementDrawings,
@@ -770,10 +816,10 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     eventHitsTrendLine,
     fallbackPaneId: candlePaneId,
     getDestroyed: () => destroyed,
-    getPendingOverlayId: () => pendingOverlayId,
-    getPendingOverlayOptions: () => pendingOverlayOptions,
+    getPendingOverlayId: () => horizontalLineTool?.getPendingOverlayId() ?? null,
+    getPendingOverlayOptions: () => horizontalLineTool?.getPendingOverlayOptions() ?? null,
     publishHorizontalLineState: publishState,
-    setPendingOverlayId: (id) => { pendingOverlayId = id },
+    setPendingOverlayId: (id) => { horizontalLineTool?.setPendingOverlayId(id) },
   })
   quickMeasureController = createQuickMeasureController({
     chart,
@@ -800,98 +846,25 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   })
   ensurePaneInteractionListeners()
 
-  const handleHorizontalLineCommand = createHorizontalLineToolCommandHandler({
-    applyHorizontalLineVisibility,
-    chart,
-    createHorizontalLineOverlay,
-    getLastPointerPaneId,
-    getLastSelectedOverlayId: () => lastSelectedOverlayId,
-    getPendingOverlayId: () => pendingOverlayId,
-    getPersistenceEnabled: () => persistenceEnabled,
-    getSelectedOverlayId: () => selectedOverlayId,
-    persistCurrentHorizontalLines,
-    publishObjectTreeState,
-    publishState,
-    resolveDeleteTargetOverlayId,
-    resolveEditableOverlayId,
-    setLastSelectedOverlayId: (id) => { lastSelectedOverlayId = id },
-    setPendingOverlayId: (id) => { pendingOverlayId = id },
-    setPendingOverlayOptions: (options) => { pendingOverlayOptions = options },
-    setPersistenceEnabled: (enabled) => { persistenceEnabled = enabled },
-    setSelectedHorizontalLine,
-    setSelectedOverlayId: (id) => { selectedOverlayId = id },
-    updateOverlayState,
-  })
+  const handleHorizontalLineCommand = (command: DrawingToolCommand) => {
+    horizontalLineTool?.handleCommand(command)
+  }
 
-  const handleTrendLineCommand = createTrendLineToolCommandHandler({
-    chart,
-    createTrendLineOverlay,
-    getLastPointerPaneId,
-    getPendingTrendLineOptions: () => pendingTrendLineOptions,
-    getPendingTrendLineOverlayId: () => pendingTrendLineOverlayId,
-    getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
-    getTrendLinePersistenceEnabled: () => trendLinePersistenceEnabled,
-    hidePendingTrendStartHandle,
-    persistCurrentTrendLines,
-    resolveDeletableTrendLineOverlayId,
-    resolveSelectedTrendLineOverlayId,
-    resolveTrendPointPrices,
-    setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
-    setLastSelectedTrendLineOverlayId: (id) => {
-      lastSelectedTrendLineOverlayId = id
-      if (id) lastSelectedTrendLineAt = Date.now()
-    },
-    setPendingTrendLineOptions: (options) => { pendingTrendLineOptions = options },
-    setPendingTrendLineOverlayId: (id) => { pendingTrendLineOverlayId = id },
-    setSelectedTrendLineOverlayId: (id) => { selectedTrendLineOverlayId = id },
-    setTrendLinePersistenceEnabled: (enabled) => { trendLinePersistenceEnabled = enabled },
-    trendLineOverlayIds,
-  })
+  const handleTrendLineCommand = (command: DrawingToolCommand) => {
+    trendLineTool?.handleCommand(command)
+  }
 
-  const handleRulerCommand = createRulerToolCommandHandler({
-    chart,
-    createRulerOverlay,
-    getLastPointerPaneId,
-    getPendingRulerOptions: () => pendingRulerOptions,
-    getPendingRulerOverlayId: () => pendingRulerOverlayId,
-    getRulerPersistenceEnabled: () => rulerPersistenceEnabled,
-    getSelectedRulerOverlayId: () => selectedRulerOverlayId,
-    persistCurrentRulers,
-    resolveTrendPointPrices,
-    setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
-    setPendingRulerOptions: (options) => { pendingRulerOptions = options },
-    setPendingRulerOverlayId: (id) => { pendingRulerOverlayId = id },
-    setRulerPersistenceEnabled: (enabled) => { rulerPersistenceEnabled = enabled },
-    setSelectedRulerOverlayId: (id) => { selectedRulerOverlayId = id },
-    rulerOverlayIds,
-  })
+  const handleRulerCommand = (command: DrawingToolCommand) => {
+    rulerTool?.handleCommand(command)
+  }
 
-  const handleFibCommand = createRulerToolCommandHandler({
-    chart,
-    createRulerOverlay: createFibOverlay,
-    getLastPointerPaneId,
-    getPendingRulerOptions: () => pendingFibOptions,
-    getPendingRulerOverlayId: () => pendingFibOverlayId,
-    getRulerPersistenceEnabled: () => fibRetracementPersistenceEnabled,
-    getSelectedRulerOverlayId: () => selectedFibOverlayId,
-    persistCurrentRulers: persistCurrentFibRetracements,
-    resolveTrendPointPrices,
-    setActiveObjectTreeOverlayId: (id) => { activeObjectTreeOverlayId = id },
-    setPendingRulerOptions: (options) => { pendingFibOptions = options },
-    setPendingRulerOverlayId: (id) => { pendingFibOverlayId = id },
-    setRulerPersistenceEnabled: (enabled) => { fibRetracementPersistenceEnabled = enabled },
-    setSelectedRulerOverlayId: (id) => { selectedFibOverlayId = id },
-    rulerOverlayIds: fibOverlayIds,
-    clearStoredDrawings: clearStoredFibRetracementDrawings,
-    tool: 'fibRetracement',
-  })
+  const handleFibCommand = (command: DrawingToolCommand) => {
+    fibTool?.handleCommand(command)
+  }
 
-  const handleStickerCommand = createStickerDrawingCommandHandler({
-    getPersistenceEnabled: () => emojiStickerPersistenceEnabled,
-    persist: persistCurrentEmojiStickers,
-    setPersistenceEnabled: (enabled) => { emojiStickerPersistenceEnabled = enabled },
-    stickerController,
-  })
+  const handleStickerCommand = (command: DrawingToolCommand) => {
+    stickerTool?.handleCommand(command)
+  }
 
   const handleCommand = (event: Event) => {
     routeChartDrawingCommand(event, {
@@ -909,16 +882,16 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     chart,
     clearFibSelection,
     clearHorizontalLineSelection,
-    clearStickerSelection: () => stickerController?.select(null),
+    clearStickerSelection: () => stickerTool?.select(null),
     clearTrendLineSelection,
-    emojiStickerOverlayIds: stickerController?.getOverlayIds(),
+    emojiStickerOverlayIds: stickerTool?.getOverlayIds(),
     fibOverlayIds,
     getActiveObjectTreeOverlayId: () => activeObjectTreeOverlayId,
     getSelectedOverlayId: () => selectedOverlayId,
     getSelectedRulerOverlayId: () => selectedRulerOverlayId,
     getSelectedTrendLineOverlayId: () => selectedTrendLineOverlayId,
-    getSelectedStickerOverlayId: () => stickerController?.getSelectedId() ?? null,
-    getSelectedStickerOverlayIds: () => stickerController?.getSelectedIds() ?? new Set(),
+    getSelectedStickerOverlayId: () => stickerTool?.getSelectedId() ?? null,
+    getSelectedStickerOverlayIds: () => stickerTool?.getSelectedIds() ?? new Set(),
     horizontalLineOverlayIds,
     isHorizontalLineVisibleInCurrentPeriod,
     isFibRetracementVisibleInCurrentPeriod,
@@ -948,7 +921,7 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
     setSelectedOverlayId: (id) => { selectedOverlayId = id },
     setSelectedRulerOverlayId: (id) => { selectedRulerOverlayId = id },
     setSelectedTrendLineOverlayId: (id) => { selectedTrendLineOverlayId = id },
-    setSelectedStickerOverlayId: (id, additive) => stickerController?.select(id, additive),
+    setSelectedStickerOverlayId: (id, additive) => stickerTool?.select(id, additive),
     toggleSelectedHorizontalLine,
     trendLineOverlayIds,
     updateOverlayState,
@@ -1012,13 +985,12 @@ export function installChartDrawingTools(chart: Chart, getPeriod: () => string =
   })
   return () => {
     destroyed = true
-    if (pendingOverlayId) chart.removeOverlay({ id: pendingOverlayId })
-    if (pendingTrendLineOverlayId) chart.removeOverlay({ id: pendingTrendLineOverlayId })
-    if (pendingRulerOverlayId) chart.removeOverlay({ id: pendingRulerOverlayId })
-    if (pendingFibOverlayId) chart.removeOverlay({ id: pendingFibOverlayId })
-    hidePendingTrendStartHandle()
+    horizontalLineTool?.cleanup()
+    trendLineTool?.cleanup()
+    rulerTool?.cleanup()
+    fibTool?.cleanup()
     morganRangeController?.cleanup()
-    stickerController?.cleanup()
+    stickerTool?.cleanup()
     symbolMarkerController?.clearAll()
     if (window.fractalFrameSymbolMarkers === symbolMarkerController) delete window.fractalFrameSymbolMarkers
     cleanupLifecycle()

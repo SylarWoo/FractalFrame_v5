@@ -61,6 +61,10 @@ function readSessionBreakVisible() {
   return readSettingsBooleanValue(chartSettingKeys.sessionBreakVisible, chartSettingDefaults.sessionBreakVisible)
 }
 
+function readSessionWeekBreakVisible() {
+  return readSettingsBooleanValue(chartSettingKeys.sessionWeekBreakVisible, chartSettingDefaults.sessionWeekBreakVisible)
+}
+
 function readRealtimeWindowSeparatorVisible() {
   return readSettingsBooleanValue(
     chartSettingKeys.realtimeWindowSeparatorVisible,
@@ -82,6 +86,11 @@ function resolveSessionDayKey(timestampMs: number, anchorMinuteUtc: number) {
   const timestampSeconds = Math.floor(timestampMs / 1000)
   const anchorSeconds = Math.max(0, Math.min(24 * 60 - 1, Math.trunc(anchorMinuteUtc))) * 60
   return Math.floor((timestampSeconds - anchorSeconds) / (24 * 60 * 60))
+}
+
+function resolveSessionBoundarySeconds(timestampMs: number, anchorMinuteUtc: number) {
+  const anchorSeconds = Math.max(0, Math.min(24 * 60 - 1, Math.trunc(anchorMinuteUtc))) * 60
+  return resolveSessionDayKey(timestampMs, anchorMinuteUtc) * 24 * 60 * 60 + anchorSeconds
 }
 
 function resolveRealTimestampMs(data: KLineData) {
@@ -128,19 +137,31 @@ export function isSessionBreakRow(previous: KLineData, current: KLineData, symbo
     !== resolveSessionDayKey(resolveRealTimestampMs(current), anchorMinuteUtc)
 }
 
+export function isSessionWeekBreakRow(previous: KLineData, current: KLineData, symbol: string) {
+  if (!isSessionBreakRow(previous, current, symbol)) return false
+  const anchorMinuteUtc = resolveSessionAnchorMinuteUtc(symbol)
+  const boundarySeconds = resolveSessionBoundarySeconds(resolveRealTimestampMs(current), anchorMinuteUtc)
+  const shanghaiWeekday = new Date((boundarySeconds + 8 * 60 * 60) * 1000).getUTCDay()
+  return shanghaiWeekday === 1
+}
+
 function collectSessionBreakCoordinates(
   kLineDataList: KLineData[],
   from: number,
   to: number,
   xAxis: IndicatorXAxisAdapter,
   symbol: string,
+  mode: 'day' | 'week',
 ) {
   const out: SessionBreakCoordinate[] = []
   for (let index = from; index <= to; index += 1) {
     if (index <= 0 || index >= kLineDataList.length) continue
     const previous = kLineDataList[index - 1]
     const current = kLineDataList[index]
-    if (!previous || !current || !isSessionBreakRow(previous, current, symbol)) continue
+    const matches = mode === 'week'
+      ? previous && current && isSessionWeekBreakRow(previous, current, symbol)
+      : previous && current && isSessionBreakRow(previous, current, symbol)
+    if (!matches) continue
     const rawX = typeof xAxis.convertToPixel === 'function' ? xAxis.convertToPixel(index) : Number.NaN
     if (!Number.isFinite(rawX)) continue
     out.push({
@@ -185,14 +206,17 @@ function ensureSessionBreakIndicatorRegistered() {
     shortName: 'Day-Line',
     calc: () => [],
     draw: ({ ctx, kLineDataList, indicator, visibleRange, bounding, xAxis }) => {
-      if (!readSessionBreakVisible() || kLineDataList.length < 2) return false
+      const weekVisible = readSessionWeekBreakVisible()
+      const dayVisible = readSessionBreakVisible()
+      const mode: 'day' | 'week' | null = weekVisible ? 'week' : dayVisible ? 'day' : null
+      if (!mode || kLineDataList.length < 2) return false
       const symbol = typeof indicator.extendData?.symbol === 'string' ? indicator.extendData.symbol : ''
       const period = typeof indicator.extendData?.period === 'string' ? indicator.extendData.period : ''
       const realtimeStart = typeof indicator.extendData?.realtimeStart === 'number' ? indicator.extendData.realtimeStart : null
       if (!shouldShowSessionBreaksForPeriod(period)) return false
 
       const state = readSettingsSymbolState()
-      const swatch = state['events.sessionBreak.color']
+      const swatch = state[mode === 'week' ? 'events.sessionWeekBreak.color' : 'events.sessionBreak.color']
       const color = resolveSwatchColor(swatch, '#93b7f4')
       const line = resolveLineStyle(swatch)
       const size = resolveLineThickness(swatch)
@@ -200,7 +224,7 @@ function ensureSessionBreakIndicatorRegistered() {
       const to = Math.min(kLineDataList.length - 1, Math.ceil(visibleRange.to) + 2)
       const coords = filterSessionBreakCoordinatesForRealtimeSeparator(
         filterCloseSessionBreakCoordinates(
-          collectSessionBreakCoordinates(kLineDataList, from, to, xAxis, symbol),
+          collectSessionBreakCoordinates(kLineDataList, from, to, xAxis, symbol, mode),
         ),
         readRealtimeWindowSeparatorVisible(),
         realtimeStart,
@@ -233,13 +257,14 @@ export function applySessionBreakIndicator(chart: Chart, symbol: string, period:
 } = {}) {
   ensureSessionBreakIndicatorRegistered()
   const visible = readSessionBreakVisible()
+  const weekVisible = readSessionWeekBreakVisible()
   const realtimeWindowSeparatorVisible = readRealtimeWindowSeparatorVisible()
   const normalizedRealtimeStart = normalizeTimestampSeconds(options.realtimeStart)
-  const signature = `${symbol}:${period}:${visible ? 'visible' : 'hidden'}:${realtimeWindowSeparatorVisible ? 'realtime-separator' : 'session-break-only'}:${normalizedRealtimeStart ?? 'no-realtime-start'}`
+  const signature = `${symbol}:${period}:${visible ? 'visible' : 'hidden'}:${weekVisible ? 'week-visible' : 'week-hidden'}:${realtimeWindowSeparatorVisible ? 'realtime-separator' : 'session-break-only'}:${normalizedRealtimeStart ?? 'no-realtime-start'}`
   if (appliedSessionBreakSignatures.get(chart) === signature) return
   appliedSessionBreakSignatures.set(chart, signature)
   chart.removeIndicator('candle_pane', sessionBreakIndicatorName)
-  if (visible) {
+  if (visible || weekVisible) {
     chart.createIndicator({
       name: sessionBreakIndicatorName,
       extendData: { period, realtimeStart: normalizedRealtimeStart, symbol },

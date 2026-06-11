@@ -196,7 +196,66 @@ describe('buildKLineChartRenderFrameV2', () => {
 
     expect(frame.mainRows.map((row) => row.timestamp)).toEqual([100_000, 400_000, 700_000])
     expect(frame.panes.MR_M5.rows).toEqual([
-      expect.objectContaining({ endIndex: 1, startIndex: 0, startTimestamp: 100_000 }),
+      expect.objectContaining({ endIndex: 0, startIndex: 0, startTimestamp: 100_000 }),
+      expect.objectContaining({ endIndex: 3, startIndex: 1, startTimestamp: 400_000 }),
+    ])
+  })
+
+  it('deduplicates Morgan Range history and realtime segments with the same start timestamp', () => {
+    const history = {
+      ...historyFrame(),
+      alignment: {
+        barKeyToDataIndex: new Map([['history:1', 0], ['history:2', 1]]),
+        dataIndexToBarKey: ['history:1', 'history:2'],
+        dataIndexToGlobalIndex: [1, 2],
+        dataIndexToTimestamp: [100_000, 400_000],
+        globalIndexToDataIndex: new Map([[1, 0], [2, 1]]),
+        timestampToDataIndex: new Map([[100_000, 0], [400_000, 1]]),
+      },
+      mainRows: [
+        { close: 1, high: 2, low: 0.5, open: 1, timestamp: 100_000, volume: 10 },
+        { close: 2, high: 3, low: 1.5, open: 2, timestamp: 400_000, volume: 20 },
+      ],
+      panes: {
+        MR_M30: {
+          key: 'history-mr',
+          paneId: 'main-morgan-range-m30-overlay',
+          paneRole: 'main' as const,
+          renderRole: 'main-overlay' as const,
+          rows: [mrSegment(1, 2, 400_000)],
+          source: 'history-page-kline-chart-pane-frame-v2' as const,
+        },
+      },
+    }
+    const realtime = {
+      ...realtimeFrameWithRows(),
+      alignment: {
+        barKeyToDataIndex: new Map([['realtime:1', 0], ['realtime:2', 1]]),
+        dataIndexToBarKey: ['realtime:1', 'realtime:2'],
+        dataIndexToGlobalIndex: [null, null],
+        dataIndexToTimestamp: [400_000, 700_000],
+        globalIndexToDataIndex: new Map(),
+        timestampToDataIndex: new Map([[400_000, 0], [700_000, 1]]),
+      },
+      mainRows: [
+        { close: 4, high: 5, low: 3, open: 4, timestamp: 400_000, volume: 40 },
+        { close: 7, high: 8, low: 6, open: 7, timestamp: 700_000, volume: 70 },
+      ],
+      panes: {
+        MR_M30: {
+          key: 'realtime-mr',
+          paneId: 'main-morgan-range-m30-overlay',
+          paneRole: 'main' as const,
+          renderRole: 'main-overlay' as const,
+          rows: [mrSegment(0, 2, 400_000)],
+          source: 'realtime-page-kline-chart-pane-frame-v2' as const,
+        },
+      },
+    }
+
+    const frame = buildKLineChartRenderFrameV2(history, realtime)
+
+    expect(frame.panes.MR_M30.rows).toEqual([
       expect.objectContaining({ endIndex: 3, startIndex: 1, startTimestamp: 400_000 }),
     ])
   })

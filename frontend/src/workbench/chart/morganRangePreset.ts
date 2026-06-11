@@ -8,10 +8,10 @@ const fibRetracementStyleStorageKey = 'fractalframe.drawingsDrawer.fibRetracemen
 const defaultLevels = [
   { color: '#787b86', enabled: true, opacity: 1, value: '0' },
   { color: '#f23645', enabled: true, opacity: 1, value: '0.236' },
-  { color: '#ff9800', enabled: true, opacity: 1, value: '0.382' },
+  { color: '#81c784', enabled: true, opacity: 1, value: '0.382' },
   { color: '#4caf50', enabled: true, opacity: 1, value: '0.5' },
-  { color: '#089981', enabled: true, opacity: 1, value: '0.618' },
-  { color: '#2962ff', enabled: true, opacity: 1, value: '0.786' },
+  { color: '#009688', enabled: true, opacity: 1, value: '0.618' },
+  { color: '#64b5f6', enabled: true, opacity: 1, value: '0.786' },
   { color: '#787b86', enabled: true, opacity: 1, value: '1' },
   { color: '#90caf9', enabled: false, opacity: 1, value: '1.618' },
 ]

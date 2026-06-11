@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { KLineData } from 'klinecharts'
-import { filterSessionBreakCoordinatesForRealtimeSeparator, isSessionBreakRow } from './sessionBreakIndicator'
+import { filterSessionBreakCoordinatesForRealtimeSeparator, isSessionBreakRow, isSessionWeekBreakRow } from './sessionBreakIndicator'
 
 type TestSessionBreakRow = KLineData & {
   tradingDay?: string
@@ -53,6 +53,24 @@ describe('isSessionBreakRow', () => {
       row(Date.UTC(2026, 0, 1, 22, 0)),
       'BTCUSDm',
     )).toBe(true)
+  })
+})
+
+describe('isSessionWeekBreakRow', () => {
+  it('marks the Monday 06:00 Shanghai session boundary as a weekly break', () => {
+    expect(isSessionWeekBreakRow(
+      row(Date.UTC(2026, 4, 31, 21, 55)),
+      row(Date.UTC(2026, 4, 31, 22, 0)),
+      'XAUUSDm',
+    )).toBe(true)
+  })
+
+  it('does not mark a non-Monday 06:00 Shanghai session boundary as a weekly break', () => {
+    expect(isSessionWeekBreakRow(
+      row(Date.UTC(2026, 5, 1, 21, 55)),
+      row(Date.UTC(2026, 5, 1, 22, 0)),
+      'XAUUSDm',
+    )).toBe(false)
   })
 })
 

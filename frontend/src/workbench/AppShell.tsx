@@ -8,6 +8,7 @@ import {
   storeV6MmfV3IndicatorIdV2,
   storeV6MorganRangeM5RequestIdV2,
   storeV6MorganRangeM30RequestIdV2,
+  storeV6MorganRangeH2RequestIdV2,
   storeV6StochIndicatorIdV2,
   storeV6TsiIndicatorIdV2,
   storeV6VdoIndicatorIdV2,
@@ -64,7 +65,7 @@ import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
 import { formatChartLoadStatus } from './mt5DataCenter/storeV6StatusFormat'
 import { readBooleanFlag, readJson, readString, removeStorageItem, writeBooleanFlag, writeJson, writeString } from './persistence/jsonStorage'
 import { storageKeys } from './persistence/storageKeys'
-import { readSettingsBooleanValue, readSettingsStringValue, settingsSymbolChangedEvent } from './settingsSymbolState'
+import { readSettingsBooleanValue, readSettingsStringValue, settingsSymbolChangedEvent, setSettingsSymbolStatePeriod } from './settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from './settings/chartSettingsSchema'
 import { TopBar } from './topbar/TopBar'
 import { visibilityRangeChangedEvent } from './visibilityRange/visibilityRangeModel'
@@ -124,6 +125,7 @@ const indicatorShortcutLabels: Record<string, string> = {
   MMF_V3: 'MMF v3 - 日内交易系统',
   'MR-M5': '\u6469\u6839\u533a\u95f4_5\u5206\u949f',
   'MR-M30': '\u6469\u6839\u533a\u95f4_30\u5206\u949f',
+  'MR-H2': '\u6469\u6839\u533a\u95f4_2\u5c0f\u65f6',
   VWAP: '成交量加权平均价',
   Vol: '成交量',
 }
@@ -217,7 +219,7 @@ function periodToChartPeriod(period: string) {
 
 function isIsolatedChartPeriod(period: string | null | undefined) {
   const mode = resolveStoreV6PagePartitionMode(period)
-  return mode === 'm5-time' || mode === 'm30-time' || !hasStoreV6PeriodPageSystemV2(period)
+  return mode === 'm5-time' || mode === 'm30-time' || mode === 'h2-time' || !hasStoreV6PeriodPageSystemV2(period)
 }
 
 function createBlankChartTarget(symbol: string, period: string) {
@@ -330,6 +332,7 @@ export function AppShell() {
   const [strategyPersistenceEnabled, setStrategyPersistenceEnabled] = useState(readInitialStrategyPersistenceEnabled)
   const [loadedStrategyKeys, setLoadedStrategyKeys] = useState<string[]>(readInitialLoadedStrategyKeys)
   const [chartTarget, setChartTarget] = useState<ChartTarget>(readInitialChartTarget)
+  setSettingsSymbolStatePeriod(chartTarget.period)
   const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
   const indicatorsController = useIndicatorsController({
     chartLoadState,
@@ -348,11 +351,15 @@ export function AppShell() {
     const normalizedChartPeriod = chartTarget.period.trim().toUpperCase()
     const currentPeriodMorganRangeRequestId = normalizedChartPeriod === 'M30'
       ? storeV6MorganRangeM30RequestIdV2
+      : normalizedChartPeriod === 'H2'
+        ? storeV6MorganRangeH2RequestIdV2
       : normalizedChartPeriod === 'M5'
         ? storeV6MorganRangeM5RequestIdV2
         : null
     const currentPeriodMorganRangeLoaded = normalizedChartPeriod === 'M30'
       ? loadedIndicatorKeys.includes('MR-M30')
+      : normalizedChartPeriod === 'H2'
+        ? loadedIndicatorKeys.includes('MR-H2')
       : normalizedChartPeriod === 'M5'
         ? loadedIndicatorKeys.includes('MR-M5')
         : false
@@ -367,7 +374,11 @@ export function AppShell() {
         id: storeV6MmfV3IndicatorIdV2,
         params: {
           maSettings: indicatorsController.settings.ma,
-          morganRangeMode: normalizedChartPeriod === 'M30' && loadedIndicatorKeys.includes('MR-M30') ? 'D1_M30' : 'H4_M5',
+          morganRangeMode: normalizedChartPeriod === 'H2' && loadedIndicatorKeys.includes('MR-H2')
+            ? 'D5_H2'
+            : normalizedChartPeriod === 'M30' && loadedIndicatorKeys.includes('MR-M30')
+              ? 'D1_M30'
+              : 'H4_M5',
           settings: indicatorsController.settings.mmfV3,
           stochSettings: indicatorsController.settings.stoch,
           tsiSettings: indicatorsController.settings.tsi,
@@ -378,9 +389,14 @@ export function AppShell() {
       })
     }
     if (currentPeriodMorganRangeLoaded && currentPeriodMorganRangeRequestId) {
+      const currentPeriodMorganRangeSettings = normalizedChartPeriod === 'H2'
+        ? indicatorsController.settings.mrH2
+        : normalizedChartPeriod === 'M30'
+          ? indicatorsController.settings.mrM30
+          : indicatorsController.settings.mr
       requests.push({
         id: currentPeriodMorganRangeRequestId,
-        params: indicatorsController.settings.mr,
+        params: currentPeriodMorganRangeSettings,
       })
     }
     if (loadedIndicatorKeys.includes('Vol')) {
@@ -420,7 +436,7 @@ export function AppShell() {
       })
     }
     return requests
-  }, [chartTarget.period, indicatorsController.settings.ma, indicatorsController.settings.mmfV3, indicatorsController.settings.mr, indicatorsController.settings.stoch, indicatorsController.settings.tsi, indicatorsController.settings.vdo, indicatorsController.settings.vmi, indicatorsController.settings.vol, indicatorsController.settings.vwap, loadedIndicatorKeys])
+  }, [chartTarget.period, indicatorsController.settings.ma, indicatorsController.settings.mmfV3, indicatorsController.settings.mr, indicatorsController.settings.mrM30, indicatorsController.settings.mrH2, indicatorsController.settings.stoch, indicatorsController.settings.tsi, indicatorsController.settings.vdo, indicatorsController.settings.vmi, indicatorsController.settings.vol, indicatorsController.settings.vwap, loadedIndicatorKeys])
   const chartWorkspaceTarget = useMemo(() => ({
     ...chartTarget,
     indicatorRequests: chartIndicatorRequestsV2,
@@ -489,6 +505,11 @@ export function AppShell() {
   useEffect(() => {
     writeString(storageKeys.rightWidgetDrawerWidthPx, String(rightDrawerWidth))
   }, [rightDrawerWidth])
+
+  useEffect(() => {
+    setSettingsSymbolStatePeriod(chartTarget.period)
+    window.dispatchEvent(new Event(settingsSymbolChangedEvent))
+  }, [chartTarget.period])
 
   useEffect(() => {
     writeJson(storageKeys.indicatorShortcutKeys, indicatorShortcutKeys)
@@ -642,7 +663,7 @@ export function AppShell() {
   }
 
   function handleToggleIndicatorShortcutLoad(name: string) {
-    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF_V3' && name !== 'MR-M5' && name !== 'MR-M30' && name !== 'RSI' && name !== 'SQZMOM' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'AO' && name !== 'VMI' && name !== 'VWAP' && name !== 'Vol') return
+    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF_V3' && name !== 'MR-M5' && name !== 'MR-M30' && name !== 'MR-H2' && name !== 'RSI' && name !== 'SQZMOM' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'AO' && name !== 'VMI' && name !== 'VWAP' && name !== 'Vol') return
     if (loadedIndicatorKeys.includes(name)) {
       indicatorsController.unloadIndicator(name)
       return

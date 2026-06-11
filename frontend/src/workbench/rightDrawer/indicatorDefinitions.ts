@@ -14,6 +14,7 @@ export const indicatorRows = [
   { key: 'MA', name: '移动均线', type: '主图指标', description: 'Moving Average' },
   { key: 'MR-M5', name: '\u6469\u6839\u533a\u95f4_5\u5206\u949f', type: '\u4e3b\u56fe\u6307\u6807', description: 'Morgan Range H4-M5' },
   { key: 'MR-M30', name: '\u6469\u6839\u533a\u95f4_30\u5206\u949f', type: '\u4e3b\u56fe\u6307\u6807', description: 'Morgan Range D1-M30' },
+  { key: 'MR-H2', name: '\u6469\u6839\u533a\u95f4_2\u5c0f\u65f6', type: '\u4e3b\u56fe\u6307\u6807', description: 'Morgan Range D5-H2' },
   { key: 'MMF_V3', name: 'MMF v3 - 日内交易系统', type: '主图指标', description: 'Morgan Momentum Fractal v3' },
   { key: 'VWAP', name: '成交量加权平均价', type: '主图指标', description: 'Volume Weighted Average Price' },
   { key: 'Vol', name: '成交量', type: '主图指标', description: 'MT5 tick volume' },

@@ -1,16 +1,33 @@
-import { readJson, writeJsonObjectValue } from './persistence/jsonStorage'
+import { readJson } from './persistence/jsonStorage'
+import { readPeriodUiState, writePeriodUiState } from './persistence/periodUiStateStorage'
 import { storageKeys } from './persistence/storageKeys'
 import { dispatchWorkbenchEvent, workbenchEvents } from './persistence/workbenchEvents'
 
 export const settingsSymbolStorageKey = storageKeys.settingsSymbolPanel
 export const settingsSymbolChangedEvent = workbenchEvents.settingsSymbolChanged
+let activeSettingsPeriod = 'M5'
+
+function normalizePeriod(value: string | null | undefined) {
+  return String(value || 'M5').trim().toUpperCase() || 'M5'
+}
+
+export function setSettingsSymbolStatePeriod(period: string | null | undefined) {
+  activeSettingsPeriod = normalizePeriod(period)
+}
 
 export function readSettingsSymbolState(): Record<string, unknown> {
-  return readJson<Record<string, unknown>>(settingsSymbolStorageKey, {})
+  return readPeriodUiState<Record<string, unknown>>(
+    'settings',
+    activeSettingsPeriod,
+    readJson<Record<string, unknown>>(settingsSymbolStorageKey, {}),
+  )
 }
 
 export function writeSettingsSymbolStateValue(key: string, value: unknown) {
-  writeJsonObjectValue(settingsSymbolStorageKey, key, value)
+  writePeriodUiState('settings', activeSettingsPeriod, {
+    ...readSettingsSymbolState(),
+    [key]: value,
+  })
   dispatchWorkbenchEvent(settingsSymbolChangedEvent)
 }
 

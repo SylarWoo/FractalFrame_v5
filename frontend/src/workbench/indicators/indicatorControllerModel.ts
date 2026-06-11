@@ -1,4 +1,4 @@
-import type { ChartIndicatorCommand } from '../chart/ChartCoreHost'
+import type { ChartIndicatorCommand } from '../chart/chartRuntimeTypes'
 import type { SupportedChartIndicator } from '../rightDrawer/indicatorDefinitions'
 import type {
   DpoIndicatorSettings,
@@ -56,7 +56,8 @@ export const indicatorControllerDefinitions = [
   { key: 'VI', stateField: 'vi' },
   { key: 'MA', stateField: 'ma' },
   { key: 'MR-M5', stateField: 'mr' },
-  { key: 'MR-M30', stateField: 'mr' },
+  { key: 'MR-M30', stateField: 'mrM30' },
+  { key: 'MR-H2', stateField: 'mrH2' },
   { key: 'MMF_V3', stateField: 'mmfV3' },
   { key: 'VWAP', stateField: 'vwap' },
   { key: 'Vol', stateField: 'vol' },

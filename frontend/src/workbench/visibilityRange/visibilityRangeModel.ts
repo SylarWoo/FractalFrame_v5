@@ -75,7 +75,7 @@ export function visibilityRangeStorageKey(key?: string) {
 
 export function readVisibilityRangeRows(key?: string) {
   const resolvedKey = visibilityRangeStorageKey(key)
-  const fallbackRows = key === 'indicator:MR-M5' || key === 'indicator:MR-M30'
+  const fallbackRows = key === 'indicator:MR-M5' || key === 'indicator:MR-M30' || key === 'indicator:MR-H2'
     ? mrVisibilityRangeRows
     : key === 'indicator:MMF_V2'
       ? mmfV2VisibilityRangeRows

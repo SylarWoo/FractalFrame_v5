@@ -39,6 +39,47 @@ describe('calculateTradingViewVwapRows', () => {
     expect(rows.map((item) => item.vwap)).toEqual([100, 200, 250])
   })
 
+  it('resets monthly VWAP at the Shanghai 06:00 month boundary when the month opens on Monday for gold', () => {
+    const rows = calculateTradingViewVwapRows(
+      [
+        row(Date.UTC(2026, 4, 31, 21), 100),
+        row(Date.UTC(2026, 4, 31, 22), 200),
+        row(Date.UTC(2026, 4, 31, 23), 300),
+      ],
+      { anchorPeriod: 'month', source: 'close', symbol: 'XAUUSDm' },
+    )
+
+    expect(rows.map((item) => item.vwap)).toEqual([100, 200, 250])
+  })
+
+  it('delays gold monthly VWAP reset to the first Monday 06:00 boundary when month open is not Monday', () => {
+    const rows = calculateTradingViewVwapRows(
+      [
+        row(Date.UTC(2026, 3, 30, 21), 100),
+        row(Date.UTC(2026, 3, 30, 22), 200),
+        row(Date.UTC(2026, 4, 3, 21), 300),
+        row(Date.UTC(2026, 4, 3, 22), 400),
+        row(Date.UTC(2026, 4, 3, 23), 500),
+      ],
+      { anchorPeriod: 'month', source: 'close', symbol: 'XAUUSDm' },
+    )
+
+    expect(rows.map((item) => item.vwap)).toEqual([100, 150, 200, 400, 450])
+  })
+
+  it('keeps crypto monthly VWAP anchored to UTC midnight', () => {
+    const rows = calculateTradingViewVwapRows(
+      [
+        row(Date.UTC(2026, 4, 31, 23), 100),
+        row(Date.UTC(2026, 5, 1, 0), 200),
+        row(Date.UTC(2026, 5, 1, 1), 300),
+      ],
+      { anchorPeriod: 'month', source: 'close', symbol: 'BTCUSDm' },
+    )
+
+    expect(rows.map((item) => item.vwap)).toEqual([100, 200, 250])
+  })
+
   it('uses StoreV6 tradingDay as the authoritative session boundary', () => {
     const rows = calculateTradingViewVwapRows(
       [

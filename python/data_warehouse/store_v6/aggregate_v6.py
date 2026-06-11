@@ -15,7 +15,7 @@ from .schema_v6 import AGGREGATED_COLUMNS, bar_key, normalize_period
 from .symbol_sessions_v6 import annotate_time_with_session_rule, read_symbol_session_rule_v6
 from .writer_v6 import append_frame_v6
 
-SUPPORTED_AGGREGATE_PERIODS = ["M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN"]
+SUPPORTED_AGGREGATE_PERIODS = ["M5", "M15", "M30", "H1", "H2", "H4", "D1", "W1", "MN"]
 
 
 def _clean_m1_files(root: Path, symbol: str) -> list[str]:

@@ -82,7 +82,7 @@ function createPaneRowsByTimestamp(frame: KLineChartHistoryFrame | KLineChartRea
 }
 
 function isMorganRangePane(name: string) {
-  return name === 'MR_M5' || name === 'MR_M30'
+  return name === 'MR_M5' || name === 'MR_M30' || name === 'MR_H2'
 }
 
 function translateMorganRangeSegments(
@@ -112,6 +112,30 @@ function translateMorganRangeSegments(
   }).filter((segment): segment is MorganRangeSegment => segment != null)
 }
 
+function mergeMorganRangeSegmentsForRender(rows: MorganRangeSegment[]) {
+  const byStartTimestamp = new Map<number, MorganRangeSegment>()
+  rows.forEach((segment) => {
+    const startTimestamp = Number(segment.startTimestamp)
+    if (Number.isFinite(startTimestamp)) byStartTimestamp.set(startTimestamp, segment)
+  })
+  return [...byStartTimestamp.values()]
+    .sort((left, right) => Number(left.startIndex) - Number(right.startIndex) || Number(left.startTimestamp) - Number(right.startTimestamp))
+    .map((segment, index, segments) => {
+      const next = segments[index + 1]
+      if (!next) return segment
+      const nextStartIndex = Math.max(0, Math.round(Number(next.startIndex)))
+      const startIndex = Math.max(0, Math.round(Number(segment.startIndex)))
+      const endIndex = Math.min(Math.round(Number(segment.endIndex)), Math.max(startIndex, nextStartIndex - 1))
+      return {
+        ...segment,
+        endIndex,
+        endTimestamp: Number.isFinite(next.startTimestamp) && endIndex < Number(segment.endIndex)
+          ? Number(next.startTimestamp)
+          : segment.endTimestamp,
+      }
+    })
+}
+
 function mergePanes(
   historyFrame: KLineChartHistoryFrame,
   realtimeFrame: KLineChartRealtimeFrame | null | undefined,
@@ -136,10 +160,10 @@ function mergePanes(
         paneId: realtimePane?.paneId ?? historyPane?.paneId,
         paneRole: realtimePane?.paneRole ?? historyPane?.paneRole,
         renderRole: realtimePane?.renderRole ?? historyPane?.renderRole,
-        rows: [
+        rows: mergeMorganRangeSegmentsForRender([
           ...translateMorganRangeSegments(historyFrame, historyPane, finalTimestampToDataIndex),
           ...(realtimeFrame ? translateMorganRangeSegments(realtimeFrame, realtimePane, finalTimestampToDataIndex) : []),
-        ],
+        ]),
         settings: realtimePane?.settings ?? historyPane?.settings,
         source: 'kline-chart-render-pane-frame-v2',
       }

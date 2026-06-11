@@ -18,7 +18,7 @@ from .store_v6_daily_maintenance_log import (
     update_ledger as update_maintenance_ledger,
 )
 
-AGGREGATE_TIMEFRAMES_DEFAULT = ["M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN"]
+AGGREGATE_TIMEFRAMES_DEFAULT = ["M5", "M15", "M30", "H1", "H2", "H4", "D1", "W1", "MN"]
 MAINTENANCE_TIMEZONE = ZoneInfo("Asia/Shanghai")
 MAINTENANCE_HOUR = 6
 RUNNING_TIMEOUT_SECONDS = 6 * 60 * 60

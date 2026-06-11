@@ -26,9 +26,10 @@ type PixelAxis = {
 
 const registered = new Set<string>()
 
-export type TradingViewMrIndicatorName = 'MR_M5' | 'MR_M30'
+export type TradingViewMrIndicatorName = 'MR_M5' | 'MR_M30' | 'MR_H2'
 
-export function resolveTradingViewMrIndicatorName(name: 'MR-M5' | 'MR-M30'): TradingViewMrIndicatorName {
+export function resolveTradingViewMrIndicatorName(name: 'MR-M5' | 'MR-M30' | 'MR-H2'): TradingViewMrIndicatorName {
+  if (name === 'MR-H2') return 'MR_H2'
   return name === 'MR-M30' ? 'MR_M30' : 'MR_M5'
 }
 

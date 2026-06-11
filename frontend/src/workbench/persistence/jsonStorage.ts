@@ -1,6 +1,9 @@
 const persistentStateEndpoint = '/__fractalframe_persistent_state'
 const devStateCache = new Map<string, unknown>()
 const devStateLoadedKeys = new Set<string>()
+const localToDevMigrationKeys = new Set([
+  'fractalframe.drawingsDrawer.fibRetracementStyle',
+])
 
 function readDevState(key: string): unknown {
   if (devStateCache.has(key)) return devStateCache.get(key)
@@ -87,7 +90,13 @@ function resolvePersistentStateEndpoint() {
 export function readJson<T>(key: string, fallback: T): T {
   try {
     const raw = window.localStorage.getItem(key)
-    if (raw) return JSON.parse(raw) as T
+    if (raw) {
+      const value = JSON.parse(raw) as T
+      if (localToDevMigrationKeys.has(key) && !devStateLoadedKeys.has(key)) {
+        writeDevState(key, value)
+      }
+      return value
+    }
   } catch {
     return fallback
   }
@@ -174,12 +183,8 @@ export function removeStorageItem(key: string) {
 }
 
 export function readBooleanFlag(key: string, fallback = false) {
-  try {
-    const raw = window.localStorage.getItem(key)
-    return raw == null ? fallback : raw === '1'
-  } catch {
-    return fallback
-  }
+  const raw = readString(key, fallback ? '1' : '0')
+  return raw === '1'
 }
 
 export function writeBooleanFlag(key: string, value: boolean) {

@@ -24,6 +24,7 @@ import { installKLineChartOverlayControllerV2 } from './klineChartOverlayControl
 import { applyKLineChartFrameUpdateV2 } from './klineChartFrameApplyControllerV2'
 import { ensureKLineChartInteractionStateV2, kLineChartHorizontalDragEndEventV2 } from './klineChartInteractionStateV2'
 import { installKLineChartBenchmarkV2 } from './klineChartBenchmarkV2'
+import { installChartDrawingModule } from '../chartDrawingModule'
 import './klineChartHostV2.css'
 
 declare global {
@@ -61,6 +62,7 @@ export function KLineChartHostV2({
   const renderStateControllerRef = useRef<ReturnType<typeof createKLineChartRenderStateControllerV2> | null>(null)
   const viewportStateRef = useRef<ReturnType<typeof installKLineChartViewportStateV2> | null>(null)
   const benchmarkRef = useRef<ReturnType<typeof installKLineChartBenchmarkV2> | null>(null)
+  const drawingModuleRef = useRef<ReturnType<typeof installChartDrawingModule> | null>(null)
   const chartDragInProgressRef = useRef(false)
   const realtimeVisualOpen = Boolean(frame.segments.realtime)
   const displayContextRef = useRef({
@@ -128,6 +130,14 @@ export function KLineChartHostV2({
       }))
       renderStateControllerRef.current = createKLineChartRenderStateControllerV2(chart, () => viewportStateRef.current)
       benchmarkRef.current = installKLineChartBenchmarkV2(chart, () => previousFrameRef.current ?? frame)
+      drawingModuleRef.current = installChartDrawingModule({
+        chart,
+        initialContext: {
+          period: displayContextRef.current.period,
+          symbol: displayContextRef.current.symbol,
+          viewportScope: displayContextRef.current.viewportScope,
+        },
+      })
     }
 
     let resizeFrameId = 0
@@ -197,6 +207,8 @@ export function KLineChartHostV2({
       viewportStateRef.current = null
       benchmarkRef.current?.destroy()
       benchmarkRef.current = null
+      drawingModuleRef.current?.destroy()
+      drawingModuleRef.current = null
       renderStateControllerRef.current = null
       chartInstanceRef.current = null
       if (import.meta.env.DEV) window.__ffKLineChartV2 = null
@@ -209,6 +221,11 @@ export function KLineChartHostV2({
     if (!chart) return
     displayControllerRef.current?.updateContext(displayContextRef.current)
     overlayControllerRef.current?.updateDisplayContext()
+    drawingModuleRef.current?.updateContext({
+      period: frame.period,
+      symbol: frame.symbol,
+      viewportScope: displayContextRef.current.viewportScope,
+    })
   }, [displayName, frame.period, frame.symbol, pageNavigation?.realtimeStart, realtimeVisualOpen])
 
   useEffect(() => {

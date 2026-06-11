@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createPageDataSliceFromDisplayRows } from '../pageData/pageDataProvider'
+import { createPageDataSliceFromDisplayRows } from '../../pageData/pageDataProvider'
 import { createChartPageWindow } from './chartPageWindow'
 
 describe('createChartPageWindow', () => {

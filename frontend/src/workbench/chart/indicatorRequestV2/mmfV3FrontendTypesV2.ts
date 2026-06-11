@@ -10,7 +10,7 @@ import type {
 
 export type MmfV3NormalizedContextV2 = {
   maSettings: MaIndicatorSettings
-  morganRangeMode: 'D1_M30' | 'H4_M5'
+  morganRangeMode: 'D1_M30' | 'D5_H2' | 'H4_M5'
   period: string
   settings: MmfIndicatorSettings
   stochSettings: StochIndicatorSettings

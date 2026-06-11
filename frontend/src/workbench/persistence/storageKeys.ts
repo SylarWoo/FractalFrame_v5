@@ -1,6 +1,7 @@
 export const storageKeys = {
   bottomDrawerHeightPx: 'fractalframe:bottomDrawerHeightPx:v1',
   bottomDrawerOpen: 'fractalframe:bottomDrawerOpen:v1',
+  chartColorPaletteCustomColors: 'ffChartColorPaletteCustomColorsV1',
   importCenterColumnWidthsPx: 'fractalframe:mt5ImportCenterColumnWidthsPx:v1',
   importCenterM1CheckResults: 'fractalframe:mt5ImportCenterM1CheckResults:v1',
   importCenterQuery: 'fractalframe:mt5ImportCenterQuery:v1',
@@ -27,6 +28,8 @@ export const storageKeys = {
   realtimePageTableHeightPx: 'fractalframe:chartRealtimePageTableHeightPx:v1',
   realtimePageIndexCache: 'fractalframe:chartRealtimePageIndexCache:v1',
   realtimePageLastResetCache: 'fractalframe:chartRealtimePageLastResetCache:v1',
+  realtimeStablePage: 'fractalframe:klinechart-v2:realtimeStablePage:v1',
+  realtimeTailRuntime: 'fractalframe:klinechart-v2:realtimeTailRuntime:v1',
   indicatorShortcutKeys: 'fractalframe:indicatorShortcutKeys:v1',
   strategyLoadedKeys: 'fractalframe:strategyLoadedKeys:v1',
   strategyDrawerActiveTab: 'fractalframe:strategyDrawerActiveTab:v1',

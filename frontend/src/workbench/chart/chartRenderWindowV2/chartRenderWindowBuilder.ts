@@ -130,7 +130,7 @@ function mergeIndicatorSeries(
 }
 
 function isMorganRangeSeriesName(name: string) {
-  return name === 'MR_M5' || name === 'MR_M30'
+  return name === 'MR_M5' || name === 'MR_M30' || name === 'MR_H2'
 }
 
 function isMorganRangeSegment(row: unknown): row is MorganRangeSegment {
@@ -180,6 +180,31 @@ function translateMorganRangeRowsToRenderWindow(
     .filter((segment): segment is MorganRangeSegment => segment != null)
 }
 
+function mergeMorganRangeSegmentsForRender(rows: MorganRangeSegment[]) {
+  const byStartTimestamp = new Map<number, MorganRangeSegment>()
+  rows.forEach((segment) => {
+    const startTimestamp = finiteNumber(segment.startTimestamp)
+    if (startTimestamp == null) return
+    byStartTimestamp.set(startTimestamp, segment)
+  })
+  return [...byStartTimestamp.values()]
+    .sort((left, right) => Number(left.startIndex) - Number(right.startIndex) || Number(left.startTimestamp) - Number(right.startTimestamp))
+    .map((segment, index, segments) => {
+      const next = segments[index + 1]
+      if (!next) return segment
+      const nextStartIndex = Math.max(0, Math.round(Number(next.startIndex)))
+      const startIndex = Math.max(0, Math.round(Number(segment.startIndex)))
+      const endIndex = Math.min(Math.round(Number(segment.endIndex)), Math.max(startIndex, nextStartIndex - 1))
+      return {
+        ...segment,
+        endIndex,
+        endTimestamp: Number.isFinite(next.startTimestamp) && endIndex < Number(segment.endIndex)
+          ? Number(next.startTimestamp)
+          : segment.endTimestamp,
+      }
+    })
+}
+
 function mergeIndicators(
   historyIndicators: StoreV6HistoryPageWindowIndicators,
   realtimeIndicators: StoreV6HistoryPageWindowIndicators | null | undefined,
@@ -195,10 +220,10 @@ function mergeIndicators(
   Object.entries(realtimeIndicators).forEach(([name, series]) => {
     if (isMorganRangeSeriesName(name)) {
       const historySeries = indicators[name]
-      const rows = [
+      const rows = mergeMorganRangeSegmentsForRender([
         ...translateMorganRangeRowsToRenderWindow(historySeries, options.historyRows, finalTimestampToDataIndex),
         ...translateMorganRangeRowsToRenderWindow(series, options.realtimeRows, finalTimestampToDataIndex),
-      ]
+      ])
       indicators[name] = {
         ...(historySeries ?? series),
         displayRows: rows,

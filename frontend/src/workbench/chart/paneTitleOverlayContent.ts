@@ -414,7 +414,9 @@ function createCandleMrParts(chart: Chart) {
   const mrM5 = indicatorFromChart(chart, 'candle_pane', 'MR_M5')
   if (mrM5) return [titlePart('MR-M5')]
   const mrM30 = indicatorFromChart(chart, 'candle_pane', 'MR_M30')
-  return mrM30 ? [titlePart('MR-M30')] : []
+  if (mrM30) return [titlePart('MR-M30')]
+  const mrH2 = indicatorFromChart(chart, 'candle_pane', 'MR_H2')
+  return mrH2 ? [titlePart('MR-H2')] : []
 }
 
 function createCandleVolParts(chart: Chart, crosshairIndex: number | null) {
@@ -470,11 +472,13 @@ export function createPaneTitleLines(chart: Chart, spec: TitlePaneSpec, context:
 
 export function readCrosshairDataIndex(payload: unknown) {
   if (!isRecord(payload)) return null
+  const crosshair = payload.crosshair
+  if (isRecord(crosshair)) {
+    const nested = numberValue(crosshair.dataIndex)
+    if (nested != null) return Math.round(nested)
+  }
   const direct = numberValue(payload.dataIndex)
   if (direct != null) return Math.round(direct)
-  const crosshair = payload.crosshair
-  if (!isRecord(crosshair)) return null
-  const nested = numberValue(crosshair.dataIndex)
-  return nested == null ? null : Math.round(nested)
+  return null
 }
 

@@ -1,4 +1,4 @@
-﻿import type { ChartLoadState } from '../chart/ChartCoreHost'
+﻿import type { ChartLoadState } from '../chart/chartRuntimeTypes'
 import type { Mt5M1CheckJobPayload, Mt5SymbolRow, StoreV6AggregateJobPayload, StoreV6CheckPayload, StoreV6PullJobPayload } from '../../services/mt5/mt5SymbolsApi'
 
 export type StoreTableRow = {

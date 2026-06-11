@@ -38,6 +38,7 @@ export type StoreV6RealtimePageWindowRequest = {
 
 export type Mt5RealtimeWindowTick = {
   ask?: number | null
+  barVolume?: number | null
   bid?: number | null
   last?: number | null
   symbol: string

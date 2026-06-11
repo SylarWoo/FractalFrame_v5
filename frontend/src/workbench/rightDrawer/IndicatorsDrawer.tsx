@@ -119,11 +119,15 @@ export function IndicatorsDrawer({ indicatorShortcutKeys, indicatorsController, 
               maSettings={indicatorsController.settings.ma}
               mmfV3Settings={indicatorsController.settings.mmfV3}
               morganRangeSegment={morganRangeSegment}
+              mrH2Settings={indicatorsController.settings.mrH2}
+              mrM30Settings={indicatorsController.settings.mrM30}
               mrSettings={indicatorsController.settings.mr}
               onDpoSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('DPO', settings)}
               onMacdSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MACD', settings)}
               onMaSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MA', settings)}
               onMmfV3SettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MMF_V3', settings)}
+              onMrH2SettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MR-H2', settings)}
+              onMrM30SettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MR-M30', settings)}
               onMrSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('MR-M5', settings)}
               onSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('RSI', settings)}
               onSqzmomSettingsChange={(settings) => indicatorsController.updateIndicatorSettings('SQZMOM', settings)}

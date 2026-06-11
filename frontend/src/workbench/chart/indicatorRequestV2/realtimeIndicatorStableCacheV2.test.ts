@@ -11,6 +11,9 @@ import {
   storeV6MorganRangeM30IndicatorDefinitionV2,
   storeV6MorganRangeM30IndicatorIdV2,
   storeV6MorganRangeM30RequestIdV2,
+  storeV6MorganRangeH2IndicatorDefinitionV2,
+  storeV6MorganRangeH2IndicatorIdV2,
+  storeV6MorganRangeH2RequestIdV2,
 } from './morganRangeIndicatorV2'
 import { storeV6MaIndicatorDefinitionV2, storeV6MaIndicatorIdV2 } from './maIndicatorV2'
 import { storeV6StochIndicatorDefinitionV2, storeV6StochIndicatorIdV2 } from './stochIndicatorV2'
@@ -45,6 +48,10 @@ function m5RowsBetween(from: number, to: number) {
 
 function m30RowsBetween(from: number, to: number) {
   return rowsBetweenStep(from, to, 30 * 60, 'M30')
+}
+
+function h2RowsBetween(from: number, to: number) {
+  return rowsBetweenStep(from, to, 2 * 60 * 60, 'H2')
 }
 
 function rowsBetweenStep(from: number, to: number, stepSeconds: number, period: string) {
@@ -381,6 +388,40 @@ describe('refreshRealtimeWindowIndicatorsWithStableCacheV2', () => {
     const currentSegment = segmentRows[currentSegmentIndex] as { startIndex: number }
     const previous = segmentRows[currentSegmentIndex - 1] as { endIndex: number } | undefined
     expect(previous?.endIndex).toBeLessThan(currentSegment.startIndex)
+  })
+
+  it('creates the current MR-H2 D5 weekly segment when the weekly boundary row is the realtime tail', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6MorganRangeH2IndicatorDefinitionV2)
+    const from = shanghaiSeconds(2026, 6, 1, 6, 0)
+    const realtimeStart = shanghaiSeconds(2026, 7, 13, 6, 0)
+    const currentD5Start = shanghaiSeconds(2026, 7, 20, 6, 0)
+    const allRows = h2RowsBetween(from, currentD5Start)
+    const historyRows = allRows.filter((row) => row.time < realtimeStart)
+    const activeRows = allRows.filter((row) => row.time >= realtimeStart)
+
+    const next = await refreshRealtimeWindowIndicatorsWithStableCacheV2({
+      historyRows,
+      registry,
+      requests: [{ id: storeV6MorganRangeH2RequestIdV2 }],
+      window: {
+        ...windowFromRows(activeRows),
+        indicatorRequests: [{ id: storeV6MorganRangeH2RequestIdV2 }],
+        period: 'H2',
+        sessionTimeFrom: realtimeStart,
+      },
+    })
+
+    const segmentRows = next.indicators[storeV6MorganRangeH2IndicatorIdV2].displayRows ?? []
+    const currentSegmentIndex = segmentRows.findIndex((segment) => (
+      Number((segment as { startTimestamp?: number }).startTimestamp) === currentD5Start * 1000
+    ))
+    expect(currentSegmentIndex).toBeGreaterThanOrEqual(0)
+    const currentSegment = segmentRows[currentSegmentIndex] as { endIndex: number; startIndex: number }
+    expect(currentSegment).toEqual(expect.objectContaining({
+      endIndex: 143,
+      startIndex: 84,
+    }))
   })
 
   it('matches direct realtime VDO results after the closing tail moves into stable realtime rows', async () => {

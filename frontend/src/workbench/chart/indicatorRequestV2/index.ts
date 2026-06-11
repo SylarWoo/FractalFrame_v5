@@ -44,6 +44,10 @@ export {
   storeV6MorganRangeM30IndicatorIdV2,
   storeV6MorganRangeM30PaneIdV2,
   storeV6MorganRangeM30RequestIdV2,
+  storeV6MorganRangeH2IndicatorDefinitionV2,
+  storeV6MorganRangeH2IndicatorIdV2,
+  storeV6MorganRangeH2PaneIdV2,
+  storeV6MorganRangeH2RequestIdV2,
 } from './morganRangeIndicatorV2'
 export {
   storeV6VolIndicatorDefinitionV2,

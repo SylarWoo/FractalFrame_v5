@@ -25,7 +25,9 @@ try {
   Write-Host ""
   Write-Host "Setup complete."
   Write-Host "Backend: .\.venv\Scripts\python.exe scripts\mt5_symbols_server.py --host 127.0.0.1 --port 8765"
-  Write-Host "Frontend: cd frontend; npm run dev -- --host 127.0.0.1 --port 5185"
+  Write-Host "All: .\scripts\start_all.ps1 -OpenBrowser"
+  Write-Host "Frontend ports: 5185, 5186, 5187"
+  Write-Host "Single frontend: cd frontend; npm run dev -- --host 127.0.0.1 --port 5185"
 } finally {
   Pop-Location
 }

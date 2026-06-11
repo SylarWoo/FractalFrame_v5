@@ -1,7 +1,7 @@
 import type { MutableRefObject } from 'react'
 import type { Chart } from 'klinecharts'
 import type { KLineData } from 'klinecharts'
-import type { ChartIndicatorCommand } from './ChartCoreHost'
+import type { ChartIndicatorCommand } from './chartRuntimeTypes'
 import { mainVolumeIndicatorName } from './mainVolumeIndicator'
 import { scheduleResetIndicatorYAxisAutoScale } from './chartAxisInteraction'
 import type { VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'

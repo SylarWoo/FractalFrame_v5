@@ -2,13 +2,14 @@ import { formatCount, formatEpochSeconds, normalizePeriodForUi, resolveLocalM1La
 import type { StoreTableRow } from '../mt5DataCenter/storeV6StatusFormat'
 import type { Mt5SymbolRow, StoreV6CheckPayload } from '../../services/mt5/mt5SymbolsApi'
 
-export const storeTableAggregatePeriods = ['M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN']
+export const storeTableAggregatePeriods = ['M5', 'M15', 'M30', 'H1', 'H2', 'H4', 'D1', 'W1', 'MN']
 
 const fixedPeriodSeconds: Record<string, number> = {
   M5: 5 * 60,
   M15: 15 * 60,
   M30: 30 * 60,
   H1: 60 * 60,
+  H2: 2 * 60 * 60,
   H4: 4 * 60 * 60,
   D1: 24 * 60 * 60,
 }

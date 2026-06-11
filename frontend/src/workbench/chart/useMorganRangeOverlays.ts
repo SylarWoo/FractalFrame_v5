@@ -18,6 +18,7 @@ export function clearMorganRangeOverlays(chart: Chart, overlayIds: Set<string>) 
 }
 
 function isMorganRangeModeVisible(mode: MorganRangeMode, period: string) {
+  if (mode === 'D5_H2') return period === 'H2'
   return mode === 'D1_M30' ? period === 'M30' : period === 'M5'
 }
 

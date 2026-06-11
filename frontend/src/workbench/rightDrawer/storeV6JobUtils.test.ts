@@ -80,7 +80,7 @@ describe('storeV6JobUtils', () => {
         { timeframe: 'H1', rowsCount: 10, sourceLastTime: 1000, dirty: false },
         { timeframe: 'H4', rowsCount: 10, sourceLastTime: cleanLastTime, dirty: true },
       ],
-    }))).toEqual(['M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN'])
+    }))).toEqual(['M15', 'M30', 'H1', 'H2', 'H4', 'D1', 'W1', 'MN'])
   })
 
   it('targets aggregate periods whose source time is current but last bar is behind', () => {

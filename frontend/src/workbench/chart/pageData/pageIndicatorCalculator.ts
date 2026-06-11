@@ -2,12 +2,13 @@ import {
   alignMorganRangeSegmentsToDisplayRows,
   calculateMorganRangeSegmentsForModeCached,
   resolveMorganRangeBucketSeconds,
+  type MorganRangeMode,
 } from '../morganRangeModel'
 import { resolvePeriodSeconds } from '../chartTimeFormatting'
 import { updatePageDataPackage } from './pageDataCache'
 import type { PageDataIndicatorCalculationRequest, PageDataPackage, PageDataPackageRequest } from './pageDataTypes'
 
-function calculateMorganRangeTable(entry: PageDataPackage, mode: 'D1_M30' | 'H4_M5') {
+function calculateMorganRangeTable(entry: PageDataPackage, mode: MorganRangeMode) {
   const periodSeconds = resolvePeriodSeconds(entry.period)
   const futureBars = Number.isFinite(periodSeconds) && periodSeconds > 0
     ? Math.round(resolveMorganRangeBucketSeconds(mode) / periodSeconds)
@@ -30,6 +31,9 @@ export function calculatePageIndicatorTables(entry: PageDataPackage, request: Pa
   }
   if (indicators.has('MR_M30') || mode === 'D1_M30') {
     indicatorTables.MR_M30 = calculateMorganRangeTable(entry, 'D1_M30')
+  }
+  if (indicators.has('MR_H2') || mode === 'D5_H2') {
+    indicatorTables.MR_H2 = calculateMorganRangeTable(entry, 'D5_H2')
   }
 
   return {

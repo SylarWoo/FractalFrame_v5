@@ -15,7 +15,7 @@ import { readString, writeString } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
 import './StoreV6Panel.css'
 
-const storeV6AggregatePeriods = ['M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN']
+const storeV6AggregatePeriods = ['M5', 'M15', 'M30', 'H1', 'H2', 'H4', 'D1', 'W1', 'MN']
 
 type StoreOperationProgress = {
   hasEstimate: boolean

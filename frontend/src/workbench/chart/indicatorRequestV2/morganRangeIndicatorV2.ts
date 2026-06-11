@@ -17,6 +17,9 @@ export const storeV6MorganRangeM5PaneIdV2 = 'main-morgan-range-m5-overlay'
 export const storeV6MorganRangeM30IndicatorIdV2 = 'MR_M30'
 export const storeV6MorganRangeM30RequestIdV2 = 'MR-M30'
 export const storeV6MorganRangeM30PaneIdV2 = 'main-morgan-range-m30-overlay'
+export const storeV6MorganRangeH2IndicatorIdV2 = 'MR_H2'
+export const storeV6MorganRangeH2RequestIdV2 = 'MR-H2'
+export const storeV6MorganRangeH2PaneIdV2 = 'main-morgan-range-h2-overlay'
 
 function finiteNumber(value: unknown, fallback = 0) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -95,7 +98,7 @@ function calculateDisplaySegments(options: {
 
 function requiredWarmupRows(request: StoreV6IndicatorRequestSpecV2, mode: MorganRangeMode) {
   normalizeRequestSettings(request)
-  return mode === 'D1_M30' ? 8 * 48 : 8 * 48
+  return mode === 'D5_H2' ? 8 * 60 : 8 * 48
 }
 
 function createMorganRangeIndicatorDefinitionV2(options: {
@@ -178,4 +181,12 @@ export const storeV6MorganRangeM30IndicatorDefinitionV2 = createMorganRangeIndic
   paneId: storeV6MorganRangeM30PaneIdV2,
   requestId: storeV6MorganRangeM30RequestIdV2,
   source: 'store-v6-morgan-range-m30-indicator-v2',
+})
+
+export const storeV6MorganRangeH2IndicatorDefinitionV2 = createMorganRangeIndicatorDefinitionV2({
+  indicatorId: storeV6MorganRangeH2IndicatorIdV2,
+  mode: 'D5_H2',
+  paneId: storeV6MorganRangeH2PaneIdV2,
+  requestId: storeV6MorganRangeH2RequestIdV2,
+  source: 'store-v6-morgan-range-h2-indicator-v2',
 })

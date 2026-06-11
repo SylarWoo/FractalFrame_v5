@@ -14,6 +14,7 @@ export type PageDataIndicatorTables = {
   MMF_V3?: MmfV3IndicatorRow[]
   MR_M5?: MorganRangeSegment[]
   MR_M30?: MorganRangeSegment[]
+  MR_H2?: MorganRangeSegment[]
 }
 
 export type PageDataPackage = {
@@ -48,6 +49,6 @@ export type PageDataPackageRequest = {
 }
 
 export type PageDataIndicatorCalculationRequest = {
-  indicators?: Array<'MMF_V3' | 'MR_M5' | 'MR_M30'>
+  indicators?: Array<'MMF_V3' | 'MR_M5' | 'MR_M30' | 'MR_H2'>
   morganRangeMode?: MorganRangeMode
 }

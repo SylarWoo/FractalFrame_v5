@@ -59,12 +59,16 @@ export function LoadedIndicatorSettingsPanel({
   maSettings,
   mmfV3Settings,
   mrSettings,
+  mrM30Settings,
+  mrH2Settings,
   morganRangeSegment,
   onDpoSettingsChange,
   onMacdSettingsChange,
   onMaSettingsChange,
   onMmfV3SettingsChange,
   onMrSettingsChange,
+  onMrM30SettingsChange,
+  onMrH2SettingsChange,
   onSettingsChange,
   onSqzmomSettingsChange,
   onStochSettingsChange,
@@ -93,12 +97,16 @@ export function LoadedIndicatorSettingsPanel({
   maSettings: MaIndicatorSettings
   mmfV3Settings: MmfIndicatorSettings
   mrSettings: MrIndicatorSettings
+  mrM30Settings: MrIndicatorSettings
+  mrH2Settings: MrIndicatorSettings
   morganRangeSegment?: MorganRangeSegment | null
   onDpoSettingsChange: (settings: DpoIndicatorSettings) => void
   onMacdSettingsChange: (settings: MacdIndicatorSettings) => void
   onMaSettingsChange: (settings: MaIndicatorSettings) => void
   onMmfV3SettingsChange: (settings: MmfIndicatorSettings) => void
   onMrSettingsChange: (settings: MrIndicatorSettings) => void
+  onMrM30SettingsChange: (settings: MrIndicatorSettings) => void
+  onMrH2SettingsChange: (settings: MrIndicatorSettings) => void
   onSettingsChange: (settings: RsiIndicatorSettings) => void
   onSqzmomSettingsChange: (settings: SqzmomIndicatorSettings) => void
   onStochSettingsChange: (settings: StochIndicatorSettings) => void
@@ -140,8 +148,12 @@ export function LoadedIndicatorSettingsPanel({
       style: <MrStylePanelV3 onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
     },
     'MR-M30': {
-      input: <MrInputPanelV3 segment={morganRangeSegment} onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
-      style: <MrStylePanelV3 onSettingsChange={onMrSettingsChange} settings={mrSettings} />,
+      input: <MrInputPanelV3 segment={morganRangeSegment} onSettingsChange={onMrM30SettingsChange} settings={mrM30Settings} />,
+      style: <MrStylePanelV3 onSettingsChange={onMrM30SettingsChange} settings={mrM30Settings} />,
+    },
+    'MR-H2': {
+      input: <MrInputPanelV3 segment={morganRangeSegment} onSettingsChange={onMrH2SettingsChange} settings={mrH2Settings} />,
+      style: <MrStylePanelV3 onSettingsChange={onMrH2SettingsChange} settings={mrH2Settings} />,
     },
     MMF_V3: {
       input: <MmfV2InputPanel settings={mmfV3Settings} onSettingsChange={onMmfV3SettingsChange} />,

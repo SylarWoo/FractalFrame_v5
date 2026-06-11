@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ChartLoadState } from '../chart/ChartCoreHost'
+import type { ChartLoadState } from '../chart/chartRuntimeTypes'
 import { resolveIndicatorRestoreContextKey } from './useIndicatorsController'
 
 function createLoadState(overrides: Partial<ChartLoadState> = {}): ChartLoadState {

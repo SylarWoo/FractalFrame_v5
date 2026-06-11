@@ -4,7 +4,7 @@ export const storeV6HistoryPageSize = 2_500
 import { buildRowsBasedPagePartition } from './rowsBasedPagePartitionBuilder'
 import { resolveStoreV6PeriodPageSystemAdapterV2 } from './periodPageSystemRegistryV2'
 
-export type StoreV6PagePartitionMode = 'm5-time' | 'm30-time' | 'rows'
+export type StoreV6PagePartitionMode = 'm5-time' | 'm30-time' | 'h2-time' | 'rows'
 
 export function resolveStoreV6PagePartitionMode(period: string | null | undefined): StoreV6PagePartitionMode {
   return resolveStoreV6PeriodPageSystemAdapterV2(period)?.mode ?? 'rows'

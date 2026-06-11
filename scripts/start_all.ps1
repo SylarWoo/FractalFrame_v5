@@ -2,7 +2,7 @@ param(
   [string]$HostAddress = "127.0.0.1",
   [int]$BackendPort = 8765,
   [int]$FrontendPort = 0,
-  [int[]]$FrontendPorts = @(5185, 5186),
+  [int[]]$FrontendPorts = @(5185, 5186, 5187),
   [switch]$OpenBrowser
 )
 

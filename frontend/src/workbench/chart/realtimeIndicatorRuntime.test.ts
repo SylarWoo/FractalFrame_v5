@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { KLineData } from 'klinecharts'
-import type { ChartIndicatorCommand } from './ChartCoreHost'
+import type { ChartIndicatorCommand } from './chartRuntimeTypes'
 import {
   applyRealtimeIndicatorCommandToState,
   createInitialRealtimeIndicatorRuntimeState,

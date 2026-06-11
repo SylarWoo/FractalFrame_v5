@@ -103,6 +103,7 @@ describe('buildStoreV6PagePartition', () => {
   it('routes only registered periods to the independent period page systems', () => {
     expect(resolveStoreV6PagePartitionMode('M5')).toBe('m5-time')
     expect(resolveStoreV6PagePartitionMode('M30')).toBe('m30-time')
+    expect(resolveStoreV6PagePartitionMode('H2')).toBe('h2-time')
     expect(resolveStoreV6PagePartitionMode('H1')).toBe('rows')
   })
 

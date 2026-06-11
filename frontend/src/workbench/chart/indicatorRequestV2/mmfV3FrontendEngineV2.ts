@@ -44,7 +44,7 @@ export function normalizeMmfV3FrontendContextV2(input: MmfV3CalcContext): MmfV3N
       type: 'sma',
       ...(input.maSettings as Partial<MaIndicatorSettings> | undefined ?? {}),
     },
-    morganRangeMode: input.morganRangeMode === 'D1_M30' ? 'D1_M30' : 'H4_M5',
+    morganRangeMode: input.morganRangeMode === 'D5_H2' ? 'D5_H2' : input.morganRangeMode === 'D1_M30' ? 'D1_M30' : 'H4_M5',
     period: String(input.period || 'M5').trim().toUpperCase(),
     settings: normalizeMmfSettings(input.settings as Partial<MmfIndicatorSettings> | undefined),
     stochSettings: normalizeStochSettings({

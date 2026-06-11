@@ -7,7 +7,7 @@ from .query_params import clamp_m1_check_count, query_bool
 from .response import error_payload
 from .route_helpers import parse_timeframes, required_job_id, required_symbol
 
-AGGREGATE_TIMEFRAMES_DEFAULT = "M5,M15,M30,H1,H4,D1,W1,MN"
+AGGREGATE_TIMEFRAMES_DEFAULT = "M5,M15,M30,H1,H2,H4,D1,W1,MN"
 
 
 def _parse_store_v6_timeframes(value: str) -> list[str]:

@@ -1,3 +1,47 @@
+import type {
+  AoIndicatorSettings,
+  DpoIndicatorSettings,
+  MacdIndicatorSettings,
+  MaIndicatorSettings,
+  MmfIndicatorSettings,
+  MrIndicatorSettings,
+  RsiIndicatorSettings,
+  SqzmomIndicatorSettings,
+  StochIndicatorSettings,
+  TsiIndicatorSettings,
+  VdoIndicatorSettings,
+  ViIndicatorSettings,
+  VmiIndicatorSettings,
+  VolIndicatorSettings,
+  VwapIndicatorSettings,
+} from '../rightDrawer/indicatorPersistence'
+
+export type ChartIndicatorCommand = {
+  action: 'load' | 'unload'
+  id: number
+  resetAxisOnCreate?: boolean
+} & (
+  | { name: 'MA'; settings?: MaIndicatorSettings }
+  | { name: 'MACD'; settings?: MacdIndicatorSettings }
+  | { name: 'MMF'; settings?: MmfIndicatorSettings }
+  | { name: 'MMF_V2'; settings?: MmfIndicatorSettings }
+  | { name: 'MMF_V3'; settings?: MmfIndicatorSettings }
+  | { name: 'DPO'; settings?: DpoIndicatorSettings }
+  | { name: 'MR-M5'; settings?: MrIndicatorSettings }
+  | { name: 'MR-M30'; settings?: MrIndicatorSettings }
+  | { name: 'MR-H2'; settings?: MrIndicatorSettings }
+  | { name: 'RSI'; settings?: RsiIndicatorSettings }
+  | { name: 'SQZMOM'; settings?: SqzmomIndicatorSettings }
+  | { name: 'Stoch'; settings?: StochIndicatorSettings }
+  | { name: 'TSI'; settings?: TsiIndicatorSettings }
+  | { name: 'VDO'; settings?: VdoIndicatorSettings }
+  | { name: 'VI'; settings?: ViIndicatorSettings }
+  | { name: 'AO'; settings?: AoIndicatorSettings }
+  | { name: 'VMI'; settings?: VmiIndicatorSettings }
+  | { name: 'VWAP'; settings?: VwapIndicatorSettings }
+  | { name: 'Vol'; settings?: VolIndicatorSettings }
+)
+
 export type ChartLoadState = {
   error: boolean
   loadedPeriod?: string

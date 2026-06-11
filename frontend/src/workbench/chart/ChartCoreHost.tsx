@@ -6,8 +6,8 @@ import { chartManualYAxisRangeChangeEvent } from './chartAxisInteraction'
 import { chartDrawingVisibilityRefreshEvent } from './chartDrawingTools'
 import { stripFuturePlaceholders } from './chartFuturePlaceholders'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
-import { useChartInstance } from './useChartInstance'
-import { chartRealtimeDataChangedEvent } from './useChartRealtimeTicks'
+import { useChartInstance } from './legacy/useChartInstance'
+import { chartRealtimeDataChangedEvent } from './legacy/useChartRealtimeTicks'
 import { ensureMainVolumeLegendIndicator, installMainVolumeOverlay, mainVolumeIndicatorName } from './mainVolumeIndicator'
 import {
   createIndicatorPageKey,
@@ -70,7 +70,8 @@ import type {
   IndicatorPaneCommandName,
   IndicatorPaneConfig,
 } from './chartIndicatorCommandHandlers'
-import type { DpoIndicatorSettings, MacdIndicatorSettings, MaIndicatorSettings, MmfIndicatorSettings, MrIndicatorSettings, PersistedIndicatorsState, RsiIndicatorSettings, SqzmomIndicatorSettings, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, ViIndicatorSettings, AoIndicatorSettings, VmiIndicatorSettings, VolIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
+import type { ChartIndicatorCommand, ChartLoadState, ChartPageTarget } from './chartRuntimeTypes'
+import type { MaIndicatorSettings, MmfIndicatorSettings, MrIndicatorSettings, PersistedIndicatorsState, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, VmiIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import { readString, writeString } from '../persistence/jsonStorage'
 import './ChartCoreHost.css'
@@ -101,9 +102,10 @@ const minRsiPaneHeight = 80
 const maxStoredRsiPaneHeight = 720
 const updateLevelAll = 4
 
-type MorganRangeIndicatorName = 'MR-M5' | 'MR-M30'
+type MorganRangeIndicatorName = 'MR-M5' | 'MR-M30' | 'MR-H2'
 
 function resolveMorganRangeMode(name: MorganRangeIndicatorName): MorganRangeMode {
+  if (name === 'MR-H2') return 'D5_H2'
   return name === 'MR-M30' ? 'D1_M30' : 'H4_M5'
 }
 
@@ -145,57 +147,6 @@ type ChartCoreHostProps = {
   vdoSettings?: VdoIndicatorSettings
   vmiSettings?: VmiIndicatorSettings
   vwapSettings?: VwapIndicatorSettings
-}
-
-export type ChartPageTarget = {
-  blank?: boolean
-  fromGlobalIndex?: number | null
-  identity?: string | null
-  index: number
-  limit: number
-  realtime: boolean
-  rows?: number | null
-  timeFrom?: number | null
-  timeTo?: number | null
-  toGlobalIndex?: number | null
-}
-
-export type ChartIndicatorCommand = {
-  action: 'load' | 'unload'
-  id: number
-  resetAxisOnCreate?: boolean
-} & (
-  | { name: 'MA'; settings?: MaIndicatorSettings }
-  | { name: 'MACD'; settings?: MacdIndicatorSettings }
-  | { name: 'MMF'; settings?: MmfIndicatorSettings }
-  | { name: 'MMF_V2'; settings?: MmfIndicatorSettings }
-  | { name: 'MMF_V3'; settings?: MmfIndicatorSettings }
-  | { name: 'DPO'; settings?: DpoIndicatorSettings }
-  | { name: 'MR-M5'; settings?: MrIndicatorSettings }
-  | { name: 'MR-M30'; settings?: MrIndicatorSettings }
-  | { name: 'RSI'; settings?: RsiIndicatorSettings }
-  | { name: 'SQZMOM'; settings?: SqzmomIndicatorSettings }
-  | { name: 'Stoch'; settings?: StochIndicatorSettings }
-  | { name: 'TSI'; settings?: TsiIndicatorSettings }
-  | { name: 'VDO'; settings?: VdoIndicatorSettings }
-  | { name: 'VI'; settings?: ViIndicatorSettings }
-  | { name: 'AO'; settings?: AoIndicatorSettings }
-  | { name: 'VMI'; settings?: VmiIndicatorSettings }
-  | { name: 'VWAP'; settings?: VwapIndicatorSettings }
-  | { name: 'Vol'; settings?: VolIndicatorSettings }
-)
-
-export type ChartLoadState = {
-  error: boolean
-  loadedPeriod?: string
-  loadedSymbol?: string
-  loading: boolean
-  loadingMore: boolean
-  period: string
-  requestedRows: number
-  rows: number
-  symbol: string
-  totalRows?: number | null
 }
 
 function normalizeRsiPaneHeight(value: number) {
@@ -322,6 +273,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     chart.removeIndicator('candle_pane', 'MMF_V3')
     chart.removeIndicator('candle_pane', 'MR_M5')
     chart.removeIndicator('candle_pane', 'MR_M30')
+    chart.removeIndicator('candle_pane', 'MR_H2')
     chart.removeIndicator('candle_pane', 'MA')
     chart.removeIndicator('candle_pane', 'VWAP')
     chart.removeIndicator('candle_pane', tradingViewVwapIndicatorName)
@@ -600,7 +552,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
   }, [chartInstanceRef, onMorganRangeSegmentChange, page?.index, page?.realtime, period, resolveMorganRangeSegmentsForCurrentPage, symbol])
 
   const applyMorganRangeCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
-    if (command.name !== 'MR-M5' && command.name !== 'MR-M30') return
+    if (command.name !== 'MR-M5' && command.name !== 'MR-M30' && command.name !== 'MR-H2') return
 
     if (command.action === 'unload') {
       if (morganRangeIndicatorNameRef.current !== command.name) return
@@ -618,6 +570,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     ensureTradingViewMrIndicator(chartIndicatorName)
     chart.removeIndicator('candle_pane', 'MR_M5')
     chart.removeIndicator('candle_pane', 'MR_M30')
+    chart.removeIndicator('candle_pane', 'MR_H2')
     const mode = resolveMorganRangeMode(command.name)
     morganRangeModeRef.current = mode
     morganRangeIndicatorNameRef.current = command.name
@@ -653,7 +606,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
       period: period.trim().toUpperCase(),
       rows: createIndicatorSnapshotRows({ period, rows: chart.getDataList(), symbol }),
       settingsHash,
-      settingsHashKey: 'MR',
+      settingsHashKey: chartIndicatorName,
       symbol,
     })
     chart.createIndicator({ name: chartIndicatorName, calcParams: [command.settings] }, true, { id: 'candle_pane' })
@@ -1519,6 +1472,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     const overlayIndicatorHandlers: Partial<Record<ChartIndicatorCommand['name'], () => void>> = {
       'MR-M5': () => applyMorganRangeCommand(chart, indicatorCommand),
       'MR-M30': () => applyMorganRangeCommand(chart, indicatorCommand),
+      'MR-H2': () => applyMorganRangeCommand(chart, indicatorCommand),
       Vol: () => applyVolumeCommand({
         chart,
         command: indicatorCommand,

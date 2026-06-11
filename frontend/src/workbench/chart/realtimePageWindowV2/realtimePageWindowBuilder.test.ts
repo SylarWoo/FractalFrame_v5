@@ -15,11 +15,13 @@ import {
   buildStoreV6RealtimePageWindow,
   mergeMt5RealtimeTickIntoWindow,
   rebuildStoreV6RealtimeStablePageWindow,
+  requestStoreV6RealtimePageWindow,
   resolveActiveM5RealtimeSessionStartSeconds,
   resolveRealtimeIndicatorHistoryRowsV2,
   resolveM5RealtimeSessionStartSeconds,
   resolveNextM5RealtimeSessionStartSeconds,
 } from './realtimePageWindowBuilder'
+import { aggregateM30RatesToH2RealtimeRowsV2, resolveH2RealtimeRateVolumeForPeriodStartV2 } from './h2RealtimeAggregatorV2'
 
 vi.mock('../../../services/mt5/mt5SymbolsApi', () => ({
   queryMt5Rates: vi.fn(),
@@ -112,6 +114,84 @@ describe('buildStoreV6RealtimePageWindow', () => {
       .toBe(shanghaiSeconds(2026, 6, 8, 6, 0))
   })
 
+  it('aggregates MT5 M30 rates into H2 realtime rows', () => {
+    const rows = aggregateM30RatesToH2RealtimeRowsV2({
+      rows: [
+        { close: 11, high: 12, low: 9, open: 10, time: shanghaiSeconds(2026, 6, 1, 6, 0), volume: 10 },
+        { close: 12, high: 13, low: 10, open: 11, time: shanghaiSeconds(2026, 6, 1, 6, 30), volume: 20 },
+        { close: 13, high: 14, low: 11, open: 12, time: shanghaiSeconds(2026, 6, 1, 7, 0), volume: 30 },
+        { close: 14, high: 15, low: 12, open: 13, time: shanghaiSeconds(2026, 6, 1, 7, 30), volume: 40 },
+        { close: 15, high: 16, low: 14, open: 14, time: shanghaiSeconds(2026, 6, 1, 8, 0), volume: 50 },
+      ],
+      sessionTimeFrom: shanghaiSeconds(2026, 6, 1, 6, 0),
+      sessionTimeTo: null,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({
+      barKey: `XAUUSDm|H2|${shanghaiSeconds(2026, 6, 1, 6, 0)}`,
+      close: 14,
+      high: 15,
+      low: 9,
+      open: 10,
+      period: 'H2',
+      sourceBars: 4,
+      time: shanghaiSeconds(2026, 6, 1, 6, 0),
+      volume: 100,
+    })
+    expect(rows[1]).toMatchObject({
+      close: 15,
+      sourceBars: 1,
+      time: shanghaiSeconds(2026, 6, 1, 8, 0),
+      volume: 50,
+    })
+  })
+
+  it('requests M30 rates for H2 realtime windows and persists the current H2 tail separately', async () => {
+    queryMt5RatesMock.mockResolvedValueOnce({
+      rows: [
+        { close: 11, high: 12, low: 9, open: 10, time: shanghaiSeconds(2026, 6, 1, 6, 0), volume: 10 },
+        { close: 12, high: 13, low: 10, open: 11, time: shanghaiSeconds(2026, 6, 1, 6, 30), volume: 20 },
+        { close: 13, high: 14, low: 11, open: 12, time: shanghaiSeconds(2026, 6, 1, 7, 0), volume: 30 },
+        { close: 14, high: 15, low: 12, open: 13, time: shanghaiSeconds(2026, 6, 1, 7, 30), volume: 40 },
+        { close: 15, high: 16, low: 14, open: 14, time: shanghaiSeconds(2026, 6, 1, 8, 0), volume: 50 },
+      ],
+    } as never)
+
+    const window = await requestStoreV6RealtimePageWindow({
+      enabled: true,
+      indicatorRequests: [],
+      period: 'H2',
+      sessionTimeFrom: shanghaiSeconds(2026, 6, 1, 6, 0),
+      sessionTimeTo: null,
+      symbol: 'XAUUSDm',
+    })
+
+    expect(queryMt5RatesMock).toHaveBeenCalledWith(expect.objectContaining({
+      symbol: 'XAUUSDm',
+      timeframe: 'M30',
+      timeFrom: shanghaiSeconds(2026, 6, 1, 6, 0),
+    }))
+    expect(window?.stableRows).toHaveLength(1)
+    expect(window?.tailRow).toMatchObject({
+      close: 15,
+      period: 'H2',
+      sourceBars: 1,
+      time: shanghaiSeconds(2026, 6, 1, 8, 0),
+    })
+  })
+
+  it('resolves H2 realtime tail volume by summing the source M30 rates in the same H2 bucket', () => {
+    expect(resolveH2RealtimeRateVolumeForPeriodStartV2([
+      { close: 11, high: 12, low: 9, open: 10, time: shanghaiSeconds(2026, 6, 1, 6, 0), volume: 10 },
+      { close: 12, high: 13, low: 10, open: 11, time: shanghaiSeconds(2026, 6, 1, 6, 30), volume: 20 },
+      { close: 13, high: 14, low: 11, open: 12, time: shanghaiSeconds(2026, 6, 1, 7, 0), volume: 30 },
+      { close: 14, high: 15, low: 12, open: 13, time: shanghaiSeconds(2026, 6, 1, 7, 30), volume: 40 },
+      { close: 15, high: 16, low: 14, open: 14, time: shanghaiSeconds(2026, 6, 1, 8, 0), volume: 50 },
+    ], shanghaiSeconds(2026, 6, 1, 6, 0))).toBe(100)
+  })
+
   it('moves the M5 realtime window to the next open after the current session closes', () => {
     expect(resolveActiveM5RealtimeSessionStartSeconds(shanghaiSeconds(2026, 6, 9, 4, 55), 'XAUUSDm'))
       .toBe(shanghaiSeconds(2026, 6, 9, 6, 0))
@@ -164,12 +244,14 @@ describe('buildStoreV6RealtimePageWindow', () => {
     expect(window).not.toBeNull()
 
     const first = mergeMt5RealtimeTickIntoWindow(window!, {
+      barVolume: 10,
       bid: 2300,
       symbol: 'XAUUSDm',
       time: barTime,
       volume: 10,
     })
     const second = mergeMt5RealtimeTickIntoWindow(first, {
+      barVolume: 11,
       bid: 2301,
       symbol: 'XAUUSDm',
       time: barTime + 60,
@@ -188,7 +270,7 @@ describe('buildStoreV6RealtimePageWindow', () => {
     expect(second.updateKind).toBe('realtime-tail-tick')
   })
 
-  it('increments realtime tick volume when MT5 ticks do not provide volume', () => {
+  it('does not invent realtime bar volume from raw MT5 ticks', () => {
     const sessionStart = shanghaiSeconds(2026, 6, 8, 6, 0)
     const barTime = shanghaiSeconds(2026, 6, 8, 18, 40)
     const window = buildStoreV6RealtimePageWindow({
@@ -216,9 +298,72 @@ describe('buildStoreV6RealtimePageWindow', () => {
       time: barTime + 300,
     })
 
-    expect(second.tailRow?.volume).toBe(2)
-    expect(nextBar.tailRow?.volume).toBe(1)
+    expect(second.tailRow?.volume).toBe(0)
+    expect(nextBar.tailRow?.volume).toBe(0)
     expect(nextBar.updateKind).toBe('realtime-bar-close-settlement')
+  })
+
+  it('uses the current timeframe MT5 rate volume for realtime tail volume', () => {
+    const sessionStart = shanghaiSeconds(2026, 6, 8, 6, 0)
+    const barTime = shanghaiSeconds(2026, 6, 8, 18, 40)
+    const window = buildStoreV6RealtimePageWindow({
+      enabled: true,
+      period: 'M5',
+      sessionTimeFrom: sessionStart - 300,
+      symbol: 'XAUUSDm',
+    })
+    expect(window).not.toBeNull()
+
+    const first = mergeMt5RealtimeTickIntoWindow(window!, {
+      barVolume: 128,
+      bid: 2300,
+      symbol: 'XAUUSDm',
+      time: barTime,
+      volume: 1,
+    })
+    const second = mergeMt5RealtimeTickIntoWindow(first, {
+      barVolume: 131,
+      bid: 2301,
+      symbol: 'XAUUSDm',
+      time: barTime + 60,
+      volume: 1,
+    })
+
+    expect(first.tailRow?.volume).toBe(128)
+    expect(second.tailRow?.volume).toBe(131)
+  })
+
+  it('groups H2 realtime ticks into two-hour tail buckets', () => {
+    const sessionStart = shanghaiSeconds(2026, 6, 1, 6, 0)
+    const window = buildStoreV6RealtimePageWindow({
+      enabled: true,
+      period: 'H2',
+      sessionTimeFrom: sessionStart,
+      symbol: 'XAUUSDm',
+    })
+    expect(window).not.toBeNull()
+
+    const first = mergeMt5RealtimeTickIntoWindow(window!, {
+      bid: 2300,
+      symbol: 'XAUUSDm',
+      time: shanghaiSeconds(2026, 6, 1, 6, 5),
+    })
+    const second = mergeMt5RealtimeTickIntoWindow(first, {
+      bid: 2301,
+      symbol: 'XAUUSDm',
+      time: shanghaiSeconds(2026, 6, 1, 7, 55),
+    })
+    const nextBucket = mergeMt5RealtimeTickIntoWindow(second, {
+      bid: 2302,
+      symbol: 'XAUUSDm',
+      time: shanghaiSeconds(2026, 6, 1, 8, 0),
+    })
+
+    expect(second.tailRow?.time).toBe(sessionStart)
+    expect(second.tailRow?.close).toBe(2301)
+    expect(nextBucket.stableRows.map((row) => row.time)).toEqual([sessionStart])
+    expect(nextBucket.tailRow?.time).toBe(shanghaiSeconds(2026, 6, 1, 8, 0))
+    expect(nextBucket.updateKind).toBe('realtime-bar-close-settlement')
   })
 
   it('loads realtime indicator warmup from StoreV6 before the first active row', async () => {

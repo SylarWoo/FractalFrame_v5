@@ -1,5 +1,6 @@
 export const m5TimeAlignedPartitionProfileVersion = 4
 export const m30TimeAlignedPartitionProfileVersion = 2
+export const h2TimeAlignedPartitionProfileVersion = 4
 
 export type TimeAlignedPageProfile = {
   boundaryHourShanghai: number
@@ -30,4 +31,21 @@ export const m30TradingMonthProfile: M30TimeAlignedPageProfile = {
 
 export function estimateM30TimePageLimit(profile: M30TimeAlignedPageProfile) {
   return Math.ceil((profile.windowWeeks * 6 * 24 * 60) / 30)
+}
+
+export type H2TimeAlignedPageProfile = TimeAlignedPageProfile & {
+  historyWindowMonths: number
+  realtimeWindowMonths: number
+}
+
+export const h2TradingFourMonthProfile: H2TimeAlignedPageProfile = {
+  boundaryHourShanghai: 6,
+  boundaryMinuteShanghai: 0,
+  historyWindowMonths: 4,
+  realtimeWindowMonths: 1,
+  windowDays: 124,
+}
+
+export function estimateH2TimePageLimit(profile: H2TimeAlignedPageProfile) {
+  return Math.ceil((profile.historyWindowMonths * 4 * 6 * 24 * 60) / 120)
 }

@@ -8,6 +8,7 @@ import './SettingsEventsPanel.css'
 
 export function SettingsEventsPanel() {
   const [sessionBreakVisible, setSessionBreakVisible] = useState(() => readSettingsBooleanValue(chartSettingKeys.sessionBreakVisible, chartSettingDefaults.sessionBreakVisible))
+  const [sessionWeekBreakVisible, setSessionWeekBreakVisible] = useState(() => readSettingsBooleanValue(chartSettingKeys.sessionWeekBreakVisible, chartSettingDefaults.sessionWeekBreakVisible))
   const [realtimeWindowSeparatorVisible, setRealtimeWindowSeparatorVisible] = useState(() => readSettingsBooleanValue(chartSettingKeys.realtimeWindowSeparatorVisible, chartSettingDefaults.realtimeWindowSeparatorVisible))
 
   return (
@@ -30,11 +31,32 @@ export function SettingsEventsPanel() {
             const next = event.currentTarget.checked
             setSessionBreakVisible(next)
             writeSettingsSymbolStateValue(chartSettingKeys.sessionBreakVisible, next)
+            if (next) {
+              setSessionWeekBreakVisible(false)
+              writeSettingsSymbolStateValue(chartSettingKeys.sessionWeekBreakVisible, false)
+            }
           }}
           type="checkbox"
         />
         <span>交易日间隔</span>
         <SettingsLineSwatch color="#93b7f4" storageKey="events.sessionBreak.color" />
+      </div>
+      <div className="ff-settings-events-row">
+        <input
+          checked={sessionWeekBreakVisible}
+          onChange={(event) => {
+            const next = event.currentTarget.checked
+            setSessionWeekBreakVisible(next)
+            writeSettingsSymbolStateValue(chartSettingKeys.sessionWeekBreakVisible, next)
+            if (next) {
+              setSessionBreakVisible(false)
+              writeSettingsSymbolStateValue(chartSettingKeys.sessionBreakVisible, false)
+            }
+          }}
+          type="checkbox"
+        />
+        <span>交易周间隔</span>
+        <SettingsLineSwatch color="#93b7f4" storageKey="events.sessionWeekBreak.color" />
       </div>
       <div className="ff-settings-events-row">
         <input

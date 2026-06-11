@@ -1,4 +1,5 @@
-import { readBooleanFlag, readJson, removeStorageItem, writeBooleanFlag, writeJson } from '../persistence/jsonStorage'
+import { readBooleanFlag, readJson, removeStorageItem, writeBooleanFlag } from '../persistence/jsonStorage'
+import { readPeriodUiState, removePeriodUiState, writePeriodUiState } from '../persistence/periodUiStateStorage'
 import {
   defaultRsiIndicatorSettings,
   normalizeIndicatorSettingsTab,
@@ -87,8 +88,9 @@ export function writeIndicatorPersistenceEnabled(enabled: boolean) {
   writeBooleanFlag(persistEnabledKey, enabled)
 }
 
-export function readPersistedIndicatorsState(): PersistedIndicatorsState {
-  const parsed = readJson<Partial<PersistedIndicatorsState> | null>(persistedStateKey, null)
+export function readPersistedIndicatorsState(period = 'M5'): PersistedIndicatorsState {
+  const parsed = readPeriodUiState<Partial<PersistedIndicatorsState> | null>('indicators', period, null)
+    ?? readJson<Partial<PersistedIndicatorsState> | null>(persistedStateKey, null)
   const legacyMmfLoaded = parsed?.loaded?.MMF === true || parsed?.loaded?.MMF_V2 === true
   const legacyMmfSettings = parsed?.mmfV3 ?? parsed?.mmf
   const selectedKey = typeof parsed?.ui?.selectedKey === 'string' && parsed.ui.selectedKey ? parsed.ui.selectedKey : 'RSI'
@@ -102,6 +104,7 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
       MMF_V3: parsed?.loaded?.MMF_V3 === true || legacyMmfLoaded,
       'MR-M5': parsed?.loaded?.['MR-M5'] === true || parsed?.loaded?.MR === true,
       'MR-M30': parsed?.loaded?.['MR-M30'] === true,
+      'MR-H2': parsed?.loaded?.['MR-H2'] === true,
       RSI: parsed?.loaded?.RSI === true,
       SQZMOM: parsed?.loaded?.SQZMOM === true,
       Stoch: parsed?.loaded?.Stoch === true,
@@ -125,6 +128,8 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
     mmf: normalizeMmfSettings(parsed?.mmf),
     mmfV3: normalizeMmfSettings(legacyMmfSettings),
     mr: normalizeMrSettings(parsed?.mr),
+    mrM30: normalizeMrSettings(parsed?.mrM30 ?? parsed?.mr),
+    mrH2: normalizeMrSettings(parsed?.mrH2),
     rsi: {
       ...defaultRsiIndicatorSettings,
       ...(parsed?.rsi ?? {}),
@@ -145,10 +150,11 @@ export function readPersistedIndicatorsState(): PersistedIndicatorsState {
   }
 }
 
-export function writePersistedIndicatorsState(state: PersistedIndicatorsState) {
-  writeJson(persistedStateKey, state)
+export function writePersistedIndicatorsState(state: PersistedIndicatorsState, period = 'M5') {
+  writePeriodUiState('indicators', period, state)
 }
 
-export function clearPersistedIndicatorsState() {
+export function clearPersistedIndicatorsState(period = 'M5') {
+  removePeriodUiState('indicators', period)
   removeStorageItem(persistedStateKey)
 }

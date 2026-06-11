@@ -11,10 +11,15 @@ import {
   storeV6MorganRangeM30IndicatorIdV2,
   storeV6MorganRangeM30PaneIdV2,
   storeV6MorganRangeM30RequestIdV2,
+  storeV6MorganRangeH2IndicatorDefinitionV2,
+  storeV6MorganRangeH2IndicatorIdV2,
+  storeV6MorganRangeH2PaneIdV2,
+  storeV6MorganRangeH2RequestIdV2,
 } from './morganRangeIndicatorV2'
 
 const fiveMinutes = 5 * 60
 const thirtyMinutes = 30 * 60
+const twoHours = 2 * 60 * 60
 
 function shanghaiSeconds(year: number, month: number, day: number, hour: number, minute: number) {
   return Date.UTC(year, month - 1, day, hour - 8, minute) / 1000
@@ -387,5 +392,56 @@ describe('storeV6MorganRangeM5IndicatorDefinitionV2', () => {
       endIndex: displayRows.length - 1,
       startTimestamp: displayFrom * 1000,
     }))
+  })
+
+  it('calculates MR-H2 from D5 weekly buckets and extends one trading-week H2 window', async () => {
+    const registry = createStoreV6IndicatorRegistryV2()
+    registry.register(storeV6MorganRangeH2IndicatorDefinitionV2)
+    const from = shanghaiSeconds(2026, 6, 1, 6, 0)
+    const displayFrom = shanghaiSeconds(2026, 7, 20, 6, 0)
+    const to = shanghaiSeconds(2026, 7, 25, 4, 0)
+    const calculationRows = rowsBetweenStep(from, to, twoHours, 'H2')
+    const displayRows = calculationRows.filter((row) => row.time >= displayFrom)
+
+    const indicators = await requestHistoryWindowIndicatorsV2({
+      boundary: {
+        actualFromGlobalIndex: displayRows[0].globalIndex,
+        actualTimeFrom: displayRows[0].time,
+        actualTimeTo: displayRows[displayRows.length - 1].time,
+        actualToGlobalIndex: displayRows[displayRows.length - 1].globalIndex,
+        requestedFromGlobalIndex: null,
+        requestedTimeFrom: displayRows[0].time,
+        requestedTimeTo: displayRows[displayRows.length - 1].time,
+        requestedToGlobalIndex: null,
+      },
+      calculationRows,
+      displayOffset: calculationRows.length - displayRows.length,
+      displayRows,
+      pageIndex: 1,
+      period: 'H2',
+      registry,
+      requests: [{ id: storeV6MorganRangeH2RequestIdV2 }],
+      symbol: 'XAUUSDm',
+      warmupRows: calculationRows.slice(0, calculationRows.length - displayRows.length),
+    })
+
+    const pane = indicators[storeV6MorganRangeH2IndicatorIdV2]
+    expect(pane).toMatchObject({
+      id: storeV6MorganRangeH2RequestIdV2,
+      paneId: storeV6MorganRangeH2PaneIdV2,
+      paneRole: 'main',
+      renderRole: 'main-overlay',
+    })
+    const segmentRows = pane.displayRows ?? []
+    const segment = segmentRows.find((row) => (
+      Number((row as { startTimestamp?: number }).startTimestamp) === displayFrom * 1000
+    )) as { endIndex?: number; startIndex?: number } | undefined
+    expect(segment).toEqual(expect.objectContaining({
+      endIndex: 59,
+      startIndex: 0,
+    }))
+    expect(segmentRows.some((row) => (
+      Number((row as { startTimestamp?: number }).startTimestamp) === shanghaiSeconds(2026, 7, 21, 6, 0) * 1000
+    ))).toBe(false)
   })
 })

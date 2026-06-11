@@ -512,6 +512,7 @@ export type PersistedIndicatorsState = {
     MR?: boolean
     'MR-M5'?: boolean
     'MR-M30'?: boolean
+    'MR-H2'?: boolean
     RSI?: boolean
     SQZMOM?: boolean
     Stoch?: boolean
@@ -529,6 +530,8 @@ export type PersistedIndicatorsState = {
   mmf: MmfIndicatorSettings
   mmfV3: MmfIndicatorSettings
   mr: MrIndicatorSettings
+  mrM30: MrIndicatorSettings
+  mrH2: MrIndicatorSettings
   rsi: RsiIndicatorSettings
   sqzmom: SqzmomIndicatorSettings
   stoch: StochIndicatorSettings

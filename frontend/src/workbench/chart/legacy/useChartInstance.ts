@@ -1,17 +1,17 @@
 import { useEffect, useRef } from 'react'
 import { dispose, init } from 'klinecharts'
 import type { Chart } from 'klinecharts'
-import { settingsSymbolChangedEvent } from '../settingsSymbolState'
-import { realtimeEnabledChangedEvent } from '../mt5DataCenter/storeV6Persistence'
-import { marketStatusTitleChangedEvent } from '../mt5DataCenter/marketStatusTitleState'
-import { formatChartDate, readChartTimezone } from './chartTimeFormatting'
-import { readRightPlaceholderVisible, refreshChartFuturePlaceholders } from './chartFuturePlaceholders'
-import { chartDrawingVisibilityRefreshEvent, installChartDrawingTools } from './chartDrawingTools'
-import { installChartMouseBehaviorOverrides } from './chartMouseBehaviorOverrides'
-import { installChartBarSpaceCompression } from './chartBarSpaceCompression'
-import { domPaneTitleOverlayEnabled } from './paneTitleOverlayConfig'
-import { installPaneTitleOverlay } from './paneTitleOverlayManager'
-import { applySessionBreakIndicator } from './sessionBreakIndicator'
+import { settingsSymbolChangedEvent } from '../../settingsSymbolState'
+import { realtimeEnabledChangedEvent } from '../../mt5DataCenter/storeV6Persistence'
+import { marketStatusTitleChangedEvent } from '../../mt5DataCenter/marketStatusTitleState'
+import { formatChartDate, readChartTimezone } from '../chartTimeFormatting'
+import { readRightPlaceholderVisible, refreshChartFuturePlaceholders } from '../chartFuturePlaceholders'
+import { chartDrawingVisibilityRefreshEvent, installChartDrawingTools } from '../chartDrawingTools'
+import { installChartMouseBehaviorOverrides } from '../chartMouseBehaviorOverrides'
+import { installChartBarSpaceCompression } from '../chartBarSpaceCompression'
+import { domPaneTitleOverlayEnabled } from '../paneTitleOverlayConfig'
+import { installPaneTitleOverlay } from '../paneTitleOverlayManager'
+import { applySessionBreakIndicator } from '../sessionBreakIndicator'
 import { installChartViewportPersistence } from './chartViewportPersistence'
 import {
   applyAxisLineStyle,
@@ -25,8 +25,8 @@ import {
   applyPaneSeparatorStyle,
   applyPriceVolumePrecision,
   createChartBaseStyles,
-} from './chartStyleAppliers'
-import { installYAxisDragOptimization } from './chartAxisInteraction'
+} from '../chartStyleAppliers'
+import { installYAxisDragOptimization } from '../chartAxisInteraction'
 
 type UseChartInstanceOptions = {
   displayName?: string

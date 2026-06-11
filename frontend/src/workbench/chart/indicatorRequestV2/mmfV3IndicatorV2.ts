@@ -42,7 +42,7 @@ function normalizeRequestContext(
   const params = request.params ?? {}
   return {
     maSettings: params.maSettings as Partial<MaIndicatorSettings> | undefined,
-    morganRangeMode: params.morganRangeMode === 'D1_M30' ? 'D1_M30' : 'H4_M5',
+    morganRangeMode: params.morganRangeMode === 'D5_H2' ? 'D5_H2' : params.morganRangeMode === 'D1_M30' ? 'D1_M30' : 'H4_M5',
     period,
     settings: normalizeMmfSettings(params.settings as Partial<MmfIndicatorSettings> | undefined),
     stochSettings: params.stochSettings as Partial<StochIndicatorSettings> | undefined,

@@ -22,7 +22,7 @@ export type PeriodOption = {
   rowsCount?: number | null
 }
 
-export const periodOrder = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1', 'W1', 'MN']
+export const periodOrder = ['M1', 'M5', 'M15', 'M30', 'H1', 'H2', 'H4', 'D1', 'W1', 'MN']
 
 function resolveDirectM1Rows(status: StoreV6StatusSnapshot | null) {
   return status?.directM1?.rowsCount

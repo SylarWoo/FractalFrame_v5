@@ -2,19 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { ActionType } from 'klinecharts'
 import type { Chart, KLineData } from 'klinecharts'
-import { loadStoreV6KLineData } from '../../datafeed/storeV6KLineDatafeed'
-import { chartError, chartInfo } from './chartLogger'
-import { resolvePeriodSeconds } from './chartTimeFormatting'
-import { stripFuturePlaceholders } from './chartFuturePlaceholders'
-import { applySessionBreakIndicator } from './sessionBreakIndicator'
+import { loadStoreV6KLineData } from '../../../datafeed/storeV6KLineDatafeed'
+import { chartError, chartInfo } from '../chartLogger'
+import { resolvePeriodSeconds } from '../chartTimeFormatting'
+import { stripFuturePlaceholders } from '../chartFuturePlaceholders'
+import { applySessionBreakIndicator } from '../sessionBreakIndicator'
 import {
   jumpBarSpace,
   jumpDisplayWindowBars,
   mergeKLineData,
   resolveHasMoreOlder,
-} from './chartCoreDataUtils'
-import { applyPriceVolumePrecision } from './chartStyleAppliers'
-import { scheduleResetYAxisAutoScaleFlags } from './chartAxisInteraction'
+} from '../chartCoreDataUtils'
+import { applyPriceVolumePrecision } from '../chartStyleAppliers'
+import { scheduleResetYAxisAutoScaleFlags } from '../chartAxisInteraction'
 import {
   captureChartViewportSnapshot,
   markChartViewportPersistenceReady,
@@ -22,17 +22,17 @@ import {
   restoreChartViewportSnapshot,
   type ChartViewportSnapshot,
 } from './chartViewportPersistence'
-import type { ChartPageTarget } from './ChartCoreHost'
-import { preparePageDataPackage } from './pageData/pageDataManager'
-import { writePageDataPackage } from './pageData/pageDataCache'
-import { pageDataPackageToSlice } from './pageData/pageDataSlice'
-import { writePageCalculationContext } from './pageCalculationContext'
+import type { ChartPageTarget } from '../chartRuntimeTypes'
+import { preparePageDataPackage } from '../pageData/pageDataManager'
+import { writePageDataPackage } from '../pageData/pageDataCache'
+import { pageDataPackageToSlice } from '../pageData/pageDataSlice'
+import { writePageCalculationContext } from '../pageCalculationContext'
 import { resolvePageLoadPlan } from './pageLoader/pageLoadPlanner'
 import { applyChartPageWindow, clearChartPageWindow } from './chartAdapter/chartWindowAdapter'
 import { createChartPageWindow } from './pageWindow/chartPageWindow'
 import { createHistoryPageWindow } from './pageWindow/historyPageWindow'
 import { createRealtimePageWindow } from './pageWindow/realtimePageWindow'
-import { readRealtimePageBuffer, writeRealtimePageBuffer } from './realtimePageBuffer'
+import { readRealtimePageBuffer, writeRealtimePageBuffer } from '../realtimePageBuffer'
 
 export type ChartLoadStateCore = {
   error: boolean

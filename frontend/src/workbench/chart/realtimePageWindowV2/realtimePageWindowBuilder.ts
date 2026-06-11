@@ -12,6 +12,7 @@ import {
 } from '../pagePartition/timeAligned/tradingDayBoundary'
 import { queryMt5Rates } from '../../../services/mt5/mt5SymbolsApi'
 import type { StoreV6QueryRow } from '../../../services/mt5/mt5SymbolsApi'
+import { aggregateM30RatesToH2RealtimeRowsV2 } from './h2RealtimeAggregatorV2'
 import {
   combineRealtimeRowsV2,
   mergeRealtimeRowsV2,
@@ -46,6 +47,7 @@ function resolvePeriodSeconds(period: string) {
   if (normalized === 'M5') return m5Seconds
   if (normalized === 'M1') return 60
   if (/^M\d+$/.test(normalized)) return Number(normalized.slice(1)) * 60 || 60
+  if (/^H\d+$/.test(normalized)) return Number(normalized.slice(1)) * 60 * 60 || 60 * 60
   return 60
 }
 
@@ -107,6 +109,16 @@ function normalizeMt5RateRows(rows: StoreV6QueryRow[] | null | undefined, reques
     })
   })
   return [...byTime.values()].sort((left, right) => Number(left.timestamp) - Number(right.timestamp))
+}
+
+export function resolveMt5RateVolumeForPeriodStartV2(
+  rows: StoreV6QueryRow[] | null | undefined,
+  periodStartSeconds: number,
+) {
+  if (!Array.isArray(rows) || !Number.isFinite(periodStartSeconds)) return null
+  const matched = rows.find((row) => Number(row.time ?? row.openTime ?? row.timestamp) === Math.floor(periodStartSeconds))
+  const volume = Number(matched?.volume)
+  return Number.isFinite(volume) && volume >= 0 ? volume : null
 }
 
 function resolveTickLast(tick: Mt5RealtimeWindowTick) {
@@ -249,7 +261,7 @@ function resolveRealtimeSessionStart(request: StoreV6RealtimePageWindowRequest) 
   if (normalizedPeriod === 'M5' && latest != null) return resolveActiveM5RealtimeSessionStartSeconds(latest, request.symbol)
   const requested = finiteNumber(request.sessionTimeFrom)
   if (normalizedPeriod === 'M5') return resolveM5RealtimeSessionStartSeconds(requested, request.symbol)
-  if (normalizedPeriod === 'M30') return requested == null ? null : Math.floor(requested)
+  if (normalizedPeriod === 'M30' || normalizedPeriod === 'H2') return requested == null ? null : Math.floor(requested)
   const periodSeconds = resolvePeriodSeconds(request.period)
   return requested == null ? null : Math.floor(requested) + periodSeconds
 }
@@ -438,6 +450,7 @@ export async function requestStoreV6RealtimePageWindow(
 ): Promise<StoreV6RealtimePageWindow | null> {
   const empty = buildStoreV6RealtimePageWindow(request)
   if (!empty || empty.sessionTimeFrom == null) return empty
+  const isH2 = request.period.trim().toUpperCase() === 'H2'
   const payload = await queryMt5Rates({
     limit: createRealtimePage({
       period: request.period,
@@ -445,16 +458,23 @@ export async function requestStoreV6RealtimePageWindow(
       sessionTimeTo: empty.sessionTimeTo,
     }).limit,
     symbol: request.symbol,
-    timeframe: normalizeTimeframe(request.period),
+    timeframe: isH2 ? 'M30' : normalizeTimeframe(request.period),
     timeFrom: empty.sessionTimeFrom,
     timeTo: empty.sessionTimeTo ?? undefined,
   })
-  const activeRows = normalizeMt5RateRows(payload.rows, {
-    period: request.period,
-    sessionTimeFrom: empty.sessionTimeFrom,
-    sessionTimeTo: empty.sessionTimeTo,
-    symbol: request.symbol,
-  })
+  const activeRows = isH2
+    ? aggregateM30RatesToH2RealtimeRowsV2({
+      rows: payload.rows,
+      sessionTimeFrom: empty.sessionTimeFrom,
+      sessionTimeTo: empty.sessionTimeTo,
+      symbol: request.symbol,
+    })
+    : normalizeMt5RateRows(payload.rows, {
+      period: request.period,
+      sessionTimeFrom: empty.sessionTimeFrom,
+      sessionTimeTo: empty.sessionTimeTo,
+      symbol: request.symbol,
+    })
   const { stableRows, tailRow } = splitRealtimeRowsV2(activeRows)
   const composedRows = combineRealtimeRowsV2(stableRows, tailRow)
   const nextWindow = await buildRealtimeWindowWithIndicators({
@@ -491,6 +511,7 @@ export async function rebuildStoreV6RealtimeStablePageWindow(
 ): Promise<StoreV6RealtimePageWindow | null> {
   const baseWindow = window ?? buildStoreV6RealtimePageWindow(request)
   if (!baseWindow || baseWindow.sessionTimeFrom == null) return baseWindow
+  const isH2 = request.period.trim().toUpperCase() === 'H2'
   const payload = await queryMt5Rates({
     limit: createRealtimePage({
       period: request.period,
@@ -498,16 +519,23 @@ export async function rebuildStoreV6RealtimeStablePageWindow(
       sessionTimeTo: baseWindow.sessionTimeTo,
     }).limit,
     symbol: request.symbol,
-    timeframe: normalizeTimeframe(request.period),
+    timeframe: isH2 ? 'M30' : normalizeTimeframe(request.period),
     timeFrom: baseWindow.sessionTimeFrom,
     timeTo: baseWindow.sessionTimeTo ?? undefined,
   })
-  const mt5Rows = normalizeMt5RateRows(payload.rows, {
-    period: request.period,
-    sessionTimeFrom: baseWindow.sessionTimeFrom,
-    sessionTimeTo: baseWindow.sessionTimeTo,
-    symbol: request.symbol,
-  })
+  const mt5Rows = isH2
+    ? aggregateM30RatesToH2RealtimeRowsV2({
+      rows: payload.rows,
+      sessionTimeFrom: baseWindow.sessionTimeFrom,
+      sessionTimeTo: baseWindow.sessionTimeTo,
+      symbol: request.symbol,
+    })
+    : normalizeMt5RateRows(payload.rows, {
+      period: request.period,
+      sessionTimeFrom: baseWindow.sessionTimeFrom,
+      sessionTimeTo: baseWindow.sessionTimeTo,
+      symbol: request.symbol,
+    })
   const activeRows = baseWindow.tailRow
     ? mergeRealtimeRowsV2(mt5Rows, [baseWindow.tailRow])
     : mt5Rows
@@ -556,11 +584,13 @@ export function mergeMt5RealtimeTickIntoWindow(
   const latest = window.activeRows[window.activeRows.length - 1]
   const sameBar = latest && Number(latest.time) === tickTime
   const settledPreviousTail = Boolean(latest && !sameBar)
-  const volume = typeof tick.volume === 'number' && Number.isFinite(tick.volume) && tick.volume > 0
-    ? Math.max(0, tick.volume)
-    : sameBar
-      ? Math.max(1, Number(latest.volume ?? 0) + 1)
-      : 1
+  const barVolume = finiteNumber(tick.barVolume)
+  const latestVolume = finiteNumber(latest?.volume)
+  const volume = barVolume != null && barVolume >= 0
+    ? Math.max(0, barVolume)
+    : sameBar && latestVolume != null
+      ? Math.max(0, latestVolume)
+      : 0
   const open = sameBar ? Number(latest.open) : Number(latest?.close ?? last)
   const high = sameBar ? Math.max(Number(latest.high), last) : Math.max(open, last)
   const low = sameBar ? Math.min(Number(latest.low), last) : Math.min(open, last)

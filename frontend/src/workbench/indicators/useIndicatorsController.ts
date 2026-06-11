@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import type { ChartIndicatorCommand, ChartLoadState } from '../chart/ChartCoreHost'
+import type { ChartIndicatorCommand, ChartLoadState } from '../chart/chartRuntimeTypes'
 import type { SupportedChartIndicator } from '../rightDrawer/indicatorDefinitions'
 import {
   clearPersistedIndicatorsState,
@@ -38,7 +38,7 @@ export function useIndicatorsController({
   chartSymbol: string
   restoreContextExtra?: string
 }) {
-  const [state, setState] = useState(readPersistedIndicatorsState)
+  const [state, setState] = useState(() => readPersistedIndicatorsState(chartPeriod))
   const stateRef = useRef(state)
   const [persistenceEnabled, setPersistenceEnabledState] = useState(readIndicatorPersistenceEnabled)
   const [command, setCommand] = useState<ChartIndicatorCommand | null>(null)
@@ -48,6 +48,7 @@ export function useIndicatorsController({
   const commandIdRef = useRef(0)
   const dispatchQueuedCommandRef = useRef<() => void>(() => undefined)
   const restoredContextRef = useRef('')
+  const persistedPeriodRef = useRef(chartPeriod)
 
   const loadedIndicatorKeys = useMemo(() => loadedKeysFromState(state), [state])
 
@@ -133,11 +134,11 @@ export function useIndicatorsController({
     setPersistenceEnabledState(enabled)
     writeIndicatorPersistenceEnabled(enabled)
     if (!enabled) {
-      clearPersistedIndicatorsState()
+      clearPersistedIndicatorsState(chartPeriod)
       return
     }
-    writePersistedIndicatorsState(stateRef.current)
-  }, [])
+    writePersistedIndicatorsState(stateRef.current, chartPeriod)
+  }, [chartPeriod])
 
   const setSelectedKey = useCallback((selectedKey: string) => {
     updateState((current) => ({ ...current, ui: { ...current.ui, selectedKey } }))
@@ -153,8 +154,20 @@ export function useIndicatorsController({
 
   useEffect(() => {
     stateRef.current = state
-    if (persistenceEnabled) writePersistedIndicatorsState(state)
-  }, [persistenceEnabled, state])
+    if (persistedPeriodRef.current !== chartPeriod) return
+    if (persistenceEnabled) writePersistedIndicatorsState(state, chartPeriod)
+  }, [chartPeriod, persistenceEnabled, state])
+
+  useEffect(() => {
+    if (persistedPeriodRef.current === chartPeriod) return
+    persistedPeriodRef.current = chartPeriod
+    const nextState = readPersistedIndicatorsState(chartPeriod)
+    stateRef.current = nextState
+    setState(nextState)
+    commandQueueRef.current = []
+    setCommand(null)
+    enqueueCommands(createLoadedIndicatorCommands(nextState))
+  }, [chartPeriod, enqueueCommands])
 
   useEffect(() => () => {
     if (commandTimerRef.current != null) window.clearTimeout(commandTimerRef.current)

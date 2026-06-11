@@ -83,11 +83,12 @@ function displayRowsByKey(seriesRows: unknown[] | undefined) {
 }
 
 function isMorganRangeSeriesName(name: string) {
-  return name === 'MR_M5' || name === 'MR_M30'
+  return name === 'MR_M5' || name === 'MR_M30' || name === 'MR_H2'
 }
 
 function resolveMorganRangeRequestMode(request: StoreV6IndicatorRequestSpecV2): MorganRangeMode | null {
   const id = request.id.trim().toUpperCase()
+  if (id === 'MR-H2' || id === 'MR_H2') return 'D5_H2'
   if (id === 'MR-M30' || id === 'MR_M30') return 'D1_M30'
   if (id === 'MR-M5' || id === 'MR_M5') return 'H4_M5'
   return null

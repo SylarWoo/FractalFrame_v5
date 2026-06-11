@@ -1,6 +1,7 @@
 import type { StoreV6PagePartition, StoreV6PagePartitionMode } from './pagePartitionBuilder'
 import { buildM5TradingDaySlidingWeekPartition } from './timeAligned/m5TradingDaySlidingWeekPaginator'
 import { buildM30TradingMonthPartition } from './timeAligned/m30TradingMonthPaginator'
+import { buildH2TradingFourMonthPartition } from './timeAligned/h2TradingFourMonthPaginator'
 
 export type StoreV6PeriodPageSystemAdapterV2 = {
   build: (options: {
@@ -21,6 +22,11 @@ const periodPageSystemAdaptersV2: StoreV6PeriodPageSystemAdapterV2[] = [
     build: buildM30TradingMonthPartition,
     mode: 'm30-time',
     period: 'M30',
+  },
+  {
+    build: buildH2TradingFourMonthPartition,
+    mode: 'h2-time',
+    period: 'H2',
   },
 ]
 

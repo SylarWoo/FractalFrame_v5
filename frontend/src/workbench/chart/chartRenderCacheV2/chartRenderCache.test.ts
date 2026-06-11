@@ -201,7 +201,7 @@ describe('chartRenderCacheV2', () => {
 
     expect(first.frame.panes.VDO?.rows.at(-1)).toMatchObject({ barKey: tail.barKey, vdo: 0.3, vdoMa: 0.2 })
     expect(second.frame.panes.VDO?.rows.at(-1)).toMatchObject({ barKey: tail.barKey, vdo: 0.9, vdoMa: 0.7 })
-    expect(second.renderWindow.indicators.VDO?.displayRows.at(-1)).toMatchObject({ barKey: tail.barKey, vdo: 0.9, vdoMa: 0.7 })
+    expect(second.renderWindow.indicators.VDO?.displayRows?.at(-1)).toMatchObject({ barKey: tail.barKey, vdo: 0.9, vdoMa: 0.7 })
     expect(secondPerf?.cache.renderWindowHit).toBe(true)
     expect(secondPerf?.cache.finalFrameHit).toBe(true)
     vi.unstubAllGlobals()

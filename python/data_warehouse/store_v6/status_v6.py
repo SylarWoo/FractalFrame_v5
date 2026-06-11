@@ -24,7 +24,7 @@ def check_store_v6(symbol: str, store_root: str | Path | None = None) -> dict[st
     raw = manifest.get("datasets", {}).get(raw_key)
     clean = manifest.get("datasets", {}).get(clean_key)
     aggregated = []
-    for timeframe in ["M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN"]:
+    for timeframe in ["M5", "M15", "M30", "H1", "H2", "H4", "D1", "W1", "MN"]:
         key = dataset_key(provider="mt5", symbol=symbol, mode="aggregated", timeframe=normalize_period(timeframe), base_timeframe="M1", anchor="UTC2200")
         cell = manifest.get("datasets", {}).get(key)
         if cell:
