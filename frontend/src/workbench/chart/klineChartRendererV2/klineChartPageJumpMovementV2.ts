@@ -27,9 +27,8 @@ export function resolveKLineChartPageJumpMovementV2(
   }
   const delta = current.pageIndex - previous.pageIndex
   if (delta === 0) return null
-  if (delta === 1) return 'history-tail'
-  if (delta === -1) return 'history-head'
-  if (current.segments.realtime) return 'realtime-latest'
+  if (delta > 0) return 'history-tail'
+  if (delta < 0) return 'history-head'
   return null
 }
 

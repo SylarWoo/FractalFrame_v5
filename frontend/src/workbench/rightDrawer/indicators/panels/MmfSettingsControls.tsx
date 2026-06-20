@@ -2,7 +2,7 @@ import { SymbolSelect } from '../../../controls/SymbolSelect'
 import type { SymbolSelectSize } from '../../../controls/SymbolSelect'
 import { SettingsColorSwatch } from '../../../settings/SettingsSwatches'
 import { mmfHighSymbolOptions } from '../../stickerSymbols'
-import { CheckControl, NumberBox } from './indicatorPanelShared'
+import { CheckControl, NumberBox } from './IndicatorSettingControls'
 
 function resolveMmfSymbolSize(symbol: string): SymbolSelectSize {
   if (['\u25b2', '\u25b3', '\u25bc', '\u25bd'].includes(symbol)) return 'triangle'

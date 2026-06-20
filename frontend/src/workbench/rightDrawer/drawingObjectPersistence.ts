@@ -1,4 +1,5 @@
 import { readBooleanFlag, readJson, removeStorageItem, writeBooleanFlag, writeJson } from '../persistence/jsonStorage'
+import { normalizeDrawingCrossPeriodTargets } from '../drawing/drawingCrossPeriodModel'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import type { DrawingTextStyle, DrawingTrendLineStyle } from './drawingPersistence'
 import { normalizeDrawingLineStyle, normalizeDrawingTextStyle, normalizeDrawingTrendLineStyle } from './drawingPersistence'
@@ -8,17 +9,22 @@ import { normalizeDrawingRulerStyle } from './rulerDrawingStyle'
 export type PersistableDrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'emojiSticker'
 
 export type StoredHorizontalLineDrawing = {
+  crossPeriod?: boolean
+  crossPeriodTargets?: string[]
   lineStyle: SettingsLineSwatchValue
   locked: boolean
   manualVisible: boolean
   objectId: string
   paneId: string
   showPriceLabel: boolean
+  sourcePeriod?: string
   textStyle: DrawingTextStyle
   value: number
 }
 
 export type StoredTrendLineDrawing = {
+  crossPeriod?: boolean
+  crossPeriodTargets?: string[]
   lineStyle: SettingsLineSwatchValue
   locked: boolean
   manualVisible: boolean
@@ -30,6 +36,7 @@ export type StoredTrendLineDrawing = {
     value?: number
   }>
   showPriceLabel: boolean
+  sourcePeriod?: string
   textStyle: DrawingTextStyle
   trendLineStyle: DrawingTrendLineStyle
 }
@@ -86,6 +93,16 @@ export const horizontalLineDrawingsStorageKey = 'fractalframe.drawings.horizonta
 export const trendLineDrawingsStorageKey = 'fractalframe.drawings.trendLine.items'
 export const rulerDrawingsStorageKey = 'fractalframe.drawings.ruler.items'
 export const fibRetracementDrawingsStorageKey = 'fractalframe.drawings.fibRetracement.items'
+export const drawingObjectPersistenceChangedEvent = 'fractalframe:drawing-object-persistence-changed'
+
+function dispatchDrawingObjectPersistenceChanged(key: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(drawingObjectPersistenceChangedEvent, { detail: { key } }))
+}
+
+function normalizeStoredPeriod(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim().toUpperCase() : undefined
+}
 
 export function readDrawingObjectPersistence(tool: PersistableDrawingToolKey) {
   return readBooleanFlag(`${drawingObjectPersistenceStoragePrefix}.${tool}`, true)
@@ -99,12 +116,15 @@ export function readStoredHorizontalLineDrawings() {
   const stored = readJson<StoredHorizontalLineDrawing[]>(horizontalLineDrawingsStorageKey, [])
   return stored
     .map((drawing) => ({
+      crossPeriod: drawing.crossPeriod === true,
+      crossPeriodTargets: normalizeDrawingCrossPeriodTargets(drawing.crossPeriodTargets),
       lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#0f766e'),
       locked: drawing.locked === true,
       manualVisible: drawing.manualVisible !== false,
       objectId: typeof drawing.objectId === 'string' && drawing.objectId.trim() ? drawing.objectId.trim() : '',
       paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
       showPriceLabel: drawing.showPriceLabel !== false,
+      sourcePeriod: normalizeStoredPeriod(drawing.sourcePeriod),
       textStyle: normalizeDrawingTextStyle(drawing.textStyle),
       value: Number(drawing.value),
     }))
@@ -112,20 +132,27 @@ export function readStoredHorizontalLineDrawings() {
 }
 
 export function writeStoredHorizontalLineDrawings(drawings: StoredHorizontalLineDrawing[]) {
-  return writeJson(horizontalLineDrawingsStorageKey, drawings.map((drawing) => ({
+  const written = writeJson(horizontalLineDrawingsStorageKey, drawings.map((drawing) => ({
+    crossPeriod: drawing.crossPeriod === true,
+    crossPeriodTargets: normalizeDrawingCrossPeriodTargets(drawing.crossPeriodTargets),
     lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#0f766e'),
     locked: drawing.locked === true,
     manualVisible: drawing.manualVisible !== false,
     objectId: typeof drawing.objectId === 'string' && drawing.objectId.trim() ? drawing.objectId.trim() : '',
     paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
     showPriceLabel: drawing.showPriceLabel !== false,
+    sourcePeriod: normalizeStoredPeriod(drawing.sourcePeriod),
     textStyle: normalizeDrawingTextStyle(drawing.textStyle),
     value: drawing.value,
   })))
+  if (written) dispatchDrawingObjectPersistenceChanged(horizontalLineDrawingsStorageKey)
+  return written
 }
 
 export function clearStoredHorizontalLineDrawings() {
-  return removeStorageItem(horizontalLineDrawingsStorageKey)
+  const removed = removeStorageItem(horizontalLineDrawingsStorageKey)
+  if (removed) dispatchDrawingObjectPersistenceChanged(horizontalLineDrawingsStorageKey)
+  return removed
 }
 
 function normalizeTrendLinePoint(point: StoredTrendLineDrawing['points'][number]) {
@@ -174,6 +201,8 @@ export function readStoredTrendLineDrawings() {
   const stored = readJson<StoredTrendLineDrawing[]>(trendLineDrawingsStorageKey, [])
   return stored
     .map((drawing) => ({
+      crossPeriod: drawing.crossPeriod === true,
+      crossPeriodTargets: normalizeDrawingCrossPeriodTargets(drawing.crossPeriodTargets),
       lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#2962ff'),
       locked: drawing.locked === true,
       manualVisible: drawing.manualVisible !== false,
@@ -181,6 +210,7 @@ export function readStoredTrendLineDrawings() {
       paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
       points: Array.isArray(drawing.points) ? drawing.points.map(normalizeTrendLinePoint) : [],
       showPriceLabel: drawing.showPriceLabel !== false,
+      sourcePeriod: normalizeStoredPeriod(drawing.sourcePeriod),
       textStyle: normalizeDrawingTextStyle(drawing.textStyle),
       trendLineStyle: normalizeDrawingTrendLineStyle(drawing.trendLineStyle),
     }))
@@ -188,7 +218,9 @@ export function readStoredTrendLineDrawings() {
 }
 
 export function writeStoredTrendLineDrawings(drawings: StoredTrendLineDrawing[]) {
-  return writeJson(trendLineDrawingsStorageKey, drawings.map((drawing) => ({
+  const written = writeJson(trendLineDrawingsStorageKey, drawings.map((drawing) => ({
+    crossPeriod: drawing.crossPeriod === true,
+    crossPeriodTargets: normalizeDrawingCrossPeriodTargets(drawing.crossPeriodTargets),
     lineStyle: normalizeDrawingLineStyle(drawing.lineStyle, '#2962ff'),
     locked: drawing.locked === true,
     manualVisible: drawing.manualVisible !== false,
@@ -196,13 +228,18 @@ export function writeStoredTrendLineDrawings(drawings: StoredTrendLineDrawing[])
     paneId: typeof drawing.paneId === 'string' && drawing.paneId.trim() ? drawing.paneId.trim() : 'candle_pane',
     points: drawing.points.slice(0, 2).map(normalizeTrendLinePoint),
     showPriceLabel: drawing.showPriceLabel !== false,
+    sourcePeriod: normalizeStoredPeriod(drawing.sourcePeriod),
     textStyle: normalizeDrawingTextStyle(drawing.textStyle),
     trendLineStyle: normalizeDrawingTrendLineStyle(drawing.trendLineStyle),
   })))
+  if (written) dispatchDrawingObjectPersistenceChanged(trendLineDrawingsStorageKey)
+  return written
 }
 
 export function clearStoredTrendLineDrawings() {
-  return removeStorageItem(trendLineDrawingsStorageKey)
+  const removed = removeStorageItem(trendLineDrawingsStorageKey)
+  if (removed) dispatchDrawingObjectPersistenceChanged(trendLineDrawingsStorageKey)
+  return removed
 }
 
 export function readStoredRulerDrawings() {

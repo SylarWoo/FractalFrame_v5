@@ -3,7 +3,7 @@ import type { KLineChartPaneFrame } from '../historyPageKLineChartFrameV2'
 import { createIndicatorSnapshotRows, writeIndicatorPageSnapshot } from '../indicatorPageSnapshotStore'
 import { storeV6MaIndicatorIdV2 } from '../indicatorRequestV2'
 import type { KLineChartRenderFrameV2 } from '../klineChartRenderFrameV2'
-import { ensureTradingViewMaShiftIndicator } from '../tradingViewMaShiftIndicator'
+import { ensureTradingViewMaShiftIndicator, tradingViewMaShiftIndicatorName } from '../tradingViewMaShiftIndicator'
 import type { MaShiftRow } from '../tradingViewMaShiftIndicator'
 import { createKLineChartIndicatorSnapshotContextV2, createKLineChartRuntimeCalcParamsV2 } from './klineChartIndicatorSnapshotBridgeV2'
 import { createKLineChartIndicatorMountAdapterV2 } from './klineChartIndicatorMountAdapterV2'
@@ -72,10 +72,11 @@ function writeMaSnapshot(frame: KLineChartRenderFrameV2, pane: KLineChartPaneFra
 
 export function installKLineChartMainMaOverlayV2(chart: Chart, frame: KLineChartRenderFrameV2) {
   ensureTradingViewMaShiftIndicator()
+  chart.removeIndicator(candlePaneId, storeV6MaIndicatorIdV2)
   const mount = createKLineChartIndicatorMountAdapterV2({
     chart,
     createStack: true,
-    indicatorName: storeV6MaIndicatorIdV2,
+    indicatorName: tradingViewMaShiftIndicatorName,
     paneId: candlePaneId,
   })
 
@@ -86,7 +87,7 @@ export function installKLineChartMainMaOverlayV2(chart: Chart, frame: KLineChart
       return
     }
     const calcParams = [writeMaSnapshot(nextFrame, pane)]
-    mount.apply({ name: storeV6MaIndicatorIdV2, calcParams })
+    mount.apply({ name: tradingViewMaShiftIndicatorName, calcParams })
   }
 
   apply(frame)

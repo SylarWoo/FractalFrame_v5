@@ -1,6 +1,6 @@
 import type { KLineData } from 'klinecharts'
-import { createPageDataSliceFromDisplayRows } from '../../pageData/pageDataProvider'
 import { createChartPageWindow } from './chartPageWindow'
+import { createPageDataSliceFromDisplayRows } from './pageDataSliceBridge'
 
 export function createHistoryPageWindow(options: {
   pageIndex?: number

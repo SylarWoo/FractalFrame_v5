@@ -31,10 +31,35 @@ export {
   storeV6MaPaneIdV2,
 } from './maIndicatorV2'
 export {
+  storeV6AoIndicatorDefinitionV2,
+  storeV6AoIndicatorIdV2,
+  storeV6AoPaneIdV2,
+} from './aoIndicatorV2'
+export {
+  storeV6DpoIndicatorDefinitionV2,
+  storeV6DpoIndicatorIdV2,
+  storeV6DpoPaneIdV2,
+} from './dpoIndicatorV2'
+export {
+  storeV6MacdIndicatorDefinitionV2,
+  storeV6MacdIndicatorIdV2,
+  storeV6MacdPaneIdV2,
+} from './macdIndicatorV2'
+export {
   storeV6MmfV3IndicatorDefinitionV2,
   storeV6MmfV3IndicatorIdV2,
   storeV6MmfV3PaneIdV2,
 } from './mmfV3IndicatorV2'
+export {
+  storeV6MmfStochH2IndicatorDefinitionV2,
+  storeV6MmfStochH2IndicatorIdV2,
+  storeV6MmfStochH2PaneIdV2,
+} from './mmfStochH2IndicatorV2'
+export {
+  storeV6MmadIndicatorDefinitionV2,
+  storeV6MmadIndicatorIdV2,
+  storeV6MmadPaneIdV2,
+} from './mmadIndicatorV2'
 export {
   storeV6MorganRangeM5IndicatorDefinitionV2,
   storeV6MorganRangeM5IndicatorIdV2,
@@ -70,10 +95,25 @@ export {
   storeV6StochPaneIdV2,
 } from './stochIndicatorV2'
 export {
+  storeV6RsiIndicatorDefinitionV2,
+  storeV6RsiIndicatorIdV2,
+  storeV6RsiPaneIdV2,
+} from './rsiIndicatorV2'
+export {
+  storeV6SqzmomIndicatorDefinitionV2,
+  storeV6SqzmomIndicatorIdV2,
+  storeV6SqzmomPaneIdV2,
+} from './sqzmomIndicatorV2'
+export {
   storeV6TsiIndicatorDefinitionV2,
   storeV6TsiIndicatorIdV2,
   storeV6TsiPaneIdV2,
 } from './tsiIndicatorV2'
+export {
+  storeV6ViIndicatorDefinitionV2,
+  storeV6ViIndicatorIdV2,
+  storeV6ViPaneIdV2,
+} from './viIndicatorV2'
 export {
   storeV6VwapIndicatorDefinitionV2,
   storeV6VwapIndicatorIdV2,

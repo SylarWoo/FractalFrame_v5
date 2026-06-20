@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   isHistoryPageIndexCacheStaleAfterDailyRollover,
+  isHistoryPageIndexCacheStaleAfterRollover,
   resolveLastHistoryPageDailyRolloverAtMs,
+  resolveLastHistoryPageRolloverAtMs,
   resolveNextHistoryPageDailyRolloverDelayMs,
+  resolveNextHistoryPageRolloverDelayMs,
 } from './historyPageDailyRolloverV2'
 
 function shanghaiMs(year: number, month: number, day: number, hour: number, minute: number) {
@@ -46,5 +49,57 @@ describe('historyPageDailyRolloverV2', () => {
       nowMs: shanghaiMs(2026, 6, 9, 7, 0),
       symbol: 'XAUUSDm',
     })).toBe(false)
+  })
+
+  it('schedules M30 page rollover after the next Shanghai Friday close', () => {
+    const nowMs = shanghaiMs(2026, 6, 12, 4, 50)
+    const delay = resolveNextHistoryPageRolloverDelayMs({
+      nowMs,
+      period: 'M30',
+      symbol: 'XAUUSDm',
+    })
+
+    expect(delay).toBe(shanghaiMs(2026, 6, 12, 5, 1) - nowMs)
+  })
+
+  it('marks M30 page index cache stale after weekly rollover', () => {
+    expect(resolveLastHistoryPageRolloverAtMs({
+      nowMs: shanghaiMs(2026, 6, 12, 7, 0),
+      period: 'M30',
+      symbol: 'XAUUSDm',
+    })).toBe(shanghaiMs(2026, 6, 12, 5, 1))
+
+    expect(isHistoryPageIndexCacheStaleAfterRollover({
+      builtAt: new Date(shanghaiMs(2026, 6, 11, 23, 0)).toISOString(),
+      nowMs: shanghaiMs(2026, 6, 12, 7, 0),
+      period: 'M30',
+      symbol: 'XAUUSDm',
+    })).toBe(true)
+  })
+
+  it('schedules H2 page rollover after the last Shanghai trading-day close of the month', () => {
+    const nowMs = shanghaiMs(2026, 5, 29, 4, 50)
+    const delay = resolveNextHistoryPageRolloverDelayMs({
+      nowMs,
+      period: 'H2',
+      symbol: 'XAUUSDm',
+    })
+
+    expect(delay).toBe(shanghaiMs(2026, 5, 29, 5, 1) - nowMs)
+  })
+
+  it('marks H2 page index cache stale after monthly rollover', () => {
+    expect(resolveLastHistoryPageRolloverAtMs({
+      nowMs: shanghaiMs(2026, 6, 30, 7, 0),
+      period: 'H2',
+      symbol: 'XAUUSDm',
+    })).toBe(shanghaiMs(2026, 6, 30, 5, 1))
+
+    expect(isHistoryPageIndexCacheStaleAfterRollover({
+      builtAt: new Date(shanghaiMs(2026, 6, 29, 23, 0)).toISOString(),
+      nowMs: shanghaiMs(2026, 6, 30, 7, 0),
+      period: 'H2',
+      symbol: 'XAUUSDm',
+    })).toBe(true)
   })
 })

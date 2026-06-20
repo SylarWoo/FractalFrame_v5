@@ -69,6 +69,7 @@ function createLabelNode(className: string): PageLabelNode {
 
 function hideLabel(label: PageLabelNode) {
   label.node.style.display = 'none'
+  label.node.onclick = null
   label.button.onclick = null
 }
 
@@ -90,14 +91,20 @@ function updateLabel(options: {
     button.style.display = 'block'
     button.textContent = options.arrow
     if (options.onClick) {
-      button.onclick = options.onClick
+      node.onclick = options.onClick
+      button.onclick = (event) => {
+        event.stopPropagation()
+        options.onClick?.()
+      }
       button.disabled = false
     } else {
+      node.onclick = null
       button.onclick = null
       button.disabled = true
     }
   } else {
     button.style.display = 'none'
+    node.onclick = null
     button.onclick = null
     button.disabled = true
   }

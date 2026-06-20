@@ -113,6 +113,32 @@ describe('klineChartFrameLifecycleV2', () => {
     })).toBe(false)
   })
 
+  it('uses the main data identity fast path for indicator-only frame key changes', () => {
+    const previous = frame(5)
+    previous.segments.history.key = 'history-page-1:indicators:VOL:off'
+    const current = frame(5)
+    current.key = 'frame-with-vol-settings'
+    current.segments.history.key = 'history-page-1:indicators:VOL:on'
+    current.mainRows = previous.mainRows.map((row, index) => index === 1
+      ? ({
+        get close() {
+          throw new Error('pane-only fast path should not scan unchanged rows')
+        },
+        high: row.high,
+        low: row.low,
+        open: row.open,
+        timestamp: row.timestamp,
+        volume: row.volume,
+      } as never)
+      : row)
+
+    expect(canApplyKLineChartPaneOnlyUpdateV2({
+      current,
+      previous,
+      sameRenderWindow: true,
+    })).toBe(true)
+  })
+
   it('does not treat history page switches as new realtime boundary anchors', () => {
     const firstPage = frame(3, 1000)
     const secondPage = frame(3, 1000)

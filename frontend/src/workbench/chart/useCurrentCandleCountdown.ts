@@ -19,6 +19,8 @@ type UseCurrentCandleCountdownOptions = {
   symbol: string
 }
 
+const tailSilenceGraceMs = 90_000
+
 export type CurrentCandleCountdownState = {
   axisWidth: number
   color: string
@@ -103,6 +105,10 @@ export function useCurrentCandleCountdown({ chartInstanceRef, dataReady = true, 
       const axisRect = axisDom?.getBoundingClientRect()
       const axisWidth = axisRect?.width ?? Number.NaN
       const periodMs = periodSeconds * 1000
+      if (Date.now() > timestamp + periodMs + tailSilenceGraceMs) {
+        setState((current) => current.visible ? { ...current, visible: false } : current)
+        return
+      }
       const endTimestamp = resolveCountdownEndTimestamp(timestamp, periodMs)
       if (!Number.isFinite(y) || !Number.isFinite(axisWidth)) {
         setState((current) => current.visible ? { ...current, visible: false } : current)

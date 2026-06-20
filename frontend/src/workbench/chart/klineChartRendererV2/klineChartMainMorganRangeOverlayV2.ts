@@ -11,6 +11,11 @@ import {
 } from '../indicatorRequestV2'
 import type { KLineChartRenderFrameV2 } from '../klineChartRenderFrameV2'
 import type { MorganRangeMode, MorganRangeSegment } from '../morganRangeModel'
+import {
+  isMorganRangeSegmentV2,
+  readMorganRangePaneFromFrameV2,
+  resolveMorganRangeRuntimeDefinitionForFrameV2,
+} from '../morganRangeRuntimeV2'
 import { ensureTradingViewMrIndicator } from '../tradingViewMrIndicator'
 import { createKLineChartIndicatorSnapshotContextV2 } from './klineChartIndicatorSnapshotBridgeV2'
 
@@ -41,73 +46,20 @@ type MorganRangePaneTarget = {
 }
 
 function findMorganRangePane(frame: KLineChartRenderFrameV2): MorganRangePaneTarget | null {
-  const normalizedPeriod = frame.period.trim().toUpperCase()
-  const h2Pane = frame.panes[storeV6MorganRangeH2IndicatorIdV2] ?? frame.panes['MR-H2'] ?? null
-  const m30Pane = frame.panes[storeV6MorganRangeM30IndicatorIdV2] ?? frame.panes['MR-M30'] ?? null
-  const m5Pane = frame.panes[storeV6MorganRangeM5IndicatorIdV2] ?? frame.panes['MR-M5'] ?? null
-  if (normalizedPeriod === 'M5' && m5Pane) {
-    return {
-      indicatorId: storeV6MorganRangeM5IndicatorIdV2,
-      mode: 'H4_M5',
-      pane: m5Pane,
-      settingsHashKey: storeV6MorganRangeM5IndicatorIdV2,
-    }
-  }
-  if (normalizedPeriod === 'M30' && m30Pane) {
-    return {
-      indicatorId: storeV6MorganRangeM30IndicatorIdV2,
-      mode: 'D1_M30',
-      pane: m30Pane,
-      settingsHashKey: storeV6MorganRangeM30IndicatorIdV2,
-    }
-  }
-  if (normalizedPeriod === 'H2' && h2Pane) {
-    return {
-      indicatorId: storeV6MorganRangeH2IndicatorIdV2,
-      mode: 'D5_H2',
-      pane: h2Pane,
-      settingsHashKey: storeV6MorganRangeH2IndicatorIdV2,
-    }
-  }
-  if (!m5Pane && !m30Pane && !h2Pane) return null
-  if (h2Pane) {
-    return {
-      indicatorId: storeV6MorganRangeH2IndicatorIdV2,
-      mode: 'D5_H2',
-      pane: h2Pane,
-      settingsHashKey: storeV6MorganRangeH2IndicatorIdV2,
-    }
-  }
-  if (m30Pane) {
-    return {
-      indicatorId: storeV6MorganRangeM30IndicatorIdV2,
-      mode: 'D1_M30',
-      pane: m30Pane,
-      settingsHashKey: storeV6MorganRangeM30IndicatorIdV2,
-    }
-  }
-  if (!m5Pane) return null
+  const definition = resolveMorganRangeRuntimeDefinitionForFrameV2(frame)
+  if (!definition) return null
+  const pane = readMorganRangePaneFromFrameV2(frame, definition)
+  if (!pane) return null
   return {
-    indicatorId: storeV6MorganRangeM5IndicatorIdV2,
-    mode: 'H4_M5',
-    pane: m5Pane,
-    settingsHashKey: storeV6MorganRangeM5IndicatorIdV2,
+    indicatorId: definition.indicatorId,
+    mode: definition.mode,
+    pane,
+    settingsHashKey: definition.indicatorId,
   }
-}
-
-function isMorganRangeSegment(row: unknown): row is MorganRangeSegment {
-  if (!row || typeof row !== 'object') return false
-  const segment = row as Partial<MorganRangeSegment>
-  return Number.isFinite(segment.startIndex) &&
-    Number.isFinite(segment.endIndex) &&
-    Number.isFinite(segment.startTimestamp) &&
-    Number.isFinite(segment.center) &&
-    Number.isFinite(segment.upper) &&
-    Number.isFinite(segment.lower)
 }
 
 function writeMorganRangeSnapshot(frame: KLineChartRenderFrameV2, target: MorganRangePaneTarget) {
-  const segments = target.pane.rows.filter(isMorganRangeSegment)
+  const segments = target.pane.rows.filter(isMorganRangeSegmentV2)
   const { pageKey, settingsHash } = createKLineChartIndicatorSnapshotContextV2({
     frame,
     indicatorId: target.indicatorId,

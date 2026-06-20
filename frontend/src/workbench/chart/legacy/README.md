@@ -1,6 +1,6 @@
 # Legacy Chart Host Hooks
 
-This folder contains hooks that belong to the old `ChartCoreHost` runtime.
+This folder contains hooks that belong to the old `LegacyChartCoreHost` runtime.
 
 New KLineChart V2 work should use `ChartWorkspaceV2`, `klineChartRendererV2`,
 `indicatorRequestV2`, and `realtimePageWindowV2` instead of importing from here.

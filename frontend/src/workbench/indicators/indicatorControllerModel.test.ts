@@ -16,7 +16,7 @@ describe('indicatorControllerModel', () => {
 
     expect(loaded).toMatchObject({ 'MR-M5': true, RSI: true, Vol: true, MACD: false })
     expect(loadedKeysFromState({ ...readPersistedIndicatorsState(), loaded })).toEqual(['RSI', 'MR-M5', 'Vol'])
-    expect(indicatorRestoreOrder).toEqual(['RSI', 'Stoch', 'SQZMOM', 'MACD', 'DPO', 'VDO', 'AO', 'VMI', 'TSI', 'VI', 'MA', 'MR-M5', 'MR-M30', 'MR-H2', 'MMF_V3', 'VWAP', 'Vol'])
+    expect(indicatorRestoreOrder).toEqual(['RSI', 'Stoch', 'SQZMOM', 'MACD', 'DPO', 'VDO', 'AO', 'VMI', 'MMAD', 'TSI', 'VI', 'MA', 'MR-M5', 'MR-M30', 'MR-H2', 'MMF_V3', 'MMF_STOCH_H2', 'VWAP', 'Vol'])
   })
 
   it('reads and writes settings through the indicator registry', () => {

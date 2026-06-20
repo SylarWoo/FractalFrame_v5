@@ -4,6 +4,7 @@ import type { StoreV6WindowKLine } from '../pageSliceV2'
 import { readStoreV6PageSlice } from '../pageSliceV2'
 import type { StoreV6PagePartitionItem } from '../pagePartition/pagePartitionBuilder'
 import { maxIndicatorWarmupRowsV2 } from '../indicatorRequestV2'
+import { requestMmfStochH2EventReceiverIndicatorsV2 } from '../indicatorRequestV2/mmfStochH2IndicatorV2'
 import { planCompositeIndicatorDependenciesV2 } from '../indicatorRequestV2/compositeIndicatorDependencyOrchestratorV2'
 import { createStoreV6IndicatorRequestSignatureV2 } from '../indicatorRequestV2/indicatorRequestSignatureV2'
 import { refreshRealtimeWindowIndicatorsWithStableCacheV2 } from '../indicatorRequestV2/realtimeIndicatorStableCacheV2'
@@ -95,6 +96,7 @@ function normalizeMt5RateRows(rows: StoreV6QueryRow[] | null | undefined, reques
     byTime.set(time, {
       barKey: typeof row.barKey === 'string' && row.barKey ? row.barKey : createRealtimeBarKey(request.symbol, request.period, time),
       close,
+      closeTime: typeof row.closeTime === 'number' && Number.isFinite(row.closeTime) ? Math.round(row.closeTime) : time + resolvePeriodSeconds(request.period),
       globalIndex: typeof row.globalIndex === 'number' && Number.isFinite(row.globalIndex) ? Math.round(row.globalIndex) : null,
       high,
       low,
@@ -442,6 +444,26 @@ async function buildRealtimeWindowWithIndicators(options: {
       key: options.sourceKey,
       updateKind: options.updateKind,
     },
+  }).then(async (window) => {
+    const eventReceiverIndicators = await requestMmfStochH2EventReceiverIndicatorsV2({
+      calculationRows: [...indicatorHistoryRows, ...options.sourceWindow.activeRows],
+      displayRows: options.sourceWindow.activeRows,
+      period: options.period,
+      sourceKey: window.key,
+      symbol: options.symbol,
+    })
+    const indicators = {
+      ...window.indicators,
+      ...eventReceiverIndicators,
+    }
+    return {
+      ...window,
+      indicators,
+      renderData: {
+        ...window.renderData,
+        indicators,
+      },
+    }
   })
 }
 
@@ -597,6 +619,7 @@ export function mergeMt5RealtimeTickIntoWindow(
   const row: StoreV6WindowKLine = {
     barKey: createRealtimeBarKey(window.symbol, window.period, tickTime),
     close: last,
+    closeTime: tickTime + periodSeconds,
     globalIndex: sameBar ? latest.globalIndex : null,
     high,
     low,

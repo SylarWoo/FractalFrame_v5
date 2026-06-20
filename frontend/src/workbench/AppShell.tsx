@@ -3,20 +3,8 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { bottomPanels } from './bottomDrawer/bottomPanels'
 import { BottomWorkspace } from './bottomDrawer/BottomWorkspace'
 import { ChartWorkspaceV2 } from './chart/ChartWorkspaceV2'
-import {
-  storeV6MaIndicatorIdV2,
-  storeV6MmfV3IndicatorIdV2,
-  storeV6MorganRangeM5RequestIdV2,
-  storeV6MorganRangeM30RequestIdV2,
-  storeV6MorganRangeH2RequestIdV2,
-  storeV6StochIndicatorIdV2,
-  storeV6TsiIndicatorIdV2,
-  storeV6VdoIndicatorIdV2,
-  storeV6VmiIndicatorIdV2,
-  storeV6VolIndicatorIdV2,
-  storeV6VwapIndicatorIdV2,
-  type StoreV6IndicatorRequestSpecV2,
-} from './chart/indicatorRequestV2'
+import type { StoreV6IndicatorRequestSpecV2 } from './chart/indicatorRequestV2'
+import { buildChartIndicatorRequestsV2 } from './chart/indicatorRequestV2/chartIndicatorRequestBuilderV2'
 import {
   readKLineChartRenderPageConfigV2,
   writeKLineChartRenderPageConfigV2,
@@ -30,9 +18,13 @@ import {
 } from './chart/historyPageCacheCleanupV2'
 import {
   dispatchHistoryPageDailyRolloverRebuild,
-  resolveNextHistoryPageDailyRolloverDelayMs,
+  resolveHistoryPageRolloverReasonForPeriod,
+  resolveNextHistoryPageRolloverDelayMs,
 } from './chart/pagePartition/historyPageDailyRolloverV2'
 import type { StoreV6HistoryPageWindow } from './chart/historyPageWindowV2'
+import type { MorganRangeSegment } from './chart/morganRangeModel'
+import { readRealtimePageBuffer } from './chart/chartRealtimeBridge'
+import { resolvePeriodSeconds } from './chart/chartTimeFormatting'
 import { resolveStoreV6PagePartitionMode } from './chart/pagePartition/pagePartitionBuilder'
 import { hasStoreV6PeriodPageSystemV2 } from './chart/pagePartition/periodPageSystemV2'
 import {
@@ -56,6 +48,7 @@ import {
   LEFT_RAIL_ZOOM_OUT_SVGREPO_ICON_48,
 } from './leftRailV4Icons'
 import { RightDrawer } from './rightDrawer/RightDrawer'
+import { indicatorRows, isSupportedChartIndicator } from './rightDrawer/indicatorDefinitions'
 import { useIndicatorsController } from './indicators/useIndicatorsController'
 import { resolveMt5SymbolDisplay } from './rightDrawer/mt5SymbolDisplay'
 import { objectTreeDrawingsChangedEvent } from './rightDrawer/objectTree/objectTreeModel'
@@ -63,8 +56,10 @@ import type { ObjectTreeDrawingItem } from './rightDrawer/objectTree/objectTreeT
 import type { IndicatorShortcutItem, RightDrawerId, StrategyShortcutItem } from './rightDrawer/RightDrawerTypes'
 import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
 import { formatChartLoadStatus } from './mt5DataCenter/storeV6StatusFormat'
+import { marketStatusTitleChangedEvent, readMarketSessionScheduleStatus } from './mt5DataCenter/marketStatusTitleState'
 import { readBooleanFlag, readJson, readString, removeStorageItem, writeBooleanFlag, writeJson, writeString } from './persistence/jsonStorage'
 import { storageKeys } from './persistence/storageKeys'
+import { workbenchEvents } from './persistence/workbenchEvents'
 import { readSettingsBooleanValue, readSettingsStringValue, settingsSymbolChangedEvent, setSettingsSymbolStatePeriod } from './settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from './settings/chartSettingsSchema'
 import { TopBar } from './topbar/TopBar'
@@ -73,6 +68,7 @@ import './openableControl.css'
 import './AppShell.css'
 
 const appShellRefreshRestoreFlights = new Map<string, ReturnType<typeof restoreRefreshAfterAutoPushTargetV2>>()
+const tailSilenceGraceMs = 90_000
 
 function requestAppShellRefreshRestoreTargetV2(key: string) {
   const existing = appShellRefreshRestoreFlights.get(key)
@@ -110,25 +106,7 @@ const leftToolbarItems = [
   { type: 'button', label: 'Remove drawings', svg: LEFT_RAIL_REMOVE_SELECTED_DRAWINGS_SVGREPO_ICON_48 },
 ] as const
 
-const indicatorShortcutLabels: Record<string, string> = {
-  RSI: '相对强弱指数',
-  Stoch: '随机指标',
-  SQZMOM: 'SQZMOM - Squeeze Momentum',
-  MACD: '平滑异同移动平均线',
-  DPO: '非趋势价格摆动指标',
-  VDO: '漩涡差值指标',
-  AO: '动量震荡指标',
-  VMI: '漩涡动量指标',
-  TSI: '真实强弱指数',
-  VI: '漩涡指标',
-  MA: '移动均线',
-  MMF_V3: 'MMF v3 - 日内交易系统',
-  'MR-M5': '\u6469\u6839\u533a\u95f4_5\u5206\u949f',
-  'MR-M30': '\u6469\u6839\u533a\u95f4_30\u5206\u949f',
-  'MR-H2': '\u6469\u6839\u533a\u95f4_2\u5c0f\u65f6',
-  VWAP: '成交量加权平均价',
-  Vol: '成交量',
-}
+const indicatorShortcutLabels = Object.fromEntries(indicatorRows.map((row) => [row.key, row.name])) as Record<string, string>
 
 const strategyRows = [
   {
@@ -332,8 +310,11 @@ export function AppShell() {
   const [strategyPersistenceEnabled, setStrategyPersistenceEnabled] = useState(readInitialStrategyPersistenceEnabled)
   const [loadedStrategyKeys, setLoadedStrategyKeys] = useState<string[]>(readInitialLoadedStrategyKeys)
   const [chartTarget, setChartTarget] = useState<ChartTarget>(readInitialChartTarget)
+  const [morganRangeSegment, setMorganRangeSegment] = useState<MorganRangeSegment | null>(null)
   setSettingsSymbolStatePeriod(chartTarget.period)
   const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
+  const sessionCloseRolloverKeyRef = useRef('')
+  const tailSilenceRolloverKeyRef = useRef('')
   const indicatorsController = useIndicatorsController({
     chartLoadState,
     chartPeriod: chartTarget.period,
@@ -346,100 +327,20 @@ export function AppShell() {
     ].join(':'),
   })
   const loadedIndicatorKeys = indicatorsController.loadedIndicatorKeys
-  const chartIndicatorRequestsV2 = useMemo<StoreV6IndicatorRequestSpecV2[]>(() => {
-    const requests: StoreV6IndicatorRequestSpecV2[] = []
-    const normalizedChartPeriod = chartTarget.period.trim().toUpperCase()
-    const currentPeriodMorganRangeRequestId = normalizedChartPeriod === 'M30'
-      ? storeV6MorganRangeM30RequestIdV2
-      : normalizedChartPeriod === 'H2'
-        ? storeV6MorganRangeH2RequestIdV2
-      : normalizedChartPeriod === 'M5'
-        ? storeV6MorganRangeM5RequestIdV2
-        : null
-    const currentPeriodMorganRangeLoaded = normalizedChartPeriod === 'M30'
-      ? loadedIndicatorKeys.includes('MR-M30')
-      : normalizedChartPeriod === 'H2'
-        ? loadedIndicatorKeys.includes('MR-H2')
-      : normalizedChartPeriod === 'M5'
-        ? loadedIndicatorKeys.includes('MR-M5')
-        : false
-    if (loadedIndicatorKeys.includes('MA')) {
-      requests.push({
-        id: storeV6MaIndicatorIdV2,
-        params: indicatorsController.settings.ma,
-      })
-    }
-    if (loadedIndicatorKeys.includes('MMF_V3')) {
-      requests.push({
-        id: storeV6MmfV3IndicatorIdV2,
-        params: {
-          maSettings: indicatorsController.settings.ma,
-          morganRangeMode: normalizedChartPeriod === 'H2' && loadedIndicatorKeys.includes('MR-H2')
-            ? 'D5_H2'
-            : normalizedChartPeriod === 'M30' && loadedIndicatorKeys.includes('MR-M30')
-              ? 'D1_M30'
-              : 'H4_M5',
-          settings: indicatorsController.settings.mmfV3,
-          stochSettings: indicatorsController.settings.stoch,
-          tsiSettings: indicatorsController.settings.tsi,
-          vdoSettings: indicatorsController.settings.vdo,
-          vmiSettings: indicatorsController.settings.vmi,
-          vwapSettings: indicatorsController.settings.vwap,
-        },
-      })
-    }
-    if (currentPeriodMorganRangeLoaded && currentPeriodMorganRangeRequestId) {
-      const currentPeriodMorganRangeSettings = normalizedChartPeriod === 'H2'
-        ? indicatorsController.settings.mrH2
-        : normalizedChartPeriod === 'M30'
-          ? indicatorsController.settings.mrM30
-          : indicatorsController.settings.mr
-      requests.push({
-        id: currentPeriodMorganRangeRequestId,
-        params: currentPeriodMorganRangeSettings,
-      })
-    }
-    if (loadedIndicatorKeys.includes('Vol')) {
-      requests.push({
-        id: storeV6VolIndicatorIdV2,
-        params: indicatorsController.settings.vol,
-      })
-    }
-    if (loadedIndicatorKeys.includes('VWAP')) {
-      requests.push({
-        id: storeV6VwapIndicatorIdV2,
-        params: indicatorsController.settings.vwap,
-      })
-    }
-    if (loadedIndicatorKeys.includes('Stoch')) {
-      requests.push({
-        id: storeV6StochIndicatorIdV2,
-        params: indicatorsController.settings.stoch,
-      })
-    }
-    if (loadedIndicatorKeys.includes('TSI')) {
-      requests.push({
-        id: storeV6TsiIndicatorIdV2,
-        params: indicatorsController.settings.tsi,
-      })
-    }
-    if (loadedIndicatorKeys.includes('VDO')) {
-      requests.push({
-        id: storeV6VdoIndicatorIdV2,
-        params: indicatorsController.settings.vdo,
-      })
-    }
-    if (loadedIndicatorKeys.includes('VMI')) {
-      requests.push({
-        id: storeV6VmiIndicatorIdV2,
-        params: indicatorsController.settings.vmi,
-      })
-    }
-    return requests
-  }, [chartTarget.period, indicatorsController.settings.ma, indicatorsController.settings.mmfV3, indicatorsController.settings.mr, indicatorsController.settings.mrM30, indicatorsController.settings.mrH2, indicatorsController.settings.stoch, indicatorsController.settings.tsi, indicatorsController.settings.vdo, indicatorsController.settings.vmi, indicatorsController.settings.vol, indicatorsController.settings.vwap, loadedIndicatorKeys])
+  const chartIndicatorRequestsV2 = useMemo<StoreV6IndicatorRequestSpecV2[]>(() => buildChartIndicatorRequestsV2({
+    loadedIndicatorKeys,
+    period: chartTarget.period,
+    settings: indicatorsController.settings,
+  }), [chartTarget.period, indicatorsController.settings, loadedIndicatorKeys])
   const chartWorkspaceTarget = useMemo(() => ({
     ...chartTarget,
     indicatorRequests: chartIndicatorRequestsV2,
+    pageNavigation: chartTarget.pageNavigation
+      ? {
+          ...chartTarget.pageNavigation,
+          onSelectPage: handleChartPageSelect,
+        }
+      : null,
   }), [chartIndicatorRequestsV2, chartTarget])
   const refreshLoadedIndicatorsVisibility = indicatorsController.refreshLoadedIndicatorsVisibility
   const indicatorShortcuts: IndicatorShortcutItem[] = indicatorShortcutKeys.map((key) => ({
@@ -535,6 +436,10 @@ export function AppShell() {
   }, [activeRightDrawer])
 
   useEffect(() => {
+    setMorganRangeSegment(null)
+  }, [chartTarget.period, chartTarget.symbol])
+
+  useEffect(() => {
     const period = periodToChartPeriod(chartTarget.period)
     const historyPageWindow = chartTarget.historyPageWindow
     if (!isIsolatedChartPeriod(period) || !historyPageWindow) return
@@ -602,21 +507,27 @@ export function AppShell() {
 
   useEffect(() => {
     let timer = 0
+    const triggerRollover = () => {
+      const reason = resolveHistoryPageRolloverReasonForPeriod(chartTarget.period)
+      clearRealtimePageCachesV2({
+        period: chartTarget.period,
+        reason,
+        symbol: chartTarget.symbol,
+      })
+      dispatchHistoryPageDailyRolloverRebuild({
+        period: chartTarget.period,
+        reason,
+        symbol: chartTarget.symbol,
+      })
+    }
     const schedule = () => {
-      const delay = resolveNextHistoryPageDailyRolloverDelayMs({
+      const delay = resolveNextHistoryPageRolloverDelayMs({
+        period: chartTarget.period,
         symbol: chartTarget.symbol,
       })
       if (delay == null) return
       timer = window.setTimeout(() => {
-        clearRealtimePageCachesV2({
-          period: chartTarget.period,
-          reason: 'daily-close',
-          symbol: chartTarget.symbol,
-        })
-        dispatchHistoryPageDailyRolloverRebuild({
-          period: chartTarget.period,
-          symbol: chartTarget.symbol,
-        })
+        triggerRollover()
         schedule()
       }, delay)
     }
@@ -625,6 +536,115 @@ export function AppShell() {
       if (timer !== 0) window.clearTimeout(timer)
     }
   }, [chartTarget.period, chartTarget.symbol])
+
+  useEffect(() => {
+    let timer = 0
+    const triggerSessionCloseRollover = (status: ReturnType<typeof readMarketSessionScheduleStatus>) => {
+      if (!status || status.status !== 'closed') return
+      const reason = resolveHistoryPageRolloverReasonForPeriod(chartTarget.period)
+      const key = [
+        chartTarget.symbol.trim().toUpperCase(),
+        chartTarget.period.trim().toUpperCase(),
+        reason,
+        status.nextCheckAt ?? new Date().toISOString().slice(0, 10),
+      ].join(':')
+      if (sessionCloseRolloverKeyRef.current === key) return
+      sessionCloseRolloverKeyRef.current = key
+      clearRealtimePageCachesV2({
+        period: chartTarget.period,
+        reason,
+        symbol: chartTarget.symbol,
+      })
+      dispatchHistoryPageDailyRolloverRebuild({
+        period: chartTarget.period,
+        reason,
+        symbol: chartTarget.symbol,
+      })
+    }
+    const sync = () => {
+      if (timer !== 0) {
+        window.clearTimeout(timer)
+        timer = 0
+      }
+      const status = readMarketSessionScheduleStatus(chartTarget.symbol)
+      triggerSessionCloseRollover(status)
+      if (!status?.nextCheckAt) return
+      const nextCheckAt = Date.parse(status.nextCheckAt)
+      if (!Number.isFinite(nextCheckAt)) return
+      timer = window.setTimeout(sync, Math.max(1_000, nextCheckAt - Date.now() + 1_000))
+    }
+    sync()
+    window.addEventListener(marketStatusTitleChangedEvent, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      if (timer !== 0) window.clearTimeout(timer)
+      window.removeEventListener(marketStatusTitleChangedEvent, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [chartTarget.period, chartTarget.symbol])
+
+  useEffect(() => {
+    let timer = 0
+    const triggerTailSilenceRollover = (lastTimestamp: number) => {
+      const reason = resolveHistoryPageRolloverReasonForPeriod(chartTarget.period)
+      const key = [
+        chartTarget.symbol.trim().toUpperCase(),
+        chartTarget.period.trim().toUpperCase(),
+        reason,
+        Math.floor(lastTimestamp),
+      ].join(':')
+      if (tailSilenceRolloverKeyRef.current === key) return
+      tailSilenceRolloverKeyRef.current = key
+      clearRealtimePageCachesV2({
+        period: chartTarget.period,
+        reason,
+        symbol: chartTarget.symbol,
+      })
+      dispatchHistoryPageDailyRolloverRebuild({
+        period: chartTarget.period,
+        reason,
+        symbol: chartTarget.symbol,
+      })
+    }
+    const schedule = () => {
+      if (timer !== 0) {
+        window.clearTimeout(timer)
+        timer = 0
+      }
+      if (chartTarget.realtimeEnabled !== true) return
+      const periodSeconds = resolvePeriodSeconds(chartTarget.period)
+      if (!Number.isFinite(periodSeconds) || periodSeconds <= 0) return
+      const rows = readRealtimePageBuffer(chartTarget.symbol, chartTarget.period)
+      const latest = rows[rows.length - 1]
+      const lastTimestamp = Number(latest?.timestamp)
+      if (!Number.isFinite(lastTimestamp)) return
+      const periodMs = periodSeconds * 1000
+      const dueAt = lastTimestamp + periodMs + tailSilenceGraceMs
+      timer = window.setTimeout(() => {
+        const nextRows = readRealtimePageBuffer(chartTarget.symbol, chartTarget.period)
+        const nextLatestTimestamp = Number(nextRows[nextRows.length - 1]?.timestamp)
+        if (nextLatestTimestamp === lastTimestamp && Date.now() >= dueAt) {
+          triggerTailSilenceRollover(lastTimestamp)
+          return
+        }
+        schedule()
+      }, Math.max(1_000, dueAt - Date.now()))
+    }
+    const handleRealtimeBufferChanged = (event: Event) => {
+      const detail = event instanceof CustomEvent ? event.detail as { period?: unknown; symbol?: unknown } : null
+      if (detail?.symbol && String(detail.symbol).trim().toUpperCase() !== chartTarget.symbol.trim().toUpperCase()) return
+      if (detail?.period && String(detail.period).trim().toUpperCase() !== chartTarget.period.trim().toUpperCase()) return
+      schedule()
+    }
+    schedule()
+    window.addEventListener(workbenchEvents.realtimePageBufferChanged, handleRealtimeBufferChanged)
+    window.addEventListener('storage', schedule)
+    return () => {
+      if (timer !== 0) window.clearTimeout(timer)
+      window.removeEventListener(workbenchEvents.realtimePageBufferChanged, handleRealtimeBufferChanged)
+      window.removeEventListener('storage', schedule)
+    }
+  }, [chartTarget.period, chartTarget.realtimeEnabled, chartTarget.symbol])
 
   useEffect(() => {
     writeString(storageKeys.bottomDrawerHeightPx, String(bottomDrawerHeight))
@@ -663,7 +683,7 @@ export function AppShell() {
   }
 
   function handleToggleIndicatorShortcutLoad(name: string) {
-    if (name !== 'DPO' && name !== 'MA' && name !== 'MACD' && name !== 'MMF_V3' && name !== 'MR-M5' && name !== 'MR-M30' && name !== 'MR-H2' && name !== 'RSI' && name !== 'SQZMOM' && name !== 'Stoch' && name !== 'TSI' && name !== 'VDO' && name !== 'VI' && name !== 'AO' && name !== 'VMI' && name !== 'VWAP' && name !== 'Vol') return
+    if (!isSupportedChartIndicator(name)) return
     if (loadedIndicatorKeys.includes(name)) {
       indicatorsController.unloadIndicator(name)
       return
@@ -696,6 +716,62 @@ export function AppShell() {
       return
     }
     removeStorageItem(storageKeys.strategyLoadedKeys)
+  }
+
+  function handleChartPageSelect(pageIndex: number) {
+    const targetPageIndex = Number(pageIndex)
+    const period = periodToChartPeriod(chartTarget.period)
+    const symbol = chartTarget.symbol.trim()
+    if (!symbol || !Number.isFinite(targetPageIndex) || targetPageIndex < 1 || !isIsolatedChartPeriod(period)) return
+    const normalizedPageIndex = Math.round(targetPageIndex)
+    traceKLineChartPageV2('AppShell.chartNavigation.select', {
+      currentPageIndex: chartTarget.page?.index ?? chartTarget.historyPageWindow?.pageIndex ?? null,
+      pageIndex: normalizedPageIndex,
+      period,
+      symbol,
+    })
+    writeKLineChartRenderPageConfigV2({
+      pageIndex: normalizedPageIndex,
+      period,
+      realtimeEnabled: chartTarget.realtimeEnabled,
+      symbol,
+      totalRows: chartTarget.totalRows,
+    })
+    const restoreKey = [
+      symbol.trim().toUpperCase(),
+      period.trim().toUpperCase(),
+      normalizedPageIndex,
+      'chart-navigation',
+    ].join(':')
+    void requestAppShellRefreshRestoreTargetV2(restoreKey)
+      .then((target) => {
+        traceKLineChartPageV2('AppShell.chartNavigation.restoreResult', {
+          pageIndex: target?.page.index ?? null,
+          period: target?.period ?? null,
+          restoreKey,
+          symbol: target?.symbol ?? null,
+        })
+        if (!target) return
+        openChartTarget({
+          historyPageWindow: target.historyPageWindow,
+          page: target.page,
+          pageNavigation: target.pageNavigation,
+          period: target.period,
+          realtimeEnabled: target.realtimeEnabled,
+          reloadId: Date.now(),
+          symbol: target.symbol,
+          totalRows: target.totalRows,
+        })
+      })
+      .catch((err) => {
+        traceKLineChartPageV2('AppShell.chartNavigation.restoreError', {
+          error: err instanceof Error ? err.message : String(err),
+          pageIndex: normalizedPageIndex,
+          period,
+          restoreKey,
+          symbol,
+        })
+      })
   }
 
   function openChartTarget(nextTarget: ChartTarget) {
@@ -875,6 +951,7 @@ export function AppShell() {
           <ChartWorkspaceV2
             displayName={chartDisplayName}
             onLoadStateChange={setChartLoadState}
+            onMorganRangeSegmentChange={setMorganRangeSegment}
             target={chartWorkspaceTarget}
           />
           {chartLoadStatusVisible && (
@@ -897,13 +974,14 @@ export function AppShell() {
 
         <RightDrawer
           activeDrawer={activeRightDrawer}
+          chartPeriod={chartTarget.period}
           drawerWidth={rightDrawerWidth}
           indicatorShortcutKeys={indicatorShortcutKeys}
           indicatorsController={indicatorsController}
           loadedIndicatorKeys={loadedIndicatorKeys}
           loadedStrategyKeys={loadedStrategyKeys}
           strategyPersistenceEnabled={strategyPersistenceEnabled}
-          morganRangeSegment={null}
+          morganRangeSegment={morganRangeSegment}
           onClose={() => setActiveRightDrawer(null)}
           onIndicatorShortcutKeysChange={setIndicatorShortcutKeys}
           onStrategyLoad={handleLoadStrategy}

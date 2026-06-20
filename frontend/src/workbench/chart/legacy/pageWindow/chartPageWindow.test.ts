@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createPageDataSliceFromDisplayRows } from '../../pageData/pageDataProvider'
 import { createChartPageWindow } from './chartPageWindow'
+import { createPageDataSliceFromDisplayRows } from './pageDataSliceBridge'
 
 describe('createChartPageWindow', () => {
   it('creates a static history window from display rows', () => {

@@ -10,9 +10,11 @@ export type VwapAnchorPeriod = 'session' | 'week' | 'month' | 'quarter' | 'year'
 export type VwapBandCalculationMode = 'standard_deviation' | 'percentage'
 export type VwapSource = 'hlc3' | 'close' | 'open' | 'high' | 'low' | 'hl2' | 'ohlc4'
 export type VwapTimeframe = 'chart' | '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d'
+export type MmadTimeframe = '5m' | '30m' | '2h'
 export type MacdMaType = 'ema' | 'sma'
 
 import type { MmfIndicatorSettings } from './settings/mmfSettings'
+import type { MmfStochH2IndicatorSettings } from './settings/mmfStochH2Settings'
 export {
   defaultMmfIndicatorSettings,
   normalizeMmfSettings,
@@ -21,6 +23,14 @@ export type {
   MmfIndicatorSettings,
   MmfMorganRatio,
 } from './settings/mmfSettings'
+export {
+  defaultMmfStochH2IndicatorSettings,
+  normalizeMmfStochH2Settings,
+} from './settings/mmfStochH2Settings'
+export type {
+  MmfStochH2IndicatorSettings,
+  MmfStochH2PassthroughPeriod,
+} from './settings/mmfStochH2Settings'
 
 export type SqzmomIndicatorSettings = {
   bbLength: number
@@ -279,6 +289,40 @@ export type AoIndicatorSettings = {
 
 export type VmiIndicatorSettings = AoIndicatorSettings
 
+export type MmadIndicatorSettings = {
+  band1FillColor: string
+  band1FillOpacity: number
+  band1FillVisible: boolean
+  band1LowerColor: string
+  band1LowerLineStyle: RsiLineStyle
+  band1LowerLineWidth: number
+  band1LowerOpacity: number
+  band1LowerVisible: boolean
+  band1Multiplier: number
+  band1UpperColor: string
+  band1UpperLineStyle: RsiLineStyle
+  band1UpperLineWidth: number
+  band1UpperOpacity: number
+  band1UpperVisible: boolean
+  band1Visible: boolean
+  inputStatusLineVisible: boolean
+  lineColor: string
+  lineOpacity: number
+  lineStyle: RsiLineStyle
+  lineVisible: boolean
+  lineWidth: number
+  precision: RsiPrecision
+  priceScaleLabelsVisible: boolean
+  statusLineValuesVisible: boolean
+  timeframe: MmadTimeframe
+  waitForTimeframeClose: boolean
+  zeroLineColor: string
+  zeroLineOpacity: number
+  zeroLineStyle: RsiLineStyle
+  zeroLineVisible: boolean
+  zeroLineWidth: number
+}
+
 export type StochIndicatorSettings = {
   backgroundFillColor: string
   backgroundFillLowerColor: string
@@ -509,6 +553,7 @@ export type PersistedIndicatorsState = {
     MMF?: boolean
     MMF_V2?: boolean
     MMF_V3?: boolean
+    MMF_STOCH_H2?: boolean
     MR?: boolean
     'MR-M5'?: boolean
     'MR-M30'?: boolean
@@ -521,6 +566,7 @@ export type PersistedIndicatorsState = {
     VI?: boolean
     AO?: boolean
     VMI?: boolean
+    MMAD?: boolean
     VWAP?: boolean
     Vol?: boolean
   }
@@ -529,6 +575,7 @@ export type PersistedIndicatorsState = {
   macd: MacdIndicatorSettings
   mmf: MmfIndicatorSettings
   mmfV3: MmfIndicatorSettings
+  mmfStochH2: MmfStochH2IndicatorSettings
   mr: MrIndicatorSettings
   mrM30: MrIndicatorSettings
   mrH2: MrIndicatorSettings
@@ -540,6 +587,7 @@ export type PersistedIndicatorsState = {
   vi: ViIndicatorSettings
   ao: AoIndicatorSettings
   vmi: VmiIndicatorSettings
+  mmad: MmadIndicatorSettings
   vwap: VwapIndicatorSettings
   vol: VolIndicatorSettings
   ui: {
@@ -837,6 +885,40 @@ export const defaultAoIndicatorSettings: AoIndicatorSettings = {
 
 export const defaultVmiIndicatorSettings: VmiIndicatorSettings = {
   ...defaultAoIndicatorSettings,
+}
+
+export const defaultMmadIndicatorSettings: MmadIndicatorSettings = {
+  band1FillColor: '#4caf50',
+  band1FillOpacity: 0.08,
+  band1FillVisible: true,
+  band1LowerColor: '#4caf50',
+  band1LowerLineStyle: 'solid',
+  band1LowerLineWidth: 1,
+  band1LowerOpacity: 1,
+  band1LowerVisible: true,
+  band1Multiplier: 1,
+  band1UpperColor: '#4caf50',
+  band1UpperLineStyle: 'solid',
+  band1UpperLineWidth: 1,
+  band1UpperOpacity: 1,
+  band1UpperVisible: true,
+  band1Visible: true,
+  inputStatusLineVisible: true,
+  lineColor: '#2962ff',
+  lineOpacity: 1,
+  lineStyle: 'solid',
+  lineVisible: true,
+  lineWidth: 1,
+  precision: 'system',
+  priceScaleLabelsVisible: true,
+  statusLineValuesVisible: true,
+  timeframe: '5m',
+  waitForTimeframeClose: true,
+  zeroLineColor: '#787b86',
+  zeroLineOpacity: 1,
+  zeroLineStyle: 'dashed',
+  zeroLineVisible: true,
+  zeroLineWidth: 1,
 }
 
 export const defaultMaIndicatorSettings: MaIndicatorSettings = {
@@ -1397,6 +1479,49 @@ export function normalizeAoSettings(input?: Partial<AoIndicatorSettings>): AoInd
 
 export function normalizeVmiSettings(input?: Partial<VmiIndicatorSettings>): VmiIndicatorSettings {
   return normalizeAoSettings(input)
+}
+
+export function normalizeMmadSettings(input?: Partial<MmadIndicatorSettings>): MmadIndicatorSettings {
+  const merged = { ...defaultMmadIndicatorSettings, ...(input ?? {}) }
+  const band1Multiplier = Number(merged.band1Multiplier)
+  const band1FillOpacity = Number(merged.band1FillOpacity)
+  const band1LowerLineWidth = Math.round(Number(merged.band1LowerLineWidth))
+  const band1LowerOpacity = Number(merged.band1LowerOpacity)
+  const band1UpperLineWidth = Math.round(Number(merged.band1UpperLineWidth))
+  const band1UpperOpacity = Number(merged.band1UpperOpacity)
+  const lineWidth = Math.round(Number(merged.lineWidth))
+  const lineOpacity = Number(merged.lineOpacity)
+  const zeroLineWidth = Math.round(Number(merged.zeroLineWidth))
+  const zeroLineOpacity = Number(merged.zeroLineOpacity)
+  return {
+    ...merged,
+    band1FillOpacity: Number.isFinite(band1FillOpacity) ? Math.max(0, Math.min(band1FillOpacity, 1)) : defaultMmadIndicatorSettings.band1FillOpacity,
+    band1FillVisible: merged.band1FillVisible !== false,
+    band1LowerLineStyle: merged.band1LowerLineStyle === 'dashed' || merged.band1LowerLineStyle === 'dotted' ? merged.band1LowerLineStyle : 'solid',
+    band1LowerLineWidth: Number.isFinite(band1LowerLineWidth) ? Math.max(1, Math.min(band1LowerLineWidth, 4)) : defaultMmadIndicatorSettings.band1LowerLineWidth,
+    band1LowerOpacity: Number.isFinite(band1LowerOpacity) ? Math.max(0, Math.min(band1LowerOpacity, 1)) : defaultMmadIndicatorSettings.band1LowerOpacity,
+    band1LowerVisible: merged.band1LowerVisible !== false,
+    band1Multiplier: Number.isFinite(band1Multiplier) ? Math.max(0, Math.min(band1Multiplier, 100)) : defaultMmadIndicatorSettings.band1Multiplier,
+    band1UpperLineStyle: merged.band1UpperLineStyle === 'dashed' || merged.band1UpperLineStyle === 'dotted' ? merged.band1UpperLineStyle : 'solid',
+    band1UpperLineWidth: Number.isFinite(band1UpperLineWidth) ? Math.max(1, Math.min(band1UpperLineWidth, 4)) : defaultMmadIndicatorSettings.band1UpperLineWidth,
+    band1UpperOpacity: Number.isFinite(band1UpperOpacity) ? Math.max(0, Math.min(band1UpperOpacity, 1)) : defaultMmadIndicatorSettings.band1UpperOpacity,
+    band1UpperVisible: merged.band1UpperVisible !== false,
+    band1Visible: merged.band1Visible !== false,
+    inputStatusLineVisible: merged.inputStatusLineVisible !== false,
+    lineOpacity: Number.isFinite(lineOpacity) ? Math.max(0, Math.min(lineOpacity, 1)) : defaultMmadIndicatorSettings.lineOpacity,
+    lineStyle: merged.lineStyle === 'dashed' || merged.lineStyle === 'dotted' ? merged.lineStyle : 'solid',
+    lineVisible: merged.lineVisible !== false,
+    lineWidth: Number.isFinite(lineWidth) ? Math.max(1, Math.min(lineWidth, 4)) : defaultMmadIndicatorSettings.lineWidth,
+    precision: ['0', '1', '2', '3', '4', 'system'].includes(merged.precision) ? merged.precision : 'system',
+    priceScaleLabelsVisible: merged.priceScaleLabelsVisible !== false,
+    statusLineValuesVisible: merged.statusLineValuesVisible !== false,
+    timeframe: ['5m', '30m', '2h'].includes(merged.timeframe) ? merged.timeframe : '5m',
+    waitForTimeframeClose: merged.waitForTimeframeClose !== false,
+    zeroLineOpacity: Number.isFinite(zeroLineOpacity) ? Math.max(0, Math.min(zeroLineOpacity, 1)) : defaultMmadIndicatorSettings.zeroLineOpacity,
+    zeroLineStyle: merged.zeroLineStyle === 'solid' || merged.zeroLineStyle === 'dotted' ? merged.zeroLineStyle : 'dashed',
+    zeroLineVisible: merged.zeroLineVisible !== false,
+    zeroLineWidth: Number.isFinite(zeroLineWidth) ? Math.max(1, Math.min(zeroLineWidth, 4)) : defaultMmadIndicatorSettings.zeroLineWidth,
+  }
 }
 
 export function normalizeVolSettings(input?: Partial<VolIndicatorSettings>): VolIndicatorSettings {

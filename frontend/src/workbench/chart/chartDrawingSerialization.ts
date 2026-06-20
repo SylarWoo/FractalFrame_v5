@@ -14,12 +14,15 @@ export function storedHorizontalLineFromOverlay(overlay: DrawingOverlayLike, ens
   if (!Number.isFinite(value)) return null
   const extendData = overlay.extendData as HorizontalLineExtendData | undefined
   return {
+    crossPeriod: extendData?.crossPeriod === true,
+    crossPeriodTargets: extendData?.crossPeriodTargets,
     lineStyle: normalizeDrawingLineStyle(extendData?.lineStyle, '#0f766e'),
     locked: extendData?.locked === true,
     manualVisible: extendData?.manualVisible !== false,
     objectId: extendData?.objectId || ensureObjectId(),
     paneId: overlay.paneId || fallbackPaneId,
     showPriceLabel: extendData?.showPriceLabel !== false,
+    sourcePeriod: extendData?.sourcePeriod,
     textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
     value,
   }
@@ -31,6 +34,8 @@ export function storedTrendLineFromOverlay(overlay: DrawingOverlayLike, ensureOb
   if (points.length < 2 || points.some((point) => typeof point.value !== 'number')) return null
   const extendData = overlay.extendData as TrendLineExtendData | undefined
   return {
+    crossPeriod: extendData?.crossPeriod === true,
+    crossPeriodTargets: extendData?.crossPeriodTargets,
     lineStyle: normalizeDrawingLineStyle(extendData?.lineStyle, '#0f766e'),
     locked: extendData?.locked === true,
     manualVisible: extendData?.manualVisible !== false,
@@ -38,6 +43,7 @@ export function storedTrendLineFromOverlay(overlay: DrawingOverlayLike, ensureOb
     paneId: overlay.paneId || fallbackPaneId,
     points,
     showPriceLabel: extendData?.showPriceLabel !== false,
+    sourcePeriod: extendData?.sourcePeriod,
     textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
     trendLineStyle: normalizeDrawingTrendLineStyle(extendData?.trendLineStyle),
   }

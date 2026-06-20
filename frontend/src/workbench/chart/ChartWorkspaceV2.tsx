@@ -4,6 +4,7 @@ import { buildCachedKLineChartRenderFrameV2 } from './chartRenderCacheV2'
 import type { StoreV6HistoryPageWindow } from './historyPageWindowV2'
 import type { StoreV6IndicatorRequestSpecV2 } from './indicatorRequestV2'
 import type { KLineChartRenderFrameV2 } from './klineChartRenderFrameV2'
+import type { MorganRangeSegment } from './morganRangeModel'
 import { BlankKLineChartHostV2, KLineChartHostV2 } from './klineChartRendererV2'
 import { traceKLineChartPageV2 } from './klineChartRendererV2/klineChartPageDebugProbeV2'
 import { resolveRealtimeModeForHistoryPageV2 } from './klineChartRendererV2/klineChartRenderViewportPolicyV2'
@@ -30,6 +31,7 @@ export type ChartWorkspaceTargetV2 = {
 type ChartWorkspaceV2Props = {
   displayName?: string
   onLoadStateChange?: (state: ChartLoadState) => void
+  onMorganRangeSegmentChange?: (segment: MorganRangeSegment | null) => void
   target: ChartWorkspaceTargetV2
 }
 
@@ -48,15 +50,54 @@ function createHistoryWindowRealtimeSignature(historyWindow: StoreV6HistoryPageW
   ].join(':')
 }
 
-export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: ChartWorkspaceV2Props) {
+function normalizeIndicatorIdentity(value: string) {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+function realtimeWindowHasRequestedIndicators(
+  realtimeWindow: ReturnType<typeof applyStoreV6IndicatorRenderSettingsToRealtimeWindowV2>,
+  requests: StoreV6IndicatorRequestSpecV2[],
+) {
+  if (!realtimeWindow) return false
+  if (realtimeWindow.activeRows.length === 0) return true
+  if (requests.length === 0) return true
+  const available = new Set<string>()
+  Object.entries(realtimeWindow.indicators).forEach(([key, series]) => {
+    available.add(normalizeIndicatorIdentity(key))
+    if (series.id) available.add(normalizeIndicatorIdentity(series.id))
+  })
+  return requests
+    .filter((request) => request.enabled !== false)
+    .every((request) => available.has(normalizeIndicatorIdentity(request.id)))
+}
+
+export function shouldWaitForVisualRealtimeFrameV2(options: {
+  indicatorRequests: StoreV6IndicatorRequestSpecV2[]
+  realtimeEnabled?: boolean
+  realtimeMode: ReturnType<typeof resolveRealtimeModeForHistoryPageV2>
+  realtimeIndicatorsReady: boolean
+}) {
+  return options.indicatorRequests.length > 0 &&
+    options.realtimeEnabled === true &&
+    options.realtimeMode === 'visual' &&
+    !options.realtimeIndicatorsReady
+}
+
+export function ChartWorkspaceV2({ displayName, onLoadStateChange, onMorganRangeSegmentChange, target }: ChartWorkspaceV2Props) {
   const [frame, setFrame] = useState<KLineChartRenderFrameV2 | null>(null)
   const calculationRequestsRef = useRef<{
     requests: StoreV6IndicatorRequestSpecV2[]
     signature: string
   }>({ requests: [], signature: 'no-indicators' })
   const indicatorRequests = useMemo(() => target.indicatorRequests ?? [], [target.indicatorRequests])
-  const nextCalculationIndicatorRequests = createStoreV6CalculationIndicatorRequestsV2(indicatorRequests)
-  const nextCalculationIndicatorSignature = createStoreV6IndicatorRequestSignatureV2(nextCalculationIndicatorRequests)
+  const nextCalculationIndicatorRequests = useMemo(
+    () => createStoreV6CalculationIndicatorRequestsV2(indicatorRequests),
+    [indicatorRequests],
+  )
+  const nextCalculationIndicatorSignature = useMemo(
+    () => createStoreV6IndicatorRequestSignatureV2(nextCalculationIndicatorRequests),
+    [nextCalculationIndicatorRequests],
+  )
   if (calculationRequestsRef.current.signature !== nextCalculationIndicatorSignature) {
     calculationRequestsRef.current = {
       requests: nextCalculationIndicatorRequests,
@@ -68,7 +109,10 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
     target.historyPageWindow?.period === target.period
   const activeHistoryPageWindow = historyPageWindowMatchesTarget ? target.historyPageWindow ?? null : null
   const indicatorSignature = calculationRequestsRef.current.signature
-  const renderSettingsSignature = createStoreV6IndicatorRenderSettingsSignatureV2(indicatorRequests)
+  const renderSettingsSignature = useMemo(
+    () => createStoreV6IndicatorRenderSettingsSignatureV2(indicatorRequests),
+    [indicatorRequests],
+  )
   const historyPageWindowWithIndicators = useHistoryWindowIndicatorsV2({
     activeHistoryPageWindow,
     indicatorRequests: calculationIndicatorRequests,
@@ -108,6 +152,13 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
   const visualRealtimeWindow = realtimeMode === 'visual'
     ? realtimeWindowWithRenderSettings
     : null
+  const waitForVisualRealtimeFrame = shouldWaitForVisualRealtimeFrameV2({
+    indicatorRequests: calculationIndicatorRequests,
+    realtimeEnabled: target.realtimeEnabled,
+    realtimeMode,
+    realtimeIndicatorsReady: realtimeMode !== 'visual' ||
+      realtimeWindowHasRequestedIndicators(realtimeWindowWithRenderSettings, calculationIndicatorRequests),
+  })
 
   useEffect(() => {
     traceKLineChartPageV2('ChartWorkspace.target.received', {
@@ -128,12 +179,13 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
       setFrame(null)
       return
     }
+    if (waitForVisualRealtimeFrame) return
     const nextFrame = buildCachedKLineChartRenderFrameV2({
       historyWindow: historyPageWindow,
       realtimeWindow: visualRealtimeWindow,
     }).frame
-    setFrame(nextFrame)
-  }, [preparedHistoryPageWindow, visualRealtimeWindow])
+    setFrame((currentFrame) => currentFrame?.key === nextFrame.key ? currentFrame : nextFrame)
+  }, [preparedHistoryPageWindow, visualRealtimeWindow, waitForVisualRealtimeFrame])
 
   if (!frame) {
     return (
@@ -149,6 +201,7 @@ export function ChartWorkspaceV2({ displayName, onLoadStateChange, target }: Cha
       displayName={displayName}
       frame={frame}
       onLoadStateChange={onLoadStateChange}
+      onMorganRangeSegmentChange={onMorganRangeSegmentChange}
       pageNavigation={target.pageNavigation}
       totalRows={target.totalRows}
     />

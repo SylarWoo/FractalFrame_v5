@@ -43,6 +43,7 @@ function normalizeStoreV6Rows(rows: StoreV6QueryRow[], request: { period: string
     normalized.set(barKey, {
       barKey,
       close,
+      closeTime: typeof row.closeTime === 'number' && Number.isFinite(row.closeTime) ? Math.round(row.closeTime) : undefined,
       globalIndex: typeof row.globalIndex === 'number' && Number.isFinite(row.globalIndex) ? Math.round(row.globalIndex) : null,
       high,
       low,

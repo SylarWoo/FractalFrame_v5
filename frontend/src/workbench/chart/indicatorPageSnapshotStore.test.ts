@@ -525,4 +525,41 @@ describe('indicatorPageSnapshotStore', () => {
     expect(merged.settingsHashes?.DPO).toBe('dpo-hash')
     expect(merged.settingsHashes?.SQZMOM).toBeTruthy()
   })
+
+  it('merges VOL rows without dropping existing snapshot rows', () => {
+    const pageKey = createIndicatorPageKey({ pageIndex: 15, period: 'M5', realtime: true, rows, symbol: 'XAUUSDm' })
+    writeIndicatorPageSnapshot({
+      pageKey,
+      period: 'M5',
+      rows: createIndicatorSnapshotRows({
+        maRows: [{ ma: 10, maColorIndex: 1 }],
+        period: 'M5',
+        rows,
+        symbol: 'XAUUSDm',
+      }),
+      settingsHash: 'ma-hash',
+      settingsHashKey: 'MA',
+      symbol: 'XAUUSDm',
+    })
+
+    const merged = writeIndicatorPageSnapshot({
+      pageKey,
+      period: 'M5',
+      rows: createIndicatorSnapshotRows({
+        period: 'M5',
+        rows,
+        symbol: 'XAUUSDm',
+        volRows: [{ volume: 123, volumeColorIndex: 1, volumeMa: 100 }],
+      }),
+      settingsHash: createIndicatorSettingsHash({ indicator: 'VOL', period: 'M5' }),
+      settingsHashKey: 'VOL',
+      symbol: 'XAUUSDm',
+    })
+
+    expect(merged.byBarKey['XAUUSDm|M5|1700000000']?.ma?.ma).toBe(10)
+    expect(merged.byBarKey['XAUUSDm|M5|1700000000']?.vol?.volume).toBe(123)
+    expect(merged.byBarKey['XAUUSDm|M5|1700000000']?.vol?.volumeColorIndex).toBe(1)
+    expect(merged.settingsHashes?.MA).toBe('ma-hash')
+    expect(merged.settingsHashes?.VOL).toBeTruthy()
+  })
 })

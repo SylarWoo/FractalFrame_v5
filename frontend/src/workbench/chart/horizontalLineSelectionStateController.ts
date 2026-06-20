@@ -19,7 +19,7 @@ export function createHorizontalLineSelectionStateController({
   getSelectedOverlayId: () => string | null
   horizontalLineOverlayIds: Set<string>
   publishObjectTreeState: () => void
-  publishState: (state?: Partial<{ armed: boolean; lineStyle: SettingsLineSwatchValue; locked: boolean; objectId: string; price: number; selected: boolean; showPriceLabel: boolean; textStyle: DrawingTextStyle }>) => void
+  publishState: (state?: Partial<{ armed: boolean; crossPeriod: boolean; crossPeriodTargets: string[]; lineStyle: SettingsLineSwatchValue; locked: boolean; objectId: string; price: number; selected: boolean; showPriceLabel: boolean; sourcePeriod: string; textStyle: DrawingTextStyle }>) => void
   selectedHorizontalLineOverlayIds: Set<string>
   setSelectedOverlayId: (id: string | null) => void
   updateOverlayState: (id: string | undefined, patch: Record<string, unknown>) => void

@@ -5,7 +5,7 @@ import {
   storeV6LivePageSize,
   type StoreV6PagePartitionMode,
 } from '../chart/pagePartition/pagePartitionBuilder'
-import { readRealtimePageBuffer } from '../chart/realtimePageBuffer'
+import { readRealtimePageBuffer } from '../chart/chartRealtimeBridge'
 import { readJson, readString, writeJson } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
 import { queryStoreV6IndexTimes, queryStoreV6Ohlcv } from '../../services/mt5/mt5SymbolsApi'
@@ -29,7 +29,7 @@ export type PersistedPageIndex = {
 
 export type PersistedPageResetInfo = {
   period: string
-  reason: 'auto' | 'manual' | 'daily-close'
+  reason: 'auto' | 'manual' | 'daily-close' | 'weekly-close' | 'monthly-close'
   resetAt: string
   rows: number
   symbol: string

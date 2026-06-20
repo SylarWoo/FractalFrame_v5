@@ -4,6 +4,7 @@ import type {
   MacdIndicatorSettings,
   MaIndicatorSettings,
   MmfIndicatorSettings,
+  MmfStochH2IndicatorSettings,
   MrIndicatorSettings,
   RsiIndicatorSettings,
   SqzmomIndicatorSettings,
@@ -12,6 +13,7 @@ import type {
   VdoIndicatorSettings,
   ViIndicatorSettings,
   VmiIndicatorSettings,
+  MmadIndicatorSettings,
   VolIndicatorSettings,
   VwapIndicatorSettings,
 } from '../rightDrawer/indicatorPersistence'
@@ -26,6 +28,7 @@ export type ChartIndicatorCommand = {
   | { name: 'MMF'; settings?: MmfIndicatorSettings }
   | { name: 'MMF_V2'; settings?: MmfIndicatorSettings }
   | { name: 'MMF_V3'; settings?: MmfIndicatorSettings }
+  | { name: 'MMF_STOCH_H2'; settings?: MmfStochH2IndicatorSettings }
   | { name: 'DPO'; settings?: DpoIndicatorSettings }
   | { name: 'MR-M5'; settings?: MrIndicatorSettings }
   | { name: 'MR-M30'; settings?: MrIndicatorSettings }
@@ -38,6 +41,7 @@ export type ChartIndicatorCommand = {
   | { name: 'VI'; settings?: ViIndicatorSettings }
   | { name: 'AO'; settings?: AoIndicatorSettings }
   | { name: 'VMI'; settings?: VmiIndicatorSettings }
+  | { name: 'MMAD'; settings?: MmadIndicatorSettings }
   | { name: 'VWAP'; settings?: VwapIndicatorSettings }
   | { name: 'Vol'; settings?: VolIndicatorSettings }
 )

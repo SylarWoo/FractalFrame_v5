@@ -22,6 +22,7 @@ import {
   resolveNextM5RealtimeSessionStartSeconds,
 } from './realtimePageWindowBuilder'
 import { aggregateM30RatesToH2RealtimeRowsV2, resolveH2RealtimeRateVolumeForPeriodStartV2 } from './h2RealtimeAggregatorV2'
+import { clearRealtimeStableWindowCacheV2 } from './realtimeStableWindowCacheV2'
 
 vi.mock('../../../services/mt5/mt5SymbolsApi', () => ({
   queryMt5Rates: vi.fn(),
@@ -56,6 +57,7 @@ describe('buildStoreV6RealtimePageWindow', () => {
   beforeEach(() => {
     queryStoreMock.mockReset()
     queryMt5RatesMock.mockReset()
+    clearRealtimeStableWindowCacheV2()
   })
 
   it('creates an empty active session window without fake kline rows', () => {

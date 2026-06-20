@@ -61,6 +61,8 @@ function createWorkbenchProfileStoreResolver(options: {
 }
 
 const sharedPersistentStateKeys = new Set([
+  'fractalframe.drawings.horizontalLine.items',
+  'fractalframe.drawings.trendLine.items',
   'fractalframe.drawingsDrawer.fibRetracementStyle',
 ])
 
@@ -224,6 +226,59 @@ function resolvePeriodUiStateFile(options: {
   )
 }
 
+function isSharedPeriodUiState(options: {
+  kind: string
+  period: string
+}) {
+  return options.kind === 'indicators' && options.period.toUpperCase() === 'H2'
+}
+
+function resolveSharedPeriodUiStateFile(options: {
+  kind: string
+  period: string
+}) {
+  const kind = options.kind === 'settings' ? 'settings' : 'indicators'
+  const period = sanitizeRealtimePathSegment(options.period.toUpperCase())
+  return path.resolve(
+    __dirname,
+    '.fractalframe-dev',
+    'shared-period-state',
+    period,
+    `${kind}.json`,
+  )
+}
+
+function readJsonFileOrNull(stateFile: string) {
+  try {
+    return JSON.parse(fs.readFileSync(stateFile, 'utf8')) as unknown
+  } catch {
+    return null
+  }
+}
+
+function readLatestProfilePeriodUiStateOrNull(options: {
+  kind: string
+  period: string
+}) {
+  const kind = options.kind === 'settings' ? 'settings' : 'indicators'
+  const period = sanitizeRealtimePathSegment(options.period.toUpperCase())
+  const profilesDir = path.resolve(__dirname, '.fractalframe-dev', 'profiles')
+  try {
+    const candidates = fs.readdirSync(profilesDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => path.resolve(profilesDir, entry.name, 'period-state', period, `${kind}.json`))
+      .filter((stateFile) => fs.existsSync(stateFile))
+      .map((stateFile) => ({
+        mtimeMs: fs.statSync(stateFile).mtimeMs,
+        stateFile,
+      }))
+      .sort((left, right) => right.mtimeMs - left.mtimeMs)
+    return candidates.length ? readJsonFileOrNull(candidates[0].stateFile) : null
+  } catch {
+    return null
+  }
+}
+
 function periodUiStatePlugin(): Plugin {
   return {
     name: 'fractalframe-period-ui-state',
@@ -245,14 +300,14 @@ function periodUiStatePlugin(): Plugin {
             return
           }
           const stateFile = resolvePeriodUiStateFile({ kind, period, profileId })
-          try {
-            const value = JSON.parse(fs.readFileSync(stateFile, 'utf8')) as unknown
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ value }))
-          } catch {
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ value: null }))
-          }
+          const sharedStateFile = isSharedPeriodUiState({ kind, period })
+            ? resolveSharedPeriodUiStateFile({ kind, period })
+            : null
+          const value = readJsonFileOrNull(stateFile)
+            ?? (sharedStateFile ? readJsonFileOrNull(sharedStateFile) : null)
+            ?? (sharedStateFile ? readLatestProfilePeriodUiStateOrNull({ kind, period }) : null)
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ value }))
           return
         }
         if (req.method === 'POST') {
@@ -270,11 +325,19 @@ function periodUiStatePlugin(): Plugin {
               }
               if (!payload.kind || !payload.period) throw new Error('Missing period UI state identity')
               const stateFile = resolvePeriodUiStateFile({ kind: payload.kind, period: payload.period, profileId })
+              const sharedStateFile = isSharedPeriodUiState({ kind: payload.kind, period: payload.period })
+                ? resolveSharedPeriodUiStateFile({ kind: payload.kind, period: payload.period })
+                : null
               if (payload.remove) {
                 fs.rmSync(stateFile, { force: true })
+                if (sharedStateFile) fs.rmSync(sharedStateFile, { force: true })
               } else {
                 fs.mkdirSync(path.dirname(stateFile), { recursive: true })
                 fs.writeFileSync(stateFile, JSON.stringify(payload.value ?? null, null, 2), 'utf8')
+                if (sharedStateFile) {
+                  fs.mkdirSync(path.dirname(sharedStateFile), { recursive: true })
+                  fs.writeFileSync(sharedStateFile, JSON.stringify(payload.value ?? null, null, 2), 'utf8')
+                }
               }
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ ok: true }))
@@ -298,10 +361,38 @@ function persistentDevStatePlugin(): Plugin {
     stateFileName: 'workbench-profile.json',
   })
   const sharedStore = createJsonStateStore(path.resolve(__dirname, '.fractalframe-dev', 'shared-workbench-profile.json'))
+  const sharedStateClients = new Set<ServerResponse>()
+  const broadcastSharedStateChange = (key: string, origin?: string) => {
+    const payload = `data: ${JSON.stringify({ key, origin })}\n\n`
+    sharedStateClients.forEach((client) => {
+      try {
+        client.write(payload)
+      } catch {
+        sharedStateClients.delete(client)
+      }
+    })
+  }
 
   return {
     name: 'fractalframe-persistent-dev-state',
     configureServer(server: ViteDevServer) {
+      server.middlewares.use('/__fractalframe_persistent_state_events', (req: IncomingMessage, res: ServerResponse) => {
+        if (req.method !== 'GET') {
+          res.statusCode = 405
+          res.end()
+          return
+        }
+        res.writeHead(200, {
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+          'Content-Type': 'text/event-stream',
+        })
+        res.write(': connected\n\n')
+        sharedStateClients.add(res)
+        req.on('close', () => {
+          sharedStateClients.delete(res)
+        })
+      })
       server.middlewares.use('/__fractalframe_persistent_state', (req: IncomingMessage, res: ServerResponse) => {
         if (!req.url) {
           res.statusCode = 400
@@ -326,9 +417,10 @@ function persistentDevStatePlugin(): Plugin {
           })
           req.on('end', () => {
             try {
-              const payload = JSON.parse(body) as { key?: string; merge?: Record<string, unknown>; remove?: boolean; value?: unknown }
+              const payload = JSON.parse(body) as { key?: string; merge?: Record<string, unknown>; origin?: string; remove?: boolean; value?: unknown }
               if (!payload.key) throw new Error('Missing key')
-              const { readState, writeState } = sharedPersistentStateKeys.has(payload.key) ? sharedStore : resolveStore(profileId)
+              const sharedKey = sharedPersistentStateKeys.has(payload.key)
+              const { readState, writeState } = sharedKey ? sharedStore : resolveStore(profileId)
               const state = readState()
               if (payload.remove) {
                 delete state[payload.key]
@@ -342,6 +434,7 @@ function persistentDevStatePlugin(): Plugin {
                 state[payload.key] = payload.value
               }
               writeState(state)
+              if (sharedKey) broadcastSharedStateChange(payload.key, typeof payload.origin === 'string' ? payload.origin : undefined)
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ ok: true }))
             } catch {

@@ -1,7 +1,8 @@
 ﻿import type { MmfIndicatorSettings } from '../../indicatorPersistence'
 import type { SymbolSelectSize } from '../../../controls/SymbolSelect'
 import { mmfCrossSymbolOptions, mmfTradeArrowSymbolOptions } from '../../stickerSymbols'
-import { CheckControl, NumberBox, updateMmfSettings } from './indicatorPanelShared'
+import { CheckControl, NumberBox } from './IndicatorSettingControls'
+import { updateMmfSettings } from './indicatorPanelShared'
 import { MmfMarkerStyleRow } from './MmfSettingsControls'
 
 function resolveCompactSymbolSize(): SymbolSelectSize {

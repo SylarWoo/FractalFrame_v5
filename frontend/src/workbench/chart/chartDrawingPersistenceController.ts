@@ -38,6 +38,7 @@ import {
 } from './chartDrawingObjectIds'
 import { storedFibRetracementFromOverlay, storedHorizontalLineFromOverlay, storedRulerFromOverlay, storedTrendLineFromOverlay } from './chartDrawingSerialization'
 import { storedEmojiStickerFromOverlay } from './stickerDrawingSerialization'
+import type { HorizontalLineExtendData, TrendLineExtendData } from './chartDrawingTypes'
 
 export type InitialStoredDrawingState = {
   fibRetracementPersistenceEnabled: boolean
@@ -50,6 +51,16 @@ export type InitialStoredDrawingState = {
   pendingTrendLineDrawings: StoredTrendLineDrawing[]
   rulerPersistenceEnabled: boolean
   trendLinePersistenceEnabled: boolean
+}
+
+function horizontalLineObjectId(overlay: { extendData?: unknown } | null | undefined) {
+  const objectId = (overlay?.extendData as HorizontalLineExtendData | undefined)?.objectId
+  return typeof objectId === 'string' && objectId.trim() ? objectId.trim() : ''
+}
+
+function trendLineObjectId(overlay: { extendData?: unknown } | null | undefined) {
+  const objectId = (overlay?.extendData as TrendLineExtendData | undefined)?.objectId
+  return typeof objectId === 'string' && objectId.trim() ? objectId.trim() : ''
 }
 
 export function readInitialStoredDrawingState(): InitialStoredDrawingState {
@@ -114,6 +125,8 @@ export function createChartDrawingPersistenceController({
   canCreateOverlayOnPane: (paneId: string) => boolean
   chart: Chart
   createHorizontalLineOverlay: (options: {
+    crossPeriod?: boolean
+    crossPeriodTargets?: string[]
     lineStyle: SettingsLineSwatchValue
     locked: boolean
     manualVisible?: boolean
@@ -122,6 +135,7 @@ export function createChartDrawingPersistenceController({
     points?: Array<{ value: number }>
     selected: boolean
     showPriceLabel: boolean
+    sourcePeriod?: string
     textStyle?: DrawingTextStyle
   }) => unknown
   createFibRetracementOverlay: (options: {
@@ -152,6 +166,8 @@ export function createChartDrawingPersistenceController({
     textStyle?: DrawingTextStyle
   }) => unknown
   createTrendLineOverlay: (options: {
+    crossPeriod?: boolean
+    crossPeriodTargets?: string[]
     lineStyle: SettingsLineSwatchValue
     locked: boolean
     manualVisible?: boolean
@@ -160,6 +176,7 @@ export function createChartDrawingPersistenceController({
     points?: Array<{ dataIndex?: number; timestamp?: number; value?: number }>
     selected: boolean
     showPriceLabel: boolean
+    sourcePeriod?: string
     textStyle?: DrawingTextStyle
     trendLineStyle: DrawingTrendLineStyle
   }) => unknown
@@ -309,6 +326,8 @@ export function createChartDrawingPersistenceController({
         return
       }
       const overlayId = createHorizontalLineOverlay({
+        crossPeriod: drawing.crossPeriod === true,
+        crossPeriodTargets: drawing.crossPeriodTargets,
         lineStyle: drawing.lineStyle,
         locked: drawing.locked,
         manualVisible: drawing.manualVisible,
@@ -317,11 +336,58 @@ export function createChartDrawingPersistenceController({
         points: [{ value: drawing.value }],
         selected: false,
         showPriceLabel: drawing.showPriceLabel,
+        sourcePeriod: drawing.sourcePeriod,
         textStyle: drawing.textStyle,
       })
       if (typeof overlayId === 'string') horizontalLineOverlayIds.add(overlayId)
     })
     pendingHorizontalLineDrawings = remaining
+  }
+
+  const syncStoredHorizontalLines = () => {
+    if (!getHorizontalLinePersistenceEnabled()) return
+    pendingHorizontalLineDrawings = readStoredHorizontalLineDrawings()
+    const storedObjectIds = new Set(pendingHorizontalLineDrawings.map((drawing) => drawing.objectId).filter(Boolean))
+    const storedByObjectId = new Map(pendingHorizontalLineDrawings.map((drawing) => [drawing.objectId, drawing]))
+    horizontalLineOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) {
+        horizontalLineOverlayIds.delete(id)
+        return
+      }
+      const objectId = horizontalLineObjectId(overlay)
+      if (objectId && !storedObjectIds.has(objectId)) {
+        chart.removeOverlay({ id })
+        horizontalLineOverlayIds.delete(id)
+        return
+      }
+      const drawing = objectId ? storedByObjectId.get(objectId) : undefined
+      if (drawing) {
+        chart.overrideOverlay({
+          id,
+          extendData: {
+            ...(overlay.extendData ?? {}),
+            crossPeriod: drawing.crossPeriod === true,
+            crossPeriodTargets: drawing.crossPeriodTargets,
+            lineStyle: drawing.lineStyle,
+            locked: drawing.locked,
+            manualVisible: drawing.manualVisible,
+            showPriceLabel: drawing.showPriceLabel,
+            sourcePeriod: drawing.sourcePeriod,
+            textStyle: drawing.textStyle,
+          },
+          lock: drawing.locked,
+          points: [{ ...(overlay.points[0] ?? {}), value: drawing.value }],
+        })
+      }
+    })
+    const existingObjectIds = new Set<string>()
+    horizontalLineOverlayIds.forEach((id) => {
+      const objectId = horizontalLineObjectId(chart.getOverlayById(id))
+      if (objectId) existingObjectIds.add(objectId)
+    })
+    pendingHorizontalLineDrawings = pendingHorizontalLineDrawings.filter((drawing) => !drawing.objectId || !existingObjectIds.has(drawing.objectId))
+    restorePendingStoredHorizontalLines()
   }
 
   const restorePendingStoredTrendLines = () => {
@@ -334,6 +400,8 @@ export function createChartDrawingPersistenceController({
         return
       }
       const overlayId = createTrendLineOverlay({
+        crossPeriod: drawing.crossPeriod === true,
+        crossPeriodTargets: drawing.crossPeriodTargets,
         lineStyle: drawing.lineStyle,
         locked: drawing.locked,
         manualVisible: drawing.manualVisible,
@@ -342,12 +410,60 @@ export function createChartDrawingPersistenceController({
         points: drawing.points.slice(0, 2),
         selected: false,
         showPriceLabel: drawing.showPriceLabel,
+        sourcePeriod: drawing.sourcePeriod,
         textStyle: drawing.textStyle,
         trendLineStyle: drawing.trendLineStyle,
       })
       if (typeof overlayId === 'string') trendLineOverlayIds.add(overlayId)
     })
     pendingTrendLineDrawings = remaining
+  }
+
+  const syncStoredTrendLines = () => {
+    if (!getTrendLinePersistenceEnabled()) return
+    pendingTrendLineDrawings = readStoredTrendLineDrawings()
+    const storedObjectIds = new Set(pendingTrendLineDrawings.map((drawing) => drawing.objectId).filter(Boolean))
+    const storedByObjectId = new Map(pendingTrendLineDrawings.map((drawing) => [drawing.objectId, drawing]))
+    trendLineOverlayIds.forEach((id) => {
+      const overlay = chart.getOverlayById(id)
+      if (!overlay) {
+        trendLineOverlayIds.delete(id)
+        return
+      }
+      const objectId = trendLineObjectId(overlay)
+      if (objectId && !storedObjectIds.has(objectId)) {
+        chart.removeOverlay({ id })
+        trendLineOverlayIds.delete(id)
+        return
+      }
+      const drawing = objectId ? storedByObjectId.get(objectId) : undefined
+      if (drawing) {
+        chart.overrideOverlay({
+          id,
+          extendData: {
+            ...(overlay.extendData ?? {}),
+            crossPeriod: drawing.crossPeriod === true,
+            crossPeriodTargets: drawing.crossPeriodTargets,
+            lineStyle: drawing.lineStyle,
+            locked: drawing.locked,
+            manualVisible: drawing.manualVisible,
+            showPriceLabel: drawing.showPriceLabel,
+            sourcePeriod: drawing.sourcePeriod,
+            textStyle: drawing.textStyle,
+            trendLineStyle: drawing.trendLineStyle,
+          },
+          lock: drawing.locked,
+          points: drawing.points.slice(0, 2),
+        })
+      }
+    })
+    const existingObjectIds = new Set<string>()
+    trendLineOverlayIds.forEach((id) => {
+      const objectId = trendLineObjectId(chart.getOverlayById(id))
+      if (objectId) existingObjectIds.add(objectId)
+    })
+    pendingTrendLineDrawings = pendingTrendLineDrawings.filter((drawing) => !drawing.objectId || !existingObjectIds.has(drawing.objectId))
+    restorePendingStoredTrendLines()
   }
 
   const restorePendingStoredRulers = () => {
@@ -456,5 +572,7 @@ export function createChartDrawingPersistenceController({
     restorePendingStoredHorizontalLines,
     restorePendingStoredRulers,
     restorePendingStoredTrendLines,
+    syncStoredHorizontalLines,
+    syncStoredTrendLines,
   }
 }

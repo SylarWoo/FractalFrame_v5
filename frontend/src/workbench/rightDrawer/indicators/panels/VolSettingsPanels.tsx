@@ -1,6 +1,6 @@
 import { SettingsColorSwatch, SettingsLineSwatch } from '../../../settings/SettingsSwatches'
 import type { VolIndicatorSettings } from '../../indicatorPersistence'
-import { CheckControl, InfoBadge, NumberBox } from './indicatorPanelShared'
+import { CheckControl, InfoBadge, NumberBox } from './IndicatorSettingControls'
 
 export function VolInputPanel({
   onSettingsChange,

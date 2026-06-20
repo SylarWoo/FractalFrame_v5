@@ -150,7 +150,7 @@
   align-items: center;
   gap: 6px;
   height: 18px;
-  margin-top: 4px;
+  margin-top: 8px;
   padding: 0 4px;
   border-radius: 3px;
   color: #374151;
@@ -246,12 +246,12 @@
   display: flex;
   gap: 20px;
   align-items: flex-end;
-  margin-top: 18px;
+  margin-top: 28px;
   border-bottom: 1px solid #cbd5e1;
 }
 
-.ff-import-selected-periods {
-  margin-top: 10px;
+.ff-import-selected .ff-watchlist-periods.ff-import-selected-periods {
+  margin-top: 22px;
 }
 
 .ff-import-selected-tabs__item {

@@ -22,10 +22,13 @@ export const storageKeys = {
   importCenterWatchlistColumnWidthsPx: 'fractalframe:mt5ImportCenterWatchlistColumnWidthsPx:v1',
   importCenterWatchlistTableHeightPx: 'fractalframe:mt5ImportCenterWatchlistTableHeightPx:v1',
   marketStatusTitleSnapshots: 'fractalframe:marketStatusTitleSnapshots:v1',
+  // Legacy key kept by chartRealtimeBridge as a fallback until the realtime profile is migrated.
   realtimePageBuffer: 'fractalframe:chartRealtimePageBuffer:v1',
   renderPageConfig: 'fractalframe:klinechart-v2:renderPageConfig:v1',
+  // Legacy realtime monitor snapshot key; do not add new V2 state here.
   realtimePageSnapshot: 'fractalframe:chartRealtimePageSnapshot:v1',
   realtimePageTableHeightPx: 'fractalframe:chartRealtimePageTableHeightPx:v1',
+  // Legacy realtime page index cache key; V2 runtime state should use klinechart-v2 keys.
   realtimePageIndexCache: 'fractalframe:chartRealtimePageIndexCache:v1',
   realtimePageLastResetCache: 'fractalframe:chartRealtimePageLastResetCache:v1',
   realtimeStablePage: 'fractalframe:klinechart-v2:realtimeStablePage:v1',

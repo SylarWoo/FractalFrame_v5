@@ -1,13 +1,13 @@
-import { ActionType, DomPosition, registerIndicator } from 'klinecharts'
+import { registerIndicator } from 'klinecharts'
 import type { Chart, IndicatorCreateTooltipDataSourceParams, KLineData } from 'klinecharts'
 import { defaultVolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import type { VolIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { readSettingsBooleanValue } from '../settingsSymbolState'
 import { chartSettingDefaults, chartSettingKeys } from '../settings/chartSettingsSchema'
 import { calculateWithoutFuturePlaceholders } from './chartFuturePlaceholders'
+import { mapPageIndicatorSnapshotToDataList } from './pageIndicatorRuntime'
 
 const candlePaneId = 'candle_pane'
-const overlayClassName = 'ff-main-volume-overlay-canvas'
 export const mainVolumeIndicatorName = 'FF_MAIN_VOL'
 
 type MainVolumeOverlay = {
@@ -15,19 +15,16 @@ type MainVolumeOverlay = {
   updateSettings: (settings?: Partial<VolIndicatorSettings>) => void
 }
 
-type MainVolumeCache = {
-  dataLength: number
-  lastTimestamp?: number
-  lastVolume?: number
-  maLength: number
-  maValues: Array<number | undefined>
-  volumes: number[]
-}
-
-type MainVolumeLegendRow = {
+export type MainVolumeLegendRow = {
   volume?: number
   volumeColorIndex?: 0 | 1
   volumeMa?: number
+}
+
+declare global {
+  interface Window {
+    __ffMainVolumeOverlayDebug?: unknown
+  }
 }
 
 let legendRegistered = false
@@ -51,6 +48,25 @@ function colorWithAlpha(hex: string, opacity: number) {
 
 function normalizeSettings(settings?: Partial<VolIndicatorSettings>): VolIndicatorSettings {
   return { ...defaultVolIndicatorSettings, ...(settings ?? {}) }
+}
+
+function readVolSnapshotContext(input: unknown) {
+  const context = input && typeof input === 'object'
+    ? input as Partial<VolIndicatorSettings> & {
+      pageKey?: string
+      period?: string
+      runtimeOnly?: boolean
+      settingsHash?: string
+      symbol?: string
+    }
+    : {}
+  return {
+    pageKey: typeof context.pageKey === 'string' ? context.pageKey : '',
+    period: typeof context.period === 'string' ? context.period.trim().toUpperCase() : '',
+    runtimeOnly: context.runtimeOnly === true,
+    settingsHash: typeof context.settingsHash === 'string' ? context.settingsHash : '',
+    symbol: typeof context.symbol === 'string' ? context.symbol.trim() : '',
+  }
 }
 
 function readVolume(row: KLineData) {
@@ -92,19 +108,12 @@ function lineDashForStyle(style: VolIndicatorSettings['maLineStyle']) {
   return []
 }
 
-function resolveVisibleRange(chart: Chart, dataLength: number) {
-  const range = chart.getVisibleRange()
-  const from = Math.max(0, Math.floor(range.realFrom) - 1)
-  const to = Math.min(dataLength - 1, Math.ceil(range.realTo) + 1)
-  return { from, to }
-}
-
-function resolveVolumeMax(volumes: number[], maValues: Array<number | undefined>, from: number, to: number) {
+function resolveIndicatorVolumeMax(rows: MainVolumeLegendRow[], from: number, to: number) {
   let max = 0
   for (let index = from; index <= to; index += 1) {
-    const volume = volumes[index]
-    if (Number.isFinite(volume)) max = Math.max(max, volume)
-    const ma = maValues[index]
+    const volume = rows[index]?.volume
+    if (typeof volume === 'number' && Number.isFinite(volume)) max = Math.max(max, volume)
+    const ma = rows[index]?.volumeMa
     if (Number.isFinite(ma)) max = Math.max(max, ma as number)
   }
   return max > 0 ? max : 1
@@ -139,6 +148,31 @@ function calculateLegendRows(dataList: KLineData[], inputSettings?: Partial<VolI
   }))
 }
 
+export function calculateMainVolumeRowsForKLineChart(dataList: KLineData[], inputContext: unknown): MainVolumeLegendRow[] {
+  const context = readVolSnapshotContext(inputContext)
+  if (context.pageKey && context.symbol && context.period) {
+    const rows = mapPageIndicatorSnapshotToDataList<MainVolumeLegendRow>({
+      dataList,
+      indicator: 'vol',
+      pageKey: context.pageKey,
+      period: context.period,
+      settingsHashKey: 'VOL',
+      settingsHash: context.settingsHash,
+      symbol: context.symbol,
+    })
+    if (rows) {
+      return calculateWithoutFuturePlaceholders(dataList, () => rows)
+    }
+    if (context.runtimeOnly) {
+      return calculateWithoutFuturePlaceholders(dataList, (realRows) => realRows.map(() => ({})))
+    }
+  }
+  return calculateWithoutFuturePlaceholders(
+    dataList,
+    (realRows) => calculateLegendRows(realRows, inputContext as Partial<VolIndicatorSettings>),
+  )
+}
+
 function resolveTooltipIndex(params: IndicatorCreateTooltipDataSourceParams<MainVolumeLegendRow>) {
   const crosshairIndex = Number(params.crosshair.dataIndex)
   if (Number.isFinite(crosshairIndex) && crosshairIndex >= 0) {
@@ -157,7 +191,19 @@ export function ensureMainVolumeLegendIndicator() {
     calcParams: [defaultVolIndicatorSettings],
     figures: [],
     regenerateFigures: () => [],
-    draw: () => true,
+    draw: ({ barSpace, bounding, ctx, indicator, kLineDataList, visibleRange, xAxis }) => {
+      drawMainVolumeIndicator({
+        barSpace,
+        bounding,
+        ctx,
+        kLineDataList,
+        rows: indicator.result,
+        settings: normalizeSettings(indicator.calcParams[0]),
+        visibleRange,
+        xAxis,
+      })
+      return true
+    },
     createTooltipDataSource: (params) => {
       const settings = normalizeSettings(params.indicator.calcParams[0])
       const index = resolveTooltipIndex(params)
@@ -186,97 +232,86 @@ export function ensureMainVolumeLegendIndicator() {
         values,
       }
     },
-    calc: (dataList, indicator) => calculateWithoutFuturePlaceholders(
-      dataList,
-      (realRows) => calculateLegendRows(realRows, indicator.calcParams[0]),
-    ),
+    calc: (dataList, indicator) => calculateMainVolumeRowsForKLineChart(dataList, indicator.calcParams[0]),
   })
 }
 
-function convertDataIndexToX(chart: Chart, dataList: KLineData[], index: number) {
-  const coordinate = chart.convertToPixel({ dataIndex: index, timestamp: dataList[index]?.timestamp, value: dataList[index]?.close }, { paneId: candlePaneId })
-  return Array.isArray(coordinate) ? Number.NaN : Number(coordinate.x)
+function publishMainVolumeOverlayDebug(value: unknown) {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return
+  window.__ffMainVolumeOverlayDebug = value
 }
 
-function resizeCanvas(canvas: HTMLCanvasElement, width: number, height: number) {
-  const ratio = window.devicePixelRatio || 1
-  const nextWidth = Math.max(1, Math.round(width * ratio))
-  const nextHeight = Math.max(1, Math.round(height * ratio))
-  if (canvas.width !== nextWidth) canvas.width = nextWidth
-  if (canvas.height !== nextHeight) canvas.height = nextHeight
-  canvas.style.width = `${Math.max(1, Math.round(width))}px`
-  canvas.style.height = `${Math.max(1, Math.round(height))}px`
-  const ctx = canvas.getContext('2d')
-  ctx?.setTransform(ratio, 0, 0, ratio, 0, 0)
-  return ctx
-}
-
-function resolveRenderCache(dataList: KLineData[], settings: VolIndicatorSettings, cache: MainVolumeCache | null): MainVolumeCache {
-  const maLength = Math.max(1, Math.min(Math.round(Number(settings.maLength)), 500))
-  const last = dataList[dataList.length - 1]
-  const lastTimestamp = Number(last?.timestamp)
-  const lastVolume = readVolume(last ?? ({} as KLineData))
-  if (
-    cache &&
-    cache.dataLength === dataList.length &&
-    cache.lastTimestamp === lastTimestamp &&
-    cache.lastVolume === lastVolume &&
-    cache.maLength === maLength
-  ) {
-    return cache
+function drawMainVolumeIndicator(options: {
+  barSpace: { bar?: number; gapBar?: number }
+  bounding: { height: number; left: number; top: number; width: number }
+  ctx: CanvasRenderingContext2D
+  kLineDataList: KLineData[]
+  rows: MainVolumeLegendRow[]
+  settings: VolIndicatorSettings
+  visibleRange: { from: number; to: number }
+  xAxis: { convertToPixel: (value: number) => number }
+}) {
+  const { barSpace, bounding, ctx, kLineDataList, rows, settings, visibleRange, xAxis } = options
+  if (bounding.width <= 0 || bounding.height <= 0) {
+    publishMainVolumeOverlayDebug({ reason: 'invalid-main-size', size: [bounding.width, bounding.height] })
+    return
+  }
+  if (kLineDataList.length === 0 || !settings.volumeChecked) {
+    publishMainVolumeOverlayDebug({
+      dataLength: kLineDataList.length,
+      reason: kLineDataList.length === 0 ? 'empty-data' : 'volume-disabled',
+      volumeChecked: settings.volumeChecked,
+    })
+    return
+  }
+  const from = Math.max(0, Math.floor(visibleRange.from) - 1)
+  const to = Math.min(rows.length - 1, Math.ceil(visibleRange.to) + 1)
+  if (to < from) {
+    publishMainVolumeOverlayDebug({ dataLength: kLineDataList.length, from, reason: 'empty-visible-range', to })
+    return
   }
 
-  const volumes = dataList.map(readVolume)
-  return {
-    dataLength: dataList.length,
-    lastTimestamp,
-    lastVolume,
-    maLength,
-    volumes,
-    maValues: calculateSma(volumes, maLength),
-  }
-}
-
-function drawMainVolumeOverlay(chart: Chart, canvas: HTMLCanvasElement, settings: VolIndicatorSettings, cache: MainVolumeCache | null) {
-  const mainSize = chart.getSize(candlePaneId, DomPosition.Main)
-  if (!mainSize || mainSize.width <= 0 || mainSize.height <= 0) return cache
-
-  const ctx = resizeCanvas(canvas, mainSize.width, mainSize.height)
-  if (!ctx) return cache
-  ctx.clearRect(0, 0, mainSize.width, mainSize.height)
-
-  const dataList = chart.getDataList()
-  if (dataList.length === 0 || !settings.volumeChecked) return cache
-
-  const { from, to } = resolveVisibleRange(chart, dataList.length)
-  if (to < from) return cache
-
-  const nextCache = resolveRenderCache(dataList, settings, cache)
-  const { maValues, volumes } = nextCache
-  const maxVolume = resolveVolumeMax(volumes, maValues, from, to)
-  const bandHeight = Math.max(42, Math.min(112, Math.round(mainSize.height * 0.24)))
+  const maxVolume = resolveIndicatorVolumeMax(rows, from, to)
+  const bandHeight = Math.max(42, Math.min(112, Math.round(bounding.height * 0.24)))
   const bottomPadding = 0
-  const top = mainSize.height - bandHeight - bottomPadding
-  const bottom = mainSize.height - bottomPadding
-  const barSpace = chart.getBarSpace()
-  const barWidth = Math.max(1, Math.floor(barSpace * 0.82))
-  const fromX = convertDataIndexToX(chart, dataList, from)
-  if (!Number.isFinite(fromX)) return nextCache
+  const top = bounding.top + bounding.height - bandHeight - bottomPadding
+  const bottom = bounding.top + bounding.height - bottomPadding
+  const resolvedBarSpace = Number(barSpace.gapBar ?? barSpace.bar ?? 1)
+  const barWidth = Math.max(1, Math.floor(resolvedBarSpace * 0.82))
+  const points: Array<{ index: number; x: number }> = []
+  for (let index = from; index <= to; index += 1) {
+    const x = xAxis.convertToPixel(index)
+    if (!Number.isFinite(x)) continue
+    if (x < bounding.left - barWidth || x > bounding.left + bounding.width + barWidth) continue
+    points.push({ index, x })
+  }
+  if (points.length === 0) {
+    publishMainVolumeOverlayDebug({
+      barSpace: resolvedBarSpace,
+      barWidth,
+      dataLength: kLineDataList.length,
+      from,
+      reason: 'no-visible-volume-points',
+      range: visibleRange,
+      size: [bounding.width, bounding.height],
+      to,
+    })
+    return
+  }
 
   ctx.save()
   ctx.beginPath()
-  ctx.rect(0, top - 2, mainSize.width, bandHeight + 4)
+  ctx.rect(bounding.left, top - 2, bounding.width, bandHeight + 4)
   ctx.clip()
 
-  for (let index = from; index <= to; index += 1) {
-    const volume = volumes[index]
-    if (!Number.isFinite(volume)) continue
-    const xCenter = fromX + (index - from) * barSpace
+  for (const { index, x: xCenter } of points) {
+    const volume = rows[index]?.volume
+    if (typeof volume !== 'number' || !Number.isFinite(volume)) continue
 
     const height = Math.max(1, (volume / maxVolume) * (bandHeight - 8))
     const x = Math.round(xCenter - barWidth / 2)
     const y = Math.round(bottom - height)
-    ctx.fillStyle = getVolumeColorIndex(dataList, index, settings) === 0
+    ctx.fillStyle = rows[index]?.volumeColorIndex === 0
       ? colorWithAlpha(settings.volumeUpColor, settings.volumeUpOpacity)
       : colorWithAlpha(settings.volumeDownColor, settings.volumeDownOpacity)
     ctx.fillRect(x, y, barWidth, Math.round(height))
@@ -290,8 +325,8 @@ function drawMainVolumeOverlay(chart: Chart, canvas: HTMLCanvasElement, settings
     ctx.lineJoin = 'round'
     ctx.setLineDash(lineDashForStyle(settings.maLineStyle))
     let started = false
-    for (let index = from; index <= to; index += 1) {
-      const ma = maValues[index]
+    for (const { index, x } of points) {
+      const ma = rows[index]?.volumeMa
       if (!Number.isFinite(ma)) {
         if (started) {
           ctx.stroke()
@@ -300,7 +335,6 @@ function drawMainVolumeOverlay(chart: Chart, canvas: HTMLCanvasElement, settings
         }
         continue
       }
-      const x = fromX + (index - from) * barSpace
       const y = bottom - ((ma as number) / maxVolume) * (bandHeight - 8)
       if (!started) {
         ctx.moveTo(x, y)
@@ -313,104 +347,36 @@ function drawMainVolumeOverlay(chart: Chart, canvas: HTMLCanvasElement, settings
   }
 
   ctx.restore()
-  return nextCache
-}
-
-function createRenderSignature(chart: Chart, settings: VolIndicatorSettings) {
-  const mainSize = chart.getSize(candlePaneId, DomPosition.Main)
-  const dataList = chart.getDataList()
-  const range = chart.getVisibleRange()
-  const from = Math.max(0, Math.floor(range.realFrom) - 1)
-  const to = Math.min(dataList.length - 1, Math.ceil(range.realTo) + 1)
-  const firstVisible = dataList[from]
-  const lastVisible = dataList[to]
-  const last = dataList[dataList.length - 1]
-  return JSON.stringify({
-    barSpace: Math.round(chart.getBarSpace() * 1000) / 1000,
-    dataLength: dataList.length,
-    devicePixelRatio: window.devicePixelRatio || 1,
-    firstVisible: firstVisible ? [firstVisible.timestamp, firstVisible.open, firstVisible.close, readVolume(firstVisible)] : null,
-    last: last ? [last.timestamp, last.open, last.high, last.low, last.close, readVolume(last)] : null,
-    lastVisible: lastVisible ? [lastVisible.timestamp, lastVisible.open, lastVisible.close, readVolume(lastVisible)] : null,
-    rangeFrom: Math.round(range.realFrom * 1000) / 1000,
-    rangeTo: Math.round(range.realTo * 1000) / 1000,
-    settings: {
-      colorBasedOnPreviousClose: settings.colorBasedOnPreviousClose,
-      maChecked: settings.maChecked,
-      maColor: settings.maColor,
-      maLength: settings.maLength,
-      maLineStyle: settings.maLineStyle,
-      maLineWidth: settings.maLineWidth,
-      maOpacity: settings.maOpacity,
-      volumeChecked: settings.volumeChecked,
-      volumeDownColor: settings.volumeDownColor,
-      volumeDownOpacity: settings.volumeDownOpacity,
-      volumeUpColor: settings.volumeUpColor,
-      volumeUpOpacity: settings.volumeUpOpacity,
-    },
-    size: mainSize ? [Math.round(mainSize.width), Math.round(mainSize.height)] : null,
-    visibleFrom: from,
-    visibleTo: to,
+  publishMainVolumeOverlayDebug({
+    dataLength: kLineDataList.length,
+    from,
+    points: points.length,
+    range: visibleRange,
+    reason: 'rendered',
+    to,
   })
 }
 
 export function installMainVolumeOverlay(chart: Chart, inputSettings?: Partial<VolIndicatorSettings>): MainVolumeOverlay | null {
-  const mainDom = chart.getDom(candlePaneId, DomPosition.Main)
-  if (!mainDom) return null
-
-  const canvas = document.createElement('canvas')
-  canvas.className = overlayClassName
-  canvas.style.position = 'absolute'
-  canvas.style.inset = '0'
-  canvas.style.pointerEvents = 'none'
-  canvas.style.zIndex = '2'
-
-  if (getComputedStyle(mainDom).position === 'static') {
-    mainDom.style.position = 'relative'
-  }
-  mainDom.insertBefore(canvas, mainDom.lastElementChild)
-
+  ensureMainVolumeLegendIndicator()
   let settings = normalizeSettings(inputSettings)
-  let frameId = 0
-  let renderCache: MainVolumeCache | null = null
-  let renderSignature = ''
-  const render = () => {
-    frameId = 0
-    const nextSignature = createRenderSignature(chart, settings)
-    if (nextSignature === renderSignature) return
-    renderSignature = nextSignature
-    renderCache = drawMainVolumeOverlay(chart, canvas, settings, renderCache)
+  const apply = () => {
+    const indicator = { name: mainVolumeIndicatorName, calcParams: [settings], zLevel: -20 }
+    if (chart.getIndicatorByPaneId(candlePaneId, mainVolumeIndicatorName)) {
+      chart.overrideIndicator(indicator, candlePaneId)
+      return
+    }
+    chart.createIndicator(indicator, true, { id: candlePaneId })
   }
-  const scheduleRender = () => {
-    if (frameId !== 0) return
-    frameId = window.requestAnimationFrame(render)
-  }
-  const resizeObserver = new ResizeObserver(scheduleRender)
-  resizeObserver.observe(mainDom)
-
-  const actions = [
-    ActionType.OnDataReady,
-    ActionType.OnScroll,
-    ActionType.OnVisibleRangeChange,
-    ActionType.OnZoom,
-  ]
-  actions.forEach((action) => chart.subscribeAction(action, scheduleRender))
-  window.addEventListener('resize', scheduleRender)
-  scheduleRender()
+  apply()
 
   return {
     destroy: () => {
-      if (frameId !== 0) window.cancelAnimationFrame(frameId)
-      resizeObserver.disconnect()
-      actions.forEach((action) => chart.unsubscribeAction(action, scheduleRender))
-      window.removeEventListener('resize', scheduleRender)
-      canvas.remove()
+      chart.removeIndicator(candlePaneId, mainVolumeIndicatorName)
     },
     updateSettings: (nextSettings) => {
       settings = normalizeSettings(nextSettings)
-      renderCache = null
-      renderSignature = ''
-      scheduleRender()
+      apply()
     },
   }
 }

@@ -7,13 +7,14 @@ import {
   dispatchRealtimeStablePageRebuildCompleted,
   requestStoreV6RealtimePageWindow,
   realtimeStablePageRebuildRequestedEvent,
-  resolveH2RealtimeRateVolumeForPeriodStartV2,
-  resolveMt5RateVolumeForPeriodStartV2,
   type Mt5RealtimeWindowTick,
   type StoreV6RealtimePageWindow,
 } from './realtimePageWindowV2'
 import { readRealtimePageMonitorSnapshotV2 } from './realtimePageWindowV2/realtimePageMonitorV2'
-import { resolveAutoRebuildRealtimeStablePageReason } from './realtimePageWindowV2/realtimeStablePageRebuildHeuristics'
+import {
+  isRealtimeWindowStructurallyInconsistent,
+  resolveAutoRebuildRealtimeStablePageReason,
+} from './realtimePageWindowV2/realtimeStablePageRebuildHeuristics'
 import {
   refreshRealtimeWindowIndicatorsV2,
   type StoreV6IndicatorRequestSpecV2,
@@ -22,8 +23,7 @@ import { chartWorkspaceIndicatorRegistryV2 } from './chartWorkspaceIndicatorRegi
 import { workbenchEvents } from '../persistence/workbenchEvents'
 import { traceKLineChartPageV2 } from './klineChartRendererV2/klineChartPageDebugProbeV2'
 import { kLineChartHorizontalDragEndEventV2 } from './klineChartRendererV2/klineChartInteractionStateV2'
-import { queryMt5Rates } from '../../services/mt5/mt5SymbolsApi'
-import { resolvePeriodSeconds } from './chartTimeFormatting'
+import { createRealtimeRateVolumeResolverV2 } from './realtimeRateVolumeResolverV2'
 
 declare global {
   interface Window {
@@ -31,32 +31,6 @@ declare global {
       horizontalDragInProgress: boolean
     }
   }
-}
-
-function normalizeRealtimeRateTimeframe(period: string) {
-  const value = period.trim().toUpperCase()
-  if (value === 'H2') return 'M30'
-  if (value === '1M' || value === 'M1') return 'M1'
-  if (value === 'MN' || value === 'MN1') return 'MN1'
-  if (/^\d+M$/.test(value)) return `M${value.slice(0, -1)}`
-  if (/^\d+H$/.test(value)) return `H${value.slice(0, -1)}`
-  return value
-}
-
-function resolveTickTimestampMs(tick: Mt5RealtimeWindowTick) {
-  if (typeof tick.timeMsc === 'number' && Number.isFinite(tick.timeMsc)) {
-    return tick.timeMsc < 1_000_000_000_000 ? tick.timeMsc * 1000 : tick.timeMsc
-  }
-  if (typeof tick.time === 'number' && Number.isFinite(tick.time)) {
-    return tick.time < 1_000_000_000_000 ? tick.time * 1000 : tick.time
-  }
-  return Date.now()
-}
-
-function resolveTickPeriodStartSeconds(tick: Mt5RealtimeWindowTick, period: string) {
-  const periodSeconds = resolvePeriodSeconds(period)
-  if (!Number.isFinite(periodSeconds) || periodSeconds <= 0) return null
-  return Math.floor(resolveTickTimestampMs(tick) / (periodSeconds * 1000)) * periodSeconds
 }
 
 export function useRealtimePageWindowForChartV2(options: {
@@ -107,8 +81,8 @@ export function useRealtimePageWindowForChartV2(options: {
     let indicatorRefreshInFlight = false
     let stablePageRebuildId = 0
     let stablePageRebuildScheduled = false
-    let rateVolumeInFlight = false
-    let latestRateVolumeTick: Mt5RealtimeWindowTick | null = null
+    let pendingAutoRebuildFrameId = 0
+    let pendingAutoRebuildWindow: StoreV6RealtimePageWindow | null = null
     let dragEndFlushTimer = 0
     let dragEndFlushHandler: (() => void) | null = null
     const realtimeUpdateMode = options.indicatorRequests.reduce<'deferred' | 'tail' | 'window'>((mode, request) => {
@@ -145,7 +119,7 @@ export function useRealtimePageWindowForChartV2(options: {
         clearDragEndFlush()
         if (disposed || !pendingRealtimeWindow) return
         scheduleRealtimeFrame(pendingRealtimeWindow)
-        maybeAutoRebuildStablePage(pendingRealtimeWindow)
+        scheduleMaybeAutoRebuildStablePage(pendingRealtimeWindow)
       }
       dragEndFlushHandler = flush
       window.addEventListener(kLineChartHorizontalDragEndEventV2, flush, { once: true })
@@ -265,14 +239,16 @@ export function useRealtimePageWindowForChartV2(options: {
         // Keep the current realtime window if rebuild fails.
       })
     }
-    const maybeAutoRebuildStablePage = (windowToCheck: StoreV6RealtimePageWindow | null) => {
+    const maybeAutoRebuildStablePageNow = (windowToCheck: StoreV6RealtimePageWindow | null) => {
       if (!windowToCheck || stablePageRebuildScheduled) return
-      const monitor = readRealtimePageMonitorSnapshotV2({
-        period: options.period,
-        sessionTimeFrom: windowToCheck.sessionTimeFrom,
-        sessionTimeTo: windowToCheck.sessionTimeTo,
-        symbol: options.symbol,
-      })
+      const monitor = isRealtimeWindowStructurallyInconsistent(windowToCheck)
+        ? null
+        : readRealtimePageMonitorSnapshotV2({
+            period: options.period,
+            sessionTimeFrom: windowToCheck.sessionTimeFrom,
+            sessionTimeTo: windowToCheck.sessionTimeTo,
+            symbol: options.symbol,
+          })
       const reason = resolveAutoRebuildRealtimeStablePageReason({ monitor, window: windowToCheck })
       if (reason) {
         traceKLineChartPageV2('RealtimeStablePageRebuild.autoRequested', {
@@ -289,6 +265,17 @@ export function useRealtimePageWindowForChartV2(options: {
         scheduleStablePageRebuild()
       }
     }
+    const scheduleMaybeAutoRebuildStablePage = (windowToCheck: StoreV6RealtimePageWindow | null) => {
+      pendingAutoRebuildWindow = windowToCheck
+      if (pendingAutoRebuildFrameId !== 0) return
+      pendingAutoRebuildFrameId = window.requestAnimationFrame(() => {
+        pendingAutoRebuildFrameId = 0
+        const windowForCheck = pendingAutoRebuildWindow
+        pendingAutoRebuildWindow = null
+        if (disposed) return
+        maybeAutoRebuildStablePageNow(windowForCheck)
+      })
+    }
     if (options.realtimeEnabled !== true) {
       setRealtimeWindow(null)
     } else {
@@ -304,7 +291,7 @@ export function useRealtimePageWindowForChartV2(options: {
           if (disposed || refreshId !== realtimeIndicatorRefreshId) return
           realtimeWindowState = restoredRealtimeWindow
           setRealtimeWindow(restoredRealtimeWindow)
-          maybeAutoRebuildStablePage(restoredRealtimeWindow)
+          scheduleMaybeAutoRebuildStablePage(restoredRealtimeWindow)
         }).catch(() => {
           if (!disposed && refreshId === realtimeIndicatorRefreshId) setRealtimeWindow(emptyRealtimeWindow)
         })
@@ -323,7 +310,7 @@ export function useRealtimePageWindowForChartV2(options: {
           if (disposed) return
           realtimeWindowState = nextRealtimeWindow
           setRealtimeWindow(nextRealtimeWindow)
-          maybeAutoRebuildStablePage(nextRealtimeWindow)
+          scheduleMaybeAutoRebuildStablePage(nextRealtimeWindow)
         })
         .catch(() => {
           if (!disposed) setRealtimeWindow(realtimeWindowState)
@@ -344,67 +331,41 @@ export function useRealtimePageWindowForChartV2(options: {
       }
       if (options.indicatorRequests.length === 0) {
         scheduleRealtimeFrame(nextRealtimeWindow)
-        maybeAutoRebuildStablePage(nextRealtimeWindow)
+        scheduleMaybeAutoRebuildStablePage(nextRealtimeWindow)
         return
       }
       if (nextRealtimeWindow.updateKind === 'realtime-bar-close-settlement') {
         scheduleRealtimeFrame(nextRealtimeWindow)
         flushSettlementIndicatorRefresh(nextRealtimeWindow)
-        maybeAutoRebuildStablePage(nextRealtimeWindow)
+        scheduleMaybeAutoRebuildStablePage(nextRealtimeWindow)
         return
       }
       if (realtimeUpdateMode === 'tail') {
         scheduleRealtimeFrame(nextRealtimeWindow)
         scheduleIndicatorRefresh(nextRealtimeWindow)
-        maybeAutoRebuildStablePage(nextRealtimeWindow)
+        scheduleMaybeAutoRebuildStablePage(nextRealtimeWindow)
         return
       }
       if (realtimeUpdateMode === 'deferred') {
         scheduleRealtimeFrame(nextRealtimeWindow)
         scheduleHeavyIndicatorRefresh(nextRealtimeWindow)
-        maybeAutoRebuildStablePage(nextRealtimeWindow)
+        scheduleMaybeAutoRebuildStablePage(nextRealtimeWindow)
         return
       }
       scheduleIndicatorRefresh(nextRealtimeWindow)
-      maybeAutoRebuildStablePage(nextRealtimeWindow)
+      scheduleMaybeAutoRebuildStablePage(nextRealtimeWindow)
     }
-    const requestRateVolumeForLatestTick = (tick: Mt5RealtimeWindowTick) => {
-      latestRateVolumeTick = tick
-      if (rateVolumeInFlight) return
-      const sourceTick = latestRateVolumeTick
-      const tickPeriodStart = sourceTick ? resolveTickPeriodStartSeconds(sourceTick, options.period) : null
-      if (tickPeriodStart == null) {
-        return
-      }
-      rateVolumeInFlight = true
-      void queryMt5Rates({
-        limit: 3,
-        symbol: options.symbol,
-        timeframe: normalizeRealtimeRateTimeframe(options.period),
-      })
-        .then((payload) => {
-          if (disposed) return
-          const currentTick = latestRateVolumeTick ?? sourceTick
-          const currentPeriodStart = currentTick ? resolveTickPeriodStartSeconds(currentTick, options.period) : tickPeriodStart
-          const barVolume = options.period.trim().toUpperCase() === 'H2'
-            ? resolveH2RealtimeRateVolumeForPeriodStartV2(payload.rows, currentPeriodStart ?? tickPeriodStart)
-            : resolveMt5RateVolumeForPeriodStartV2(payload.rows, currentPeriodStart ?? tickPeriodStart)
-          if (currentTick) applyRealtimeTick(currentTick, barVolume)
-        })
-        .catch(() => {})
-        .finally(() => {
-          rateVolumeInFlight = false
-          if (disposed) return
-          const pendingTick = latestRateVolumeTick
-          if (pendingTick && pendingTick !== sourceTick) requestRateVolumeForLatestTick(pendingTick)
-        })
-    }
+    const rateVolumeResolver = createRealtimeRateVolumeResolverV2({
+      apply: applyRealtimeTick,
+      period: options.period,
+      symbol: options.symbol,
+    })
     const handleRealtimeTick = (event: Event) => {
       if (disposed || !realtimeWindowState) return
       const tick = (event as CustomEvent<Mt5RealtimeWindowTick>).detail
       if (!tick) return
       applyRealtimeTick(tick, null)
-      requestRateVolumeForLatestTick(tick)
+      rateVolumeResolver.request(tick)
     }
     const handleStablePageRebuildRequest = (event: Event) => {
       const detail = event instanceof CustomEvent ? event.detail as { period?: string | null; symbol?: string | null } : {}
@@ -414,7 +375,7 @@ export function useRealtimePageWindowForChartV2(options: {
       scheduleStablePageRebuild()
     }
     const handleRealtimeStateChanged = () => {
-      maybeAutoRebuildStablePage(realtimeWindowState)
+      scheduleMaybeAutoRebuildStablePage(realtimeWindowState)
     }
     window.addEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
     window.addEventListener(realtimeStablePageRebuildRequestedEvent, handleStablePageRebuildRequest)
@@ -422,9 +383,11 @@ export function useRealtimePageWindowForChartV2(options: {
     window.addEventListener(workbenchEvents.realtimePageSnapshotChanged, handleRealtimeStateChanged)
     return () => {
       disposed = true
+      rateVolumeResolver.dispose()
       clearDragEndFlush()
       if (pendingFrameId !== 0) window.cancelAnimationFrame(pendingFrameId)
       if (pendingIndicatorFrameId !== 0) window.cancelAnimationFrame(pendingIndicatorFrameId)
+      if (pendingAutoRebuildFrameId !== 0) window.cancelAnimationFrame(pendingAutoRebuildFrameId)
       if (pendingHeavyIndicatorTimeoutId !== 0) window.clearTimeout(pendingHeavyIndicatorTimeoutId)
       window.removeEventListener('fractalframe:mt5RealtimeTick', handleRealtimeTick)
       window.removeEventListener(realtimeStablePageRebuildRequestedEvent, handleStablePageRebuildRequest)

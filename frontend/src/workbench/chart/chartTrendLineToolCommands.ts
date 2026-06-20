@@ -4,21 +4,27 @@ import { clearStoredTrendLineDrawings } from '../rightDrawer/drawingObjectPersis
 import type { DrawingTextStyle, DrawingTrendLineStyle } from '../rightDrawer/drawingPersistence'
 import type { DrawingToolCommand } from '../rightDrawer/drawingToolCommands'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
+import { normalizeDrawingCrossPeriodTargets } from '../drawing/drawingCrossPeriodModel'
 import { normalizeLineStyle, trendOverlayStylesFromLine } from './chartDrawingStyle'
 import type { TrendLineExtendData } from './chartDrawingTypes'
 import { publishTrendLineDeselectedState, publishTrendLineSelectedState, publishTrendLineStartedState } from './trendLineToolState'
 
 export type PendingTrendLineOptions = {
+  crossPeriod?: boolean
+  crossPeriodTargets?: string[]
   lineStyle: SettingsLineSwatchValue
   locked: boolean
+  sourcePeriod?: string
   showPriceLabel: boolean
   textStyle?: DrawingTextStyle
   trendLineStyle: DrawingTrendLineStyle
 }
 
 export function createTrendLineToolCommandHandler({
+  applyTrendLineVisibility,
   chart,
   createTrendLineOverlay,
+  getPeriod,
   getLastPointerPaneId,
   getPendingTrendLineOptions,
   getPendingTrendLineOverlayId,
@@ -37,8 +43,10 @@ export function createTrendLineToolCommandHandler({
   setTrendLinePersistenceEnabled,
   trendLineOverlayIds,
 }: {
+  applyTrendLineVisibility: () => void
   chart: Chart
   createTrendLineOverlay: (options: PendingTrendLineOptions & { paneId?: string; selected: boolean }) => unknown
+  getPeriod: () => string
   getLastPointerPaneId: () => string
   getPendingTrendLineOptions: () => PendingTrendLineOptions | null
   getPendingTrendLineOverlayId: () => string | null
@@ -216,6 +224,40 @@ export function createTrendLineToolCommandHandler({
       return
     }
 
+    if (command.action === 'updateSelectedCrossPeriod') {
+      const pendingTrendLineOptions = getPendingTrendLineOptions()
+      const sourcePeriod = pendingTrendLineOptions?.sourcePeriod || getPeriod().trim().toUpperCase()
+      const pendingCrossPeriodTargets = normalizeDrawingCrossPeriodTargets(command.crossPeriodTargets ?? pendingTrendLineOptions?.crossPeriodTargets)
+      setPendingTrendLineOptions(pendingTrendLineOptions
+        ? { ...pendingTrendLineOptions, crossPeriod: command.crossPeriod === true, crossPeriodTargets: pendingCrossPeriodTargets, sourcePeriod }
+        : pendingTrendLineOptions)
+      const editableTrendLineId = resolveSelectedTrendLineOverlayId()
+      if (!editableTrendLineId) return
+      const overlay = chart.getOverlayById(editableTrendLineId)
+      const extendData = overlay?.extendData as TrendLineExtendData | undefined
+      if (!overlay) return
+      const crossPeriodTargets = normalizeDrawingCrossPeriodTargets(command.crossPeriodTargets ?? extendData?.crossPeriodTargets)
+      chart.overrideOverlay({
+        id: editableTrendLineId,
+        extendData: {
+          ...extendData,
+          crossPeriod: command.crossPeriod === true,
+          crossPeriodTargets,
+          selected: true,
+          sourcePeriod: extendData?.sourcePeriod || getPeriod().trim().toUpperCase(),
+        },
+      })
+      markSelectedTrendLine(editableTrendLineId)
+      persistCurrentTrendLines()
+      applyTrendLineVisibility()
+      publishTrendLineSelectedState({
+        armed: getPendingTrendLineOverlayId() != null,
+        overlay: chart.getOverlayById(editableTrendLineId) ?? overlay,
+        trendPointPrices: resolveTrendPointPrices(overlay),
+      })
+      return
+    }
+
     if (command.action === 'updateSelectedTextStyle') {
       if (!command.textStyle) return
       const textStyle = normalizeDrawingTextStyle(command.textStyle)
@@ -321,8 +363,11 @@ export function createTrendLineToolCommandHandler({
     if (pendingTrendLineOverlayId) chart.removeOverlay({ id: pendingTrendLineOverlayId })
     hidePendingTrendStartHandle()
     const pendingTrendLineOptions: PendingTrendLineOptions = {
+      crossPeriod: command.crossPeriod === true,
+      crossPeriodTargets: normalizeDrawingCrossPeriodTargets(command.crossPeriodTargets),
       lineStyle,
       locked: command.locked === true,
+      sourcePeriod: getPeriod().trim().toUpperCase(),
       showPriceLabel: command.showPriceLabel !== false,
       textStyle: command.textStyle,
       trendLineStyle: normalizeDrawingTrendLineStyle(command.trendLineStyle),
@@ -337,9 +382,12 @@ export function createTrendLineToolCommandHandler({
     if (typeof overlayId === 'string') trendLineOverlayIds.add(overlayId)
     publishTrendLineStartedState({
       armed: typeof overlayId === 'string',
+      crossPeriod: pendingTrendLineOptions.crossPeriod,
+      crossPeriodTargets: pendingTrendLineOptions.crossPeriodTargets,
       lineStyle,
       locked: pendingTrendLineOptions.locked,
       showPriceLabel: pendingTrendLineOptions.showPriceLabel,
+      sourcePeriod: pendingTrendLineOptions.sourcePeriod,
       textStyle: pendingTrendLineOptions.textStyle,
       trendLineStyle: pendingTrendLineOptions.trendLineStyle,
     })

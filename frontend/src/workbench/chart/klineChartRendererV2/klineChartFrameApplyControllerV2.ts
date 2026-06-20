@@ -318,7 +318,7 @@ export function applyKLineChartFrameUpdateV2(options: ApplyKLineChartFrameUpdate
   })
   const applyMs = performance.now() - applyStart
   options.onPreviousFrameChange(options.frame)
-  const overlayMs = dataReadyOverlayMs + timedOverlayUpdate(options)
+  const overlayMs = dataReadyOverlayMs
   options.displayController?.scheduleApply()
   emitLoadState({
     frame: options.frame,

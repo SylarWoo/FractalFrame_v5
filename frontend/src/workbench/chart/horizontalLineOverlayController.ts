@@ -8,6 +8,8 @@ import type { MixedDrawingMoveState, TrendLineExtendData } from './chartDrawingT
 import type { PressedHorizontalLineMoveState } from './chartDrawingMoveController'
 
 export type CreateHorizontalLineOverlayOptions = {
+  crossPeriod?: boolean
+  crossPeriodTargets?: string[]
   lineStyle: SettingsLineSwatchValue
   locked: boolean
   manualVisible?: boolean
@@ -16,6 +18,7 @@ export type CreateHorizontalLineOverlayOptions = {
   points?: Array<{ value: number }>
   selected: boolean
   showPriceLabel: boolean
+  sourcePeriod?: string
   textStyle?: DrawingTextStyle
 }
 
@@ -58,7 +61,7 @@ export function createHorizontalLineOverlayFactory({
   persistCurrentHorizontalLines: () => void
   persistCurrentTrendLines: () => void
   publishObjectTreeState: () => void
-  publishState: (state?: Partial<{ armed: boolean; lineStyle: SettingsLineSwatchValue; locked: boolean; objectId: string; price: number; selected: boolean; showPriceLabel: boolean; textStyle: DrawingTextStyle }>) => void
+  publishState: (state?: Partial<{ armed: boolean; crossPeriod: boolean; crossPeriodTargets: string[]; lineStyle: SettingsLineSwatchValue; locked: boolean; objectId: string; price: number; selected: boolean; showPriceLabel: boolean; sourcePeriod: string; textStyle: DrawingTextStyle }>) => void
   clearDeselectedHorizontalLine: (id: string) => void
   clearRemovedHorizontalLine: (id: string) => void
   selectedHorizontalLineOverlayIds: Set<string>
@@ -79,11 +82,16 @@ export function createHorizontalLineOverlayFactory({
     points,
     selected,
     showPriceLabel,
+    sourcePeriod,
+    crossPeriod,
+    crossPeriodTargets,
     textStyle,
   }: CreateHorizontalLineOverlayOptions) {
     return chart.createOverlay({
       name: horizontalLineOverlayName,
       extendData: {
+        crossPeriod: crossPeriod === true,
+        crossPeriodTargets,
         drawing: true,
         hovered: false,
         lineStyle: normalizeLineStyle(lineStyle),
@@ -94,6 +102,7 @@ export function createHorizontalLineOverlayFactory({
         pressed: false,
         selected,
         showPriceLabel,
+        sourcePeriod,
         textStyle: normalizeDrawingTextStyle(textStyle),
       },
       lock: locked,

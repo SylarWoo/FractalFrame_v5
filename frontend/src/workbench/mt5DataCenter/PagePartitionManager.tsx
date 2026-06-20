@@ -5,7 +5,9 @@ import {
 } from '../chart/historyPageCacheCleanupV2'
 import {
   historyPageDailyRolloverRebuildEvent,
-  isHistoryPageIndexCacheStaleAfterDailyRollover,
+  isHistoryPageIndexCacheStaleAfterRollover,
+  resolveHistoryPageRolloverReasonForPeriod,
+  type HistoryPageRolloverReason,
   type HistoryPageDailyRolloverRebuildDetail,
 } from '../chart/pagePartition/historyPageDailyRolloverV2'
 import {
@@ -64,6 +66,12 @@ import {
   type UpdateSummary,
 } from './pagePartitionManagerHelpers'
 import { pushRefreshAfterAutoPageV2 } from './refreshAfterAutoPusherV2'
+
+function formatRolloverReasonText(reason: HistoryPageRolloverReason) {
+  if (reason === 'weekly-close') return '周收盘'
+  if (reason === 'monthly-close') return '月收盘'
+  return '日收盘'
+}
 
 type PagePartitionManagerProps = {
   onOpenChart?: (options: { historyPageWindow?: StoreV6HistoryPageWindow | null; pageNavigation?: ChartPageNavigation | null; realtimeEnabled?: boolean; symbol: string; period: string; totalRows?: number | null; limit?: number; reloadId?: number; page?: ChartPageTarget | null }) => void
@@ -315,12 +323,14 @@ export function PagePartitionManager({
       const cacheMissingM5AnchorMeta = Boolean(cached) &&
         currentPartition.partitionMode === 'm5-time' &&
         !cachedM5AnchorMeta
-      const cacheExpiredAfterDailyClose = currentPartition.partitionMode === 'm5-time' &&
-        isHistoryPageIndexCacheStaleAfterDailyRollover({
+      const rolloverReason = resolveHistoryPageRolloverReasonForPeriod(selectedPeriod)
+      const cacheExpiredAfterRollover = resolvePartitionCacheKind(currentPartition) === 'time' &&
+        isHistoryPageIndexCacheStaleAfterRollover({
           builtAt: cached?.builtAt,
+          period: selectedPeriod,
           symbol: selectedSymbol,
         })
-      const cacheCurrent = isCurrentCache(cached, currentPartition) && !cacheExpiredAfterDailyClose && !cacheMissingM5AnchorMeta
+      const cacheCurrent = isCurrentCache(cached, currentPartition) && !cacheExpiredAfterRollover && !cacheMissingM5AnchorMeta
       if (cached && !cacheCurrent) {
         clearHistoryPageCachesV2({
           reason: 'stale-page-index-cache',
@@ -330,8 +340,8 @@ export function PagePartitionManager({
         deletePageIndexCache(cacheKey)
         setLastResetInfo(readLastResetCache()[cacheKey] ?? null)
         setPages([])
-        setPartitionStatus(cacheExpiredAfterDailyClose
-          ? '分页缓存已跨过日收盘，正在自动重建...'
+        setPartitionStatus(cacheExpiredAfterRollover
+          ? `分页缓存已跨过${formatRolloverReasonText(rolloverReason)}，正在自动重建...`
           : cacheMissingM5AnchorMeta
           ? '分页缓存缺少 M5 锚点信息，正在自动重建...'
           : '分页缓存版本已更新，正在自动重建...')
@@ -390,18 +400,19 @@ export function PagePartitionManager({
   }, [cacheKey, pages, selectedPeriod, selectedPeriodPageSystemReady, selectedSymbol])
 
   useEffect(() => {
-    const handleDailyCloseRebuild = (event: Event) => {
+    const handlePeriodRolloverRebuild = (event: Event) => {
       const detail = (event as CustomEvent<HistoryPageDailyRolloverRebuildDetail>).detail
       const eventSymbol = typeof detail?.symbol === 'string' ? detail.symbol.trim().toUpperCase() : ''
       const eventPeriod = typeof detail?.period === 'string' ? detail.period.trim().toUpperCase() : ''
+      const reason = detail?.reason ?? resolveHistoryPageRolloverReasonForPeriod(selectedPeriod)
       if (eventSymbol && eventSymbol !== selectedSymbol.trim().toUpperCase()) return
       if (eventPeriod && eventPeriod !== selectedPeriod.trim().toUpperCase()) return
       if (!cacheKey || !selectedPeriodPageSystemReady || resolvePartitionCacheKind(buildCurrentPartition()) !== 'time') return
-      setPartitionStatus('日收盘已触发，正在清缓存并重建分页...')
-      buildPages('daily-close')
+      setPartitionStatus(`${formatRolloverReasonText(reason)}已触发，正在清缓存并重建分页...`)
+      buildPages(reason)
     }
-    window.addEventListener(historyPageDailyRolloverRebuildEvent, handleDailyCloseRebuild)
-    return () => window.removeEventListener(historyPageDailyRolloverRebuildEvent, handleDailyCloseRebuild)
+    window.addEventListener(historyPageDailyRolloverRebuildEvent, handlePeriodRolloverRebuild)
+    return () => window.removeEventListener(historyPageDailyRolloverRebuildEvent, handlePeriodRolloverRebuild)
   }, [building, cacheKey, selectedPeriod, selectedPeriodPageSystemReady, selectedSymbol])
 
   useEffect(() => {
@@ -455,7 +466,7 @@ export function PagePartitionManager({
     }
   }, [building, cacheKey, selectedPeriodPageSystemReady, selectedSymbol])
 
-  function buildPages(reason: 'auto' | 'manual' | 'daily-close' = 'manual') {
+  function buildPages(reason: 'auto' | 'manual' | HistoryPageRolloverReason = 'manual') {
     const period = selectedPeriod
     if (!selectedSymbol || !period || !cacheKey || building) return
     if (!hasStoreV6PeriodPageSystemV2(period)) {

@@ -195,6 +195,18 @@ export function readMarketStatusTitleSnapshot(symbol: string): MarketStatusTitle
   return expiredOpenStatusAsClosed(snapshot)
 }
 
+export function readMarketSessionScheduleStatus(symbol: string): MarketStatusTitleSnapshot['status'] | null {
+  const key = normalizeSymbol(symbol)
+  if (!key) return null
+  const snapshots = readJson<Record<string, MarketStatusTitleSnapshot>>(storageKeys.marketStatusTitleSnapshots, {})
+  const snapshot = snapshots[key]
+  if (!snapshot?.sessions) return null
+  return resolveMarketStatusFromSymbolSession({
+    symbol: snapshot.symbol || symbol,
+    sessions: snapshot.sessions,
+  })
+}
+
 export function saveMarketStatusTitleSnapshotFromSymbolSession(row: Mt5SymbolRow) {
   const key = normalizeSymbol(row.symbol)
   if (!key) return null

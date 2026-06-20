@@ -1,4 +1,5 @@
 import { readJson, writeJson } from '../persistence/jsonStorage'
+import { readPeriodUiState, writePeriodUiState } from '../persistence/periodUiStateStorage'
 import type { SettingsLineSwatchValue, SettingsSwatchValue } from '../settings/SettingsSwatches'
 
 export type DrawingRulerStatsData = 'bars-range' | 'date-time-range' | 'percent-change' | 'point-change' | 'price-range' | 'volume'
@@ -82,10 +83,15 @@ export function normalizeDrawingRulerStyle(value: Partial<DrawingRulerStyle> | n
   }
 }
 
-export function readDrawingRulerStyle() {
-  return normalizeDrawingRulerStyle(readJson<Partial<DrawingRulerStyle> | null>(drawingRulerStyleStorageKey, null))
+export function readDrawingRulerStyle(period = 'M5') {
+  const saved = readPeriodUiState<{ rulerStyle?: Partial<DrawingRulerStyle> }>('drawings', period, {}).rulerStyle
+  return normalizeDrawingRulerStyle(saved ?? readJson<Partial<DrawingRulerStyle> | null>(drawingRulerStyleStorageKey, null))
 }
 
-export function writeDrawingRulerStyle(value: DrawingRulerStyle) {
+export function writeDrawingRulerStyle(value: DrawingRulerStyle, period = 'M5') {
+  writePeriodUiState('drawings', period, {
+    ...readPeriodUiState<Record<string, unknown>>('drawings', period, {}),
+    rulerStyle: normalizeDrawingRulerStyle(value),
+  })
   return writeJson(drawingRulerStyleStorageKey, normalizeDrawingRulerStyle(value))
 }

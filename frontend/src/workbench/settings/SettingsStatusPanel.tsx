@@ -12,7 +12,7 @@ export function SettingsStatusPanel() {
   return (
     <div className="ff-settings-status-panel">
       <section className="ff-settings-status-group">
-        <div className="ff-settings-symbol-kicker">鍟嗗搧</div>
+        <div className="ff-settings-symbol-kicker">商品</div>
         <SettingsCheckRow storageKey="status.logo.visible">Logo</SettingsCheckRow>
         <div className="ff-settings-status-row">
           <input
@@ -54,7 +54,7 @@ export function SettingsStatusPanel() {
         <SettingsCheckRow checked storageKey={chartSettingKeys.statusIndicatorValuesVisible}>数值</SettingsCheckRow>
         <div className="ff-settings-status-row">
           <SettingsCheckboxInput checked storageKey="status.indicatorBackground.visible" />
-          <span>鑳屾櫙</span>
+          <span>背景</span>
           <div className="ff-settings-status-opacity" aria-hidden="true">
             <span />
           </div>

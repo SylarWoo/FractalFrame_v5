@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { OpenableSelect } from '../controls/OpenableSelect'
 import { readJson, writeJson } from '../persistence/jsonStorage'
+import { readPeriodUiState, writePeriodUiState } from '../persistence/periodUiStateStorage'
 import { SettingsColorSwatch, SettingsLineSwatch } from '../settings/SettingsSwatches'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
 import { createDefaultDrawingLineStyle } from './drawingPersistence'
@@ -156,11 +157,16 @@ function normalizeFibRetracementStyleState(value: Partial<FibRetracementStyleSta
   }
 }
 
-export function readFibRetracementStyleState() {
-  return normalizeFibRetracementStyleState(readJson<Partial<FibRetracementStyleState> | null>(fibRetracementStyleStorageKey, null))
+export function readFibRetracementStyleState(period = 'M5') {
+  const saved = readPeriodUiState<{ fibRetracementStyle?: Partial<FibRetracementStyleState> }>('drawings', period, {}).fibRetracementStyle
+  return normalizeFibRetracementStyleState(saved ?? readJson<Partial<FibRetracementStyleState> | null>(fibRetracementStyleStorageKey, null))
 }
 
-function writeFibRetracementStyleState(value: FibRetracementStyleState) {
+function writeFibRetracementStyleState(value: FibRetracementStyleState, period = 'M5') {
+  writePeriodUiState('drawings', period, {
+    ...readPeriodUiState<Record<string, unknown>>('drawings', period, {}),
+    fibRetracementStyle: normalizeFibRetracementStyleState(value),
+  })
   writeJson(fibRetracementStyleStorageKey, normalizeFibRetracementStyleState(value))
 }
 
@@ -178,6 +184,7 @@ export function FibRetracementStylePanel({
   onFibRetracementStyleChange,
   priceVisibleValue,
   quarterLineStylesValue,
+  storagePeriod = 'M5',
   quarterSplitVisibleValue,
   onTrendLineChange,
   trendLineStyle,
@@ -196,13 +203,14 @@ export function FibRetracementStylePanel({
   onFibRetracementStyleChange: (levels: FibLevelState[], horizontalLineStyle: SettingsLineSwatchValue, backgroundVisible: boolean, backgroundOpacity: number, reverse: boolean, priceVisible: boolean, labelAlign: string, labelVAlign: string, labelFontSize: string, levelVisible: boolean, levelDisplay: string, quarterSplitVisible: boolean, quarterLineStyles: SettingsLineSwatchValue[]) => void
   priceVisibleValue: boolean
   quarterLineStylesValue: SettingsLineSwatchValue[]
+  storagePeriod?: string
   quarterSplitVisibleValue: boolean
   onTrendLineChange: (visible: boolean, style?: SettingsLineSwatchValue) => void
   trendLineStyle: SettingsLineSwatchValue
   trendLineVisible: boolean
 }) {
   const initialStyleRef = useRef<FibRetracementStyleState | null>(null)
-  if (!initialStyleRef.current) initialStyleRef.current = readFibRetracementStyleState()
+  if (!initialStyleRef.current) initialStyleRef.current = readFibRetracementStyleState(storagePeriod)
   const initialStyle = initialStyleRef.current
   const [levels, setLevels] = useState(levelsValue.length > 0 ? levelsValue : initialStyle.levels)
   const [backgroundEnabled, setBackgroundEnabled] = useState(backgroundVisibleValue)
@@ -300,7 +308,7 @@ export function FibRetracementStylePanel({
       textVisible,
       trendLineStyle,
       trendLineVisible,
-    })
+    }, storagePeriod)
     const nextPayload = {
       backgroundEnabled,
       backgroundOpacity: background.opacity,
@@ -320,7 +328,7 @@ export function FibRetracementStylePanel({
       lastPublishedFibStyleRef.current = nextPayload
       onFibRetracementStyleChange(levels, nextHorizontalLineStyle, backgroundEnabled, background.opacity, reverse, priceVisible, labelAlign, labelVAlign, fontSize, levelVisible, levelDisplay, textVisible, quarterLineStyles)
     }
-  }, [background, backgroundEnabled, extendLeft, extendRight, fontSize, horizontalLineStyle, horizontalLineThickness, labelAlign, labelVAlign, levelDisplay, levelVisible, levels, onFibRetracementStyleChange, priceVisible, quarterLineStyles, reverse, textAlign, textVAlign, textVisible, trendLineStyle, trendLineVisible])
+  }, [background, backgroundEnabled, extendLeft, extendRight, fontSize, horizontalLineStyle, horizontalLineThickness, labelAlign, labelVAlign, levelDisplay, levelVisible, levels, onFibRetracementStyleChange, priceVisible, quarterLineStyles, reverse, storagePeriod, textAlign, textVAlign, textVisible, trendLineStyle, trendLineVisible])
 
   useEffect(() => {
     if (!horizontalLineThicknessOpen) return

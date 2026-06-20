@@ -23,6 +23,7 @@ export type StrategyShortcutItem = {
 
 export type RightDrawerProps = {
   activeDrawer: RightDrawerId | null
+  chartPeriod: string
   drawerWidth: number
   indicatorShortcutKeys: string[]
   indicatorsController: IndicatorsController

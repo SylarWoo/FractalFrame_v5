@@ -274,6 +274,17 @@
   gap: 8px;
 }
 
+.ff-indicators-rsi-style-panel-v1 .ff-indicators-style-row-v1,
+.ff-indicators-dpo-style-panel-v1 .ff-indicators-style-row-v1 {
+  grid-template-columns: 176px max-content;
+}
+
+.ff-indicators-rsi-style-panel-v1 .ff-indicators-style-row-v1__check button,
+.ff-indicators-dpo-style-panel-v1 .ff-indicators-style-row-v1__check button {
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .ff-indicators-mmf-panel-v1__signal-block {
   margin-bottom: 10px;
 }
@@ -368,6 +379,21 @@
 .ff-indicators-mmf-v2-panel__check-row .ff-indicators-style-row-v1__check button {
   font-size: 14px;
   white-space: nowrap;
+}
+
+.ff-indicators-mmf-stoch-h2-panel__passthrough-row {
+  display: flex;
+  align-items: center;
+  margin: -2px 0 10px 22px;
+  pointer-events: auto;
+}
+
+.ff-indicators-mmf-stoch-h2-panel__passthrough-select {
+  width: 124px;
+}
+
+.ff-indicators-mmf-stoch-h2-panel__passthrough-select .ff-settings-multicheck-select__menu {
+  width: 124px;
 }
 
 .ff-indicators-mmf-v2-panel__advance-row {

@@ -28,6 +28,8 @@ export function createChartDrawingPaneInteractionController({
   clearRulerSelection: () => void
   clearTrendLineSelection: () => void
   createHorizontalLineOverlay: (options: {
+    crossPeriod?: boolean
+    crossPeriodTargets?: string[]
     lineStyle: SettingsLineSwatchValue
     locked: boolean
     manualVisible?: boolean
@@ -36,6 +38,7 @@ export function createChartDrawingPaneInteractionController({
     points?: Array<{ value: number }>
     selected: boolean
     showPriceLabel: boolean
+    sourcePeriod?: string
     textStyle?: DrawingTextStyle
   }) => unknown
   eventHitsFib?: (event: MouseEvent, paneId: string) => boolean
@@ -46,8 +49,11 @@ export function createChartDrawingPaneInteractionController({
   getDestroyed: () => boolean
   getPendingOverlayId: () => string | null
   getPendingOverlayOptions: () => {
+    crossPeriod?: boolean
+    crossPeriodTargets?: string[]
     lineStyle: SettingsLineSwatchValue
     locked: boolean
+    sourcePeriod?: string
     showPriceLabel: boolean
     textStyle?: DrawingTextStyle
   } | null

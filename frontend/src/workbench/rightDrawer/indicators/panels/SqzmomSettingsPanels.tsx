@@ -1,13 +1,9 @@
 import { OpenableSelect } from '../../../controls/OpenableSelect'
 import { SettingsColorSwatch } from '../../../settings/SettingsSwatches'
 import type { SqzmomIndicatorSettings, VwapTimeframe } from '../../indicatorPersistence'
-import {
-  CheckControl,
-  InfoBadge,
-  NumberBox,
-  updateSqzmomSettings,
-  vwapTimeframeOptions,
-} from './indicatorPanelShared'
+import { CheckControl, InfoBadge, NumberBox } from './IndicatorSettingControls'
+import { vwapTimeframeOptions } from './indicatorPanelOptions'
+import { updateSqzmomSettings } from './indicatorPanelShared'
 
 export function SqzmomInputPanel({
   onSettingsChange,

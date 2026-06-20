@@ -338,7 +338,7 @@ body[data-fractalframe-topbar-resizing='true'] {
   left: 0;
   z-index: 160;
   display: grid;
-  width: 178px;
+  width: 260px;
   box-sizing: border-box;
   overflow: hidden;
   border: 1px solid #d1d5db;
@@ -351,7 +351,7 @@ body[data-fractalframe-topbar-resizing='true'] {
 
 .ff-topbar-wallet__menu button {
   display: grid;
-  grid-template-columns: 14px 42px minmax(0, 1fr);
+  grid-template-columns: 14px 64px minmax(0, 1fr);
   height: 28px;
   align-items: center;
   gap: 6px;

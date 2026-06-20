@@ -193,7 +193,7 @@ export function RightDrawerMt5Body(props: RightDrawerMt5BodyProps) {
                 {selectedMarketStatus && <MarketStatusLine status={selectedMarketStatus} />}
               </div>
               <div className="ff-import-selected-head__actions">
-                <LoadRow label="添加自选列表：" loaded={selectedIsInWatchlist} onSetLoaded={props.onSetSelectedWatchlistLoaded} />
+                <LoadRow label="添加自选列表" loaded={selectedIsInWatchlist} onSetLoaded={props.onSetSelectedWatchlistLoaded} />
                 <LoadRow label="添加快捷菜单" loaded={shortcutMenuEnabled} onSetLoaded={props.onSetShortcutMenuLoaded} />
               </div>
             </div>

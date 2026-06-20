@@ -14,6 +14,7 @@ import {
   isStoredVisibilityRangePeriodVisible,
   restoreVisibilityRangeCurrentPeriod,
 } from '../visibilityRange/visibilityRangeModel'
+import { isDrawingVisibleForPeriod } from '../drawing/drawingCrossPeriodModel'
 import type { HorizontalLineExtendData, RulerExtendData, TrendLineExtendData } from './chartDrawingTypes'
 
 export type DrawingVisibilityState = {
@@ -91,7 +92,12 @@ export function createChartDrawingVisibilityController({
 
   const resolveHorizontalLineVisibility = (extendData: HorizontalLineExtendData | undefined): DrawingVisibilityState => {
     const manualVisible = extendData?.manualVisible !== false
-    const periodVisible = isHorizontalLineVisibleInCurrentPeriod(extendData?.objectId)
+    const periodVisible = isHorizontalLineVisibleInCurrentPeriod(extendData?.objectId) && isDrawingVisibleForPeriod({
+      crossPeriod: extendData?.crossPeriod,
+      crossPeriodTargets: extendData?.crossPeriodTargets,
+      currentPeriod: getPeriod(),
+      sourcePeriod: extendData?.sourcePeriod,
+    })
     return {
       manualVisible,
       periodVisible,
@@ -101,7 +107,12 @@ export function createChartDrawingVisibilityController({
 
   const resolveTrendLineVisibility = (extendData: TrendLineExtendData | undefined): DrawingVisibilityState => {
     const manualVisible = extendData?.manualVisible !== false
-    const periodVisible = isTrendLineVisibleInCurrentPeriod(extendData?.objectId)
+    const periodVisible = isTrendLineVisibleInCurrentPeriod(extendData?.objectId) && isDrawingVisibleForPeriod({
+      crossPeriod: extendData?.crossPeriod,
+      crossPeriodTargets: extendData?.crossPeriodTargets,
+      currentPeriod: getPeriod(),
+      sourcePeriod: extendData?.sourcePeriod,
+    })
     return {
       manualVisible,
       periodVisible,
@@ -137,7 +148,7 @@ export function createChartDrawingVisibilityController({
       const extendData = overlay.extendData as HorizontalLineExtendData | undefined
       const { manualVisible, periodVisible, visible } = resolveHorizontalLineVisibility(extendData)
       const selected = selectedHorizontalLineOverlayIds.has(id)
-      if (overlay.visible !== manualVisible || extendData?.manualVisible !== manualVisible || extendData?.periodVisible !== periodVisible || extendData?.selected !== selected) {
+      if (overlay.visible !== visible || extendData?.manualVisible !== manualVisible || extendData?.periodVisible !== periodVisible || extendData?.selected !== selected) {
         chart.overrideOverlay({
           id,
           extendData: {
@@ -146,7 +157,7 @@ export function createChartDrawingVisibilityController({
             periodVisible,
             selected,
           },
-          visible: manualVisible,
+          visible,
         })
       }
       if (!visible) updateOverlayState(id, { handlePressed: false, hovered: false, pressed: false })
@@ -162,7 +173,7 @@ export function createChartDrawingVisibilityController({
       const extendData = overlay.extendData as TrendLineExtendData | undefined
       const { manualVisible, periodVisible, visible } = resolveTrendLineVisibility(extendData)
       const selected = getSelectedTrendLineOverlayId() === id || extendData?.selected === true
-      if (overlay.visible !== manualVisible || extendData?.manualVisible !== manualVisible || extendData?.periodVisible !== periodVisible || extendData?.selected !== selected) {
+      if (overlay.visible !== visible || extendData?.manualVisible !== manualVisible || extendData?.periodVisible !== periodVisible || extendData?.selected !== selected) {
         chart.overrideOverlay({
           id,
           extendData: {
@@ -171,7 +182,7 @@ export function createChartDrawingVisibilityController({
             periodVisible,
             selected,
           },
-          visible: manualVisible,
+          visible,
         })
       }
       if (!visible) {

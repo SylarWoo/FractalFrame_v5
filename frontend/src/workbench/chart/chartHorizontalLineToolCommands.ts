@@ -4,12 +4,16 @@ import { clearStoredHorizontalLineDrawings } from '../rightDrawer/drawingObjectP
 import type { DrawingTextStyle } from '../rightDrawer/drawingPersistence'
 import type { DrawingToolCommand } from '../rightDrawer/drawingToolCommands'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
+import { normalizeDrawingCrossPeriodTargets } from '../drawing/drawingCrossPeriodModel'
 import { normalizeLineStyle, overlayStylesFromLine } from './chartDrawingStyle'
 import type { HorizontalLineExtendData } from './chartDrawingTypes'
 
 export type PendingHorizontalLineOptions = {
+  crossPeriod?: boolean
+  crossPeriodTargets?: string[]
   lineStyle: SettingsLineSwatchValue
   locked: boolean
+  sourcePeriod?: string
   showPriceLabel: boolean
   textStyle?: DrawingTextStyle
 }
@@ -19,6 +23,7 @@ export function createHorizontalLineToolCommandHandler({
   chart,
   createHorizontalLineOverlay,
   getLastPointerPaneId,
+  getPeriod,
   getPendingOverlayId,
   getPersistenceEnabled,
   getLastSelectedOverlayId,
@@ -40,13 +45,14 @@ export function createHorizontalLineToolCommandHandler({
   chart: Chart
   createHorizontalLineOverlay: (options: PendingHorizontalLineOptions & { paneId?: string; selected: boolean }) => unknown
   getLastPointerPaneId: () => string
+  getPeriod: () => string
   getPendingOverlayId: () => string | null
   getPersistenceEnabled: () => boolean
   getLastSelectedOverlayId: () => string | null
   getSelectedOverlayId: () => string | null
   persistCurrentHorizontalLines: () => void
   publishObjectTreeState: () => void
-  publishState: (state?: Partial<{ armed: boolean; lineStyle: SettingsLineSwatchValue; locked: boolean; price: number; selected: boolean; showPriceLabel: boolean; textStyle: DrawingTextStyle }>) => void
+  publishState: (state?: Partial<{ armed: boolean; crossPeriod: boolean; crossPeriodTargets: string[]; lineStyle: SettingsLineSwatchValue; locked: boolean; price: number; selected: boolean; showPriceLabel: boolean; sourcePeriod: string; textStyle: DrawingTextStyle }>) => void
   resolveDeleteTargetOverlayId: () => string | null
   resolveEditableOverlayId: () => string | null
   setLastSelectedOverlayId: (id: string | null) => void
@@ -127,6 +133,24 @@ export function createHorizontalLineToolCommandHandler({
       return
     }
 
+    if (command.action === 'updateSelectedCrossPeriod') {
+      const editableOverlayId = resolveEditableOverlayId()
+      if (!editableOverlayId) return
+      const overlay = chart.getOverlayById(editableOverlayId)
+      const extendData = overlay?.extendData as HorizontalLineExtendData | undefined
+      const sourcePeriod = extendData?.sourcePeriod || getPeriod().trim().toUpperCase()
+      const crossPeriod = command.crossPeriod === true
+      const crossPeriodTargets = normalizeDrawingCrossPeriodTargets(command.crossPeriodTargets ?? extendData?.crossPeriodTargets)
+      updateOverlayState(editableOverlayId, { crossPeriod, crossPeriodTargets, sourcePeriod })
+      setSelectedOverlayId(editableOverlayId)
+      setLastSelectedOverlayId(editableOverlayId)
+      persistCurrentHorizontalLines()
+      applyHorizontalLineVisibility()
+      publishState({ crossPeriod, crossPeriodTargets, selected: true, sourcePeriod })
+      publishObjectTreeState()
+      return
+    }
+
     if (command.action === 'updateSelectedPriceLabel') {
       const editableOverlayId = resolveEditableOverlayId()
       if (!editableOverlayId) return
@@ -177,8 +201,11 @@ export function createHorizontalLineToolCommandHandler({
     const pendingOverlayId = getPendingOverlayId()
     if (pendingOverlayId) chart.removeOverlay({ id: pendingOverlayId })
     const pendingOverlayOptions: PendingHorizontalLineOptions = {
+      crossPeriod: command.crossPeriod === true,
+      crossPeriodTargets: normalizeDrawingCrossPeriodTargets(command.crossPeriodTargets),
       lineStyle,
       locked: command.locked === true,
+      sourcePeriod: getPeriod().trim().toUpperCase(),
       showPriceLabel: command.showPriceLabel !== false,
       textStyle: command.textStyle,
     }

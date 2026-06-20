@@ -81,6 +81,9 @@ export function installKLineChartOverlayControllerV2(options: OverlayControllerO
     scheduleMainPriceScaleRender() {
       indicatorLifecycle.scheduleMainPriceScaleRender()
     },
+    scheduleRealtimePaneRender() {
+      realtimePane.scheduleRender()
+    },
     updateDisplayContext() {
       axisLabelLayer.updateContext()
     },

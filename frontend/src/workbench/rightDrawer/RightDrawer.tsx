@@ -41,6 +41,7 @@ function shouldSkipChartOpen(period: string | null | undefined) {
 
 export function RightDrawer({
   activeDrawer,
+  chartPeriod,
   drawerWidth,
   indicatorShortcutKeys,
   indicatorsController,
@@ -440,7 +441,7 @@ export function RightDrawer({
     <RightDrawerFrame activeDrawer={activeDrawer} onClose={onClose} onResize={onResize} onResizePointerDown={handleResizePointerDown} onToggleDrawer={onToggleDrawer} open={open} topPaneHeight={topPaneHeight}>
       <Suspense fallback={null}>
         {renderedActiveDrawer === 'drawings' ? (
-          <DrawingsDrawer />
+          <DrawingsDrawer chartPeriod={chartPeriod} key={chartPeriod.trim().toUpperCase()} />
         ) : renderedActiveDrawer === 'objectTree' ? (
           <ObjectTreeDrawer />
         ) : renderedActiveDrawer === 'settings' ? (

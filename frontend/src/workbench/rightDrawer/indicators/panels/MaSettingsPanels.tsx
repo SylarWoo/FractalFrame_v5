@@ -1,7 +1,9 @@
 import { OpenableSelect } from '../../../controls/OpenableSelect'
 import { SettingsColorSwatch, SettingsLineWeightSwatch } from '../../../settings/SettingsSwatches'
 import type { MaIndicatorSettings, MaMarkerMode, MaSource, MaType } from '../../indicatorPersistence'
-import { CheckControl, NumberBox, maMarkerModeOptions, maSourceOptions, maTypeOptions, updateMaSettings } from './indicatorPanelShared'
+import { CheckControl, NumberBox } from './IndicatorSettingControls'
+import { maMarkerModeOptions, maSourceOptions, maTypeOptions } from './indicatorPanelOptions'
+import { updateMaSettings } from './indicatorPanelShared'
 export function MaInputPanel({
   onSettingsChange,
   settings,

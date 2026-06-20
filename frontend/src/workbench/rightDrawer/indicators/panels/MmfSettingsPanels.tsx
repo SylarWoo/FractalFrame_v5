@@ -1,5 +1,6 @@
 import type { MmfIndicatorSettings } from '../../indicatorPersistence'
-import { CheckControl, updateMmfSettings } from './indicatorPanelShared'
+import { CheckControl } from './IndicatorSettingControls'
+import { updateMmfSettings } from './indicatorPanelShared'
 import {
   MmfMarkerStyleRow,
   MmfMorganOnlyRow,

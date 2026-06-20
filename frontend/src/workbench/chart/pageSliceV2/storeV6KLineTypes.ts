@@ -2,6 +2,7 @@ import type { KLineData } from 'klinecharts'
 
 export type StoreV6WindowKLine = KLineData & {
   barKey: string
+  closeTime?: number
   globalIndex: number | null
   period: string
   sessionId?: string

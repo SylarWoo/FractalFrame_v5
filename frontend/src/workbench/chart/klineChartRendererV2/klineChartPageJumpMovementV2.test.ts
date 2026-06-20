@@ -88,9 +88,52 @@ describe('klineChartPageJumpMovementV2', () => {
     expect(chart.scrollToDataIndex).toHaveBeenCalledWith(40, 0)
   })
 
-  it('jumps from a distant history page to page 1 by showing the realtime latest bar', () => {
+  it('jumps from a distant history page to page 1 by showing the new history head', () => {
     const current = frame(1, 100, true)
     const movement = resolveKLineChartPageJumpMovementV2(frame(11), current)
+    const chart = {
+      getVisibleRange: vi.fn(() => ({ from: 20, to: 60 })),
+      scrollToDataIndex: vi.fn(),
+    }
+
+    expect(movement).toBe('history-head')
+    expect(applyKLineChartPageJumpMovementV2(chart as never, current, movement)).toBe(true)
+    expect(chart.scrollToDataIndex).toHaveBeenCalledWith(40, 0)
+  })
+
+  it('jumps toward a newer page by keeping the new page head at the viewport right edge', () => {
+    const current = frame(2, 120)
+    const movement = resolveKLineChartPageJumpMovementV2(frame(6, 120), current)
+    const chart = {
+      getVisibleRange: vi.fn(() => ({ from: 30, to: 90 })),
+      scrollToDataIndex: vi.fn(),
+    }
+
+    expect(movement).toBe('history-head')
+    expect(applyKLineChartPageJumpMovementV2(chart as never, current, movement)).toBe(true)
+    expect(chart.scrollToDataIndex).toHaveBeenCalledWith(60, 0)
+  })
+
+  it('jumps from page 1 to a distant history page by showing the new history tail', () => {
+    const current = frame(8, 80)
+    const movement = resolveKLineChartPageJumpMovementV2(frame(1, 100, true), current)
+    const chart = {
+      getVisibleRange: vi.fn(() => ({ from: 20, to: 60 })),
+      scrollToDataIndex: vi.fn(),
+    }
+
+    expect(movement).toBe('history-tail')
+    expect(applyKLineChartPageJumpMovementV2(chart as never, current, movement)).toBe(true)
+    expect(chart.scrollToDataIndex).toHaveBeenCalledWith(79, 0)
+  })
+
+  it('keeps latest realtime anchoring for symbol or period changes', () => {
+    const current = frame(1, 100, true)
+    const previous = {
+      ...frame(1, 80, false),
+      symbol: 'EURUSD',
+    }
+    const movement = resolveKLineChartPageJumpMovementV2(previous, current)
     const chart = {
       getVisibleRange: vi.fn(() => ({ from: 20, to: 60 })),
       scrollToDataIndex: vi.fn(),

@@ -5,6 +5,7 @@ import type {
   MacdIndicatorSettings,
   MaIndicatorSettings,
   MmfIndicatorSettings,
+  MmfStochH2IndicatorSettings,
   MrIndicatorSettings,
   PersistedIndicatorsState,
   RsiIndicatorSettings,
@@ -15,6 +16,7 @@ import type {
   ViIndicatorSettings,
   AoIndicatorSettings,
   VmiIndicatorSettings,
+  MmadIndicatorSettings,
   VolIndicatorSettings,
   VwapIndicatorSettings,
 } from '../rightDrawer/indicatorPersistence'
@@ -24,6 +26,7 @@ export type IndicatorSettings =
   | MacdIndicatorSettings
   | MaIndicatorSettings
   | MmfIndicatorSettings
+  | MmfStochH2IndicatorSettings
   | MrIndicatorSettings
   | RsiIndicatorSettings
   | SqzmomIndicatorSettings
@@ -33,6 +36,7 @@ export type IndicatorSettings =
   | ViIndicatorSettings
   | AoIndicatorSettings
   | VmiIndicatorSettings
+  | MmadIndicatorSettings
   | VolIndicatorSettings
   | VwapIndicatorSettings
 
@@ -41,9 +45,11 @@ type IndicatorStateField = Exclude<keyof PersistedIndicatorsState, 'loaded' | 'u
 type IndicatorControllerDefinition = {
   key: SupportedChartIndicator
   stateField: IndicatorStateField
+  chartCommand?: boolean
+  chartRequest?: boolean
 }
 
-export const indicatorControllerDefinitions = [
+export const indicatorControllerDefinitions: readonly IndicatorControllerDefinition[] = [
   { key: 'RSI', stateField: 'rsi' },
   { key: 'Stoch', stateField: 'stoch' },
   { key: 'SQZMOM', stateField: 'sqzmom' },
@@ -52,6 +58,7 @@ export const indicatorControllerDefinitions = [
   { key: 'VDO', stateField: 'vdo' },
   { key: 'AO', stateField: 'ao' },
   { key: 'VMI', stateField: 'vmi' },
+  { key: 'MMAD', stateField: 'mmad' },
   { key: 'TSI', stateField: 'tsi' },
   { key: 'VI', stateField: 'vi' },
   { key: 'MA', stateField: 'ma' },
@@ -59,9 +66,10 @@ export const indicatorControllerDefinitions = [
   { key: 'MR-M30', stateField: 'mrM30' },
   { key: 'MR-H2', stateField: 'mrH2' },
   { key: 'MMF_V3', stateField: 'mmfV3' },
+  { key: 'MMF_STOCH_H2', stateField: 'mmfStochH2', chartCommand: false, chartRequest: true },
   { key: 'VWAP', stateField: 'vwap' },
   { key: 'Vol', stateField: 'vol' },
-] as const satisfies readonly IndicatorControllerDefinition[]
+]
 
 const indicatorDefinitionByKey = Object.fromEntries(
   indicatorControllerDefinitions.map((definition) => [definition.key, definition]),
@@ -72,6 +80,14 @@ export const indicatorRestoreOrder = indicatorControllerDefinitions.map((definit
 export function loadedKeysFromState(state: PersistedIndicatorsState) {
   return indicatorRestoreOrder.filter((key) => state.loaded[key])
 }
+
+export function shouldDispatchIndicatorCommand(name: SupportedChartIndicator) {
+  return indicatorDefinitionByKey[name].chartCommand !== false
+}
+
+export const chartRequestIndicatorKeys = indicatorControllerDefinitions
+  .filter((definition) => definition.chartRequest !== false)
+  .map((definition) => definition.key)
 
 export function loadedRecordFromKeys(keys: string[]) {
   const keySet = new Set(keys)
@@ -104,5 +120,6 @@ export function createLoadCommand(state: PersistedIndicatorsState, name: Support
 export function createLoadedIndicatorCommands(state: PersistedIndicatorsState, targetKey?: string) {
   return loadedKeysFromState(state)
     .filter((key) => !targetKey || key === targetKey)
+    .filter(shouldDispatchIndicatorCommand)
     .map((key) => createLoadCommand(state, key))
 }

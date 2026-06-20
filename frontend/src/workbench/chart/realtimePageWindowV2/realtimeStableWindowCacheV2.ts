@@ -7,6 +7,15 @@ const realtimeStablePageStorageKey = storageKeys.realtimeStablePage
 const realtimeTailRuntimeStorageKey = storageKeys.realtimeTailRuntime
 const physicalRealtimeStateCache = new Map<string, unknown>()
 const physicalRealtimeStateLoaded = new Set<string>()
+const tailRuntimePersistDelayMs = 1000
+let pendingTailRuntimePersist:
+  | {
+    storageKey: string
+    value: PersistedRealtimeTailRuntime
+  }
+  | null = null
+let pendingTailRuntimePersistTimer: ReturnType<typeof setTimeout> | null = null
+let tailRuntimeFlushListenersInstalled = false
 
 type PersistedRealtimeStablePage = {
   period: string
@@ -69,9 +78,10 @@ function readPhysicalRealtimeState<T>(kind: 'stable' | 'tail', options: {
   sessionTimeTo: number | null
   symbol: string
 }) {
-  if (typeof window === 'undefined' || typeof XMLHttpRequest === 'undefined' || options.sessionTimeFrom == null) return null
+  if (options.sessionTimeFrom == null) return null
   const key = physicalRealtimeStateKey(kind, options)
   if (physicalRealtimeStateCache.has(key)) return physicalRealtimeStateCache.get(key) as T
+  if (typeof window === 'undefined' || typeof XMLHttpRequest === 'undefined') return null
   if (physicalRealtimeStateLoaded.has(key)) return null
   physicalRealtimeStateLoaded.add(key)
   try {
@@ -94,10 +104,22 @@ function readPhysicalRealtimeState<T>(kind: 'stable' | 'tail', options: {
   }
 }
 
-function writePhysicalRealtimeState(kind: 'stable' | 'tail', value: PersistedRealtimeStablePage | PersistedRealtimeTailRuntime) {
+function cachePhysicalRealtimeState(kind: 'stable' | 'tail', value: PersistedRealtimeStablePage | PersistedRealtimeTailRuntime) {
+  for (const [key, cached] of physicalRealtimeStateCache.entries()) {
+    if (!key.startsWith(`${kind}:`)) continue
+    const record = cached as { period?: string; symbol?: string } | null
+    if (!record) continue
+    if (normalizeSymbol(record.symbol) !== normalizeSymbol(value.symbol)) continue
+    if (record.period?.trim().toUpperCase() !== value.period.trim().toUpperCase()) continue
+    physicalRealtimeStateCache.delete(key)
+  }
   const key = physicalRealtimeStateKey(kind, value)
   physicalRealtimeStateCache.set(key, value)
   physicalRealtimeStateLoaded.add(key)
+}
+
+function writePhysicalRealtimeState(kind: 'stable' | 'tail', value: PersistedRealtimeStablePage | PersistedRealtimeTailRuntime) {
+  cachePhysicalRealtimeState(kind, value)
   if (typeof window === 'undefined' || typeof fetch === 'undefined') return
   const endpoint = resolveRealtimePageStateEndpoint()
   if (!endpoint) return
@@ -186,6 +208,60 @@ function readRealtimeTailRuntimeStore() {
 
 function writeRealtimeTailRuntimeStore(value: Record<string, PersistedRealtimeTailRuntime>) {
   writeStorageRecord(realtimeTailRuntimeStorageKey, value)
+}
+
+function persistTailRuntimeNow() {
+  if (!pendingTailRuntimePersist) return
+  if (window.__ffKLineChartV2Interaction?.horizontalDragInProgress === true) {
+    if (pendingTailRuntimePersistTimer) {
+      clearTimeout(pendingTailRuntimePersistTimer)
+      pendingTailRuntimePersistTimer = null
+    }
+    pendingTailRuntimePersistTimer = setTimeout(persistTailRuntimeNow, 250)
+    return
+  }
+  const pending = pendingTailRuntimePersist
+  pendingTailRuntimePersist = null
+  if (pendingTailRuntimePersistTimer) {
+    clearTimeout(pendingTailRuntimePersistTimer)
+    pendingTailRuntimePersistTimer = null
+  }
+  writePhysicalRealtimeState('tail', pending.value)
+  writeRealtimeTailRuntimeStore(replaceScopedStorageEntry(readRealtimeTailRuntimeStore(), pending.storageKey, pending.value))
+}
+
+function installTailRuntimeFlushListeners() {
+  if (tailRuntimeFlushListenersInstalled || typeof window === 'undefined') return
+  if (typeof window.addEventListener !== 'function') return
+  tailRuntimeFlushListenersInstalled = true
+  window.addEventListener('pagehide', persistTailRuntimeNow)
+  window.addEventListener('beforeunload', persistTailRuntimeNow)
+}
+
+function clearPendingTailRuntimePersist() {
+  pendingTailRuntimePersist = null
+  if (pendingTailRuntimePersistTimer) {
+    clearTimeout(pendingTailRuntimePersistTimer)
+    pendingTailRuntimePersistTimer = null
+  }
+}
+
+function removeTailRuntimeFlushListeners() {
+  if (!tailRuntimeFlushListenersInstalled || typeof window === 'undefined') return
+  if (typeof window.removeEventListener !== 'function') return
+  tailRuntimeFlushListenersInstalled = false
+  window.removeEventListener('pagehide', persistTailRuntimeNow)
+  window.removeEventListener('beforeunload', persistTailRuntimeNow)
+}
+
+function scheduleTailRuntimePersist(storageKey: string, value: PersistedRealtimeTailRuntime) {
+  cachePhysicalRealtimeState('tail', value)
+  pendingTailRuntimePersist = { storageKey, value }
+  if (typeof window === 'undefined') return
+  installTailRuntimeFlushListeners()
+  if (pendingTailRuntimePersistTimer) return
+  const delay = window.__ffKLineChartV2Interaction?.horizontalDragInProgress === true ? 250 : tailRuntimePersistDelayMs
+  pendingTailRuntimePersistTimer = setTimeout(persistTailRuntimeNow, delay)
 }
 
 function matchesRealtimeIdentity(
@@ -308,6 +384,8 @@ export function clearRealtimeStableWindowCacheV2(scope?: {
   period?: string | null
   symbol?: string | null
 }) {
+  clearPendingTailRuntimePersist()
+  removeTailRuntimeFlushListeners()
   clearPhysicalRealtimeState(scope)
   clearScopedStorageRecord<PersistedRealtimeStablePage>(realtimeStablePageStorageKey, scope)
   clearScopedStorageRecord<PersistedRealtimeTailRuntime>(realtimeTailRuntimeStorageKey, scope)
@@ -353,8 +431,7 @@ export function writeRealtimeTailRuntimeCacheV2(window: StoreV6RealtimePageWindo
     symbol: window.symbol,
     tailRow: window.tailRow,
   }
-  writePhysicalRealtimeState('tail', nextValue)
-  writeRealtimeTailRuntimeStore(replaceScopedStorageEntry(readRealtimeTailRuntimeStore(), storageKey, nextValue))
+  scheduleTailRuntimePersist(storageKey, nextValue)
 }
 
 export function writeCachedRealtimeRowsV2(window: StoreV6RealtimePageWindow) {

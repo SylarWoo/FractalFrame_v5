@@ -29,8 +29,9 @@ export type IndicatorPaneConfig = {
 }
 
 export type CandleIndicatorConfig = {
+  commandName?: CandleIndicatorCommandName
   ensureRegistered: () => void
-  name: CandleIndicatorCommandName
+  name: string
   resolveCalcParams?: (command: ChartIndicatorCommand) => unknown
 }
 
@@ -202,13 +203,14 @@ export function applyCandleIndicatorCommand({
   isIndicatorVisible: (name: ChartIndicatorCommand['name']) => boolean
 }) {
   config.ensureRegistered()
+  const visibleName = config.commandName ?? (config.name as ChartIndicatorCommand['name'])
 
   if (command.action === 'unload') {
     chart.removeIndicator('candle_pane', config.name)
     return
   }
 
-  if (!isIndicatorVisible(config.name)) {
+  if (!isIndicatorVisible(visibleName)) {
     chart.removeIndicator('candle_pane', config.name)
     return
   }
@@ -247,8 +249,9 @@ export function applySnapshotCandleIndicatorCommand({
   symbol: string
 }) {
   config.ensureRegistered()
+  const visibleName = config.commandName ?? (config.name as ChartIndicatorCommand['name'])
 
-  if (command.action === 'unload' || !isIndicatorVisible(config.name)) {
+  if (command.action === 'unload' || !isIndicatorVisible(visibleName)) {
     chart.removeIndicator('candle_pane', config.name)
     return
   }

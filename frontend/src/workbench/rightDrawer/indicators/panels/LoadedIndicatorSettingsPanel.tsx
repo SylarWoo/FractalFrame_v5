@@ -8,6 +8,7 @@ import type {
   MacdIndicatorSettings,
   MaIndicatorSettings,
   MmfIndicatorSettings,
+  MmfStochH2IndicatorSettings,
   MrIndicatorSettings,
   RsiIndicatorSettings,
   SqzmomIndicatorSettings,
@@ -17,6 +18,7 @@ import type {
   ViIndicatorSettings,
   AoIndicatorSettings,
   VmiIndicatorSettings,
+  MmadIndicatorSettings,
   VolIndicatorSettings,
   VwapIndicatorSettings,
 } from '../../indicatorPersistence'
@@ -31,6 +33,8 @@ import {
   MrStylePanelV3,
   MmfV2InputPanel,
   MmfV2StylePanel,
+  MmfStochH2InputPanel,
+  MmfStochH2StylePanel,
   RsiInputPanel,
   RsiStylePanel,
   SqzmomInputPanel,
@@ -47,6 +51,8 @@ import {
   AoStylePanel,
   VmiInputPanel,
   VmiStylePanel,
+  MmadInputPanel,
+  MmadStylePanel,
   VolInputPanel,
   VolStylePanel,
   VwapInputPanel,
@@ -58,6 +64,8 @@ export function LoadedIndicatorSettingsPanel({
   macdSettings,
   maSettings,
   mmfV3Settings,
+  mmfStochH2Settings,
+  mmadSettings,
   mrSettings,
   mrM30Settings,
   mrH2Settings,
@@ -66,6 +74,8 @@ export function LoadedIndicatorSettingsPanel({
   onMacdSettingsChange,
   onMaSettingsChange,
   onMmfV3SettingsChange,
+  onMmfStochH2SettingsChange,
+  onMmadSettingsChange,
   onMrSettingsChange,
   onMrM30SettingsChange,
   onMrH2SettingsChange,
@@ -96,6 +106,8 @@ export function LoadedIndicatorSettingsPanel({
   macdSettings: MacdIndicatorSettings
   maSettings: MaIndicatorSettings
   mmfV3Settings: MmfIndicatorSettings
+  mmfStochH2Settings: MmfStochH2IndicatorSettings
+  mmadSettings: MmadIndicatorSettings
   mrSettings: MrIndicatorSettings
   mrM30Settings: MrIndicatorSettings
   mrH2Settings: MrIndicatorSettings
@@ -104,6 +116,8 @@ export function LoadedIndicatorSettingsPanel({
   onMacdSettingsChange: (settings: MacdIndicatorSettings) => void
   onMaSettingsChange: (settings: MaIndicatorSettings) => void
   onMmfV3SettingsChange: (settings: MmfIndicatorSettings) => void
+  onMmfStochH2SettingsChange: (settings: MmfStochH2IndicatorSettings) => void
+  onMmadSettingsChange: (settings: MmadIndicatorSettings) => void
   onMrSettingsChange: (settings: MrIndicatorSettings) => void
   onMrM30SettingsChange: (settings: MrIndicatorSettings) => void
   onMrH2SettingsChange: (settings: MrIndicatorSettings) => void
@@ -159,6 +173,10 @@ export function LoadedIndicatorSettingsPanel({
       input: <MmfV2InputPanel settings={mmfV3Settings} onSettingsChange={onMmfV3SettingsChange} />,
       style: <MmfV2StylePanel settings={mmfV3Settings} onSettingsChange={onMmfV3SettingsChange} />,
     },
+    MMF_STOCH_H2: {
+      input: <MmfStochH2InputPanel settings={mmfStochH2Settings} onSettingsChange={onMmfStochH2SettingsChange} />,
+      style: <MmfStochH2StylePanel settings={mmfStochH2Settings} onSettingsChange={onMmfStochH2SettingsChange} />,
+    },
     RSI: {
       input: <RsiInputPanel onSettingsChange={onSettingsChange} settings={settings} />,
       style: <RsiStylePanel onSettingsChange={onSettingsChange} settings={settings} />,
@@ -190,6 +208,10 @@ export function LoadedIndicatorSettingsPanel({
     VMI: {
       input: <VmiInputPanel onSettingsChange={onVmiSettingsChange} settings={vmiSettings} />,
       style: <VmiStylePanel onSettingsChange={onVmiSettingsChange} settings={vmiSettings} />,
+    },
+    MMAD: {
+      input: <MmadInputPanel onSettingsChange={onMmadSettingsChange} settings={mmadSettings} />,
+      style: <MmadStylePanel onSettingsChange={onMmadSettingsChange} settings={mmadSettings} />,
     },
     VWAP: {
       input: <VwapInputPanel onSettingsChange={onVwapSettingsChange} settings={vwapSettings} />,

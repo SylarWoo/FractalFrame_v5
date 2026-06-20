@@ -6,7 +6,7 @@ import { workbenchEvents } from '../persistence/workbenchEvents'
 import { settingsSymbolChangedEvent } from '../settingsSymbolState'
 import { readCandleBarStyle, readSymbolLabelVisibleParts, resolveCandleValueColor } from './chartStyleReaders'
 import { formatGlobalPrice } from './globalPricePrecision'
-import { readRealtimePageBuffer } from './realtimePageBuffer'
+import { readRealtimePageBuffer } from './chartRealtimeBridge'
 import { formatCountdown, resolveCountdownEndTimestamp } from './useCurrentCandleCountdown'
 import { resolvePeriodSeconds } from './chartTimeFormatting'
 import { readCurrentCandleCountdownActive } from './currentCandleCountdownVisibility'
@@ -18,6 +18,8 @@ type UseRealtimePriceMarkerOptions = {
   period: string
   symbol: string
 }
+
+const tailSilenceGraceMs = 90_000
 
 export type RealtimePriceMarkerState = {
   axisWidth: number
@@ -95,7 +97,11 @@ export function useRealtimePriceMarker({ chartInstanceRef, enabled = true, perio
         lineVisible,
         lineWidth: Number.isFinite(lineWidth) ? Math.max(0, lineWidth) : 0,
         price: formatGlobalPrice(close, '', { symbol }),
-        text: countdownVisible && Number.isFinite(timestamp) && Number.isFinite(periodSeconds) && periodSeconds > 0
+        text: countdownVisible &&
+          Number.isFinite(timestamp) &&
+          Number.isFinite(periodSeconds) &&
+          periodSeconds > 0 &&
+          Date.now() <= timestamp + periodSeconds * 1000 + tailSilenceGraceMs
           ? formatCountdown(resolveCountdownEndTimestamp(timestamp, periodSeconds * 1000) - Date.now())
           : '',
         top: clampPriceMarkerTop(chart, y),

@@ -34,6 +34,21 @@ export type MacdSnapshotRow = {
   signal?: number
 }
 
+export type MmadSnapshotRow = {
+  breakBefore?: boolean
+  denominator?: number
+  morganHigh?: number
+  morganLow?: number
+  lowerBand1?: number
+  mp?: number
+  segmentIndex?: number
+  segmentStartTimestamp?: number
+  upperBand1?: number
+  volumeSum?: number
+  value?: number
+  weightedMp?: number
+}
+
 export type VwapSnapshotRow = {
   lowerBand1?: number
   lowerBand2?: number
@@ -79,12 +94,19 @@ export type ViSnapshotRow = {
   plus?: number
 }
 
+export type VolSnapshotRow = {
+  volume?: number
+  volumeColorIndex?: 0 | 1
+  volumeMa?: number
+}
+
 export type IndicatorPageSnapshotRow = {
   ao?: AoSnapshotRow
   barKey: string
   dpo?: DpoSnapshotRow
   ma?: MaSnapshotRow
   macd?: MacdSnapshotRow
+  mmad?: MmadSnapshotRow
   mmfV3?: MmfV3IndicatorRow
   rsi?: RsiSnapshotRow
   sourceIndex: number
@@ -95,6 +117,7 @@ export type IndicatorPageSnapshotRow = {
   vdo?: VdoSnapshotRow
   vi?: ViSnapshotRow
   vmi?: VmiSnapshotRow
+  vol?: VolSnapshotRow
   vwap?: VwapSnapshotRow
 }
 
@@ -187,6 +210,7 @@ export function createIndicatorSnapshotRows({
   dpoRows,
   maRows,
   macdRows,
+  mmadRows,
   mmfV3Rows,
   period,
   rsiRows,
@@ -198,12 +222,14 @@ export function createIndicatorSnapshotRows({
   vdoRows,
   viRows,
   vmiRows,
+  volRows,
   vwapRows,
 }: {
   aoRows?: AoSnapshotRow[]
   dpoRows?: DpoSnapshotRow[]
   maRows?: MaSnapshotRow[]
   macdRows?: MacdSnapshotRow[]
+  mmadRows?: MmadSnapshotRow[]
   mmfV3Rows?: MmfV3IndicatorRow[]
   period: string
   rsiRows?: RsiSnapshotRow[]
@@ -215,6 +241,7 @@ export function createIndicatorSnapshotRows({
   vdoRows?: VdoSnapshotRow[]
   viRows?: ViSnapshotRow[]
   vmiRows?: VmiSnapshotRow[]
+  volRows?: VolSnapshotRow[]
   vwapRows?: VwapSnapshotRow[]
 }) {
   return stripFuturePlaceholders(rows).map((row, sourceIndex) => {
@@ -228,6 +255,7 @@ export function createIndicatorSnapshotRows({
     if (dpoRows) snapshotRow.dpo = dpoRows[sourceIndex] ?? {}
     if (maRows) snapshotRow.ma = maRows[sourceIndex] ?? {}
     if (macdRows) snapshotRow.macd = macdRows[sourceIndex] ?? {}
+    if (mmadRows) snapshotRow.mmad = mmadRows[sourceIndex] ?? {}
     if (mmfV3Rows) snapshotRow.mmfV3 = mmfV3Rows[sourceIndex] ?? {}
     if (rsiRows) snapshotRow.rsi = rsiRows[sourceIndex] ?? {}
     if (sqzmomRows) snapshotRow.sqzmom = sqzmomRows[sourceIndex] ?? {}
@@ -236,6 +264,7 @@ export function createIndicatorSnapshotRows({
     if (vdoRows) snapshotRow.vdo = vdoRows[sourceIndex] ?? {}
     if (viRows) snapshotRow.vi = viRows[sourceIndex] ?? {}
     if (vmiRows) snapshotRow.vmi = vmiRows[sourceIndex] ?? {}
+    if (volRows) snapshotRow.vol = volRows[sourceIndex] ?? {}
     if (vwapRows) snapshotRow.vwap = vwapRows[sourceIndex] ?? {}
     return snapshotRow
   })
@@ -273,6 +302,7 @@ export function writeIndicatorPageSnapshot(snapshot: Omit<IndicatorPageSnapshot,
       vdo: row.vdo ?? byBarKey[row.barKey]?.vdo,
       vi: row.vi ?? byBarKey[row.barKey]?.vi,
       vmi: row.vmi ?? byBarKey[row.barKey]?.vmi,
+      vol: row.vol ?? byBarKey[row.barKey]?.vol,
       vwap: row.vwap ?? byBarKey[row.barKey]?.vwap,
     }
   })

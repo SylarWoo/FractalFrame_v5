@@ -16,6 +16,7 @@ import {
   getIndicatorSettings,
   loadedKeysFromState,
   loadedRecordFromKeys,
+  shouldDispatchIndicatorCommand,
   withIndicatorSettings,
 } from './indicatorControllerModel'
 import type { IndicatorSettings } from './indicatorControllerModel'
@@ -94,7 +95,9 @@ export function useIndicatorsController({
     }, name, nextSettings)
     stateRef.current = nextState
     setState(nextState)
-    enqueueCommands(createLoadCommand(nextState, name, { resetAxisOnCreate: true }))
+    if (shouldDispatchIndicatorCommand(name)) {
+      enqueueCommands(createLoadCommand(nextState, name, { resetAxisOnCreate: true }))
+    }
   }, [enqueueCommands])
 
   const unloadIndicator = useCallback((name: SupportedChartIndicator) => {
@@ -107,13 +110,16 @@ export function useIndicatorsController({
       ...current,
       loaded: { ...current.loaded, [name]: false },
     }))
-    enqueueCommands({ action: 'unload', id: 0, name })
+    if (shouldDispatchIndicatorCommand(name)) {
+      enqueueCommands({ action: 'unload', id: 0, name })
+    }
   }, [enqueueCommands, updateState])
 
   const updateIndicatorSettings = useCallback((name: SupportedChartIndicator, settings: IndicatorSettings) => {
     const nextState = withIndicatorSettings(stateRef.current, name, settings)
     stateRef.current = nextState
     setState(nextState)
+    if (!shouldDispatchIndicatorCommand(name)) return
     if (!nextState.loaded[name]) return
     const existingTimer = settingsCommandTimersRef.current[name]
     if (existingTimer != null) window.clearTimeout(existingTimer)

@@ -28,7 +28,7 @@ import {
 import { mmfV2MomentumStatsEvent, publishMmfV2MomentumCrosshairIndex } from './mmfV2MomentumStats'
 import type { MmfV2MomentumSample, MmfV2MomentumStats, MmfV2MomentumStatsSide } from './mmfV2MomentumStats'
 import { readCrosshairDataIndex } from './paneTitleOverlayContent'
-import { calculateTradingViewMaShiftRows, ensureTradingViewMaShiftIndicator } from './tradingViewMaShiftIndicator'
+import { calculateTradingViewMaShiftRows, ensureTradingViewMaShiftIndicator, tradingViewMaShiftIndicatorName } from './tradingViewMaShiftIndicator'
 import { ensureTradingViewMmfIndicator } from './tradingViewMmfIndicator'
 import { ensureTradingViewMmfV2Indicator } from './tradingViewMmfV2Indicator'
 import { calculateMmfV3RowsForDisplayPage, calculateMmfV3RowsForPage, ensureTradingViewMmfV3Indicator } from './tradingViewMmfV3Indicator'
@@ -74,7 +74,7 @@ import type { ChartIndicatorCommand, ChartLoadState, ChartPageTarget } from './c
 import type { MaIndicatorSettings, MmfIndicatorSettings, MrIndicatorSettings, PersistedIndicatorsState, StochIndicatorSettings, TsiIndicatorSettings, VdoIndicatorSettings, VmiIndicatorSettings, VwapIndicatorSettings } from '../rightDrawer/indicatorPersistence'
 import { isStoredVisibilityRangePeriodVisible } from '../visibilityRange/visibilityRangeModel'
 import { readString, writeString } from '../persistence/jsonStorage'
-import './ChartCoreHost.css'
+import './LegacyChartCoreHost.css'
 
 const rsiPaneId = 'rsi_pane'
 const stochPaneId = 'stoch_pane'
@@ -120,7 +120,7 @@ function refreshChartDrawings() {
   })
 }
 
-type ChartCoreHostProps = {
+type LegacyChartCoreHostProps = {
   bareKLineMode?: boolean
   displayName?: string
   indicatorCommand?: ChartIndicatorCommand | null
@@ -210,7 +210,7 @@ function createCurrentIndicatorPageKey(chart: Chart, options: { page?: ChartPage
   })
 }
 
-export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCommand, loadedStrategyKeys = [], maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, onPageCalculationContextReady, page, period, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings, vwapSettings }: ChartCoreHostProps) {
+export function LegacyChartCoreHost({ bareKLineMode = false, displayName, indicatorCommand, loadedStrategyKeys = [], maSettings, mmfLoaded = false, mmfSettings, morganRangeMode, onLoadStateChange, onMorganRangeSegmentChange, onPageCalculationContextReady, page, period, stochSettings, symbol, totalRows, tsiSettings, vdoSettings, vmiSettings, vwapSettings }: LegacyChartCoreHostProps) {
   const indicatorRuntimeEnabled = false
   const viewportScope = 'empty'
   const { chartInstanceRef, chartRef } = useChartInstance({ displayName, featureMode: 'minimal', period, symbol, viewportScope })
@@ -275,6 +275,7 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     chart.removeIndicator('candle_pane', 'MR_M30')
     chart.removeIndicator('candle_pane', 'MR_H2')
     chart.removeIndicator('candle_pane', 'MA')
+    chart.removeIndicator('candle_pane', tradingViewMaShiftIndicatorName)
     chart.removeIndicator('candle_pane', 'VWAP')
     chart.removeIndicator('candle_pane', tradingViewVwapIndicatorName)
     chart.removeIndicator('candle_pane', mainVolumeIndicatorName)
@@ -750,9 +751,11 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
   const applyMaCommand = useCallback((chart: Chart, command: ChartIndicatorCommand) => {
     if (command.name !== 'MA') return
     const config: CandleIndicatorConfig = {
+      commandName: 'MA',
       ensureRegistered: ensureTradingViewMaShiftIndicator,
-      name: 'MA',
+      name: tradingViewMaShiftIndicatorName,
     }
+    chart.removeIndicator('candle_pane', 'MA')
     const settings = command.settings
     const pageKey = createCurrentIndicatorPageKey(chart, {
       page,
@@ -1442,8 +1445,9 @@ export function ChartCoreHost({ bareKLineMode = false, displayName, indicatorCom
     }
     const candleIndicatorConfigs: Record<CandleIndicatorCommandName, CandleIndicatorConfig> = {
       MA: {
+        commandName: 'MA',
         ensureRegistered: ensureTradingViewMaShiftIndicator,
-        name: 'MA',
+        name: tradingViewMaShiftIndicatorName,
       },
       VWAP: {
         ensureRegistered: ensureTradingViewVwapIndicator,

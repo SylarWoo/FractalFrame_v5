@@ -5,7 +5,9 @@ import type { DrawingRulerStyle } from './rulerDrawingStyle'
 export type DrawingCommandTool = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange' | 'emojiSticker'
 
 export type DrawingToolCommand = {
-  action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateQuickMeasureEnabled' | 'updateSelectedFibRetracementStyle' | 'updateSelectedFibTrendLine' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedRulerStyle' | 'updateSelectedStickerStyle' | 'updateSelectedTextStyle' | 'updateSelectedTrendLinePointPrice' | 'updateSelectedTrendLineStyle'
+  action: 'deleteSelected' | 'release' | 'refreshSelectedState' | 'start' | 'toggleSelectedLock' | 'updatePersistence' | 'updateQuickMeasureEnabled' | 'updateSelectedCrossPeriod' | 'updateSelectedFibRetracementStyle' | 'updateSelectedFibTrendLine' | 'updateSelectedLineStyle' | 'updateSelectedPrice' | 'updateSelectedPriceLabel' | 'updateSelectedRulerStyle' | 'updateSelectedStickerStyle' | 'updateSelectedTextStyle' | 'updateSelectedTrendLinePointPrice' | 'updateSelectedTrendLineStyle'
+  crossPeriod?: boolean
+  crossPeriodTargets?: string[]
   enabled?: boolean
   fibBackgroundOpacity?: number
   fibBackgroundVisible?: boolean
@@ -43,6 +45,8 @@ export type DrawingToolCommand = {
 
 export type DrawingToolState = {
   armed: boolean
+  crossPeriod?: boolean
+  crossPeriodTargets?: string[]
   fibBackgroundOpacity?: number
   fibBackgroundVisible?: boolean
   fibHorizontalLineStyle?: SettingsLineSwatchValue
@@ -64,6 +68,7 @@ export type DrawingToolState = {
   price?: number
   selected: boolean
   showPriceLabel: boolean
+  sourcePeriod?: string
   stickerBold?: boolean
   stickerColor?: string
   stickerFontFamily?: string

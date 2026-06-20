@@ -3,6 +3,8 @@ import type { DrawingTextStyle, DrawingTrendLineStyle } from '../rightDrawer/dra
 import type { DrawingRulerStyle } from '../rightDrawer/rulerDrawingStyle'
 
 export type HorizontalLineExtendData = {
+  crossPeriod?: boolean
+  crossPeriodTargets?: string[]
   handlePressed?: boolean
   hovered?: boolean
   lineStyle?: SettingsLineSwatchValue
@@ -13,11 +15,14 @@ export type HorizontalLineExtendData = {
   pressed?: boolean
   selected?: boolean
   showPriceLabel?: boolean
+  sourcePeriod?: string
   staticRender?: boolean
   textStyle?: DrawingTextStyle
 }
 
 export type TrendLineExtendData = {
+  crossPeriod?: boolean
+  crossPeriodTargets?: string[]
   drawing?: boolean
   endpointPressed?: boolean
   pressedPointIndex?: number
@@ -30,6 +35,7 @@ export type TrendLineExtendData = {
   pressed?: boolean
   selected?: boolean
   showPriceLabel?: boolean
+  sourcePeriod?: string
   textStyle?: DrawingTextStyle
   trendLineStyle?: DrawingTrendLineStyle
 }

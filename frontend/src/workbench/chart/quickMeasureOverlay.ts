@@ -66,7 +66,7 @@ export function createQuickMeasureController({
     }
   }
 
-  const createOrUpdateOverlay = (endPoint: QuickMeasurePoint) => {
+  const createOrUpdateOverlay = (endPoint: QuickMeasurePoint, paneId = startPaneId) => {
     if (!startPoint) return
     const points = [startPoint, endPoint]
     if (!overlayId) {
@@ -78,7 +78,7 @@ export function createQuickMeasureController({
         styles: {},
         visible: true,
         zLevel: quickMeasureZLevel,
-      })
+      }, paneId)
       overlayId = typeof createdId === 'string' ? createdId : null
       return
     }
@@ -108,7 +108,7 @@ export function createQuickMeasureController({
     destroyOverlay()
     startPoint = point
     startPaneId = paneId
-    createOrUpdateOverlay(point)
+    createOrUpdateOverlay(point, paneId)
   }
 
   const handleMouseMove = (event: MouseEvent, paneId: string) => {

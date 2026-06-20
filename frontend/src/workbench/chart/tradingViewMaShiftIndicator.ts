@@ -23,6 +23,7 @@ export type MaShiftRow = {
   oscillator?: number
 }
 
+export const tradingViewMaShiftIndicatorName = 'FF_TRADINGVIEW_MA'
 let registered = false
 
 function clampPeriod(value: unknown, fallback: number) {
@@ -454,7 +455,7 @@ export function ensureTradingViewMaShiftIndicator() {
   registered = true
 
   registerIndicator<MaShiftRow>({
-    name: 'MA',
+    name: tradingViewMaShiftIndicatorName,
     shortName: 'MA',
     calcParams: [defaultMaIndicatorSettings],
     series: IndicatorSeries.Price,

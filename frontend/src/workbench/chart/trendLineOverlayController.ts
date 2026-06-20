@@ -9,6 +9,8 @@ import type { MixedDrawingMoveState, TrendLineExtendData } from './chartDrawingT
 import { isTwoPointEndpointFigureKey, resolveTwoPointEndpointPressStart, shouldActivateTwoPointEndpointDrag } from './twoPointDrawingInteraction'
 
 export type CreateTrendLineOverlayOptions = {
+  crossPeriod?: boolean
+  crossPeriodTargets?: string[]
   lineStyle: SettingsLineSwatchValue
   locked: boolean
   manualVisible?: boolean
@@ -17,6 +19,7 @@ export type CreateTrendLineOverlayOptions = {
   points?: Array<{ dataIndex?: number; timestamp?: number; value?: number }>
   selected: boolean
   showPriceLabel: boolean
+  sourcePeriod?: string
   textStyle?: DrawingTextStyle
   trendLineStyle: DrawingTrendLineStyle
 }
@@ -89,12 +92,17 @@ export function createTrendLineOverlayFactory({
     points,
     selected,
     showPriceLabel,
+    sourcePeriod,
+    crossPeriod,
+    crossPeriodTargets,
     textStyle,
     trendLineStyle,
   }: CreateTrendLineOverlayOptions) {
     return chart.createOverlay({
       name: trendLineOverlayName,
       extendData: {
+        crossPeriod: crossPeriod === true,
+        crossPeriodTargets,
         hovered: false,
         lineStyle: normalizeLineStyle(lineStyle),
         locked,
@@ -104,6 +112,7 @@ export function createTrendLineOverlayFactory({
         pressed: false,
         selected,
         showPriceLabel,
+        sourcePeriod,
         textStyle: normalizeDrawingTextStyle(textStyle),
         trendLineStyle: normalizeDrawingTrendLineStyle(trendLineStyle),
       },
@@ -139,11 +148,14 @@ export function createTrendLineOverlayFactory({
         })
         publishDrawingToolState({
           armed: false,
+          crossPeriod: crossPeriod === true,
+          crossPeriodTargets,
           lineStyle: normalizeLineStyle(lineStyle),
           locked,
           objectId,
           selected: true,
           showPriceLabel,
+          sourcePeriod,
           textStyle: normalizeDrawingTextStyle(textStyle),
           tool: 'trendLine',
           trendPointPrices: resolveTrendPointPrices(overlay),
@@ -193,11 +205,14 @@ export function createTrendLineOverlayFactory({
         setPendingTrendLineEndpointPress(null)
         publishDrawingToolState({
           armed: false,
+          crossPeriod: extendData?.crossPeriod === true,
+          crossPeriodTargets: extendData?.crossPeriodTargets,
           lineStyle: normalizeLineStyle(extendData?.lineStyle),
           locked: extendData?.locked === true,
           objectId: extendData?.objectId,
           selected: true,
           showPriceLabel: extendData?.showPriceLabel !== false,
+          sourcePeriod: extendData?.sourcePeriod,
           textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
           tool: 'trendLine',
           trendPointPrices: resolveTrendPointPrices(overlay),
@@ -216,11 +231,14 @@ export function createTrendLineOverlayFactory({
         chart.overrideOverlay({ id: overlay.id, extendData: { ...extendData, endpointPressed: false, pressed: true, pressedPointIndex: undefined, selected: true } })
         publishDrawingToolState({
           armed: false,
+          crossPeriod: extendData?.crossPeriod === true,
+          crossPeriodTargets: extendData?.crossPeriodTargets,
           lineStyle: normalizeLineStyle(extendData?.lineStyle),
           locked: extendData?.locked === true,
           objectId: extendData?.objectId,
           selected: true,
           showPriceLabel: extendData?.showPriceLabel !== false,
+          sourcePeriod: extendData?.sourcePeriod,
           textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
           tool: 'trendLine',
           trendPointPrices: resolveTrendPointPrices(overlay),
@@ -261,11 +279,14 @@ export function createTrendLineOverlayFactory({
         const extendData = selectTrendLineForInteraction(overlay, false)
         publishDrawingToolState({
           armed: false,
+          crossPeriod: extendData?.crossPeriod === true,
+          crossPeriodTargets: extendData?.crossPeriodTargets,
           lineStyle: normalizeLineStyle(extendData?.lineStyle),
           locked: extendData?.locked === true,
           objectId: extendData?.objectId,
           selected: true,
           showPriceLabel: extendData?.showPriceLabel !== false,
+          sourcePeriod: extendData?.sourcePeriod,
           textStyle: normalizeDrawingTextStyle(extendData?.textStyle),
           tool: 'trendLine',
           trendPointPrices: resolveTrendPointPrices(overlay),

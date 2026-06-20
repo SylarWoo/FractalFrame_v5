@@ -3,7 +3,7 @@ import {
   clearChartRenderRealtimeCacheV2,
 } from './chartRenderCacheV2'
 import { traceKLineChartPageV2 } from './klineChartRendererV2/klineChartPageDebugProbeV2'
-import { clearRealtimePageBuffer } from './realtimePageBuffer'
+import { clearRealtimePageBuffer } from './chartRealtimeBridge'
 import { clearRealtimeStableWindowCacheV2 } from './realtimePageWindowV2'
 import { removeStorageItem } from '../persistence/jsonStorage'
 import { storageKeys } from '../persistence/storageKeys'
@@ -17,6 +17,8 @@ export type HistoryPageCacheCleanupReason =
 export type RealtimePageCacheCleanupReason =
   | 'daily-close'
   | 'manual'
+  | 'monthly-close'
+  | 'weekly-close'
 
 export function clearHistoryPageCachesV2(options: {
   pageIndex?: number | null

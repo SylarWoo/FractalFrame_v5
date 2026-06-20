@@ -1,5 +1,5 @@
 import type { KLineData } from 'klinecharts'
-import { readRealtimePageBuffer } from '../realtimePageBuffer'
+import { readRealtimePageBuffer } from '../chartRealtimeBridge'
 import { readRealtimeStableWindowSnapshotV2 } from './realtimePageWindowBuilder'
 
 export type RealtimePageMonitorSnapshotV2 = {

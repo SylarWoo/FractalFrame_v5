@@ -20,11 +20,14 @@ import { setKLineChartRealtimeXAxisFrameV2 } from './klineChartRealtimeXAxisV2'
 import { KLineChartSubPaneStackV2 } from './KLineChartSubPaneStackV2'
 import { installKLineChartViewportStateV2 } from './klineChartViewportStateV2'
 import { installKLineChartYAxisRestorePersistenceV2 } from './klineChartYAxisRestoreV2'
+import { installKLineChartSubPaneHeightResizePersistenceV2 } from './klineChartSubPaneHeightLifecycleV2'
 import { installKLineChartOverlayControllerV2 } from './klineChartOverlayControllerV2'
 import { applyKLineChartFrameUpdateV2 } from './klineChartFrameApplyControllerV2'
-import { ensureKLineChartInteractionStateV2, kLineChartHorizontalDragEndEventV2 } from './klineChartInteractionStateV2'
 import { installKLineChartBenchmarkV2 } from './klineChartBenchmarkV2'
+import { installKLineChartMouseEventControllerV2 } from './klineChartMouseEventControllerV2'
 import { installChartDrawingModule } from '../chartDrawingModule'
+import { installKLineChartMorganRangeSegmentPublisherV2 } from './klineChartMorganRangeSegmentPublisherV2'
+import type { MorganRangeSegment } from '../morganRangeModel'
 import './klineChartHostV2.css'
 
 declare global {
@@ -39,6 +42,7 @@ type KLineChartHostV2Props = {
   displayName?: string
   frame: KLineChartRenderFrameV2
   onLoadStateChange?: (state: ChartLoadState) => void
+  onMorganRangeSegmentChange?: (segment: MorganRangeSegment | null) => void
   pageNavigation?: ChartPageNavigation | null
   totalRows?: number | null
 }
@@ -47,6 +51,7 @@ export function KLineChartHostV2({
   displayName,
   frame,
   onLoadStateChange,
+  onMorganRangeSegmentChange,
   pageNavigation,
   totalRows,
 }: KLineChartHostV2Props) {
@@ -56,14 +61,16 @@ export function KLineChartHostV2({
   const overlayControllerRef = useRef<ReturnType<typeof installKLineChartOverlayControllerV2> | null>(null)
   const yAxisInteractionRef = useRef<ReturnType<typeof installKLineChartMainYAxisInteractionV2> | null>(null)
   const yAxisStateRef = useRef<ReturnType<typeof installKLineChartYAxisRestorePersistenceV2> | null>(null)
+  const subPaneHeightPersistenceRef = useRef<ReturnType<typeof installKLineChartSubPaneHeightResizePersistenceV2> | null>(null)
   const appliedFrameKeyRef = useRef('')
   const appliedRenderWindowKeyRef = useRef('')
   const previousFrameRef = useRef<KLineChartRenderFrameV2 | null>(null)
   const renderStateControllerRef = useRef<ReturnType<typeof createKLineChartRenderStateControllerV2> | null>(null)
   const viewportStateRef = useRef<ReturnType<typeof installKLineChartViewportStateV2> | null>(null)
   const benchmarkRef = useRef<ReturnType<typeof installKLineChartBenchmarkV2> | null>(null)
+  const mouseEventControllerRef = useRef<ReturnType<typeof installKLineChartMouseEventControllerV2> | null>(null)
   const drawingModuleRef = useRef<ReturnType<typeof installChartDrawingModule> | null>(null)
-  const chartDragInProgressRef = useRef(false)
+  const morganRangeSegmentPublisherRef = useRef<ReturnType<typeof installKLineChartMorganRangeSegmentPublisherV2> | null>(null)
   const realtimeVisualOpen = Boolean(frame.segments.realtime)
   const displayContextRef = useRef({
     displayName,
@@ -91,8 +98,6 @@ export function KLineChartHostV2({
       viewportScope: resolveKLineChartViewportScopeV2(frame),
     }
   }
-  ensureKLineChartInteractionStateV2()
-
   useEffect(() => {
     if (!chartRef.current) return
     const container = chartRef.current
@@ -109,6 +114,7 @@ export function KLineChartHostV2({
         period: displayContextRef.current.period,
         symbol: displayContextRef.current.symbol,
       }))
+      subPaneHeightPersistenceRef.current = installKLineChartSubPaneHeightResizePersistenceV2(chart, container)
       yAxisInteractionRef.current = installKLineChartMainYAxisInteractionV2(chart, {
         onRangeChange: () => {
           yAxisStateRef.current?.saveNow()
@@ -130,6 +136,12 @@ export function KLineChartHostV2({
       }))
       renderStateControllerRef.current = createKLineChartRenderStateControllerV2(chart, () => viewportStateRef.current)
       benchmarkRef.current = installKLineChartBenchmarkV2(chart, () => previousFrameRef.current ?? frame)
+      mouseEventControllerRef.current = installKLineChartMouseEventControllerV2(chart, container)
+      morganRangeSegmentPublisherRef.current = installKLineChartMorganRangeSegmentPublisherV2({
+        chart,
+        frame,
+        onSegmentChange: onMorganRangeSegmentChange,
+      })
       drawingModuleRef.current = installChartDrawingModule({
         chart,
         initialContext: {
@@ -141,72 +153,42 @@ export function KLineChartHostV2({
     }
 
     let resizeFrameId = 0
-    let dragStart: { x: number; y: number } | null = null
     const resize = () => {
       resizeFrameId = 0
       chart?.resize()
+      overlayControllerRef.current?.scheduleRealtimePaneRender()
     }
     const scheduleResize = () => {
       if (resizeFrameId !== 0) return
       resizeFrameId = window.requestAnimationFrame(resize)
     }
     const resizeObserver = new ResizeObserver(scheduleResize)
-    const handleMouseDown = (event: MouseEvent) => {
-      if (event.button !== 0) return
-      dragStart = { x: event.clientX, y: event.clientY }
-    }
-    const handleMouseMove = (event: MouseEvent) => {
-      if (!dragStart) return
-      const distanceX = Math.abs(event.clientX - dragStart.x)
-      const distanceY = Math.abs(event.clientY - dragStart.y)
-      if (distanceX >= 4 && distanceX > distanceY) {
-        chartDragInProgressRef.current = true
-        if (window.__ffKLineChartV2Interaction) {
-          window.__ffKLineChartV2Interaction.horizontalDragInProgress = true
-        }
-      }
-    }
-    const handleMouseUp = () => {
-      const wasDragging = chartDragInProgressRef.current
-      dragStart = null
-      chartDragInProgressRef.current = false
-      if (window.__ffKLineChartV2Interaction) {
-        window.__ffKLineChartV2Interaction.horizontalDragInProgress = false
-      }
-      if (wasDragging) window.dispatchEvent(new Event(kLineChartHorizontalDragEndEventV2))
-    }
     resizeObserver.observe(container)
     window.addEventListener('resize', scheduleResize)
-    container.addEventListener('mousedown', handleMouseDown)
-    window.addEventListener('mousemove', handleMouseMove, true)
-    window.addEventListener('mouseup', handleMouseUp, true)
-    window.addEventListener('mouseleave', handleMouseUp, true)
     scheduleResize()
 
     return () => {
       if (resizeFrameId !== 0) window.cancelAnimationFrame(resizeFrameId)
       resizeObserver.disconnect()
       window.removeEventListener('resize', scheduleResize)
-      container.removeEventListener('mousedown', handleMouseDown)
-      window.removeEventListener('mousemove', handleMouseMove, true)
-      window.removeEventListener('mouseup', handleMouseUp, true)
-      window.removeEventListener('mouseleave', handleMouseUp, true)
-      chartDragInProgressRef.current = false
-      if (window.__ffKLineChartV2Interaction) {
-        window.__ffKLineChartV2Interaction.horizontalDragInProgress = false
-      }
+      mouseEventControllerRef.current?.destroy()
+      mouseEventControllerRef.current = null
       displayControllerRef.current?.destroy()
       displayControllerRef.current = null
       yAxisInteractionRef.current?.destroy()
       yAxisInteractionRef.current = null
       yAxisStateRef.current?.destroy()
       yAxisStateRef.current = null
+      subPaneHeightPersistenceRef.current?.destroy()
+      subPaneHeightPersistenceRef.current = null
       overlayControllerRef.current?.destroy()
       overlayControllerRef.current = null
       viewportStateRef.current?.destroy()
       viewportStateRef.current = null
       benchmarkRef.current?.destroy()
       benchmarkRef.current = null
+      morganRangeSegmentPublisherRef.current?.destroy()
+      morganRangeSegmentPublisherRef.current = null
       drawingModuleRef.current?.destroy()
       drawingModuleRef.current = null
       renderStateControllerRef.current = null
@@ -217,10 +199,15 @@ export function KLineChartHostV2({
   }, [])
 
   useEffect(() => {
+    morganRangeSegmentPublisherRef.current?.updateHandler(onMorganRangeSegmentChange)
+  }, [onMorganRangeSegmentChange])
+
+  useEffect(() => {
     const chart = chartInstanceRef.current
     if (!chart) return
     displayControllerRef.current?.updateContext(displayContextRef.current)
     overlayControllerRef.current?.updateDisplayContext()
+    mouseEventControllerRef.current?.refreshCursorMode()
     drawingModuleRef.current?.updateContext({
       period: frame.period,
       symbol: frame.symbol,
@@ -237,7 +224,7 @@ export function KLineChartHostV2({
       appliedRenderWindowKey: appliedRenderWindowKeyRef.current,
       chart,
       chartRoot: chartRef.current,
-      dragInProgress: chartDragInProgressRef.current,
+      dragInProgress: mouseEventControllerRef.current?.isHorizontalDragInProgress() === true,
       displayController: displayControllerRef.current,
       frame,
       onAppliedFrameKeyChange: (key) => {
@@ -256,6 +243,7 @@ export function KLineChartHostV2({
       renderStateController,
       totalRows,
     })
+    morganRangeSegmentPublisherRef.current?.updateFrame(frame)
   }, [frame, frame.key, onLoadStateChange, totalRows])
 
   return (

@@ -1,7 +1,11 @@
 import { readBooleanFlag, readJson, writeBooleanFlag, writeJson } from '../persistence/jsonStorage'
+import { readPeriodUiState, writePeriodUiState } from '../persistence/periodUiStateStorage'
+import { normalizeDrawingCrossPeriodTargets } from '../drawing/drawingCrossPeriodModel'
+import type { DrawingCrossPeriodTarget } from '../drawing/drawingCrossPeriodModel'
 import type { SettingsLineSwatchValue } from '../settings/SettingsSwatches'
+import type { DrawingToolKey } from './drawingTools/drawingTypes'
 
-export type DrawingToolKey = 'horizontalLine' | 'trendLine' | 'ruler' | 'fibRetracement' | 'morganRange' | 'emojiSticker' | 'cursor'
+export type { DrawingToolKey } from './drawingTools/drawingTypes'
 
 export type DrawingTextStyle = {
   alignH: 'left' | 'center' | 'right'
@@ -30,6 +34,33 @@ export const drawingPriceLabelStoragePrefix = 'fractalframe.drawingsDrawer.price
 export const drawingLineStyleStoragePrefix = 'fractalframe.drawingsDrawer.lineStyle'
 export const drawingTextStyleStoragePrefix = 'fractalframe.drawingsDrawer.textStyle'
 export const drawingTrendLineStyleStorageKey = 'fractalframe.drawingsDrawer.trendLineStyle'
+export const drawingSelectedToolStorageKey = 'fractalframe.drawingsDrawer.selectedTool'
+
+type PersistedDrawingsUiState = {
+  lineStyles?: Partial<Record<DrawingToolKey, SettingsLineSwatchValue>>
+  priceLabels?: Partial<Record<DrawingToolKey, boolean>>
+  crossPeriods?: Partial<Record<DrawingToolKey, boolean>>
+  crossPeriodTargets?: Partial<Record<DrawingToolKey, string[]>>
+  selectedTool?: DrawingToolKey
+  textStyles?: Partial<Record<DrawingToolKey, Partial<DrawingTextStyle>>>
+  trendLineStyle?: Partial<DrawingTrendLineStyle>
+}
+
+function normalizePeriod(value: string | null | undefined) {
+  return String(value || 'M5').trim().toUpperCase() || 'M5'
+}
+
+function readDrawingsUiState(period = 'M5') {
+  return readPeriodUiState<PersistedDrawingsUiState>('drawings', normalizePeriod(period), {})
+}
+
+function writeDrawingsUiState(period: string | undefined, patch: PersistedDrawingsUiState) {
+  const normalizedPeriod = normalizePeriod(period)
+  writePeriodUiState('drawings', normalizedPeriod, {
+    ...readDrawingsUiState(normalizedPeriod),
+    ...patch,
+  })
+}
 
 export function createDefaultDrawingLineStyle(color = '#2962ff'): SettingsLineSwatchValue {
   return {
@@ -140,34 +171,72 @@ export function normalizeDrawingTrendLineStyle(value: Partial<DrawingTrendLineSt
   }
 }
 
-export function readDrawingPriceLabel(tool: DrawingToolKey) {
-  return readBooleanFlag(`${drawingPriceLabelStoragePrefix}.${tool}`, true)
+export function readDrawingSelectedTool(period = 'M5') {
+  const saved = readDrawingsUiState(period).selectedTool
+  return saved ?? null
 }
 
-export function writeDrawingPriceLabel(tool: DrawingToolKey, enabled: boolean) {
+export function writeDrawingSelectedTool(tool: DrawingToolKey, period = 'M5') {
+  writeDrawingsUiState(period, { selectedTool: tool })
+}
+
+export function readDrawingPriceLabel(tool: DrawingToolKey, period = 'M5') {
+  const saved = readDrawingsUiState(period).priceLabels?.[tool]
+  return typeof saved === 'boolean' ? saved : readBooleanFlag(`${drawingPriceLabelStoragePrefix}.${tool}`, true)
+}
+
+export function writeDrawingPriceLabel(tool: DrawingToolKey, enabled: boolean, period = 'M5') {
+  const current = readDrawingsUiState(period).priceLabels ?? {}
+  writeDrawingsUiState(period, { priceLabels: { ...current, [tool]: enabled } })
   return writeBooleanFlag(`${drawingPriceLabelStoragePrefix}.${tool}`, enabled)
 }
 
-export function readDrawingLineStyle(tool: DrawingToolKey, fallback: SettingsLineSwatchValue) {
-  return normalizeDrawingLineStyle(readJson<SettingsLineSwatchValue | null>(`${drawingLineStyleStoragePrefix}.${tool}`, null) ?? fallback, fallback.hex)
+export function readDrawingCrossPeriod(tool: DrawingToolKey, period = 'M5') {
+  const saved = readDrawingsUiState(period).crossPeriods?.[tool]
+  return typeof saved === 'boolean' ? saved : false
 }
 
-export function writeDrawingLineStyle(tool: DrawingToolKey, value: SettingsLineSwatchValue) {
+export function writeDrawingCrossPeriod(tool: DrawingToolKey, enabled: boolean, period = 'M5') {
+  const current = readDrawingsUiState(period).crossPeriods ?? {}
+  writeDrawingsUiState(period, { crossPeriods: { ...current, [tool]: enabled } })
+}
+
+export function readDrawingCrossPeriodTargets(tool: DrawingToolKey, period = 'M5'): DrawingCrossPeriodTarget[] {
+  return normalizeDrawingCrossPeriodTargets(readDrawingsUiState(period).crossPeriodTargets?.[tool])
+}
+
+export function writeDrawingCrossPeriodTargets(tool: DrawingToolKey, targets: DrawingCrossPeriodTarget[], period = 'M5') {
+  const current = readDrawingsUiState(period).crossPeriodTargets ?? {}
+  writeDrawingsUiState(period, { crossPeriodTargets: { ...current, [tool]: normalizeDrawingCrossPeriodTargets(targets) } })
+}
+
+export function readDrawingLineStyle(tool: DrawingToolKey, fallback: SettingsLineSwatchValue, period = 'M5') {
+  const saved = readDrawingsUiState(period).lineStyles?.[tool]
+  return normalizeDrawingLineStyle(saved ?? readJson<SettingsLineSwatchValue | null>(`${drawingLineStyleStoragePrefix}.${tool}`, null) ?? fallback, fallback.hex)
+}
+
+export function writeDrawingLineStyle(tool: DrawingToolKey, value: SettingsLineSwatchValue, period = 'M5') {
+  const current = readDrawingsUiState(period).lineStyles ?? {}
+  writeDrawingsUiState(period, { lineStyles: { ...current, [tool]: normalizeDrawingLineStyle(value) } })
   return writeJson(`${drawingLineStyleStoragePrefix}.${tool}`, normalizeDrawingLineStyle(value))
 }
 
-export function readDrawingTextStyle(tool: DrawingToolKey) {
-  return normalizeDrawingTextStyle(readJson<Partial<DrawingTextStyle> | null>(`${drawingTextStyleStoragePrefix}.${tool}`, null))
+export function readDrawingTextStyle(tool: DrawingToolKey, period = 'M5') {
+  const saved = readDrawingsUiState(period).textStyles?.[tool]
+  return normalizeDrawingTextStyle(saved ?? readJson<Partial<DrawingTextStyle> | null>(`${drawingTextStyleStoragePrefix}.${tool}`, null))
 }
 
-export function writeDrawingTextStyle(tool: DrawingToolKey, value: DrawingTextStyle) {
+export function writeDrawingTextStyle(tool: DrawingToolKey, value: DrawingTextStyle, period = 'M5') {
+  const current = readDrawingsUiState(period).textStyles ?? {}
+  writeDrawingsUiState(period, { textStyles: { ...current, [tool]: normalizeDrawingTextStyle(value) } })
   return writeJson(`${drawingTextStyleStoragePrefix}.${tool}`, normalizeDrawingTextStyle(value))
 }
 
-export function readDrawingTrendLineStyle() {
-  return normalizeDrawingTrendLineStyle(readJson<Partial<DrawingTrendLineStyle> | null>(drawingTrendLineStyleStorageKey, null))
+export function readDrawingTrendLineStyle(period = 'M5') {
+  return normalizeDrawingTrendLineStyle(readDrawingsUiState(period).trendLineStyle ?? readJson<Partial<DrawingTrendLineStyle> | null>(drawingTrendLineStyleStorageKey, null))
 }
 
-export function writeDrawingTrendLineStyle(value: DrawingTrendLineStyle) {
+export function writeDrawingTrendLineStyle(value: DrawingTrendLineStyle, period = 'M5') {
+  writeDrawingsUiState(period, { trendLineStyle: normalizeDrawingTrendLineStyle(value) })
   return writeJson(drawingTrendLineStyleStorageKey, normalizeDrawingTrendLineStyle(value))
 }

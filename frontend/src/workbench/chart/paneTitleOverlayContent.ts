@@ -13,6 +13,7 @@ import {
   defaultVmiIndicatorSettings,
   defaultVolIndicatorSettings,
   defaultVwapIndicatorSettings,
+  defaultMmadIndicatorSettings,
 } from '../rightDrawer/indicatorPersistence'
 import { readMarketStatusTitleSnapshot } from '../mt5DataCenter/marketStatusTitleState'
 import { readSettingsBooleanValue, readSettingsSymbolState } from '../settingsSymbolState'
@@ -21,6 +22,7 @@ import { readCandleBarStyle, resolveCandleValueColor, resolveStatusTitle } from 
 import { formatGlobalPrice } from './globalPricePrecision'
 import { formatIndicatorValue } from './indicatorValueFormat'
 import { mainVolumeIndicatorName } from './mainVolumeIndicator'
+import { tradingViewMaShiftIndicatorName } from './tradingViewMaShiftIndicator'
 import { tradingViewVwapIndicatorName } from './tradingViewVwapIndicator'
 
 export type PaneTitleContext = {
@@ -385,7 +387,7 @@ function createVmiParts(chart: Chart, indicator: IndicatorLike, crosshairIndex: 
 }
 
 function createCandleMaParts(chart: Chart, crosshairIndex: number | null) {
-  const indicator = indicatorFromChart(chart, 'candle_pane', 'MA')
+  const indicator = indicatorFromChart(chart, 'candle_pane', tradingViewMaShiftIndicatorName)
   if (!indicator) return []
   const settings = mergeSettings(defaultMaIndicatorSettings, indicator.calcParams?.[0])
   const row = readIndicatorRow(chart, indicator, crosshairIndex)
@@ -406,6 +408,18 @@ function createCandleVwapParts(chart: Chart, crosshairIndex: number | null) {
   const parts = [titlePart(`VWAP${booleanValue(settings.inputsInStatusLine, true) && readStatusInputsVisible() ? ` ${settings.anchorPeriod} ${settings.source}` : ''}`)]
   if (booleanValue(settings.statusLineValuesVisible, true) && readStatusValuesVisible() && booleanValue(settings.vwapVisible, true)) {
     parts.push(titlePart(formatNumber(row.vwap, settings.precision, 3), colorWithAlpha(stringValue(settings.vwapColor, '#2962ff'), opacityValue(settings.vwapOpacity, 1))))
+  }
+  return parts
+}
+
+function createCandleMmadParts(chart: Chart, crosshairIndex: number | null) {
+  const indicator = indicatorFromChart(chart, 'candle_pane', 'MMAD')
+  if (!indicator) return []
+  const settings = mergeSettings(defaultMmadIndicatorSettings, indicator.calcParams?.[0])
+  const row = readIndicatorRow(chart, indicator, crosshairIndex)
+  const parts = [titlePart(`MMAD${booleanValue(settings.inputStatusLineVisible, true) && readStatusInputsVisible() ? ` ${settings.timeframe}` : ''}`)]
+  if (booleanValue(settings.statusLineValuesVisible, true) && readStatusValuesVisible() && booleanValue(settings.lineVisible, true)) {
+    parts.push(titlePart(formatNumber(row.value, settings.precision, 3), colorWithAlpha(stringValue(settings.lineColor, '#2962ff'), opacityValue(settings.lineOpacity, 1))))
   }
   return parts
 }
@@ -445,6 +459,7 @@ function createCandleIndicatorLines(chart: Chart, crosshairIndex: number | null)
     createCandleMaParts(chart, crosshairIndex),
     createCandleMrParts(chart),
     createCandleVwapParts(chart, crosshairIndex),
+    createCandleMmadParts(chart, crosshairIndex),
   ].filter((line) => line.length > 0)
 }
 

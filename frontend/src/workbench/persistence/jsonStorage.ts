@@ -1,9 +1,48 @@
 const persistentStateEndpoint = '/__fractalframe_persistent_state'
+const persistentStateEventsEndpoint = '/__fractalframe_persistent_state_events'
+export const persistentStateChangedEvent = 'fractalframe:persistent-state-changed'
+const persistentStateClientId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 const devStateCache = new Map<string, unknown>()
 const devStateLoadedKeys = new Set<string>()
+let persistentStateEvents: EventSource | null = null
 const localToDevMigrationKeys = new Set([
   'fractalframe.drawingsDrawer.fibRetracementStyle',
 ])
+const devPreferredStateKeys = new Set([
+  'fractalframe.drawings.horizontalLine.items',
+  'fractalframe.drawings.trendLine.items',
+])
+
+export function invalidateJsonState(keys: string | string[]) {
+  const keyList = Array.isArray(keys) ? keys : [keys]
+  keyList.forEach((key) => {
+    devStateCache.delete(key)
+    devStateLoadedKeys.delete(key)
+  })
+}
+
+export function ensurePersistentStateChangeListener() {
+  if (persistentStateEvents || typeof window === 'undefined' || typeof EventSource === 'undefined') return
+  try {
+    persistentStateEvents = new EventSource(persistentStateEventsEndpoint)
+    persistentStateEvents.onmessage = (event) => {
+      try {
+        const detail = JSON.parse(event.data) as { key?: string; origin?: string }
+        if (!detail.key) return
+        if (detail.origin === persistentStateClientId) return
+        invalidateJsonState(detail.key)
+        window.dispatchEvent(new CustomEvent(persistentStateChangedEvent, { detail }))
+      } catch {
+        // Ignore malformed dev-server events.
+      }
+    }
+    persistentStateEvents.onerror = () => {
+      // EventSource reconnects automatically while the dev server is alive.
+    }
+  } catch {
+    persistentStateEvents = null
+  }
+}
 
 function readDevState(key: string): unknown {
   if (devStateCache.has(key)) return devStateCache.get(key)
@@ -32,7 +71,7 @@ function writeDevState(key: string, value: unknown) {
   if (!endpoint) return
   try {
     void fetch(endpoint, {
-      body: JSON.stringify({ key, value }),
+      body: JSON.stringify({ key, origin: persistentStateClientId, value }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     }).catch(() => {})
@@ -52,7 +91,7 @@ function writeDevStateObjectPatch(key: string, propertyKey: string, value: unkno
   if (!endpoint) return
   try {
     void fetch(endpoint, {
-      body: JSON.stringify({ key, merge: { [propertyKey]: value } }),
+      body: JSON.stringify({ key, merge: { [propertyKey]: value }, origin: persistentStateClientId }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     }).catch(() => {})
@@ -69,7 +108,7 @@ function removeDevState(key: string) {
   if (!endpoint) return
   try {
     void fetch(endpoint, {
-      body: JSON.stringify({ key, remove: true }),
+      body: JSON.stringify({ key, origin: persistentStateClientId, remove: true }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
     }).catch(() => {})
@@ -88,6 +127,18 @@ function resolvePersistentStateEndpoint() {
 }
 
 export function readJson<T>(key: string, fallback: T): T {
+  if (devPreferredStateKeys.has(key)) {
+    const devValue = readDevState(key)
+    if (devValue !== undefined && typeof devValue !== 'string') {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(devValue))
+      } catch {
+        // Ignore restricted storage modes.
+      }
+      return devValue as T
+    }
+  }
+
   try {
     const raw = window.localStorage.getItem(key)
     if (raw) {
