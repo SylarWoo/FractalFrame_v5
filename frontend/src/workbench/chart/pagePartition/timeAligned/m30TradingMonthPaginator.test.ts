@@ -27,16 +27,16 @@ describe('buildM30TradingMonthPartition', () => {
     expect(partition.pages[0]).toEqual(expect.objectContaining({
       pageType: 'history',
       timeFrom: shanghaiSeconds(2026, 5, 11, 6, 0),
-      timeTo: shanghaiSeconds(2026, 6, 6, 5, 0) - 1,
+      timeTo: shanghaiSeconds(2026, 6, 8, 6, 0) - 1,
     }))
     expect(partition.pages[1]).toEqual(expect.objectContaining({
       timeFrom: shanghaiSeconds(2026, 4, 13, 6, 0),
-      timeTo: shanghaiSeconds(2026, 5, 9, 5, 0) - 1,
+      timeTo: shanghaiSeconds(2026, 5, 11, 6, 0) - 1,
     }))
   })
 
   it('starts the realtime quasi-history at the next weekly open', () => {
-    const historyTo = shanghaiSeconds(2026, 6, 6, 5, 0) - 1
+    const historyTo = shanghaiSeconds(2026, 6, 8, 6, 0) - 1
 
     expect(resolveM30RealtimeOpenFromHistoryClose({
       historyTo,
@@ -45,15 +45,15 @@ describe('buildM30TradingMonthPartition', () => {
     })).toBe(shanghaiSeconds(2026, 6, 8, 6, 0))
   })
 
-  it('uses the current week as completed only after the weekly close boundary', () => {
+  it('keeps the current week realtime until the next Monday 06:00 bar prints', () => {
     const partition = buildM30TradingMonthPartition({
       fallback: fallbackPartition('XAUUSDm', 1_152),
       latestTime: shanghaiSeconds(2026, 6, 6, 5, 0),
     })
 
     expect(partition.pages[0]).toEqual(expect.objectContaining({
-      timeFrom: shanghaiSeconds(2026, 5, 11, 6, 0),
-      timeTo: shanghaiSeconds(2026, 6, 6, 5, 0) - 1,
+      timeFrom: shanghaiSeconds(2026, 5, 4, 6, 0),
+      timeTo: shanghaiSeconds(2026, 6, 1, 6, 0) - 1,
     }))
   })
 

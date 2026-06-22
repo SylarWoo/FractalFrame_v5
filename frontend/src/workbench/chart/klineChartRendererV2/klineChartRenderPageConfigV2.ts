@@ -184,9 +184,12 @@ function toNavigationTarget(page: RealtimePageRow | null | undefined): ChartPage
 
 function resolveRealtimeStartFromPages(pages: RealtimePageRow[], symbol: string, period: string) {
   const latestHistoryPage = pages[0]
-  if (!latestHistoryPage || typeof latestHistoryPage.timeTo !== 'number' || !Number.isFinite(latestHistoryPage.timeTo)) return null
+  const historyTo = typeof latestHistoryPage?.plannedTimeTo === 'number'
+    ? latestHistoryPage.plannedTimeTo
+    : latestHistoryPage?.timeTo
+  if (typeof historyTo !== 'number' || !Number.isFinite(historyTo)) return null
   return resolveTimeAlignedRealtimeOpenFromHistoryClose({
-    historyTo: latestHistoryPage.timeTo,
+    historyTo,
     period,
     symbol,
   })

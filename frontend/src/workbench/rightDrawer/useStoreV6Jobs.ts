@@ -71,6 +71,10 @@ export function useStoreV6Jobs({
   const pullPipelineCancelRequestedRef = useRef(false)
   const pullEventSourceRef = useRef<EventSource | null>(null)
   const aggregateEventSourceRef = useRef<EventSource | null>(null)
+  const preparePagePartitionInFlightRef = useRef<{
+    key: string
+    promise: Promise<StoreV6CheckPayload | null>
+  } | null>(null)
 
   const storeOperationLine = useMemo(
     () => formatStoreOperationLine(pullProgress, m1CheckJob, aggregateProgress, storeActionStatus),
@@ -284,6 +288,15 @@ export function useStoreV6Jobs({
     const symbol = selectedRowSymbol
     if (!symbol) throw new Error('请选择交易品种。')
     const normalizedPeriod = String(period || periodFromStoreTableKey(selectedStoreTableKey) || '').trim().toUpperCase()
+    const inFlightKey = `${symbol.trim().toUpperCase()}:${normalizedPeriod}`
+    const inFlight = preparePagePartitionInFlightRef.current
+    if (inFlight?.key === inFlightKey) return inFlight.promise
+    const promise = runPreparePagePartition(symbol, normalizedPeriod, inFlightKey)
+    preparePagePartitionInFlightRef.current = { key: inFlightKey, promise }
+    return promise
+  }
+
+  async function runPreparePagePartition(symbol: string, normalizedPeriod: string, inFlightKey: string) {
     const targetAggregatePeriods = normalizedPeriod === 'M5' ? ['M5'] : null
     setStoreCheckLoading(true)
     setStoreCheckError('')
@@ -357,6 +370,9 @@ export function useStoreV6Jobs({
       setStoreActionStatus('')
       throw err
     } finally {
+      if (preparePagePartitionInFlightRef.current?.key === inFlightKey) {
+        preparePagePartitionInFlightRef.current = null
+      }
       clearPullJobRefs({ activePullJobRef, pullEventSourceRef })
       clearAggregateJobRefs({ activeAggregateJobRef, aggregateEventSourceRef })
       setPullProgress(null)

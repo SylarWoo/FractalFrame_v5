@@ -1,6 +1,7 @@
 import type { H2TimeAlignedPageProfile } from './timeAlignedPageTypes'
 
 const shanghaiOffsetSeconds = 8 * 60 * 60
+const monday = 1
 
 function shanghaiMonthOpenSecondsFromParts(
   year: number,
@@ -19,8 +20,22 @@ function shanghaiMonthOpenSecondsFromParts(
   ) / 1000)
 }
 
-function daysInShanghaiMonth(year: number, monthIndex: number) {
-  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+function resolveEffectiveMonthAnchorDay(year: number, monthIndex: number) {
+  const firstDayWeekday = new Date(Date.UTC(year, monthIndex, 1)).getUTCDay()
+  return 1 + ((monday - firstDayWeekday + 7) % 7)
+}
+
+function shanghaiEffectiveMonthOpenSeconds(
+  year: number,
+  monthIndex: number,
+  profile: Pick<H2TimeAlignedPageProfile, 'boundaryHourShanghai' | 'boundaryMinuteShanghai'>,
+) {
+  return shanghaiMonthOpenSecondsFromParts(
+    year,
+    monthIndex,
+    resolveEffectiveMonthAnchorDay(year, monthIndex),
+    profile,
+  )
 }
 
 export function addShanghaiCalendarMonths(
@@ -32,8 +47,7 @@ export function addShanghaiCalendarMonths(
   const targetMonth = date.getUTCMonth() + months
   const targetYear = date.getUTCFullYear() + Math.floor(targetMonth / 12)
   const normalizedMonth = ((targetMonth % 12) + 12) % 12
-  const day = Math.min(date.getUTCDate(), daysInShanghaiMonth(targetYear, normalizedMonth))
-  return shanghaiMonthOpenSecondsFromParts(targetYear, normalizedMonth, day, profile)
+  return shanghaiEffectiveMonthOpenSeconds(targetYear, normalizedMonth, profile)
 }
 
 export function floorToShanghaiCalendarMonthOpenSeconds(
@@ -41,7 +55,7 @@ export function floorToShanghaiCalendarMonthOpenSeconds(
   profile: Pick<H2TimeAlignedPageProfile, 'boundaryHourShanghai' | 'boundaryMinuteShanghai'>,
 ) {
   const date = new Date((Math.floor(seconds) + shanghaiOffsetSeconds) * 1000)
-  const current = shanghaiMonthOpenSecondsFromParts(date.getUTCFullYear(), date.getUTCMonth(), 1, profile)
+  const current = shanghaiEffectiveMonthOpenSeconds(date.getUTCFullYear(), date.getUTCMonth(), profile)
   return Math.floor(seconds) >= current
     ? current
     : addShanghaiCalendarMonths(current, -1, profile)
@@ -52,8 +66,7 @@ export function resolveH2RealtimeOpenFromHistoryClose(options: {
   profile: H2TimeAlignedPageProfile
 }) {
   if (typeof options.historyTo !== 'number' || !Number.isFinite(options.historyTo)) return null
-  const historyCloseBoundary = Math.floor(options.historyTo) + 1
-  return floorToShanghaiCalendarMonthOpenSeconds(historyCloseBoundary, options.profile)
+  return Math.floor(options.historyTo) + 1
 }
 
 export function resolveH2TradingAnchors(options: {

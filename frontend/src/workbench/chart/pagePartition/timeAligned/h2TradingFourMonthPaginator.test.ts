@@ -26,24 +26,36 @@ describe('buildH2TradingFourMonthPartition', () => {
     expect(partition.partitionMode).toBe('h2-time')
     expect(partition.pages[0]).toEqual(expect.objectContaining({
       pageType: 'history',
-      timeFrom: shanghaiSeconds(2026, 2, 1, 6, 0),
+      timeFrom: shanghaiSeconds(2026, 2, 2, 6, 0),
       timeTo: shanghaiSeconds(2026, 6, 1, 6, 0) - 1,
     }))
     expect(partition.pages[1]).toEqual(expect.objectContaining({
-      timeFrom: shanghaiSeconds(2025, 10, 1, 6, 0),
-      timeTo: shanghaiSeconds(2026, 2, 1, 6, 0) - 1,
+      timeFrom: shanghaiSeconds(2025, 10, 6, 6, 0),
+      timeTo: shanghaiSeconds(2026, 2, 2, 6, 0) - 1,
     }))
   })
 
-  it('rolls page 1 forward when the next Shanghai month opens', () => {
+  it('does not roll page 1 forward before the first Monday monthly open', () => {
     const partition = buildH2TradingFourMonthPartition({
       fallback: fallbackPartition('XAUUSDm', 2_304),
       latestTime: shanghaiSeconds(2026, 7, 1, 6, 0),
     })
 
     expect(partition.pages[0]).toEqual(expect.objectContaining({
-      timeFrom: shanghaiSeconds(2026, 3, 1, 6, 0),
-      timeTo: shanghaiSeconds(2026, 7, 1, 6, 0) - 1,
+      timeFrom: shanghaiSeconds(2026, 2, 2, 6, 0),
+      timeTo: shanghaiSeconds(2026, 6, 1, 6, 0) - 1,
+    }))
+  })
+
+  it('rolls page 1 forward when the first Monday monthly open prints', () => {
+    const partition = buildH2TradingFourMonthPartition({
+      fallback: fallbackPartition('XAUUSDm', 2_304),
+      latestTime: shanghaiSeconds(2026, 7, 6, 6, 0),
+    })
+
+    expect(partition.pages[0]).toEqual(expect.objectContaining({
+      timeFrom: shanghaiSeconds(2026, 3, 2, 6, 0),
+      timeTo: shanghaiSeconds(2026, 7, 6, 6, 0) - 1,
     }))
   })
 

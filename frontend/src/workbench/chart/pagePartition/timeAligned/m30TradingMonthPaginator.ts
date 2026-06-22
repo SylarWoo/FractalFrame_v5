@@ -7,7 +7,6 @@ import {
 } from './timeAlignedPageTypes'
 import {
   resolveM30TradingAnchors,
-  resolveM30WeekCloseBoundary,
 } from './m30TradingAnchors'
 import { subtractCalendarDays } from './tradingDayBoundary'
 import { resolveTimeAlignedTradingProfile } from './timeAlignedTradingProfile'
@@ -25,6 +24,8 @@ function createTimePage(options: {
     index: options.index,
     limit: options.limit,
     pageType: 'history',
+    plannedTimeFrom: options.timeFrom,
+    plannedTimeTo: options.timeTo,
     realtime: false,
     rows: null,
     timeFrom: options.timeFrom,
@@ -90,22 +91,19 @@ export function buildM30TradingMonthPartition(options: {
   const limit = estimateM30TimePageLimit(profile)
   const pageCount = estimatePageCount(fallback.totalRows, limit, fallback.pages.length)
   const pages: StoreV6PagePartitionItem[] = []
-  let completedWeekOpen = anchors.completedTradingWeekOpen
+  let windowToExclusive = anchors.realtimeFrom
 
   while (pages.length < pageCount) {
-    const timeFrom = subtractCalendarDays(completedWeekOpen, (profile.windowWeeks - 1) * 7)
+    const timeFrom = subtractCalendarDays(windowToExclusive, profile.windowWeeks * 7)
     pages.push(createTimePage({
       index: pages.length + 1,
       limit,
       period: fallback.period,
       symbol: fallback.symbol,
       timeFrom,
-      timeTo: resolveM30WeekCloseBoundary({
-        symbol: fallback.symbol,
-        weekOpen: completedWeekOpen,
-      }) - 1,
+      timeTo: windowToExclusive - 1,
     }))
-    completedWeekOpen = subtractCalendarDays(completedWeekOpen, profile.windowWeeks * 7)
+    windowToExclusive = timeFrom
   }
 
   return {

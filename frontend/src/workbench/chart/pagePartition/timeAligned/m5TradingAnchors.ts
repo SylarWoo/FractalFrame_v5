@@ -1,13 +1,11 @@
 import type { TimeAlignedPageProfile } from './timeAlignedPageTypes'
 import {
   floorToTradingDayBoundarySeconds,
-  previousTradingDayBoundarySeconds,
   subtractCalendarDays,
 } from './tradingDayBoundary'
 import { resolveTimeAlignedTradingProfile } from './timeAlignedTradingProfile'
 
 const daySeconds = 24 * 60 * 60
-const m5Seconds = 5 * 60
 
 export type M5TradingAnchorSet = {
   completedTradingDayOpen: number
@@ -36,23 +34,9 @@ export function resolveM5SessionCloseBoundary(options: {
 
 export function resolveCompletedM5TradingDayOpen(options: {
   anchorBoundary: number
-  boundaryOptions: { skipWeekends?: boolean }
-  latestTime: number
-  periodSeconds?: number
   profile: ReturnType<typeof resolveTimeAlignedTradingProfile>
 }) {
-  const sessionClose = resolveM5SessionCloseBoundary({
-    anchorBoundary: options.anchorBoundary,
-    profile: options.profile,
-  })
-  if (options.latestTime + (options.periodSeconds ?? m5Seconds) >= sessionClose) {
-    return options.anchorBoundary
-  }
-  return previousTradingDayBoundarySeconds(options.anchorBoundary, {
-    boundaryHourShanghai: options.profile.boundaryHourShanghai,
-    boundaryMinuteShanghai: options.profile.boundaryMinuteShanghai,
-    windowDays: 1,
-  }, options.boundaryOptions)
+  return options.anchorBoundary
 }
 
 export function resolveNextM5TradingDayOpen(options: {
@@ -78,22 +62,13 @@ export function resolveM5TradingAnchors(options: {
   if (anchorBoundary == null) return null
   const completedTradingDayOpen = resolveCompletedM5TradingDayOpen({
     anchorBoundary,
-    boundaryOptions,
-    latestTime: options.latestTime,
     profile: tradingProfile,
   })
-  const realtimeFrom = resolveNextM5TradingDayOpen({
-    boundaryOptions,
-    fromBoundary: completedTradingDayOpen,
-    profile: options.profile,
-  })
+  const realtimeFrom = anchorBoundary
   return {
     completedTradingDayOpen,
     historyFrom: subtractCalendarDays(completedTradingDayOpen, options.profile.windowDays),
-    historyTo: resolveM5SessionCloseBoundary({
-      anchorBoundary: completedTradingDayOpen,
-      profile: tradingProfile,
-    }) - 1,
+    historyTo: realtimeFrom - 1,
     realtimeFrom,
   }
 }
@@ -104,13 +79,5 @@ export function resolveM5RealtimeOpenFromHistoryClose(options: {
   symbol: string | null | undefined
 }) {
   if (typeof options.historyTo !== 'number' || !Number.isFinite(options.historyTo)) return null
-  const tradingProfile = resolveTimeAlignedTradingProfile(options.symbol)
-  const boundaryOptions = { skipWeekends: tradingProfile.weekendClosed }
-  const completedTradingDayOpen = floorToTradingDayBoundarySeconds(options.historyTo, options.profile, boundaryOptions)
-  if (completedTradingDayOpen == null) return null
-  return resolveNextM5TradingDayOpen({
-    boundaryOptions,
-    fromBoundary: completedTradingDayOpen,
-    profile: options.profile,
-  })
+  return Math.floor(options.historyTo) + 1
 }

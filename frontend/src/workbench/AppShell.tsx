@@ -19,12 +19,18 @@ import {
 import {
   dispatchHistoryPageDailyRolloverRebuild,
   resolveHistoryPageRolloverReasonForPeriod,
-  resolveNextHistoryPageRolloverDelayMs,
 } from './chart/pagePartition/historyPageDailyRolloverV2'
 import type { StoreV6HistoryPageWindow } from './chart/historyPageWindowV2'
 import type { MorganRangeSegment } from './chart/morganRangeModel'
-import { readRealtimePageBuffer } from './chart/chartRealtimeBridge'
-import { resolvePeriodSeconds } from './chart/chartTimeFormatting'
+import { floorToTradingDayBoundarySeconds } from './chart/pagePartition/timeAligned/tradingDayBoundary'
+import {
+  h2TradingFourMonthProfile,
+  m30TradingMonthProfile,
+  m5TradingDaySlidingWeekProfile,
+} from './chart/pagePartition/timeAligned/timeAlignedPageTypes'
+import { resolveTimeAlignedTradingProfile } from './chart/pagePartition/timeAligned/timeAlignedTradingProfile'
+import { resolveH2TradingAnchors } from './chart/pagePartition/timeAligned/h2TradingMonthAnchors'
+import { resolveM30TradingAnchors } from './chart/pagePartition/timeAligned/m30TradingAnchors'
 import { resolveStoreV6PagePartitionMode } from './chart/pagePartition/pagePartitionBuilder'
 import { hasStoreV6PeriodPageSystemV2 } from './chart/pagePartition/periodPageSystemV2'
 import {
@@ -56,7 +62,6 @@ import type { ObjectTreeDrawingItem } from './rightDrawer/objectTree/objectTreeT
 import type { IndicatorShortcutItem, RightDrawerId, StrategyShortcutItem } from './rightDrawer/RightDrawerTypes'
 import type { Mt5SymbolRow } from '../services/mt5/mt5SymbolsApi'
 import { formatChartLoadStatus } from './mt5DataCenter/storeV6StatusFormat'
-import { marketStatusTitleChangedEvent, readMarketSessionScheduleStatus } from './mt5DataCenter/marketStatusTitleState'
 import { readBooleanFlag, readJson, readString, removeStorageItem, writeBooleanFlag, writeJson, writeString } from './persistence/jsonStorage'
 import { storageKeys } from './persistence/storageKeys'
 import { workbenchEvents } from './persistence/workbenchEvents'
@@ -68,7 +73,6 @@ import './openableControl.css'
 import './AppShell.css'
 
 const appShellRefreshRestoreFlights = new Map<string, ReturnType<typeof restoreRefreshAfterAutoPushTargetV2>>()
-const tailSilenceGraceMs = 90_000
 
 function requestAppShellRefreshRestoreTargetV2(key: string) {
   const existing = appShellRefreshRestoreFlights.get(key)
@@ -313,8 +317,7 @@ export function AppShell() {
   const [morganRangeSegment, setMorganRangeSegment] = useState<MorganRangeSegment | null>(null)
   setSettingsSymbolStatePeriod(chartTarget.period)
   const [chartLoadState, setChartLoadState] = useState<ChartLoadState | null>(null)
-  const sessionCloseRolloverKeyRef = useRef('')
-  const tailSilenceRolloverKeyRef = useRef('')
+  const autoTimePageOpenRolloverKeyRef = useRef('')
   const indicatorsController = useIndicatorsController({
     chartLoadState,
     chartPeriod: chartTarget.period,
@@ -338,7 +341,7 @@ export function AppShell() {
     pageNavigation: chartTarget.pageNavigation
       ? {
           ...chartTarget.pageNavigation,
-          onSelectPage: handleChartPageSelect,
+          onSelectPage: chartTarget.pageNavigation.onSelectPage ?? handleChartPageSelect,
         }
       : null,
   }), [chartIndicatorRequestsV2, chartTarget])
@@ -506,145 +509,68 @@ export function AppShell() {
   }, [bottomDrawerOpen])
 
   useEffect(() => {
-    let timer = 0
-    const triggerRollover = () => {
-      const reason = resolveHistoryPageRolloverReasonForPeriod(chartTarget.period)
-      clearRealtimePageCachesV2({
-        period: chartTarget.period,
-        reason,
-        symbol: chartTarget.symbol,
-      })
-      dispatchHistoryPageDailyRolloverRebuild({
-        period: chartTarget.period,
-        reason,
-        symbol: chartTarget.symbol,
-      })
-    }
-    const schedule = () => {
-      const delay = resolveNextHistoryPageRolloverDelayMs({
-        period: chartTarget.period,
-        symbol: chartTarget.symbol,
-      })
-      if (delay == null) return
-      timer = window.setTimeout(() => {
-        triggerRollover()
-        schedule()
-      }, delay)
-    }
-    schedule()
-    return () => {
-      if (timer !== 0) window.clearTimeout(timer)
-    }
-  }, [chartTarget.period, chartTarget.symbol])
-
-  useEffect(() => {
-    let timer = 0
-    const triggerSessionCloseRollover = (status: ReturnType<typeof readMarketSessionScheduleStatus>) => {
-      if (!status || status.status !== 'closed') return
-      const reason = resolveHistoryPageRolloverReasonForPeriod(chartTarget.period)
-      const key = [
-        chartTarget.symbol.trim().toUpperCase(),
-        chartTarget.period.trim().toUpperCase(),
-        reason,
-        status.nextCheckAt ?? new Date().toISOString().slice(0, 10),
-      ].join(':')
-      if (sessionCloseRolloverKeyRef.current === key) return
-      sessionCloseRolloverKeyRef.current = key
-      clearRealtimePageCachesV2({
-        period: chartTarget.period,
-        reason,
-        symbol: chartTarget.symbol,
-      })
-      dispatchHistoryPageDailyRolloverRebuild({
-        period: chartTarget.period,
-        reason,
-        symbol: chartTarget.symbol,
-      })
-    }
-    const sync = () => {
-      if (timer !== 0) {
-        window.clearTimeout(timer)
-        timer = 0
-      }
-      const status = readMarketSessionScheduleStatus(chartTarget.symbol)
-      triggerSessionCloseRollover(status)
-      if (!status?.nextCheckAt) return
-      const nextCheckAt = Date.parse(status.nextCheckAt)
-      if (!Number.isFinite(nextCheckAt)) return
-      timer = window.setTimeout(sync, Math.max(1_000, nextCheckAt - Date.now() + 1_000))
-    }
-    sync()
-    window.addEventListener(marketStatusTitleChangedEvent, sync)
-    window.addEventListener('storage', sync)
-    return () => {
-      if (timer !== 0) window.clearTimeout(timer)
-      window.removeEventListener(marketStatusTitleChangedEvent, sync)
-      window.removeEventListener('storage', sync)
-    }
-  }, [chartTarget.period, chartTarget.symbol])
-
-  useEffect(() => {
-    let timer = 0
-    const triggerTailSilenceRollover = (lastTimestamp: number) => {
-      const reason = resolveHistoryPageRolloverReasonForPeriod(chartTarget.period)
-      const key = [
-        chartTarget.symbol.trim().toUpperCase(),
-        chartTarget.period.trim().toUpperCase(),
-        reason,
-        Math.floor(lastTimestamp),
-      ].join(':')
-      if (tailSilenceRolloverKeyRef.current === key) return
-      tailSilenceRolloverKeyRef.current = key
-      clearRealtimePageCachesV2({
-        period: chartTarget.period,
-        reason,
-        symbol: chartTarget.symbol,
-      })
-      dispatchHistoryPageDailyRolloverRebuild({
-        period: chartTarget.period,
-        reason,
-        symbol: chartTarget.symbol,
-      })
-    }
-    const schedule = () => {
-      if (timer !== 0) {
-        window.clearTimeout(timer)
-        timer = 0
-      }
-      if (chartTarget.realtimeEnabled !== true) return
-      const periodSeconds = resolvePeriodSeconds(chartTarget.period)
-      if (!Number.isFinite(periodSeconds) || periodSeconds <= 0) return
-      const rows = readRealtimePageBuffer(chartTarget.symbol, chartTarget.period)
-      const latest = rows[rows.length - 1]
-      const lastTimestamp = Number(latest?.timestamp)
-      if (!Number.isFinite(lastTimestamp)) return
-      const periodMs = periodSeconds * 1000
-      const dueAt = lastTimestamp + periodMs + tailSilenceGraceMs
-      timer = window.setTimeout(() => {
-        const nextRows = readRealtimePageBuffer(chartTarget.symbol, chartTarget.period)
-        const nextLatestTimestamp = Number(nextRows[nextRows.length - 1]?.timestamp)
-        if (nextLatestTimestamp === lastTimestamp && Date.now() >= dueAt) {
-          triggerTailSilenceRollover(lastTimestamp)
-          return
-        }
-        schedule()
-      }, Math.max(1_000, dueAt - Date.now()))
-    }
+    const period = chartTarget.period.trim().toUpperCase()
+    if (period !== 'M5' && period !== 'M30' && period !== 'H2') return
+    const currentRealtimeStart = Number(chartTarget.pageNavigation?.realtimeStart)
+    if (!Number.isFinite(currentRealtimeStart)) return
     const handleRealtimeBufferChanged = (event: Event) => {
-      const detail = event instanceof CustomEvent ? event.detail as { period?: unknown; symbol?: unknown } : null
+      const detail = event instanceof CustomEvent ? event.detail as {
+        period?: unknown
+        symbol?: unknown
+        timeTo?: unknown
+      } : null
       if (detail?.symbol && String(detail.symbol).trim().toUpperCase() !== chartTarget.symbol.trim().toUpperCase()) return
-      if (detail?.period && String(detail.period).trim().toUpperCase() !== chartTarget.period.trim().toUpperCase()) return
-      schedule()
+      if (detail?.period && String(detail.period).trim().toUpperCase() !== period) return
+      const latestTime = Number(detail?.timeTo)
+      if (!Number.isFinite(latestTime)) return
+      const tradingProfile = resolveTimeAlignedTradingProfile(chartTarget.symbol)
+      const latestBoundary = period === 'H2'
+        ? resolveH2TradingAnchors({
+            latestTime,
+            profile: {
+              ...h2TradingFourMonthProfile,
+              boundaryHourShanghai: tradingProfile.boundaryHourShanghai,
+              boundaryMinuteShanghai: tradingProfile.boundaryMinuteShanghai,
+            },
+          }).realtimeFrom
+        : period === 'M30'
+        ? resolveM30TradingAnchors({
+            latestTime,
+            profile: {
+              ...m30TradingMonthProfile,
+              boundaryHourShanghai: tradingProfile.boundaryHourShanghai,
+              boundaryMinuteShanghai: tradingProfile.boundaryMinuteShanghai,
+            },
+            symbol: chartTarget.symbol,
+          })?.realtimeFrom ?? null
+        : floorToTradingDayBoundarySeconds(latestTime, {
+            ...m5TradingDaySlidingWeekProfile,
+            boundaryHourShanghai: tradingProfile.boundaryHourShanghai,
+            boundaryMinuteShanghai: tradingProfile.boundaryMinuteShanghai,
+          }, { skipWeekends: tradingProfile.weekendClosed })
+      if (typeof latestBoundary !== 'number' || latestBoundary <= currentRealtimeStart) return
+      const key = [
+        chartTarget.symbol.trim().toUpperCase(),
+        period,
+        latestBoundary,
+      ].join(':')
+      if (autoTimePageOpenRolloverKeyRef.current === key) return
+      autoTimePageOpenRolloverKeyRef.current = key
+      const reason = resolveHistoryPageRolloverReasonForPeriod(period)
+      clearRealtimePageCachesV2({
+        period,
+        reason,
+        symbol: chartTarget.symbol,
+      })
+      dispatchHistoryPageDailyRolloverRebuild({
+        period,
+        reason,
+        symbol: chartTarget.symbol,
+      })
     }
-    schedule()
     window.addEventListener(workbenchEvents.realtimePageBufferChanged, handleRealtimeBufferChanged)
-    window.addEventListener('storage', schedule)
-    return () => {
-      if (timer !== 0) window.clearTimeout(timer)
-      window.removeEventListener(workbenchEvents.realtimePageBufferChanged, handleRealtimeBufferChanged)
-      window.removeEventListener('storage', schedule)
-    }
-  }, [chartTarget.period, chartTarget.realtimeEnabled, chartTarget.symbol])
+    return () => window.removeEventListener(workbenchEvents.realtimePageBufferChanged, handleRealtimeBufferChanged)
+  }, [chartTarget.pageNavigation?.realtimeStart, chartTarget.period, chartTarget.symbol])
 
   useEffect(() => {
     writeString(storageKeys.bottomDrawerHeightPx, String(bottomDrawerHeight))

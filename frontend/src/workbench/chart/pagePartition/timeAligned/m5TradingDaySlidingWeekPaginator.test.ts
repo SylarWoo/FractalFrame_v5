@@ -15,7 +15,7 @@ function shanghaiSeconds(year: number, month: number, day: number, hour: number,
 }
 
 describe('buildM5TradingDaySlidingWeekPartition', () => {
-  it('builds the first history page from the previous week open to the latest completed close', () => {
+  it('keeps the stopped session in realtime until the next 06:00 open prints a new bar', () => {
     const latestTime = Date.UTC(2026, 5, 5, 20, 55) / 1000
     const partition = buildM5TradingDaySlidingWeekPartition({
       fallback: fallbackPartition(),
@@ -25,15 +25,29 @@ describe('buildM5TradingDaySlidingWeekPartition', () => {
     expect(partition.pages[0]).toEqual(expect.objectContaining({
       pageType: 'history',
       timeFrom: shanghaiSeconds(2026, 5, 29, 6, 0),
-      timeTo: Date.UTC(2026, 5, 5, 21, 0) / 1000 - 1,
+      timeTo: shanghaiSeconds(2026, 6, 5, 6, 0) - 1,
     }))
     expect(partition.pages[1]).toEqual(expect.objectContaining({
-      timeFrom: shanghaiSeconds(2026, 5, 21, 6, 0),
-      timeTo: shanghaiSeconds(2026, 5, 29, 5, 0) - 1,
+      timeFrom: shanghaiSeconds(2026, 5, 22, 6, 0),
+      timeTo: shanghaiSeconds(2026, 5, 29, 6, 0) - 1,
     }))
     expect(partition.pages[2]).toEqual(expect.objectContaining({
-      timeFrom: shanghaiSeconds(2026, 5, 13, 6, 0),
-      timeTo: shanghaiSeconds(2026, 5, 21, 5, 0) - 1,
+      timeFrom: shanghaiSeconds(2026, 5, 15, 6, 0),
+      timeTo: shanghaiSeconds(2026, 5, 22, 6, 0) - 1,
+    }))
+  })
+
+  it('settles the previous stopped session after the next 06:00 open prints a new bar', () => {
+    const latestTime = shanghaiSeconds(2026, 6, 8, 6, 0)
+    const partition = buildM5TradingDaySlidingWeekPartition({
+      fallback: fallbackPartition(),
+      latestTime,
+    })
+
+    expect(partition.pages[0]).toEqual(expect.objectContaining({
+      pageType: 'history',
+      timeFrom: shanghaiSeconds(2026, 6, 1, 6, 0),
+      timeTo: shanghaiSeconds(2026, 6, 8, 6, 0) - 1,
     }))
   })
 
@@ -52,8 +66,8 @@ describe('buildM5TradingDaySlidingWeekPartition', () => {
       pageType: 'history',
       realtime: false,
       rows: null,
-      timeFrom: shanghaiSeconds(2026, 1, 7, 6, 0),
-      timeTo: shanghaiSeconds(2026, 1, 15, 5, 0) - 1,
+      timeFrom: shanghaiSeconds(2026, 1, 8, 6, 0),
+      timeTo: shanghaiSeconds(2026, 1, 15, 6, 0) - 1,
       toGlobalIndex: null,
     }))
     expect(partition.pages[1]).toEqual(expect.objectContaining({
@@ -89,12 +103,12 @@ describe('buildM5TradingDaySlidingWeekPartition', () => {
 
     expect(partition.pages[0]).toEqual(expect.objectContaining({
       pageType: 'history',
-      timeFrom: shanghaiSeconds(2026, 6, 1, 6, 0),
-      timeTo: shanghaiSeconds(2026, 6, 9, 5, 0) - 1,
+      timeFrom: shanghaiSeconds(2026, 6, 2, 6, 0),
+      timeTo: shanghaiSeconds(2026, 6, 9, 6, 0) - 1,
     }))
     expect(partition.pages[1]).toEqual(expect.objectContaining({
-      timeFrom: shanghaiSeconds(2026, 5, 22, 6, 0),
-      timeTo: shanghaiSeconds(2026, 5, 30, 5, 0) - 1,
+      timeFrom: shanghaiSeconds(2026, 5, 26, 6, 0),
+      timeTo: shanghaiSeconds(2026, 6, 2, 6, 0) - 1,
     }))
   })
 
@@ -106,12 +120,12 @@ describe('buildM5TradingDaySlidingWeekPartition', () => {
     })
 
     expect(partition.pages[0]).toEqual(expect.objectContaining({
-      timeFrom: shanghaiSeconds(2026, 5, 29, 6, 0),
+      timeFrom: shanghaiSeconds(2026, 5, 30, 6, 0),
       timeTo: shanghaiSeconds(2026, 6, 6, 6, 0) - 1,
     }))
     expect(partition.pages[1]).toEqual(expect.objectContaining({
-      timeFrom: shanghaiSeconds(2026, 5, 21, 6, 0),
-      timeTo: shanghaiSeconds(2026, 5, 29, 6, 0) - 1,
+      timeFrom: shanghaiSeconds(2026, 5, 23, 6, 0),
+      timeTo: shanghaiSeconds(2026, 5, 30, 6, 0) - 1,
     }))
   })
 })

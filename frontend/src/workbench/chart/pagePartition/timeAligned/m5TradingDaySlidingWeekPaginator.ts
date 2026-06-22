@@ -6,13 +6,9 @@ import {
   m5TradingDaySlidingWeekProfile,
 } from './timeAlignedPageTypes'
 import {
-  previousTradingDayBoundarySeconds,
   subtractCalendarDays,
 } from './tradingDayBoundary'
 import { resolveTimeAlignedTradingProfile } from './timeAlignedTradingProfile'
-import {
-  resolveM5SessionCloseBoundary,
-} from './m5TradingAnchors'
 import { resolveM5AnchorRuntimeContextV2 } from '../m5AnchorRuntimeContextV2'
 
 function createTimePage(options: {
@@ -28,6 +24,8 @@ function createTimePage(options: {
     index: options.index,
     limit: options.limit,
     pageType: 'history',
+    plannedTimeFrom: options.timeFrom,
+    plannedTimeTo: options.timeTo,
     realtime: false,
     rows: null,
     timeFrom: options.timeFrom,
@@ -71,7 +69,6 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
     boundaryHourShanghai: tradingProfile.boundaryHourShanghai,
     boundaryMinuteShanghai: tradingProfile.boundaryMinuteShanghai,
   }
-  const boundaryOptions = { skipWeekends: tradingProfile.weekendClosed }
   const anchors = resolveM5AnchorRuntimeContextV2({
     latestTime,
     symbol: fallback.symbol,
@@ -87,10 +84,10 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
 
   const limit = estimateM5TimePageLimit(profile)
   const pages: StoreV6PagePartitionItem[] = []
-  let completedBoundary = anchors.completedTradingDayOpen
+  let windowToExclusive = anchors.realtimeFrom
 
   while (pages.length < fallback.pages.length) {
-    const timeFrom = subtractCalendarDays(completedBoundary, profile.windowDays)
+    const timeFrom = subtractCalendarDays(windowToExclusive, profile.windowDays)
 
     pages.push(createTimePage({
       index: pages.length + 1,
@@ -98,12 +95,9 @@ export function buildM5TradingDaySlidingWeekPartition(options: {
       period: fallback.period,
       symbol: fallback.symbol,
       timeFrom,
-      timeTo: resolveM5SessionCloseBoundary({
-        anchorBoundary: completedBoundary,
-        profile: tradingProfile,
-      }) - 1,
+      timeTo: windowToExclusive - 1,
     }))
-    completedBoundary = previousTradingDayBoundarySeconds(timeFrom, profile, boundaryOptions)
+    windowToExclusive = timeFrom
   }
 
   return {

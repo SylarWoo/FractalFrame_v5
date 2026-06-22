@@ -1,6 +1,6 @@
-export const m5TimeAlignedPartitionProfileVersion = 4
-export const m30TimeAlignedPartitionProfileVersion = 2
-export const h2TimeAlignedPartitionProfileVersion = 4
+export const m5TimeAlignedPartitionProfileVersion = 5
+export const m30TimeAlignedPartitionProfileVersion = 3
+export const h2TimeAlignedPartitionProfileVersion = 5
 
 export type TimeAlignedPageProfile = {
   boundaryHourShanghai: number

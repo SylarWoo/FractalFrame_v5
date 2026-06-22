@@ -18,6 +18,8 @@ export type StoreV6PagePartitionItem = {
   index: number
   limit: number
   pageType: 'live' | 'history'
+  plannedTimeFrom?: number | null
+  plannedTimeTo?: number | null
   realtime: boolean
   rows: number | null
   timeFrom?: number | null

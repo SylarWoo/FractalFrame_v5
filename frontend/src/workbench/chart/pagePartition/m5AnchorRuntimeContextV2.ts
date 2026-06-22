@@ -46,16 +46,18 @@ export function resolveM5AnchorRuntimeContextFromPagesV2(options: {
   symbol: string | null | undefined
 }): M5AnchorRuntimeCacheMetaV2 | null {
   const page = options.pages?.[0]
-  if (typeof page?.timeFrom !== 'number' || typeof page.timeTo !== 'number') return null
+  const historyFrom = typeof page?.plannedTimeFrom === 'number' ? page.plannedTimeFrom : page?.timeFrom
+  const historyTo = typeof page?.plannedTimeTo === 'number' ? page.plannedTimeTo : page?.timeTo
+  if (typeof historyFrom !== 'number' || typeof historyTo !== 'number') return null
   const realtimeFrom = resolveM5RealtimeOpenFromHistoryClose({
-    historyTo: page.timeTo,
+    historyTo,
     profile: m5TradingDaySlidingWeekProfile,
     symbol: options.symbol,
   })
   if (typeof realtimeFrom !== 'number' || !Number.isFinite(realtimeFrom)) return null
   return {
-    historyFrom: page.timeFrom,
-    historyTo: page.timeTo,
+    historyFrom,
+    historyTo,
     realtimeFrom,
   }
 }

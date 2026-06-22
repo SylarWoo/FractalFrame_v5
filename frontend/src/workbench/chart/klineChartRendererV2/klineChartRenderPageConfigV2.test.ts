@@ -57,8 +57,8 @@ describe('klineChartRenderPageConfigV2', () => {
       metadata: {
         indexFromResult: 10,
         indexToResult: 11,
-        timeFromResult: shanghaiSeconds(2026, 5, 22, 6, 0),
-        timeToResult: shanghaiSeconds(2026, 5, 30, 5, 0) - 1,
+        timeFromResult: shanghaiSeconds(2026, 5, 26, 6, 0),
+        timeToResult: shanghaiSeconds(2026, 6, 2, 6, 0) - 1,
       },
       mode: 'aggregated',
       ok: true,
@@ -69,7 +69,7 @@ describe('klineChartRenderPageConfigV2', () => {
         high: 3,
         low: 1,
         open: 1.5,
-        time: shanghaiSeconds(2026, 5, 22, 6, 0),
+        time: shanghaiSeconds(2026, 5, 26, 6, 0),
         volume: 10,
       }, {
         barKey: 'XAUUSDm|M5|2',
@@ -78,7 +78,7 @@ describe('klineChartRenderPageConfigV2', () => {
         high: 3,
         low: 1,
         open: 1.5,
-        time: shanghaiSeconds(2026, 5, 30, 5, 0) - 1,
+        time: shanghaiSeconds(2026, 6, 2, 6, 0) - 1,
         volume: 10,
       }],
       rowsCount: 2,
@@ -110,8 +110,8 @@ describe('klineChartRenderPageConfigV2', () => {
     expect(queryStoreV6OhlcvMock).toHaveBeenCalledWith(expect.objectContaining({
       symbol: 'XAUUSDm',
       timeframe: 'M5',
-      timeFrom: shanghaiSeconds(2026, 5, 22, 6, 0),
-      timeTo: shanghaiSeconds(2026, 5, 30, 5, 0) - 1,
+      timeFrom: shanghaiSeconds(2026, 5, 26, 6, 0),
+      timeTo: shanghaiSeconds(2026, 6, 2, 6, 0) - 1,
     }))
   })
 
@@ -129,7 +129,7 @@ describe('klineChartRenderPageConfigV2', () => {
         indexFromResult: 100,
         indexToResult: 101,
         timeFromResult: shanghaiSeconds(2026, 5, 11, 6, 0),
-        timeToResult: shanghaiSeconds(2026, 6, 6, 5, 0) - 1,
+        timeToResult: shanghaiSeconds(2026, 6, 8, 6, 0) - 1,
       },
       mode: 'aggregated',
       ok: true,
@@ -149,7 +149,7 @@ describe('klineChartRenderPageConfigV2', () => {
         high: 3,
         low: 1,
         open: 1.5,
-        time: shanghaiSeconds(2026, 6, 6, 5, 0) - 1,
+        time: shanghaiSeconds(2026, 6, 8, 6, 0) - 1,
         volume: 10,
       }],
       rowsCount: 2,
@@ -174,7 +174,7 @@ describe('klineChartRenderPageConfigV2', () => {
       symbol: 'XAUUSDm',
       timeframe: 'M30',
       timeFrom: shanghaiSeconds(2026, 5, 11, 6, 0),
-      timeTo: shanghaiSeconds(2026, 6, 6, 5, 0) - 1,
+      timeTo: shanghaiSeconds(2026, 6, 8, 6, 0) - 1,
     }))
   })
 })

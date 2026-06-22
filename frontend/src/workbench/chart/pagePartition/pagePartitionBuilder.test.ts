@@ -83,8 +83,8 @@ describe('buildStoreV6PagePartition', () => {
       pageType: 'history',
       realtime: false,
       rows: null,
-      timeFrom: shanghaiSeconds(2026, 1, 7, 6, 0),
-      timeTo: shanghaiSeconds(2026, 1, 15, 5, 0) - 1,
+      timeFrom: shanghaiSeconds(2026, 1, 8, 6, 0),
+      timeTo: shanghaiSeconds(2026, 1, 15, 6, 0) - 1,
       toGlobalIndex: null,
     }))
     expect(partition.pages[1]).toEqual(expect.objectContaining({

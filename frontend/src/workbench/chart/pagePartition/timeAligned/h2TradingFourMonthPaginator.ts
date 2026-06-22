@@ -21,6 +21,8 @@ function createTimePage(options: {
     index: options.index,
     limit: options.limit,
     pageType: 'history',
+    plannedTimeFrom: options.timeFrom,
+    plannedTimeTo: options.timeTo,
     realtime: false,
     rows: null,
     timeFrom: options.timeFrom,

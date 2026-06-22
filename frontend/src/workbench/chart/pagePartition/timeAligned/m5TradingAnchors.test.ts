@@ -18,9 +18,9 @@ describe('m5TradingAnchors', () => {
     })
 
     expect(anchors).toEqual({
-      completedTradingDayOpen: shanghaiSeconds(2026, 6, 8, 6, 0),
-      historyFrom: shanghaiSeconds(2026, 6, 1, 6, 0),
-      historyTo: shanghaiSeconds(2026, 6, 9, 5, 0) - 1,
+      completedTradingDayOpen: shanghaiSeconds(2026, 6, 9, 6, 0),
+      historyFrom: shanghaiSeconds(2026, 6, 2, 6, 0),
+      historyTo: shanghaiSeconds(2026, 6, 9, 6, 0) - 1,
       realtimeFrom: shanghaiSeconds(2026, 6, 9, 6, 0),
     })
   })
@@ -33,16 +33,16 @@ describe('m5TradingAnchors', () => {
     })
 
     expect(anchors).toEqual({
-      completedTradingDayOpen: shanghaiSeconds(2026, 6, 9, 6, 0),
-      historyFrom: shanghaiSeconds(2026, 6, 2, 6, 0),
-      historyTo: shanghaiSeconds(2026, 6, 10, 5, 0) - 1,
+      completedTradingDayOpen: shanghaiSeconds(2026, 6, 10, 6, 0),
+      historyFrom: shanghaiSeconds(2026, 6, 3, 6, 0),
+      historyTo: shanghaiSeconds(2026, 6, 10, 6, 0) - 1,
       realtimeFrom: shanghaiSeconds(2026, 6, 10, 6, 0),
     })
   })
 
   it('resolves the realtime open anchor from the latest history close', () => {
     expect(resolveM5RealtimeOpenFromHistoryClose({
-      historyTo: shanghaiSeconds(2026, 6, 10, 5, 0) - 1,
+      historyTo: shanghaiSeconds(2026, 6, 10, 6, 0) - 1,
       profile: m5TradingDaySlidingWeekProfile,
       symbol: 'XAUUSDm',
     })).toBe(shanghaiSeconds(2026, 6, 10, 6, 0))
@@ -50,7 +50,7 @@ describe('m5TradingAnchors', () => {
 
   it('skips closed weekends for the realtime open anchor', () => {
     expect(resolveM5RealtimeOpenFromHistoryClose({
-      historyTo: shanghaiSeconds(2026, 6, 6, 5, 0) - 1,
+      historyTo: shanghaiSeconds(2026, 6, 8, 6, 0) - 1,
       profile: m5TradingDaySlidingWeekProfile,
       symbol: 'XAUUSDm',
     })).toBe(shanghaiSeconds(2026, 6, 8, 6, 0))

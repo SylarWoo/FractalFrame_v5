@@ -5,7 +5,6 @@ import {
 } from '../chart/historyPageCacheCleanupV2'
 import {
   historyPageDailyRolloverRebuildEvent,
-  isHistoryPageIndexCacheStaleAfterRollover,
   resolveHistoryPageRolloverReasonForPeriod,
   type HistoryPageRolloverReason,
   type HistoryPageDailyRolloverRebuildDetail,
@@ -96,6 +95,7 @@ export function PagePartitionManager({
 }: PagePartitionManagerProps) {
   const reloadIdRef = useRef(0)
   const autoBuildCacheKeyRef = useRef('')
+  const buildingRef = useRef(false)
   const maintenanceRebuildRunIdRef = useRef('')
   const maintenanceRebuildInitializedRef = useRef(false)
   const [selectedPage, setSelectedPage] = useState(1)
@@ -149,9 +149,12 @@ export function PagePartitionManager({
 
   const resolveRealtimeStartFromPages = (sourcePages: RealtimePageRow[]) => {
     const latestHistoryPage = sourcePages[0]
-    if (!latestHistoryPage || typeof latestHistoryPage.timeTo !== 'number' || !Number.isFinite(latestHistoryPage.timeTo)) return null
+    const historyTo = typeof latestHistoryPage?.plannedTimeTo === 'number'
+      ? latestHistoryPage.plannedTimeTo
+      : latestHistoryPage?.timeTo
+    if (typeof historyTo !== 'number' || !Number.isFinite(historyTo)) return null
     return resolveTimeAlignedRealtimeOpenFromHistoryClose({
-      historyTo: latestHistoryPage.timeTo,
+      historyTo,
       period: selectedPeriod,
       symbol: selectedSymbol,
     })
@@ -323,14 +326,7 @@ export function PagePartitionManager({
       const cacheMissingM5AnchorMeta = Boolean(cached) &&
         currentPartition.partitionMode === 'm5-time' &&
         !cachedM5AnchorMeta
-      const rolloverReason = resolveHistoryPageRolloverReasonForPeriod(selectedPeriod)
-      const cacheExpiredAfterRollover = resolvePartitionCacheKind(currentPartition) === 'time' &&
-        isHistoryPageIndexCacheStaleAfterRollover({
-          builtAt: cached?.builtAt,
-          period: selectedPeriod,
-          symbol: selectedSymbol,
-        })
-      const cacheCurrent = isCurrentCache(cached, currentPartition) && !cacheExpiredAfterRollover && !cacheMissingM5AnchorMeta
+      const cacheCurrent = isCurrentCache(cached, currentPartition) && !cacheMissingM5AnchorMeta
       if (cached && !cacheCurrent) {
         clearHistoryPageCachesV2({
           reason: 'stale-page-index-cache',
@@ -340,9 +336,7 @@ export function PagePartitionManager({
         deletePageIndexCache(cacheKey)
         setLastResetInfo(readLastResetCache()[cacheKey] ?? null)
         setPages([])
-        setPartitionStatus(cacheExpiredAfterRollover
-          ? `分页缓存已跨过${formatRolloverReasonText(rolloverReason)}，正在自动重建...`
-          : cacheMissingM5AnchorMeta
+        setPartitionStatus(cacheMissingM5AnchorMeta
           ? '分页缓存缺少 M5 锚点信息，正在自动重建...'
           : '分页缓存版本已更新，正在自动重建...')
         window.setTimeout(() => buildPages('auto'), 0)
@@ -468,7 +462,7 @@ export function PagePartitionManager({
 
   function buildPages(reason: 'auto' | 'manual' | HistoryPageRolloverReason = 'manual') {
     const period = selectedPeriod
-    if (!selectedSymbol || !period || !cacheKey || building) return
+    if (!selectedSymbol || !period || !cacheKey || building || buildingRef.current) return
     if (!hasStoreV6PeriodPageSystemV2(period)) {
       setPages([])
       setPartitionStatus(unsupportedStoreV6PeriodPageSystemTextV2(period))
@@ -483,6 +477,7 @@ export function PagePartitionManager({
     deletePageIndexCache(cacheKey)
     setSelectedPage(1)
     setPages([])
+    buildingRef.current = true
     setBuilding(true)
     void (async () => {
       let latestTime: number | null = null
@@ -529,6 +524,7 @@ export function PagePartitionManager({
     })().catch((err) => {
       setPartitionStatus(`完整整理链失败：${err instanceof Error ? err.message : String(err)}`)
     }).finally(() => {
+      buildingRef.current = false
       setBuilding(false)
     })
   }
